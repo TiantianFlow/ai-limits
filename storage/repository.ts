@@ -54,12 +54,13 @@ export async function updateProvider(
         return provider;
       }
 
+      const originalProviderId = provider.providerId;
       const updated = updater(provider);
       return {
         ...updated,
-        providerId: provider.providerId,
+        providerId: originalProviderId,
         snapshot: updated.snapshot
-          ? { ...updated.snapshot, providerId: provider.providerId }
+          ? { ...updated.snapshot, providerId: originalProviderId }
           : undefined,
       };
     }),

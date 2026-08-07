@@ -114,4 +114,26 @@ describe("state repository", () => {
     ]);
     expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
   });
+
+  test("preserves identity when an updater mutates the stored record in place", async () => {
+    await ensureState(now);
+
+    await updateProvider("chatgpt", (provider) => {
+      provider.providerId = "claude";
+      if (provider.snapshot) {
+        provider.snapshot.providerId = "cursor";
+      }
+      return provider;
+    });
+
+    const providers = (await loadState())?.providers;
+    expect(providers?.map(({ providerId }) => providerId)).toEqual([
+      "chatgpt",
+      "claude",
+      "kimi",
+      "cursor",
+      "antigravity",
+    ]);
+    expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
+  });
 });
