@@ -17,7 +17,17 @@ function fixtureSnapshot(
 export function createFixtureState(now: number): AppState {
   const fiveHours = 5 * HOUR;
   const week = 7 * DAY;
-  const month = 30 * DAY;
+  const fixtureDate = new Date(now);
+  const calendarMonthStartedAt = Date.UTC(
+    fixtureDate.getUTCFullYear(),
+    fixtureDate.getUTCMonth(),
+    1,
+  );
+  const calendarMonthResetsAt = Date.UTC(
+    fixtureDate.getUTCFullYear(),
+    fixtureDate.getUTCMonth() + 1,
+    1,
+  );
 
   const providers: ProviderRecord[] = [
     {
@@ -136,9 +146,9 @@ export function createFixtureState(now: number): AppState {
               label: "Monthly usage",
               kind: "calendar",
               usedRatio: 0.78,
-              startedAt: now - 21 * DAY,
-              resetsAt: now + 9 * DAY,
-              durationMs: month,
+              startedAt: calendarMonthStartedAt,
+              resetsAt: calendarMonthResetsAt,
+              durationMs: calendarMonthResetsAt - calendarMonthStartedAt,
               sourceSemantics: "used",
             },
           ],

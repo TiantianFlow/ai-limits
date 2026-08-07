@@ -47,6 +47,17 @@ describe("fixture state", () => {
     expect(weekly.durationMs).toBe(7 * day);
     expect(chatgpt.windows.find(({ id }) => id === "five-hour")?.durationMs).toBe(5 * hour);
   });
+
+  test("uses exact UTC calendar-month boundaries for Cursor", () => {
+    const cursor = createFixtureState(now).providers.find(
+      ({ providerId }) => providerId === "cursor",
+    )?.snapshot;
+    const monthly = cursor?.windows.find(({ id }) => id === "monthly");
+
+    expect(monthly?.startedAt).toBe(Date.UTC(2023, 10, 1));
+    expect(monthly?.resetsAt).toBe(Date.UTC(2023, 11, 1));
+    expect(monthly?.durationMs).toBe(Date.UTC(2023, 11, 1) - Date.UTC(2023, 10, 1));
+  });
 });
 
 describe("state repository", () => {
@@ -80,5 +91,27 @@ describe("state repository", () => {
       message: "Retry later",
     });
     expect(after?.providers.slice(1)).toEqual(before?.providers.slice(1));
+  });
+
+  test("preserves provider and snapshot identity when an updater changes IDs", async () => {
+    await ensureState(now);
+
+    await updateProvider("chatgpt", (provider) => ({
+      ...provider,
+      providerId: "claude",
+      snapshot: provider.snapshot
+        ? { ...provider.snapshot, providerId: "cursor" }
+        : undefined,
+    }));
+
+    const providers = (await loadState())?.providers;
+    expect(providers?.map(({ providerId }) => providerId)).toEqual([
+      "chatgpt",
+      "claude",
+      "kimi",
+      "cursor",
+      "antigravity",
+    ]);
+    expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
   });
 });

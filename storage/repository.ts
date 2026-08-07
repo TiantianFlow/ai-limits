@@ -49,8 +49,19 @@ export async function updateProvider(
 
   await saveState({
     ...state,
-    providers: state.providers.map((provider) =>
-      provider.providerId === providerId ? updater(provider) : provider,
-    ),
+    providers: state.providers.map((provider) => {
+      if (provider.providerId !== providerId) {
+        return provider;
+      }
+
+      const updated = updater(provider);
+      return {
+        ...updated,
+        providerId: provider.providerId,
+        snapshot: updated.snapshot
+          ? { ...updated.snapshot, providerId: provider.providerId }
+          : undefined,
+      };
+    }),
   });
 }
