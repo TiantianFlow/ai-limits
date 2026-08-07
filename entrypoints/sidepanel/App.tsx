@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 
+import type { RuntimeCommand } from "../../background/messages";
 import type { AppState, DisplayMode } from "../../domain/model";
 import {
   ensureState,
@@ -8,14 +9,8 @@ import {
 } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
-type TemporaryRuntimeMessage =
-  | { type: "REFRESH_USAGE" }
-  | { type: "CONNECT_CHATGPT" };
-
-function sendMessage(message: TemporaryRuntimeMessage): void {
-  void browser.runtime.sendMessage(message).catch(() => {
-    // Task 4 adds the receiver. The cockpit stays usable until then.
-  });
+function sendMessage(message: RuntimeCommand): void {
+  void browser.runtime.sendMessage(message);
 }
 
 export function App() {
@@ -81,8 +76,10 @@ export function App() {
       state={state}
       now={now}
       onDisplayModeChange={handleDisplayModeChange}
-      onRefresh={() => sendMessage({ type: "REFRESH_USAGE" })}
-      onConnectChatGpt={() => sendMessage({ type: "CONNECT_CHATGPT" })}
+      onRefresh={() => sendMessage({ type: "REFRESH_ALL" })}
+      onConnectChatGpt={() =>
+        sendMessage({ type: "CONNECT_PROVIDER", providerId: "chatgpt" })
+      }
     />
   );
 }

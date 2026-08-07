@@ -14,7 +14,6 @@ import {
   paceStatus,
   type PaceStatus,
 } from "../../domain/quota";
-import { ConnectRow } from "./components/ConnectRow";
 import {
   ProviderCard,
   type CreditView,
@@ -40,7 +39,7 @@ const providerNames: Record<ProviderId, string> = {
 
 const sourceNames = {
   fixture: "Demo",
-  "web-session": "Web session",
+  "web-session": "Live",
   oauth: "OAuth",
 } as const;
 
@@ -218,15 +217,28 @@ export function Cockpit({
         </div>
       </div>
 
-      <ConnectRow onConnectChatGpt={onConnectChatGpt} />
-
       <section className="provider-list" aria-label="AI provider usage">
-        {state.providers.map((provider) => (
-          <ProviderCard
-            key={provider.providerId}
-            {...providerView(provider, mode, now)}
-          />
-        ))}
+        {state.providers.map((provider) => {
+          const showConnect =
+            provider.providerId === "chatgpt" &&
+            provider.snapshot?.source === "fixture";
+
+          return (
+            <ProviderCard
+              key={provider.providerId}
+              {...providerView(provider, mode, now)}
+              action={
+                showConnect
+                  ? {
+                      label: "Connect live",
+                      accessibleLabel: "Connect ChatGPT",
+                      onClick: onConnectChatGpt,
+                    }
+                  : undefined
+              }
+            />
+          );
+        })}
       </section>
     </main>
   );

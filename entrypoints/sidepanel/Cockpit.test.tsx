@@ -127,4 +127,46 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect ChatGPT" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Settings" })).toBeVisible();
   });
+
+  it("offers an explicit live connection action only for the ChatGPT fixture", () => {
+    const onConnectChatGpt = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectChatGpt={onConnectChatGpt}
+      />,
+    );
+
+    const connect = screen.getByRole("button", { name: "Connect ChatGPT" });
+    expect(connect).toHaveTextContent("Connect live");
+    fireEvent.click(connect);
+    expect(onConnectChatGpt).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows live source and removes the connection action after collection", () => {
+    const state = createFixtureState(NOW);
+    state.demoMode = false;
+    state.providers[0]!.snapshot!.source = "web-session";
+
+    renderCockpit(state);
+
+    expect(screen.getByText("Live")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Connect ChatGPT" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps demo usage visible when ChatGPT permission is required", () => {
+    const state = createFixtureState(NOW);
+    state.providers[0]!.health = { kind: "permission_required" };
+
+    renderCockpit(state);
+
+    expect(screen.getByText("Demo data")).toBeVisible();
+    expect(screen.getByText("Permission required")).toBeVisible();
+    expect(screen.getByText("72% used")).toBeVisible();
+  });
 });

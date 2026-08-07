@@ -30,6 +30,11 @@ export interface ProviderCardProps {
   freshness?: string;
   stale: boolean;
   health: ProviderHealth;
+  action?: {
+    label: string;
+    accessibleLabel: string;
+    onClick: () => void;
+  };
 }
 
 const healthLabels: Record<ProviderHealth["kind"], string> = {
@@ -57,6 +62,7 @@ export function ProviderCard({
   freshness,
   stale,
   health,
+  action,
 }: ProviderCardProps) {
   const healthIsWarm = !["connected", "connecting"].includes(health.kind);
 
@@ -86,6 +92,17 @@ export function ProviderCard({
         <p className="health-message" role={healthIsWarm ? "status" : undefined}>
           {healthMessage(health)}
         </p>
+      ) : null}
+
+      {action ? (
+        <button
+          className="button button--secondary"
+          type="button"
+          aria-label={action.accessibleLabel}
+          onClick={action.onClick}
+        >
+          {action.label}
+        </button>
       ) : null}
 
       {quotas.length ? (
