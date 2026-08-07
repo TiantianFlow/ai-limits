@@ -35,6 +35,27 @@ export interface RuntimeCommandHandlers {
   getState(): unknown;
 }
 
+type RuntimeCommandHandler = (value: unknown) => unknown;
+
+export function createChromeRuntimeMessageListener(
+  handleCommand: RuntimeCommandHandler,
+) {
+  return (
+    message: unknown,
+    _sender: Browser.runtime.MessageSender,
+    sendResponse: (response?: unknown) => void,
+  ): boolean => {
+    if (!isRuntimeCommand(message)) {
+      return false;
+    }
+
+    void Promise.resolve()
+      .then(() => handleCommand(message))
+      .then(sendResponse, () => sendResponse(undefined));
+    return true;
+  };
+}
+
 export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
   return (value: unknown): unknown => {
     if (!isRuntimeCommand(value)) {

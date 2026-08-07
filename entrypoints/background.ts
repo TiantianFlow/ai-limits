@@ -1,5 +1,8 @@
 import { refreshProvider, setProviderHealth } from "../background/coordinator";
-import { createRuntimeCommandHandler } from "../background/messages";
+import {
+  createChromeRuntimeMessageListener,
+  createRuntimeCommandHandler,
+} from "../background/messages";
 import {
   hasProviderPermission,
   requestProviderPermission,
@@ -71,6 +74,9 @@ const handleRuntimeCommand = createRuntimeCommandHandler({
   },
   getState: currentState,
 });
+const handleRuntimeMessage = createChromeRuntimeMessageListener(
+  handleRuntimeCommand,
+);
 
 export default defineBackground(() => {
   void ensureRefreshAlarm();
@@ -89,9 +95,7 @@ export default defineBackground(() => {
     }
   });
 
-  browser.runtime.onMessage.addListener((message) =>
-    handleRuntimeCommand(message) as Promise<unknown> | undefined,
-  );
+  browser.runtime.onMessage.addListener(handleRuntimeMessage);
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {

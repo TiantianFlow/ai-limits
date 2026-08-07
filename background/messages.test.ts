@@ -1,6 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { createRuntimeCommandHandler } from "./messages";
+import {
+  createChromeRuntimeMessageListener,
+  createRuntimeCommandHandler,
+} from "./messages";
 
 describe("runtime command router", () => {
   test("dispatches only the exact fixed command shapes", async () => {
@@ -28,5 +31,36 @@ describe("runtime command router", () => {
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
     expect(handlers.connectProvider).toHaveBeenCalledTimes(1);
     expect(handlers.getState).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps the response channel open only for accepted async commands", async () => {
+    const handleCommand = vi.fn(async () => ({ demoMode: true }));
+    const sendResponse = vi.fn();
+    const listener = createChromeRuntimeMessageListener(handleCommand);
+
+    expect(
+      listener(
+        { type: "GET_STATE" },
+        {} as Browser.runtime.MessageSender,
+        sendResponse,
+      ),
+    ).toBe(true);
+    await vi.waitFor(() =>
+      expect(sendResponse).toHaveBeenCalledWith({ demoMode: true }),
+    );
+    expect(handleCommand).toHaveBeenCalledWith({ type: "GET_STATE" });
+
+    handleCommand.mockClear();
+    sendResponse.mockClear();
+    expect(
+      listener(
+        { type: "REFRESH_ALL", url: "https://attacker.invalid" },
+        {} as Browser.runtime.MessageSender,
+        sendResponse,
+      ),
+    ).toBe(false);
+    await Promise.resolve();
+    expect(handleCommand).not.toHaveBeenCalled();
+    expect(sendResponse).not.toHaveBeenCalled();
   });
 });
