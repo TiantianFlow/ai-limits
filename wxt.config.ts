@@ -14,7 +14,7 @@ export default defineConfig({
       "https://www.kimi.com/*",
       "https://cursor.com/*",
     ],
-    optional_permissions: ["cookies"],
+    optional_permissions: ["cookies", "scripting"],
     action: { default_title: "Open AI Limits" },
   },
 });

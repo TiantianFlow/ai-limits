@@ -14,7 +14,7 @@ describe("provider registry", () => {
     ).toEqual([
       ["chatgpt", ["https://chatgpt.com/*"], []],
       ["claude", ["https://claude.ai/*"], []],
-      ["kimi", ["https://www.kimi.com/*"], ["cookies"]],
+      ["kimi", ["https://www.kimi.com/*"], ["cookies", "scripting"]],
       ["cursor", ["https://cursor.com/*"], []],
     ]);
   });

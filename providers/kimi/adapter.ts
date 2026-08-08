@@ -109,20 +109,28 @@ function normalizeWindow(
 async function collectKimi({
   fetch: injectedFetch,
   getCookie,
+  getAccessToken,
   now,
   signal,
 }: CollectionContext): Promise<CollectionResult> {
   try {
     const cookie = await getCookie?.({ url: KIMI_URL, name: "kimi-auth" });
-    if (!cookie?.value.trim()) {
-      return { ok: false, health: { kind: "signed_out" } };
+    const accessToken = cookie?.value.trim() || (await getAccessToken?.())?.trim();
+    if (!accessToken) {
+      return {
+        ok: false,
+        health: {
+          kind: "temporary_error",
+          message: "Open Kimi in a tab, make sure you're signed in, then try again.",
+        },
+      };
     }
 
     const response = await injectedFetch(USAGES_ENDPOINT, {
       method: "POST",
       credentials: "include",
       headers: {
-        Authorization: `Bearer ${cookie.value}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         "Connect-Protocol-Version": "1",
         "X-Language": "en-US",
@@ -203,6 +211,6 @@ export const kimiAdapter: ProviderAdapter = {
   id: "kimi",
   capabilities: { browserSession: true },
   optionalOrigins: [KIMI_ORIGIN],
-  optionalPermissions: ["cookies"],
+  optionalPermissions: ["cookies", "scripting"],
   collect: collectKimi,
 };

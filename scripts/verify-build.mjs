@@ -37,8 +37,8 @@ assert(
 );
 assert(
   JSON.stringify([...(manifest.optional_permissions ?? [])].sort()) ===
-    JSON.stringify(["cookies"]),
-  'Expected optional_permissions to equal ["cookies"].',
+    JSON.stringify(["cookies", "scripting"]),
+  'Expected optional_permissions to equal ["cookies", "scripting"].',
 );
 assert(
   manifest.minimum_chrome_version === "116",

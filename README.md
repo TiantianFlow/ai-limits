@@ -11,7 +11,8 @@ populated only by live checks against an opted-in browser session.
 Provider data stays in browser extension storage. Connecting ChatGPT, Claude,
 Kimi, or Cursor is an explicit per-provider action: the extension requests
 only that provider's optional host permission (and Kimi's optional cookies
-permission). Live session credentials are not persisted or logged.
+and scripting permissions). Live session credentials are request-local and are
+not persisted or logged.
 
 ## Current POC coverage
 
@@ -60,6 +61,12 @@ Chrome requests only the selected provider's optional permission, after which
 the extension performs a best-effort live browser-session usage check.
 Declining leaves that provider in the permission-required state with no
 fabricated usage snapshot.
+
+Kimi's current web session may keep its access token in the signed-in page
+rather than the legacy cookie. If Kimi asks for an open tab, open
+`https://www.kimi.com/`, confirm that it is signed in, leave that tab open, and
+click **Check session** again. The extension reads the token once for that
+request and does not store it.
 
 ## Known private-endpoint fragility
 

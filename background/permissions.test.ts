@@ -15,7 +15,10 @@ describe("provider permissions", () => {
     ["claude", { origins: ["https://claude.ai/*"] }],
     [
       "kimi",
-      { origins: ["https://www.kimi.com/*"], permissions: ["cookies"] },
+      {
+        origins: ["https://www.kimi.com/*"],
+        permissions: ["cookies", "scripting"],
+      },
     ],
     ["cursor", { origins: ["https://cursor.com/*"] }],
   ] as const)("requests only %s's exact optional permissions", async (providerId, expected) => {
@@ -35,7 +38,7 @@ describe("provider permissions", () => {
     await hasProviderPermission("kimi");
     expect(contains).toHaveBeenCalledWith({
       origins: ["https://www.kimi.com/*"],
-      permissions: ["cookies"],
+      permissions: ["cookies", "scripting"],
     });
   });
 });

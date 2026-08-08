@@ -52,10 +52,15 @@ function codingUsage() {
   };
 }
 
-function context(fetch: typeof globalThis.fetch, getCookie = vi.fn()) {
+function context(
+  fetch: typeof globalThis.fetch,
+  getCookie = vi.fn(),
+  getAccessToken = vi.fn(),
+) {
   return {
     fetch,
     getCookie,
+    getAccessToken,
     now: NOW,
     signal: new AbortController().signal,
   };
@@ -136,13 +141,51 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("secret-cookie");
   });
 
-  test.each([null, { value: "" }])("treats a missing cookie as signed out", async (cookie) => {
-    const result = await kimiAdapter.collect(
-      context(vi.fn<typeof globalThis.fetch>(), vi.fn().mockResolvedValue(cookie)),
+  test("uses the current page access token when the legacy cookie is absent", async () => {
+    const getAccessToken = vi.fn().mockResolvedValue("page-token");
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      response(fixture()),
     );
 
-    expect(result).toEqual({ ok: false, health: { kind: "signed_out" } });
+    const result = await kimiAdapter.collect(
+      context(fetch, vi.fn().mockResolvedValue(null), getAccessToken),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: { providerId: "kimi" },
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer page-token",
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("page-token");
   });
+
+  test.each([null, { value: "" }])(
+    "asks for an open signed-in tab when no supported Kimi credential is available",
+    async (cookie) => {
+      const result = await kimiAdapter.collect(
+        context(
+          vi.fn<typeof globalThis.fetch>(),
+          vi.fn().mockResolvedValue(cookie),
+          vi.fn().mockResolvedValue(undefined),
+        ),
+      );
+
+      expect(result).toEqual({
+        ok: false,
+        health: {
+          kind: "temporary_error",
+          message: "Open Kimi in a tab, make sure you're signed in, then try again.",
+        },
+      });
+    },
+  );
 
   test.each([401, 429, 500])("maps HTTP %i correctly", async (status) => {
     const result = await kimiAdapter.collect(

@@ -1,4 +1,5 @@
 import { refreshProvider, setProviderHealth } from "../background/coordinator";
+import { findKimiPageAccessToken } from "../background/kimi-session";
 import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
@@ -44,6 +45,19 @@ async function collectProvider(providerId: ConnectableProviderId): Promise<void>
         ? {
             getCookie: (details: { url: string; name: string }) =>
               browser.cookies.get(details),
+            getAccessToken: () =>
+              findKimiPageAccessToken({
+                queryTabs: () =>
+                  browser.tabs.query({ url: "https://www.kimi.com/*" }),
+                async readAccessToken(tabId) {
+                  const [injection] = await browser.scripting.executeScript({
+                    target: { tabId },
+                    world: "MAIN",
+                    func: () => globalThis.localStorage.getItem("access_token"),
+                  });
+                  return injection?.result;
+                },
+              }),
           }
         : {}),
     });

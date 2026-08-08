@@ -12,6 +12,7 @@ export interface CollectionContext {
     url: string;
     name: string;
   }) => Promise<{ value: string } | null>;
+  getAccessToken?: () => Promise<string | undefined>;
 }
 
 export type CollectionResult =
