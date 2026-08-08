@@ -51,8 +51,11 @@ After `pnpm verify`, open `chrome://extensions`, enable **Developer mode**, and
 choose **Load unpacked**. Select this exact directory:
 
 ```text
-/Users/tianjiang/open-source/ai-limits/.worktrees/poc/.output/chrome-mv3
+/Users/tianjiang/open-source/ai-limits/.output/chrome-mv3
 ```
+
+On macOS, if the file chooser hides `.output`, press **Command-Shift-G**, paste
+the full path above, and press Return before choosing the folder.
 
 Chrome should show **AI Limits** without manifest or service-worker errors. Use
 the extension toolbar action to open its side panel.
