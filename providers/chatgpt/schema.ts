@@ -20,8 +20,8 @@ export const chatGptUsageSchema = z
     credits: z.unknown().optional(),
     rate_limit: z
       .object({
-        primary_window: chatGptUsageWindowSchema.optional(),
-        secondary_window: chatGptUsageWindowSchema.optional(),
+        primary_window: chatGptUsageWindowSchema.nullable().optional(),
+        secondary_window: chatGptUsageWindowSchema.nullable().optional(),
       })
       .passthrough(),
   })

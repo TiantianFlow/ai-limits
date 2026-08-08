@@ -115,6 +115,28 @@ describe("ChatGPT adapter", () => {
     expect(JSON.stringify(result)).not.toContain("account-test");
   });
 
+  test("keeps a valid primary window when the optional secondary window is null", async () => {
+    const accessToken = jwt({ chatgpt_account_id: "account-test" });
+    const usage = usageFixture();
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({ accessToken }))
+      .mockResolvedValueOnce(
+        response({
+          ...usage,
+          rate_limit: { ...usage.rate_limit, secondary_window: null },
+        }),
+      );
+
+    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [expect.objectContaining({ id: "five-hour", usedRatio: 0.72 })],
+        credits: [expect.objectContaining({ remaining: 414 })],
+      },
+    });
+  });
+
   test("falls back to the legacy usage route when the current route is absent", async () => {
     const accessToken = jwt({ chatgpt_account_id: "account-direct" });
     const injectedFetch = vi
