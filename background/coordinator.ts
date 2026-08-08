@@ -4,7 +4,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../providers/types";
-import { ensureState, saveState } from "../storage/repository";
+import { mutateState } from "../storage/repository";
 
 function applyResult(
   state: AppState,
@@ -41,13 +41,12 @@ export async function setProviderHealth(
   health: ProviderHealth,
   now: number,
 ): Promise<void> {
-  const state = await ensureState(now);
-  await saveState({
+  await mutateState(now, (state) => ({
     ...state,
     providers: state.providers.map((provider) =>
       provider.providerId === providerId ? { ...provider, health } : provider,
     ),
-  });
+  }));
 }
 
 export async function refreshProvider(
@@ -62,6 +61,5 @@ export async function refreshProvider(
     result = { ok: false, health: { kind: "temporary_error" } };
   }
 
-  const state = await ensureState(context.now);
-  await saveState(applyResult(state, adapter, result));
+  await mutateState(context.now, (state) => applyResult(state, adapter, result));
 }

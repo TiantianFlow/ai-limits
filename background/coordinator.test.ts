@@ -8,9 +8,11 @@ import { refreshProvider } from "./coordinator";
 
 const NOW = 1_800_000_000_000;
 
-function liveSnapshot(): ProviderSnapshot {
+function liveSnapshot(
+  providerId: ProviderSnapshot["providerId"] = "chatgpt",
+): ProviderSnapshot {
   return {
-    providerId: "chatgpt",
+    providerId,
     planLabel: "Plus",
     source: "web-session",
     fetchedAt: NOW,
@@ -32,10 +34,17 @@ function liveSnapshot(): ProviderSnapshot {
 function adapter(
   collect: ProviderAdapter["collect"],
 ): ProviderAdapter {
+  return providerAdapter("chatgpt", collect);
+}
+
+function providerAdapter(
+  id: ProviderAdapter["id"],
+  collect: ProviderAdapter["collect"],
+): ProviderAdapter {
   return {
-    id: "chatgpt",
+    id,
     capabilities: { browserSession: true },
-    optionalOrigins: ["https://chatgpt.com/*"],
+    optionalOrigins: [`https://${id}.example/*`],
     collect,
   };
 }
@@ -143,5 +152,40 @@ describe("provider refresh coordinator", () => {
     await refreshing;
 
     expect((await loadState())?.preferences.displayMode).toBe("left");
+  });
+
+  test("retains both provider results when successful collections commit concurrently", async () => {
+    await saveState(liveState(NOW - 60_000));
+    const chatGptSnapshot = liveSnapshot("chatgpt");
+    const claudeSnapshot = liveSnapshot("claude");
+
+    await Promise.all([
+      refreshProvider(
+        providerAdapter("chatgpt", async () => ({
+          ok: true,
+          snapshot: chatGptSnapshot,
+        })),
+        collectionContext(),
+      ),
+      refreshProvider(
+        providerAdapter("claude", async () => ({
+          ok: true,
+          snapshot: claudeSnapshot,
+        })),
+        collectionContext(),
+      ),
+    ]);
+
+    const providers = (await loadState())?.providers;
+    expect(providers?.find(({ providerId }) => providerId === "chatgpt")).toEqual({
+      providerId: "chatgpt",
+      health: { kind: "connected" },
+      snapshot: chatGptSnapshot,
+    });
+    expect(providers?.find(({ providerId }) => providerId === "claude")).toEqual({
+      providerId: "claude",
+      health: { kind: "connected" },
+      snapshot: claudeSnapshot,
+    });
   });
 });

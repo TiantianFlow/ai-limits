@@ -2,53 +2,69 @@ import type { AppState, DisplayMode, ProviderId, ProviderRecord } from "../domai
 import { migrateState } from "../providers/initial-state";
 
 const STATE_KEY = "aiLimitsState";
+let stateMutationQueue: Promise<void> = Promise.resolve();
+
+function enqueueStateMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const result = stateMutationQueue.then(mutation);
+  stateMutationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function writeState(state: AppState): Promise<void> {
+  await browser.storage.local.set({ [STATE_KEY]: state });
+}
 
 export async function loadState(): Promise<AppState | undefined> {
   const stored = await browser.storage.local.get(STATE_KEY);
   return stored[STATE_KEY] as AppState | undefined;
 }
 
-export async function saveState(state: AppState): Promise<void> {
-  await browser.storage.local.set({ [STATE_KEY]: state });
+export function saveState(state: AppState): Promise<void> {
+  return enqueueStateMutation(() => writeState(state));
 }
 
-export async function ensureState(now: number): Promise<AppState> {
+async function ensureStateInsideMutation(now: number): Promise<AppState> {
   void now;
   const stored = await browser.storage.local.get(STATE_KEY);
   const value = stored[STATE_KEY] as unknown;
   const state = migrateState(value);
 
   if (JSON.stringify(value) !== JSON.stringify(state)) {
-    await saveState(state);
+    await writeState(state);
   }
 
   return state;
 }
 
-export async function setDisplayMode(mode: DisplayMode): Promise<void> {
-  const state = await loadState();
+export function ensureState(now: number): Promise<AppState> {
+  return enqueueStateMutation(() => ensureStateInsideMutation(now));
+}
 
-  if (!state) {
-    throw new Error("Cannot set display mode before state is initialized.");
-  }
-
-  await saveState({
-    ...state,
-    preferences: { ...state.preferences, displayMode: mode },
+export function mutateState(
+  now: number,
+  updater: (state: AppState) => AppState,
+): Promise<void> {
+  return enqueueStateMutation(async () => {
+    const state = await ensureStateInsideMutation(now);
+    await writeState(updater(state));
   });
 }
 
-export async function updateProvider(
+export function setDisplayMode(mode: DisplayMode): Promise<void> {
+  return mutateState(Date.now(), (state) => ({
+    ...state,
+    preferences: { ...state.preferences, displayMode: mode },
+  }));
+}
+
+export function updateProvider(
   providerId: ProviderId,
   updater: (provider: ProviderRecord) => ProviderRecord,
 ): Promise<void> {
-  const state = await loadState();
-
-  if (!state) {
-    throw new Error("Cannot update a provider before state is initialized.");
-  }
-
-  await saveState({
+  return mutateState(Date.now(), (state) => ({
     ...state,
     providers: state.providers.map((provider) => {
       if (provider.providerId !== providerId) {
@@ -65,5 +81,5 @@ export async function updateProvider(
           : undefined,
       };
     }),
-  });
+  }));
 }

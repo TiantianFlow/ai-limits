@@ -225,7 +225,9 @@ export function Cockpit({
               key={provider.providerId}
               {...providerView(provider, mode, now)}
               action={
-                !provider.snapshot && connectableProviderId
+                !provider.snapshot &&
+                provider.health.kind !== "connecting" &&
+                connectableProviderId
                   ? {
                       label: "Check session",
                       accessibleLabel: `Check ${providerNames[connectableProviderId]} session`,

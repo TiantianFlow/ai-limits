@@ -169,6 +169,18 @@ describe("Cockpit", () => {
     expect(onConnectProvider).toHaveBeenCalledWith("claude");
   });
 
+  it("hides the session check while that provider is connecting", () => {
+    const state = createInitialState();
+    state.providers[0]!.health = { kind: "connecting" };
+
+    renderCockpit(state);
+
+    expect(
+      screen.queryByRole("button", { name: "Check ChatGPT session" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Connecting")).toBeVisible();
+  });
+
   it("shows live source and removes the connection action after collection", () => {
     const state = createFixtureState(NOW);
     state.providers[0]!.snapshot!.source = "web-session";

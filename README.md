@@ -17,7 +17,7 @@ permission). Live session credentials are not persisted or logged.
 
 - Five-provider cockpit with empty, permission-required starting state.
 - Local persistence for display preferences and provider state.
-- An explicit `Connect live` flow for each standalone web provider (ChatGPT,
+- An explicit `Check session` flow for each standalone web provider (ChatGPT,
   Claude, Kimi, and Cursor).
 - A background worker that refreshes only providers with their optional
   permissions already granted.
@@ -53,9 +53,9 @@ choose **Load unpacked**. Select this exact directory:
 Chrome should show **AI Limits** without manifest or service-worker errors. Use
 the extension toolbar action to open its side panel.
 
-## Connect live providers
+## Check provider sessions
 
-Click **Connect live** only when you want to grant access to that provider.
+Click **Check session** only when you want to grant access to that provider.
 Chrome requests only the selected provider's optional permission, after which
 the extension performs a best-effort live browser-session usage check.
 Declining leaves that provider in the permission-required state with no
