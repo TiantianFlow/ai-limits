@@ -66,8 +66,7 @@ button:focus-visible {
 .provider-card__header,
 .quota-row__heading,
 .quota-row__meta,
-.credit-row,
-.display-controls {
+.credit-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -133,27 +132,19 @@ h3 {
   color: var(--text);
 }
 
-.display-controls {
-  margin-bottom: 12px;
-}
-
-.display-controls > span {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
 .segmented-control {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  width: 154px;
-  padding: 3px;
-  border-radius: 11px;
+  padding: 2px;
+  border-radius: 9px;
   background: var(--surface-muted);
 }
 
 .segmented-control button {
-  min-height: 44px;
+  min-width: 45px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: 7px;
   background: transparent;
   color: var(--text-muted);
   font-size: 12px;
@@ -328,6 +319,15 @@ h3 {
 
 .quota-row__meta--untimed {
   display: flex;
+}
+
+.quota-row__timing {
+  display: grid;
+  gap: 1px;
+}
+
+.quota-row__timing time {
+  color: var(--text-muted);
 }
 
 .pace {

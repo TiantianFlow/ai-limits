@@ -63,7 +63,7 @@ describe("Cockpit", () => {
 
     expect(screen.getByText("ChatGPT")).toBeVisible();
     expect(screen.getByText("72% used")).toBeVisible();
-    expect(screen.getAllByText(/time 5 \/ 7 days/)[0]).toBeVisible();
+    expect(screen.getAllByText("5 / 7 days elapsed")[0]).toBeVisible();
     expect(screen.getByText("$8.20 / $20.00 used")).toBeVisible();
     expect(screen.getByText("Experimental")).toBeVisible();
   });
@@ -79,6 +79,21 @@ describe("Cockpit", () => {
         onRefresh={vi.fn()}
         onConnectProvider={vi.fn()}
       />,
+    );
+
+    const weekly = within(screen.getByRole("group", { name: "Weekly messages" }));
+    const pace = weekly.getByText(/points? ahead|On pace|points? behind/).textContent;
+
+    expect(
+      weekly.getByRole("progressbar", { name: "Weekly messages time elapsed" }),
+    ).toHaveAttribute("aria-valuenow", "71");
+    expect(weekly.getByText("5 / 7 days elapsed")).toBeVisible();
+
+    const reset = weekly.getByText(/^Resets /);
+    expect(reset.tagName).toBe("TIME");
+    expect(reset).toHaveAttribute(
+      "datetime",
+      new Date(state.providers[0]!.snapshot!.windows[1]!.resetsAt!).toISOString(),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Left" }));
@@ -98,6 +113,27 @@ describe("Cockpit", () => {
     );
 
     expect(screen.getByText("28% left")).toBeVisible();
+    const remainingWeekly = within(
+      screen.getByRole("group", { name: "Weekly messages" }),
+    );
+    expect(
+      remainingWeekly.getByRole("progressbar", {
+        name: "Weekly messages time remaining",
+      }),
+    ).toHaveAttribute("aria-valuenow", "29");
+    expect(remainingWeekly.getByText("2 / 7 days left")).toBeVisible();
+    expect(remainingWeekly.getByText(pace!)).toBeVisible();
+  });
+
+  it("keeps the display selector with the global header actions", () => {
+    renderCockpit();
+
+    const header = screen.getByRole("heading", { name: "AI Limits" }).closest("header");
+    expect(header).not.toBeNull();
+    expect(
+      within(header as HTMLElement).getByRole("group", { name: "Display usage as" }),
+    ).toBeVisible();
+    expect(screen.queryByText("Show")).not.toBeInTheDocument();
   });
 
   it("omits the wall-time track when a window has no timing bounds", () => {

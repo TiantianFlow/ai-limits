@@ -49,7 +49,11 @@ function percent(ratio: number): number {
   return Math.round(ratio * 100);
 }
 
-function formatDuration(window: QuotaWindow, elapsed: number): string | undefined {
+function formatDuration(
+  window: QuotaWindow,
+  ratio: number,
+  noun: "elapsed" | "left",
+): string | undefined {
   const duration =
     window.startedAt !== undefined && window.resetsAt !== undefined
       ? window.resetsAt - window.startedAt
@@ -64,9 +68,18 @@ function formatDuration(window: QuotaWindow, elapsed: number): string | undefine
   const unitMs = duration >= day ? day : hour;
   const unit = duration >= day ? "days" : "hours";
   const total = Math.round(duration / unitMs);
-  const passed = Math.round((duration * elapsed) / unitMs);
+  const amount = Math.round((duration * ratio) / unitMs);
 
-  return `time ${passed} / ${total} ${unit}`;
+  return `${amount} / ${total} ${unit} ${noun}`;
+}
+
+function formatReset(resetsAt: number): string {
+  return `Resets ${new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(resetsAt))}`;
 }
 
 function formatPace(status: PaceStatus | undefined): string {
@@ -85,13 +98,21 @@ function formatPace(status: PaceStatus | undefined): string {
 function quotaView(window: QuotaWindow, mode: DisplayMode, now: number): QuotaView {
   const elapsed = elapsedRatio(window, now);
   const pace = elapsed === undefined ? undefined : paceStatus(window.usedRatio, elapsed);
+  const timeRatio = elapsed === undefined ? undefined : displayRatio(elapsed, mode);
+  const timeNoun = mode === "used" ? "elapsed" : "left";
 
   return {
     id: window.id,
     label: window.label,
     quotaPercent: percent(displayRatio(window.usedRatio, mode)),
-    elapsedPercent: elapsed === undefined ? undefined : percent(elapsed),
-    timeLabel: elapsed === undefined ? undefined : formatDuration(window, elapsed),
+    timePercent: timeRatio === undefined ? undefined : percent(timeRatio),
+    timeLabel:
+      timeRatio === undefined
+        ? undefined
+        : formatDuration(window, timeRatio, timeNoun),
+    resetAt: window.resetsAt,
+    resetLabel:
+      window.resetsAt === undefined ? undefined : formatReset(window.resetsAt),
     paceKind: pace?.kind,
     paceLabel: formatPace(pace),
   };
@@ -179,6 +200,22 @@ export function Cockpit({
           <h1>AI Limits</h1>
         </div>
         <div className="app-actions">
+          <div
+            className="segmented-control"
+            role="group"
+            aria-label="Display usage as"
+          >
+            {(["used", "left"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={mode === option}
+                onClick={() => onDisplayModeChange(option)}
+              >
+                {option === "used" ? "Used" : "Left"}
+              </button>
+            ))}
+          </div>
           <button
             className="icon-button"
             type="button"
@@ -198,22 +235,6 @@ export function Cockpit({
           </button>
         </div>
       </header>
-
-      <div className="display-controls">
-        <span id="display-mode-label">Show</span>
-        <div className="segmented-control" role="group" aria-labelledby="display-mode-label">
-          {(["used", "left"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={mode === option}
-              onClick={() => onDisplayModeChange(option)}
-            >
-              {option === "used" ? "Used" : "Left"}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <section className="provider-list" aria-label="AI provider usage">
         {state.providers.map((provider) => {

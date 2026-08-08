@@ -8,8 +8,10 @@ export interface QuotaView {
   id: string;
   label: string;
   quotaPercent: number;
-  elapsedPercent?: number;
+  timePercent?: number;
   timeLabel?: string;
+  resetAt?: number;
+  resetLabel?: string;
   paceKind?: PaceKind;
   paceLabel: string;
 }

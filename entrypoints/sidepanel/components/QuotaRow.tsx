@@ -7,8 +7,10 @@ export interface QuotaRowProps {
   label: string;
   mode: DisplayMode;
   quotaPercent: number;
-  elapsedPercent?: number;
+  timePercent?: number;
   timeLabel?: string;
+  resetAt?: number;
+  resetLabel?: string;
   paceKind?: PaceKind;
   paceLabel: string;
 }
@@ -17,8 +19,10 @@ export function QuotaRow({
   label,
   mode,
   quotaPercent,
-  elapsedPercent,
+  timePercent,
   timeLabel,
+  resetAt,
+  resetLabel,
   paceKind,
   paceLabel,
 }: QuotaRowProps) {
@@ -40,20 +44,25 @@ export function QuotaRow({
       >
         <span style={{ width: `${quotaPercent}%` }} />
       </div>
-      {elapsedPercent !== undefined ? (
+      {timePercent !== undefined ? (
         <>
           <div
             className="progress progress--time"
             role="progressbar"
-            aria-label={`${label} time elapsed`}
-            aria-valuenow={elapsedPercent}
+            aria-label={`${label} time ${mode === "used" ? "elapsed" : "remaining"}`}
+            aria-valuenow={timePercent}
             aria-valuemin={0}
             aria-valuemax={100}
           >
-            <span style={{ width: `${elapsedPercent}%` }} />
+            <span style={{ width: `${timePercent}%` }} />
           </div>
           <div className="quota-row__meta">
-            <span>{timeLabel}</span>
+            <span className="quota-row__timing">
+              <span>{timeLabel}</span>
+              {resetAt !== undefined && resetLabel ? (
+                <time dateTime={new Date(resetAt).toISOString()}>{resetLabel}</time>
+              ) : null}
+            </span>
             <span className={`pace pace--${paceKind ?? "on-pace"}`}>
               {paceLabel}
             </span>
@@ -61,7 +70,11 @@ export function QuotaRow({
         </>
       ) : (
         <p className="quota-row__meta quota-row__meta--untimed">
-          <span>No reset timing</span>
+          {resetAt !== undefined && resetLabel ? (
+            <time dateTime={new Date(resetAt).toISOString()}>{resetLabel}</time>
+          ) : (
+            <span>No reset timing</span>
+          )}
           <span className="pace">{paceLabel}</span>
         </p>
       )}
