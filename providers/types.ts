@@ -8,6 +8,10 @@ export interface CollectionContext {
   fetch: typeof globalThis.fetch;
   now: number;
   signal: AbortSignal;
+  getCookie?: (details: {
+    url: string;
+    name: string;
+  }) => Promise<{ value: string } | null>;
 }
 
 export type CollectionResult =
@@ -22,5 +26,6 @@ export interface ProviderAdapter {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
   readonly optionalOrigins: readonly string[];
+  readonly optionalPermissions?: readonly string[];
   collect(context: CollectionContext): Promise<CollectionResult>;
 }
