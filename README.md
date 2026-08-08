@@ -123,3 +123,7 @@ explicitly prohibit third-party tools from accessing the service.
 
 1. Prefer stable, documented provider APIs where they exist.
 2. Add per-provider refresh controls and health guidance.
+
+## License
+
+[MIT](LICENSE) © 2026 wjcjttl
