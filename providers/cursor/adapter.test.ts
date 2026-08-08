@@ -28,9 +28,9 @@ function planSummary(overrides: Record<string, unknown> = {}) {
         used: 44.1025,
         limit: 10_000,
         remaining: 9_955.8975,
-        autoPercentUsed: 0.25,
-        apiPercentUsed: 0.4,
-        totalPercentUsed: 0.441025,
+        autoPercentUsed: 17,
+        apiPercentUsed: 100,
+        totalPercentUsed: 44.1025,
       },
       onDemand: {
         enabled: true,
@@ -44,7 +44,7 @@ function planSummary(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Cursor adapter", () => {
-  test("requests live nested usage and identity, normalizing total percentage, dates, and cents", async () => {
+  test("requests live usage and renders Cursor and other model pools independently", async () => {
     const controller = new AbortController();
     const fetch = vi
       .fn<typeof globalThis.fetch>()
@@ -63,10 +63,20 @@ describe("Cursor adapter", () => {
         fetchedAt: NOW,
         windows: [
           {
-            id: "monthly",
-            label: "Monthly usage",
-            kind: "calendar",
-            usedRatio: 0.00441025,
+            id: "cursor-models-monthly",
+            label: "Cursor models",
+            kind: "model",
+            usedRatio: 0.17,
+            startedAt: Date.parse(START),
+            resetsAt: Date.parse(END),
+            durationMs: Date.parse(END) - Date.parse(START),
+            sourceSemantics: "used",
+          },
+          {
+            id: "other-models-monthly",
+            label: "Other models",
+            kind: "model",
+            usedRatio: 1,
             startedAt: Date.parse(START),
             resetsAt: Date.parse(END),
             durationMs: Date.parse(END) - Date.parse(START),
@@ -96,7 +106,7 @@ describe("Cursor adapter", () => {
     expect(JSON.stringify(result)).not.toContain("remaining");
   });
 
-  test("uses the conservative maximum of available plan lane percentages", async () => {
+  test("keeps a single reported model pool instead of inventing the other", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response(planSummary({
@@ -106,7 +116,6 @@ describe("Cursor adapter", () => {
             used: 25,
             limit: 100,
             remaining: 75,
-            autoPercentUsed: 30,
             apiPercentUsed: 60,
           },
         },
@@ -115,7 +124,37 @@ describe("Cursor adapter", () => {
 
     await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
-      snapshot: { windows: [{ usedRatio: 0.6 }] },
+      snapshot: {
+        windows: [
+          { id: "other-models-monthly", label: "Other models", usedRatio: 0.6 },
+        ],
+      },
+    });
+  });
+
+  test("uses the total plan percentage only when no model pool is reported", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary({
+        individualUsage: {
+          plan: {
+            enabled: true,
+            used: 40,
+            limit: 100,
+            remaining: 60,
+            totalPercentUsed: 40,
+          },
+        },
+      })))
+      .mockResolvedValueOnce(response({}));
+
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [
+          { id: "monthly", label: "Monthly usage", usedRatio: 0.4 },
+        ],
+      },
     });
   });
 

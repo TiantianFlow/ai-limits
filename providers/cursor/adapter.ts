@@ -86,22 +86,7 @@ function quotaRatio(quota: CursorQuota | null | undefined): number | undefined {
 function planRatio(plan: CursorPlanQuota | null | undefined): number | undefined {
   if (!plan?.enabled) return undefined;
   if (supplied(plan.totalPercentUsed)) return percentage(plan.totalPercentUsed);
-
-  const lanes = [plan.autoPercentUsed, plan.apiPercentUsed]
-    .filter(supplied)
-    .map((value) => percentage(value));
-  if (lanes.length > 0) {
-    return Math.max(...lanes.filter((ratio): ratio is number => ratio !== undefined));
-  }
   return quotaRatio(plan);
-}
-
-function usageRatio(summary: CursorUsageSummary): number | undefined {
-  return (
-    planRatio(summary.individualUsage?.plan) ??
-    quotaRatio(summary.individualUsage?.overall) ??
-    quotaRatio(summary.teamUsage?.pooled)
-  );
 }
 
 function summaryIsSemanticallyValid(summary: CursorUsageSummary): boolean {
@@ -135,27 +120,50 @@ function onDemandCredit(summary: CursorUsageSummary): CreditBalance[] {
   }];
 }
 
-function normalizeWindow(summary: CursorUsageSummary): QuotaWindow | undefined {
-  const ratio = usageRatio(summary);
+function normalizeWindows(summary: CursorUsageSummary): QuotaWindow[] {
   const startedAt = Date.parse(summary.billingCycleStart);
   const resetsAt = Date.parse(summary.billingCycleEnd);
   if (
-    ratio === undefined ||
     !Number.isFinite(startedAt) ||
     !Number.isFinite(resetsAt) ||
     resetsAt <= startedAt
-  ) return undefined;
+  ) return [];
 
-  return {
-    id: "monthly",
-    label: "Monthly usage",
-    kind: "calendar",
-    usedRatio: ratio,
+  const monthlyWindow = (
+    id: string,
+    label: string,
+    kind: QuotaWindow["kind"],
+    usedRatio: number,
+  ): QuotaWindow => ({
+    id,
+    label,
+    kind,
+    usedRatio,
     startedAt,
     resetsAt,
     durationMs: resetsAt - startedAt,
     sourceSemantics: "used",
-  };
+  });
+
+  const plan = summary.individualUsage?.plan;
+  if (plan?.enabled) {
+    const lanes = [
+      ["cursor-models-monthly", "Cursor models", percentage(plan.autoPercentUsed)],
+      ["other-models-monthly", "Other models", percentage(plan.apiPercentUsed)],
+    ] as const;
+    const laneWindows = lanes.flatMap(([id, label, ratio]) =>
+      ratio === undefined ? [] : [monthlyWindow(id, label, "model", ratio)],
+    );
+    if (laneWindows.length > 0) return laneWindows;
+  }
+
+  const fallback =
+    planRatio(plan) ??
+    quotaRatio(summary.individualUsage?.overall) ??
+    quotaRatio(summary.teamUsage?.pooled);
+  return fallback === undefined
+    ? []
+    : [monthlyWindow("monthly", "Monthly usage", "calendar", fallback)];
 }
 
 async function identityLabels(fetch: typeof globalThis.fetch, signal: AbortSignal) {
@@ -183,8 +191,10 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const window = normalizeWindow(parsed.data);
-    if (!window) return { ok: false, health: { kind: "provider_changed" } };
+    const windows = normalizeWindows(parsed.data);
+    if (windows.length === 0) {
+      return { ok: false, health: { kind: "provider_changed" } };
+    }
     const identity = await identityLabels(fetch, signal);
     return {
       ok: true,
@@ -194,7 +204,7 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
         ...identity,
         source: "web-session",
         fetchedAt: now,
-        windows: [window],
+        windows,
         credits: onDemandCredit(parsed.data),
       },
     };
