@@ -17,31 +17,48 @@ function context(fetch: typeof globalThis.fetch, signal = new AbortController().
   return { fetch, now: NOW, signal };
 }
 
-function summary(overrides: Record<string, unknown> = {}) {
+function planSummary(overrides: Record<string, unknown> = {}) {
   return {
     billingCycleStart: START,
     billingCycleEnd: END,
-    totalPercentUsed: 0.441025,
-    planUsage: { used: 4_410.25, limit: 10_000 },
-    onDemandUsage: { used: 320 },
+    membershipType: "pro",
+    individualUsage: {
+      plan: {
+        enabled: true,
+        used: 44.1025,
+        limit: 10_000,
+        remaining: 9_955.8975,
+        autoPercentUsed: 0.25,
+        apiPercentUsed: 0.4,
+        totalPercentUsed: 0.441025,
+      },
+      onDemand: {
+        enabled: true,
+        used: 320,
+        limit: 1_000,
+        remaining: 680,
+      },
+    },
     ...overrides,
   };
 }
 
 describe("Cursor adapter", () => {
-  test("requests usage and best-effort identity, normalizing percentages, dates, and cents", async () => {
+  test("requests live nested usage and identity, normalizing total percentage, dates, and cents", async () => {
     const controller = new AbortController();
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response(summary()))
-      .mockResolvedValueOnce(response({ email: "person@example.com", plan: "Pro" }));
+      .mockResolvedValueOnce(response(planSummary()))
+      .mockResolvedValueOnce(response({ email: "person@example.com" }));
 
-    await expect(cursorAdapter.collect(context(fetch, controller.signal))).resolves.toEqual({
+    const result = await cursorAdapter.collect(context(fetch, controller.signal));
+
+    expect(result).toEqual({
       ok: true,
       snapshot: {
         providerId: "cursor",
         accountLabel: "person@example.com",
-        planLabel: "Pro",
+        planLabel: "pro",
         source: "web-session",
         fetchedAt: NOW,
         windows: [
@@ -56,7 +73,15 @@ describe("Cursor adapter", () => {
             sourceSemantics: "used",
           },
         ],
-        credits: [{ id: "on-demand", label: "On-demand spend", unit: "USD", used: 3.2 }],
+        credits: [
+          {
+            id: "on-demand",
+            label: "On-demand spend",
+            unit: "USD",
+            used: 3.2,
+            limit: 10,
+          },
+        ],
       },
     });
     const init = {
@@ -67,32 +92,125 @@ describe("Cursor adapter", () => {
     };
     expect(fetch).toHaveBeenNthCalledWith(1, "https://cursor.com/api/usage-summary", init);
     expect(fetch).toHaveBeenNthCalledWith(2, "https://cursor.com/api/auth/me", init);
+    expect(JSON.stringify(result)).not.toContain("autoPercentUsed");
+    expect(JSON.stringify(result)).not.toContain("remaining");
   });
 
-  test("uses an enterprise overall absolute quota when a total percentage is absent", async () => {
+  test("uses the conservative maximum of available plan lane percentages", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response(summary({ totalPercentUsed: undefined, planUsage: undefined, overallUsage: { used: 250, limit: 1_000 } })))
-      .mockResolvedValueOnce(response({}, 500));
-
-    const result = await cursorAdapter.collect(context(fetch));
-    expect(result).toMatchObject({ ok: true, snapshot: { windows: [{ usedRatio: 0.25 }] } });
-  });
-
-  test("uses a team pooled absolute quota when higher-precedence values are absent", async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response(summary({ totalPercentUsed: undefined, planUsage: undefined, teamUsage: { used: 100, limit: 400 } })))
+      .mockResolvedValueOnce(response(planSummary({
+        individualUsage: {
+          plan: {
+            enabled: true,
+            used: 25,
+            limit: 100,
+            remaining: 75,
+            autoPercentUsed: 30,
+            apiPercentUsed: 60,
+          },
+        },
+      })))
       .mockResolvedValueOnce(response({}));
 
-    const result = await cursorAdapter.collect(context(fetch));
-    expect(result).toMatchObject({ ok: true, snapshot: { windows: [{ usedRatio: 0.25 }] } });
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: { windows: [{ usedRatio: 0.6 }] },
+    });
+  });
+
+  test("falls back from plan percentages to plan absolute usage", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary({
+        individualUsage: {
+          plan: { enabled: true, used: 250, limit: 1_000, remaining: 750 },
+        },
+      })))
+      .mockResolvedValueOnce(response({}));
+
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: { windows: [{ usedRatio: 0.25 }] },
+    });
+  });
+
+  test("uses enterprise overall quota when the plan is disabled", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary({
+        membershipType: "enterprise",
+        individualUsage: {
+          plan: { enabled: false, used: 0, limit: 0, remaining: 0 },
+          overall: { enabled: true, used: 250, limit: 1_000, remaining: 750 },
+          onDemand: { enabled: false },
+        },
+      })))
+      .mockRejectedValueOnce(new TypeError("identity unavailable"));
+
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        planLabel: "enterprise",
+        windows: [{ usedRatio: 0.25 }],
+        credits: [],
+      },
+    });
+  });
+
+  test("uses team pooled quota and team on-demand credit", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({
+        billingCycleStart: START,
+        billingCycleEnd: END,
+        membershipType: "business",
+        teamUsage: {
+          pooled: { enabled: true, used: 100, limit: 400, remaining: 300 },
+          onDemand: { enabled: true, used: 450, limit: 2_000, remaining: 1_550 },
+        },
+      }))
+      .mockResolvedValueOnce(response({ email: "team@example.com" }));
+
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [{ usedRatio: 0.25 }],
+        credits: [{ used: 4.5, limit: 20 }],
+      },
+    });
+  });
+
+  test("lets a clearly present identity plan override membership type", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()))
+      .mockResolvedValueOnce(response({ email: "person@example.com", planName: "Enterprise Plus" }));
+
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: { planLabel: "Enterprise Plus" },
+    });
   });
 
   test.each([
-    ["an out-of-range percentage", summary({ totalPercentUsed: 101 })],
-    ["an invalid billing boundary", summary({ billingCycleEnd: "not-a-date" })],
-    ["no active quota", summary({ totalPercentUsed: undefined, planUsage: undefined, onDemandUsage: undefined })],
+    ["an out-of-range supplied lane", planSummary({
+      individualUsage: {
+        plan: { enabled: true, totalPercentUsed: 5, autoPercentUsed: 101 },
+      },
+    })],
+    ["inconsistent remaining", planSummary({
+      individualUsage: {
+        plan: { enabled: true, used: 25, limit: 100, remaining: 50 },
+      },
+    })],
+    ["an invalid billing boundary", planSummary({ billingCycleEnd: "not-a-date" })],
+    ["no active quota", planSummary({
+      individualUsage: {
+        plan: { enabled: false, used: 0, limit: 0, remaining: 0 },
+        onDemand: { enabled: true, used: 10 },
+      },
+    })],
   ])("returns provider_changed for %s", async (_name, body) => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response(body));
     await expect(cursorAdapter.collect(context(fetch))).resolves.toEqual({
@@ -107,6 +225,9 @@ describe("Cursor adapter", () => {
     [500, "temporary_error"],
   ] as const)("maps %i to %s", async (status, kind) => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response({}, status));
-    await expect(cursorAdapter.collect(context(fetch))).resolves.toEqual({ ok: false, health: { kind } });
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toEqual({
+      ok: false,
+      health: { kind },
+    });
   });
 });

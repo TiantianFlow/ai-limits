@@ -1,32 +1,42 @@
 import { z } from "zod";
 
-const finiteNumber = z.number().finite();
+const nonEmptyString = z.string().trim().min(1);
+const optionalFiniteNumber = z.number().finite().nullable().optional();
 
 export const cursorQuotaSchema = z.object({
-  used: finiteNumber.optional(),
-  limit: finiteNumber.optional(),
-  percentUsed: finiteNumber.optional(),
+  enabled: z.boolean(),
+  used: optionalFiniteNumber,
+  limit: optionalFiniteNumber,
+  remaining: optionalFiniteNumber,
 }).passthrough();
+
+export const cursorPlanQuotaSchema = cursorQuotaSchema.extend({
+  autoPercentUsed: optionalFiniteNumber,
+  apiPercentUsed: optionalFiniteNumber,
+  totalPercentUsed: optionalFiniteNumber,
+});
 
 export const cursorUsageSummarySchema = z.object({
   billingCycleStart: z.iso.datetime({ offset: true }),
   billingCycleEnd: z.iso.datetime({ offset: true }),
-  totalPercentUsed: finiteNumber.optional(),
-  planUsage: cursorQuotaSchema.optional(),
-  overallUsage: cursorQuotaSchema.optional(),
-  enterpriseUsage: cursorQuotaSchema.optional(),
-  teamUsage: cursorQuotaSchema.optional(),
-  pooledUsage: cursorQuotaSchema.optional(),
-  onDemandUsage: cursorQuotaSchema.optional(),
-  lanes: z.array(cursorQuotaSchema).optional(),
-  usageLanes: z.array(cursorQuotaSchema).optional(),
+  membershipType: nonEmptyString,
+  individualUsage: z.object({
+    plan: cursorPlanQuotaSchema.nullable().optional(),
+    overall: cursorQuotaSchema.nullable().optional(),
+    onDemand: cursorQuotaSchema.nullable().optional(),
+  }).passthrough().nullable().optional(),
+  teamUsage: z.object({
+    pooled: cursorQuotaSchema.nullable().optional(),
+    onDemand: cursorQuotaSchema.nullable().optional(),
+  }).passthrough().nullable().optional(),
 }).passthrough();
 
 export const cursorIdentitySchema = z.object({
-  email: z.string().trim().min(1).optional(),
-  plan: z.string().trim().min(1).optional(),
-  planName: z.string().trim().min(1).optional(),
+  email: nonEmptyString.optional(),
+  plan: nonEmptyString.optional(),
+  planName: nonEmptyString.optional(),
 }).passthrough();
 
+export type CursorPlanQuota = z.infer<typeof cursorPlanQuotaSchema>;
 export type CursorQuota = z.infer<typeof cursorQuotaSchema>;
 export type CursorUsageSummary = z.infer<typeof cursorUsageSummarySchema>;
