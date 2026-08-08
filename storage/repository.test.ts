@@ -104,6 +104,7 @@ describe("state repository", () => {
       "experimental_unavailable",
     ]);
     expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
+    expect(await loadState()).toEqual(state);
   });
 
   test("preserves a matching live snapshot during migration", async () => {
@@ -122,6 +123,122 @@ describe("state repository", () => {
 
     expect(state.providers[0]?.snapshot).toEqual(providers[0]!.snapshot);
     expect(state.providers[0]?.snapshot?.providerId).toBe("chatgpt");
+    expect(await loadState()).toEqual(state);
+  });
+
+  test("whitelists persisted snapshot, quota, and credit fields", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        preferences: { displayMode: "left" },
+        providers: [
+          {
+            providerId: "chatgpt",
+            health: { kind: "connected", token: "health-secret" },
+            snapshot: {
+              providerId: "chatgpt",
+              accountLabel: "Plus account",
+              planLabel: "Plus",
+              source: "web-session",
+              fetchedAt: now,
+              token: "snapshot-secret",
+              rawResponse: { accessToken: "raw-secret" },
+              windows: [
+                {
+                  id: "weekly",
+                  label: "Weekly messages",
+                  kind: "rolling",
+                  usedRatio: 0.25,
+                  used: 25,
+                  limit: 100,
+                  unit: "messages",
+                  startedAt: now - day,
+                  resetsAt: now + day,
+                  durationMs: 2 * day,
+                  sourceSemantics: "used",
+                  authorization: "Bearer window-secret",
+                },
+              ],
+              credits: [
+                {
+                  id: "extra",
+                  label: "Extra usage",
+                  unit: "USD",
+                  used: 2,
+                  limit: 10,
+                  remaining: 8,
+                  resetsAt: now + day,
+                  cookie: "credit-secret",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const state = await ensureState(now);
+
+    expect(state.providers[0]?.snapshot).toStrictEqual({
+      providerId: "chatgpt",
+      accountLabel: "Plus account",
+      planLabel: "Plus",
+      source: "web-session",
+      fetchedAt: now,
+      windows: [
+        {
+          id: "weekly",
+          label: "Weekly messages",
+          kind: "rolling",
+          usedRatio: 0.25,
+          used: 25,
+          limit: 100,
+          unit: "messages",
+          startedAt: now - day,
+          resetsAt: now + day,
+          durationMs: 2 * day,
+          sourceSemantics: "used",
+        },
+      ],
+      credits: [
+        {
+          id: "extra",
+          label: "Extra usage",
+          unit: "USD",
+          used: 2,
+          limit: 10,
+          remaining: 8,
+          resetsAt: now + day,
+        },
+      ],
+    });
+    expect(await loadState()).toEqual(state);
+    expect(JSON.stringify(state)).not.toMatch(/secret|token|rawResponse|authorization|cookie/);
+  });
+
+  test("drops a snapshot containing a semantically invalid quota window", async () => {
+    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
+    delete legacyState.version;
+    const providers = legacyState.providers as ReturnType<typeof createFixtureState>["providers"];
+    providers[0]!.snapshot!.source = "web-session";
+    providers[0]!.snapshot!.windows[0]!.usedRatio = 1.1;
+    await browser.storage.local.set({ aiLimitsState: legacyState });
+
+    const state = await ensureState(now);
+
+    expect(state.providers[0]?.snapshot).toBeUndefined();
+  });
+
+  test("drops a snapshot containing a semantically invalid credit balance", async () => {
+    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
+    delete legacyState.version;
+    const providers = legacyState.providers as ReturnType<typeof createFixtureState>["providers"];
+    providers[1]!.snapshot!.source = "web-session";
+    providers[1]!.snapshot!.credits[0]!.remaining = -1;
+    await browser.storage.local.set({ aiLimitsState: legacyState });
+
+    const state = await ensureState(now);
+
+    expect(state.providers[1]?.snapshot).toBeUndefined();
   });
 
   test("updates only the requested provider record", async () => {

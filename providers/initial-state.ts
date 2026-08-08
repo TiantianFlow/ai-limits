@@ -1,10 +1,12 @@
 import type {
   AppState,
+  CreditBalance,
   DisplayMode,
   ProviderHealth,
   ProviderId,
   ProviderRecord,
   ProviderSnapshot,
+  QuotaWindow,
 } from "../domain/model";
 
 export const CURRENT_STATE_VERSION = 2 as const;
@@ -19,6 +21,90 @@ const PROVIDER_IDS: ProviderId[] = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || isNonEmptyString(value);
+}
+
+function isOptionalNumber(
+  value: unknown,
+  predicate: (value: number) => boolean,
+): value is number | undefined {
+  return value === undefined || (isFiniteNumber(value) && predicate(value));
+}
+
+function normalizeWindow(value: unknown): QuotaWindow | undefined {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.id) ||
+    !isNonEmptyString(value.label) ||
+    !["rolling", "calendar", "model", "feature"].includes(
+      value.kind as string,
+    ) ||
+    !isFiniteNumber(value.usedRatio) ||
+    value.usedRatio < 0 ||
+    value.usedRatio > 1 ||
+    !isOptionalNumber(value.used, (number) => number >= 0) ||
+    !isOptionalNumber(value.limit, (number) => number > 0) ||
+    !isOptionalString(value.unit) ||
+    !isOptionalNumber(value.startedAt, (number) => number >= 0) ||
+    !isOptionalNumber(value.resetsAt, (number) => number >= 0) ||
+    !isOptionalNumber(value.durationMs, (number) => number > 0) ||
+    (value.sourceSemantics !== "used" && value.sourceSemantics !== "remaining") ||
+    (isFiniteNumber(value.startedAt) &&
+      isFiniteNumber(value.resetsAt) &&
+      value.resetsAt <= value.startedAt)
+  ) {
+    return undefined;
+  }
+
+  return {
+    id: value.id,
+    label: value.label,
+    kind: value.kind as QuotaWindow["kind"],
+    usedRatio: value.usedRatio,
+    ...(value.used !== undefined ? { used: value.used } : {}),
+    ...(value.limit !== undefined ? { limit: value.limit } : {}),
+    ...(value.unit !== undefined ? { unit: value.unit } : {}),
+    ...(value.startedAt !== undefined ? { startedAt: value.startedAt } : {}),
+    ...(value.resetsAt !== undefined ? { resetsAt: value.resetsAt } : {}),
+    ...(value.durationMs !== undefined ? { durationMs: value.durationMs } : {}),
+    sourceSemantics: value.sourceSemantics,
+  };
+}
+
+function normalizeCredit(value: unknown): CreditBalance | undefined {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.id) ||
+    !isNonEmptyString(value.label) ||
+    !isNonEmptyString(value.unit) ||
+    !isOptionalNumber(value.used, (number) => number >= 0) ||
+    !isOptionalNumber(value.limit, (number) => number > 0) ||
+    !isOptionalNumber(value.remaining, (number) => number >= 0) ||
+    !isOptionalNumber(value.resetsAt, (number) => number >= 0)
+  ) {
+    return undefined;
+  }
+
+  return {
+    id: value.id,
+    label: value.label,
+    unit: value.unit,
+    ...(value.used !== undefined ? { used: value.used } : {}),
+    ...(value.limit !== undefined ? { limit: value.limit } : {}),
+    ...(value.remaining !== undefined ? { remaining: value.remaining } : {}),
+    ...(value.resetsAt !== undefined ? { resetsAt: value.resetsAt } : {}),
+  };
 }
 
 function initialHealth(providerId: ProviderId): ProviderHealth {
@@ -67,16 +153,30 @@ function normalizeSnapshot(
     !isRecord(value) ||
     value.providerId !== providerId ||
     (value.source !== "web-session" && value.source !== "oauth") ||
-    typeof value.fetchedAt !== "number" ||
+    !isFiniteNumber(value.fetchedAt) ||
+    value.fetchedAt < 0 ||
+    !isOptionalString(value.accountLabel) ||
+    !isOptionalString(value.planLabel) ||
     !Array.isArray(value.windows) ||
     !Array.isArray(value.credits)
   ) {
     return undefined;
   }
 
+  const windows = value.windows.map(normalizeWindow);
+  const credits = value.credits.map(normalizeCredit);
+  if (windows.some((window) => window === undefined) || credits.some((credit) => credit === undefined)) {
+    return undefined;
+  }
+
   return {
-    ...(value as unknown as ProviderSnapshot),
     providerId,
+    ...(value.accountLabel !== undefined ? { accountLabel: value.accountLabel } : {}),
+    ...(value.planLabel !== undefined ? { planLabel: value.planLabel } : {}),
+    source: value.source,
+    fetchedAt: value.fetchedAt,
+    windows: windows as QuotaWindow[],
+    credits: credits as CreditBalance[],
   };
 }
 
