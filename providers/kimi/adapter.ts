@@ -398,7 +398,7 @@ async function collectKimi({
             ? {
                 kind: "temporary_error",
                 message:
-                  "Kimi couldn't refresh in the background. Open or reload Kimi once, then retry.",
+                  "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
               }
             : healthForStatus(response.status),
       };

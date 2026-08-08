@@ -368,7 +368,7 @@ describe("Kimi adapter", () => {
       health: {
         kind: "temporary_error",
         message:
-          "Kimi couldn't refresh in the background. Open or reload Kimi once, then retry.",
+          "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
       },
     });
     expect(getRefreshedAccessToken).toHaveBeenCalledTimes(1);
@@ -530,7 +530,7 @@ describe("Kimi adapter", () => {
             health: {
               kind: "temporary_error",
               message:
-                "Kimi couldn't refresh in the background. Open or reload Kimi once, then retry.",
+                "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
             },
           }
         : { ok: false, health: { kind: "temporary_error" } },
