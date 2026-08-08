@@ -13,7 +13,7 @@ import {
   providerRegistry,
   type ConnectableProviderId,
 } from "../providers/registry";
-import { ensureState, loadState } from "../storage/repository";
+import { ensureState, setDisplayMode } from "../storage/repository";
 
 const REFRESH_ALARM = "refresh-connected";
 const REFRESH_PERIOD_MINUTES = 15;
@@ -64,7 +64,7 @@ async function refreshConnectedProviders(): Promise<void> {
 }
 
 async function currentState() {
-  return (await loadState()) ?? ensureState(Date.now());
+  return ensureState(Date.now());
 }
 
 const handleRuntimeCommand = createRuntimeCommandHandler({
@@ -88,6 +88,10 @@ const handleRuntimeCommand = createRuntimeCommandHandler({
     return currentState();
   },
   getState: currentState,
+  async setDisplayMode(mode) {
+    await setDisplayMode(mode);
+    return currentState();
+  },
 });
 const handleRuntimeMessage = createChromeRuntimeMessageListener(
   handleRuntimeCommand,

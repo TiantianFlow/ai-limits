@@ -11,6 +11,7 @@ describe("runtime command router", () => {
       refreshAll: vi.fn(async () => "refreshed"),
       connectProvider: vi.fn(async () => "connected"),
       getState: vi.fn(async () => "state"),
+      setDisplayMode: vi.fn(async () => "updated"),
     };
     const handle = createRuntimeCommandHandler(handlers);
 
@@ -28,6 +29,12 @@ describe("runtime command router", () => {
       handle({ type: "CONNECT_PROVIDER", providerId: "cursor" }),
     ).resolves.toBe("connected");
     await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
+    await expect(
+      handle({ type: "SET_DISPLAY_MODE", mode: "used" }),
+    ).resolves.toBe("updated");
+    await expect(
+      handle({ type: "SET_DISPLAY_MODE", mode: "left" }),
+    ).resolves.toBe("updated");
     expect(handlers.connectProvider).toHaveBeenNthCalledWith(1, "chatgpt");
 
     expect(handle({ type: "FETCH", url: "https://attacker.invalid" })).toBeUndefined();
@@ -47,9 +54,17 @@ describe("runtime command router", () => {
         extra: true,
       }),
     ).toBeUndefined();
+    expect(
+      handle({ type: "SET_DISPLAY_MODE", mode: "remaining" }),
+    ).toBeUndefined();
+    expect(
+      handle({ type: "SET_DISPLAY_MODE", mode: "left", extra: true }),
+    ).toBeUndefined();
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
     expect(handlers.connectProvider).toHaveBeenCalledTimes(4);
     expect(handlers.getState).toHaveBeenCalledTimes(1);
+    expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(1, "used");
+    expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(2, "left");
   });
 
   test("keeps the response channel open only for accepted async commands", async () => {

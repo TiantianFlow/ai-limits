@@ -1,9 +1,11 @@
 import type { ConnectableProviderId } from "../providers/registry";
+import type { DisplayMode } from "../domain/model";
 
 export type RuntimeCommand =
   | { type: "REFRESH_ALL" }
   | { type: "CONNECT_PROVIDER"; providerId: ConnectableProviderId }
-  | { type: "GET_STATE" };
+  | { type: "GET_STATE" }
+  | { type: "SET_DISPLAY_MODE"; mode: DisplayMode };
 
 function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   return (
@@ -28,6 +30,13 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
     );
   }
 
+  if (command.type === "SET_DISPLAY_MODE") {
+    return (
+      hasExactKeys(command, ["type", "mode"]) &&
+      (command.mode === "used" || command.mode === "left")
+    );
+  }
+
   return (
     (command.type === "REFRESH_ALL" || command.type === "GET_STATE") &&
     hasExactKeys(command, ["type"])
@@ -38,6 +47,7 @@ export interface RuntimeCommandHandlers {
   refreshAll(): unknown;
   connectProvider(providerId: ConnectableProviderId): unknown;
   getState(): unknown;
+  setDisplayMode(mode: DisplayMode): unknown;
 }
 
 type RuntimeCommandHandler = (value: unknown) => unknown;
@@ -74,6 +84,8 @@ export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
         return handlers.connectProvider(value.providerId);
       case "GET_STATE":
         return handlers.getState();
+      case "SET_DISPLAY_MODE":
+        return handlers.setDisplayMode(value.mode);
     }
   };
 }

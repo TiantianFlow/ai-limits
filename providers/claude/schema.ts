@@ -15,7 +15,7 @@ export const claudeOrganizationSchema = z.object({
 
 export const claudeUsageWindowSchema = z.object({
   utilization: z.number().finite().min(0).max(100),
-  resets_at: z.iso.datetime({ offset: true }),
+  resets_at: z.iso.datetime({ offset: true }).nullable(),
 });
 
 export const claudeScopedLimitSchema = z.object({

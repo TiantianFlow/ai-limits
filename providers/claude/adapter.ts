@@ -87,6 +87,10 @@ function normalizeWindow(
   identity: Pick<QuotaWindow, "id" | "label" | "kind">,
   durationMs: number,
 ): QuotaWindow {
+  if (window.resets_at === null) {
+    throw new Error("Cannot normalize a window without a reset time");
+  }
+
   return {
     ...identity,
     usedRatio: window.utilization / 100,
@@ -193,29 +197,43 @@ async function collectClaude({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
+    const namedUsageWindows = [
+      usage.data.five_hour,
+      usage.data.seven_day,
+      usage.data.seven_day_opus,
+      usage.data.seven_day_sonnet,
+    ];
+    if (
+      namedUsageWindows.some(
+        (window) => window?.utilization && window.resets_at === null,
+      )
+    ) {
+      return { ok: false, health: { kind: "provider_changed" } };
+    }
+
     const namedWindows = [
-      usage.data.five_hour
+      usage.data.five_hour?.resets_at
         ? normalizeWindow(
             usage.data.five_hour,
             { id: "five-hour", label: "5-hour messages", kind: "rolling" },
             5 * HOUR_MS,
           )
         : undefined,
-      usage.data.seven_day
+      usage.data.seven_day?.resets_at
         ? normalizeWindow(
             usage.data.seven_day,
             { id: "weekly", label: "Weekly messages", kind: "rolling" },
             7 * DAY_MS,
           )
         : undefined,
-      usage.data.seven_day_opus
+      usage.data.seven_day_opus?.resets_at
         ? normalizeWindow(
             usage.data.seven_day_opus,
             { id: "weekly-opus", label: "Weekly Opus", kind: "model" },
             7 * DAY_MS,
           )
         : undefined,
-      usage.data.seven_day_sonnet
+      usage.data.seven_day_sonnet?.resets_at
         ? normalizeWindow(
             usage.data.seven_day_sonnet,
             { id: "weekly-sonnet", label: "Weekly Sonnet", kind: "model" },

@@ -2,11 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import type { RuntimeCommand } from "../../background/messages";
 import type { AppState, DisplayMode } from "../../domain/model";
-import {
-  ensureState,
-  loadState,
-  setDisplayMode,
-} from "../../storage/repository";
+import { loadState } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
 function sendMessage(message: RuntimeCommand): void {
@@ -20,9 +16,9 @@ export function App() {
   useEffect(() => {
     let mounted = true;
 
-    void ensureState(Date.now()).then((nextState) => {
+    void browser.runtime.sendMessage({ type: "GET_STATE" }).then((nextState) => {
       if (mounted) {
-        setState(nextState);
+        setState(nextState as AppState);
       }
     });
 
@@ -60,7 +56,7 @@ export function App() {
           }
         : current,
     );
-    void setDisplayMode(mode);
+    sendMessage({ type: "SET_DISPLAY_MODE", mode });
   };
 
   if (!state) {

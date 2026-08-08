@@ -281,6 +281,64 @@ describe("Claude adapter", () => {
     });
   });
 
+  test("omits an inactive named window with a null reset while preserving valid windows", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            seven_day_sonnet: {
+              utilization: 0,
+              resets_at: null,
+              account_uuid: "redacted-account",
+            },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(response({}));
+
+    const result = await claudeAdapter.collect(context(injectedFetch));
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [
+          { id: "five-hour", resetsAt: Date.parse(FIVE_HOUR_RESET) },
+          { id: "weekly", resetsAt: Date.parse(WEEKLY_RESET) },
+          {
+            id: "weekly-scoped-claude-sonnet-4-5",
+            resetsAt: Date.parse(SONNET_RESET),
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("redacted-account");
+  });
+
+  test("rejects an active named window with a null reset", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            seven_day_sonnet: { utilization: 1, resets_at: null },
+          }),
+        ),
+      );
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
+      ok: false,
+      health: { kind: "provider_changed" },
+    });
+    expect(injectedFetch).toHaveBeenCalledTimes(2);
+  });
+
   test("rejects a response with no active quota window", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
