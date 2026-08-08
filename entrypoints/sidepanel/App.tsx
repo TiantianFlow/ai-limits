@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 import type { RuntimeCommand } from "../../background/messages";
-import type { AppState, DisplayMode, ProviderId } from "../../domain/model";
+import type { AppState, DisplayMode } from "../../domain/model";
 import {
   ensureState,
   loadState,
@@ -9,12 +9,7 @@ import {
 } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
-type ConnectProviderCommand = {
-  type: "CONNECT_PROVIDER";
-  providerId: Exclude<ProviderId, "antigravity">;
-};
-
-function sendMessage(message: RuntimeCommand | ConnectProviderCommand): void {
+function sendMessage(message: RuntimeCommand): void {
   void browser.runtime.sendMessage(message);
 }
 

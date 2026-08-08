@@ -8,7 +8,13 @@ export default defineConfig({
     description: "One quiet cockpit for AI subscription limits.",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
-    optional_host_permissions: ["https://chatgpt.com/*"],
+    optional_host_permissions: [
+      "https://chatgpt.com/*",
+      "https://claude.ai/*",
+      "https://www.kimi.com/*",
+      "https://cursor.com/*",
+    ],
+    optional_permissions: ["cookies"],
     action: { default_title: "Open AI Limits" },
   },
 });

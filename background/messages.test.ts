@@ -18,8 +18,17 @@ describe("runtime command router", () => {
     await expect(
       handle({ type: "CONNECT_PROVIDER", providerId: "chatgpt" }),
     ).resolves.toBe("connected");
+    await expect(
+      handle({ type: "CONNECT_PROVIDER", providerId: "claude" }),
+    ).resolves.toBe("connected");
+    await expect(
+      handle({ type: "CONNECT_PROVIDER", providerId: "kimi" }),
+    ).resolves.toBe("connected");
+    await expect(
+      handle({ type: "CONNECT_PROVIDER", providerId: "cursor" }),
+    ).resolves.toBe("connected");
     await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
-    expect(handlers.connectProvider).toHaveBeenCalledWith("chatgpt");
+    expect(handlers.connectProvider).toHaveBeenNthCalledWith(1, "chatgpt");
 
     expect(handle({ type: "FETCH", url: "https://attacker.invalid" })).toBeUndefined();
     expect(
@@ -28,8 +37,18 @@ describe("runtime command router", () => {
         url: "https://attacker.invalid",
       }),
     ).toBeUndefined();
+    expect(
+      handle({ type: "CONNECT_PROVIDER", providerId: "antigravity" }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_PROVIDER",
+        providerId: "claude",
+        extra: true,
+      }),
+    ).toBeUndefined();
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
-    expect(handlers.connectProvider).toHaveBeenCalledTimes(1);
+    expect(handlers.connectProvider).toHaveBeenCalledTimes(4);
     expect(handlers.getState).toHaveBeenCalledTimes(1);
   });
 

@@ -3,23 +3,24 @@
 ## Product summary
 
 AI Limits is a Chrome side-panel cockpit for keeping subscription usage limits
-visible in one calm view. The POC starts with five provider cards and can
-combine local demo data with a connected ChatGPT usage snapshot.
+visible in one calm view. Runtime starts with no usage data: provider cards are
+populated only by live checks against an opted-in browser session.
 
 ## Privacy model
 
-Provider data stays in the browser's extension storage. Connecting ChatGPT is
-an explicit user action: the extension requests only the optional
-`https://chatgpt.com/*` permission, uses the resulting session token for the
-collection request, and does not persist or log that token.
+Provider data stays in browser extension storage. Connecting ChatGPT, Claude,
+Kimi, or Cursor is an explicit per-provider action: the extension requests
+only that provider's optional host permission (and Kimi's optional cookies
+permission). Live session credentials are not persisted or logged.
 
 ## Current POC coverage
 
-- Five-provider demo cockpit with quota windows, usage, and health state.
+- Five-provider cockpit with empty, permission-required starting state.
 - Local persistence for display preferences and provider state.
-- An explicit `Connect live` flow for a best-effort ChatGPT usage snapshot.
-- A background worker that refreshes only after the optional ChatGPT permission
-  has been granted.
+- An explicit `Connect live` flow for each standalone web provider (ChatGPT,
+  Claude, Kimi, and Cursor).
+- A background worker that refreshes only providers with their optional
+  permissions already granted.
 
 ## Local development
 
@@ -52,23 +53,22 @@ choose **Load unpacked**. Select this exact directory:
 Chrome should show **AI Limits** without manifest or service-worker errors. Use
 the extension toolbar action to open its side panel.
 
-## Connect live ChatGPT
+## Connect live providers
 
-The initial side panel uses the local five-provider demo. Click **Connect live**
-only when you want to grant ChatGPT access. Chrome will request the optional
-ChatGPT origin permission, after which the extension can collect a current
-ChatGPT usage snapshot. Declining the request leaves the demo data in place.
+Click **Connect live** only when you want to grant access to that provider.
+Chrome requests only the selected provider's optional permission, after which
+the extension performs a best-effort live browser-session usage check.
+Declining leaves that provider in the permission-required state with no
+fabricated usage snapshot.
 
 ## Known private-endpoint fragility
 
-ChatGPT's session and usage endpoints are private, unsupported provider
+These providers' session and usage endpoints are private, unsupported
 interfaces. Their response shape or availability can change without notice. The
-POC contains malformed or unavailable responses as provider health states, but
-it cannot guarantee live ChatGPT compatibility.
+POC represents malformed or unavailable responses as provider health states,
+but cannot guarantee live compatibility.
 
 ## Next provider milestones
 
-1. Add explicit, opt-in adapters for the remaining provider cards.
-2. Prefer stable, documented provider APIs where they exist.
-3. Add per-provider refresh controls, health guidance, and coverage for each
-   opt-in integration.
+1. Prefer stable, documented provider APIs where they exist.
+2. Add per-provider refresh controls and health guidance.

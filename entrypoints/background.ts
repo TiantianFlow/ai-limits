@@ -7,7 +7,12 @@ import {
   hasProviderPermission,
   requestProviderPermission,
 } from "../background/permissions";
-import { chatGptAdapter } from "../providers/chatgpt/adapter";
+import { refreshGrantedProviders } from "../background/refresh";
+import {
+  providerIds,
+  providerRegistry,
+  type ConnectableProviderId,
+} from "../providers/registry";
 import { ensureState, loadState } from "../storage/repository";
 
 const REFRESH_ALARM = "refresh-connected";
@@ -25,7 +30,7 @@ async function ensureRefreshAlarm(): Promise<void> {
   });
 }
 
-async function collectChatGpt(): Promise<void> {
+async function collectProvider(providerId: ConnectableProviderId): Promise<void> {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(
     () => controller.abort(),
@@ -33,10 +38,17 @@ async function collectChatGpt(): Promise<void> {
   );
 
   try {
-    await refreshProvider(chatGptAdapter, {
+    const adapter = providerRegistry[providerId];
+    await refreshProvider(adapter, {
       fetch: globalThis.fetch.bind(globalThis),
       now: Date.now(),
       signal: controller.signal,
+      ...(providerId === "kimi"
+        ? {
+            getCookie: (details: { url: string; name: string }) =>
+              browser.cookies.get(details),
+          }
+        : {}),
     });
   } finally {
     globalThis.clearTimeout(timeout);
@@ -44,9 +56,11 @@ async function collectChatGpt(): Promise<void> {
 }
 
 async function refreshConnectedProviders(): Promise<void> {
-  if (await hasProviderPermission("chatgpt")) {
-    await collectChatGpt();
-  }
+  await refreshGrantedProviders(
+    providerIds,
+    hasProviderPermission,
+    collectProvider,
+  );
 }
 
 async function currentState() {
@@ -69,7 +83,8 @@ const handleRuntimeCommand = createRuntimeCommandHandler({
       return currentState();
     }
 
-    await collectChatGpt();
+    await setProviderHealth(providerId, { kind: "connecting" }, Date.now());
+    await collectProvider(providerId);
     return currentState();
   },
   getState: currentState,

@@ -26,9 +26,23 @@ assert(
   "Expected permissions to be exactly alarms, sidePanel, storage.",
 );
 assert(
-  JSON.stringify(manifest.optional_host_permissions) ===
-    JSON.stringify(["https://chatgpt.com/*"]),
-  'Expected optional_host_permissions to equal ["https://chatgpt.com/*"].',
+  JSON.stringify([...(manifest.optional_host_permissions ?? [])].sort()) ===
+    JSON.stringify([
+      "https://chatgpt.com/*",
+      "https://claude.ai/*",
+      "https://cursor.com/*",
+      "https://www.kimi.com/*",
+    ]),
+  "Expected the four exact optional provider origins.",
+);
+assert(
+  JSON.stringify([...(manifest.optional_permissions ?? [])].sort()) ===
+    JSON.stringify(["cookies"]),
+  'Expected optional_permissions to equal ["cookies"].',
+);
+assert(
+  manifest.minimum_chrome_version === "116",
+  'Expected minimum_chrome_version to equal "116".',
 );
 assert(
   typeof manifest.background?.service_worker === "string" &&

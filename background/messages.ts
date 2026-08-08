@@ -1,6 +1,8 @@
+import type { ConnectableProviderId } from "../providers/registry";
+
 export type RuntimeCommand =
   | { type: "REFRESH_ALL" }
-  | { type: "CONNECT_PROVIDER"; providerId: "chatgpt" }
+  | { type: "CONNECT_PROVIDER"; providerId: ConnectableProviderId }
   | { type: "GET_STATE" };
 
 function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
@@ -19,7 +21,10 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   if (command.type === "CONNECT_PROVIDER") {
     return (
       hasExactKeys(command, ["type", "providerId"]) &&
-      command.providerId === "chatgpt"
+      (command.providerId === "chatgpt" ||
+        command.providerId === "claude" ||
+        command.providerId === "kimi" ||
+        command.providerId === "cursor")
     );
   }
 
@@ -31,7 +36,7 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
 
 export interface RuntimeCommandHandlers {
   refreshAll(): unknown;
-  connectProvider(providerId: "chatgpt"): unknown;
+  connectProvider(providerId: ConnectableProviderId): unknown;
   getState(): unknown;
 }
 
