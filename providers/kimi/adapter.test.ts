@@ -15,25 +15,40 @@ function response(body: unknown, status = 200): Response {
 
 function fixture(overrides: Record<string, unknown> = {}) {
   return {
-    usage: {
-      limit: "1000",
-      used: "250",
-      remaining: "750",
-      reset_time: WEEKLY_RESET,
-      time_unit: "TIME_UNIT_DAY",
-      time_value: "7",
-      nested_usage: [
-        {
-          limit: "100",
-          used: "25",
-          remaining: "75",
-          reset_time: FIVE_HOUR_RESET,
-          time_unit: "TIME_UNIT_MINUTE",
-          time_value: "300",
+    usages: [
+      {
+        scope: "FEATURE_CODING",
+        detail: {
+          limit: "1000",
+          used: "250",
+          remaining: "750",
+          resetTime: WEEKLY_RESET,
         },
-      ],
-    },
+        limits: [
+          {
+            window: {
+              duration: 300,
+              timeUnit: "TIME_UNIT_MINUTE",
+            },
+            detail: {
+              limit: "100",
+              used: "25",
+              remaining: "75",
+              resetTime: FIVE_HOUR_RESET,
+            },
+          },
+        ],
+      },
+    ],
     ...overrides,
+  };
+}
+
+function codingUsage() {
+  return fixture().usages[0] as {
+    scope: string;
+    detail: Record<string, unknown>;
+    limits: Array<Record<string, unknown>>;
   };
 }
 
@@ -47,9 +62,22 @@ function context(fetch: typeof globalThis.fetch, getCookie = vi.fn()) {
 }
 
 describe("Kimi adapter", () => {
-  test("uses the browser cookie only for the coding usage request and normalizes weekly and five-hour windows", async () => {
+  test("strictly selects the coding record and normalizes weekly and five-hour windows", async () => {
     const getCookie = vi.fn().mockResolvedValue({ value: "secret-cookie" });
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response(fixture()));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      response(
+        fixture({
+          usages: [
+            {
+              scope: "FEATURE_CHAT",
+              detail: { limit: "1", used: "0", resetTime: WEEKLY_RESET },
+              limits: [],
+            },
+            codingUsage(),
+          ],
+        }),
+      ),
+    );
 
     const result = await kimiAdapter.collect(context(fetch, getCookie));
 
@@ -94,6 +122,7 @@ describe("Kimi adapter", () => {
       "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",
       expect.objectContaining({
         method: "POST",
+        credentials: "include",
         headers: {
           Authorization: "Bearer secret-cookie",
           "Content-Type": "application/json",
@@ -131,10 +160,24 @@ describe("Kimi adapter", () => {
 
   test.each([
     fixture({
-      usage: { ...fixture().usage, limit: "not-a-number" },
+      usages: [{ ...codingUsage(), detail: { ...codingUsage().detail, limit: "not-a-number" } }],
     }),
-    fixture({ usage: { ...fixture().usage, used: "1001" } }),
-    fixture({ usage: { ...fixture().usage, time_unit: "TIME_UNIT_WEEK" } }),
+    fixture({
+      usages: [{ ...codingUsage(), detail: { ...codingUsage().detail, used: "1001" } }],
+    }),
+    fixture({
+      usages: [
+        {
+          ...codingUsage(),
+          limits: [
+            {
+              ...codingUsage().limits[0],
+              window: { duration: 300, timeUnit: "TIME_UNIT_WEEK" },
+            },
+          ],
+        },
+      ],
+    }),
   ])("rejects malformed or semantically invalid usage", async (body) => {
     const result = await kimiAdapter.collect(
       context(

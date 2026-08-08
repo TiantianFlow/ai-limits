@@ -4,7 +4,12 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../types";
-import { kimiUsageResponseSchema, type KimiUsage } from "./schema";
+import {
+  kimiCodingUsageSchema,
+  kimiUsageResponseSchema,
+  type KimiUsageDetail,
+  type KimiUsageLimit,
+} from "./schema";
 
 const KIMI_ORIGIN = "https://www.kimi.com/*";
 const KIMI_URL = "https://www.kimi.com/";
@@ -34,14 +39,14 @@ async function parseJson(response: Response): Promise<unknown> {
   }
 }
 
-function durationMs(usage: KimiUsage): number | undefined {
-  const value = Number(usage.time_value);
+function durationMs(limit: KimiUsageLimit): number | undefined {
+  const value = limit.window.duration;
   const unitMs =
-    usage.time_unit === "TIME_UNIT_MINUTE"
+    limit.window.timeUnit === "TIME_UNIT_MINUTE"
       ? MINUTE_MS
-      : usage.time_unit === "TIME_UNIT_HOUR"
+      : limit.window.timeUnit === "TIME_UNIT_HOUR"
         ? HOUR_MS
-        : usage.time_unit === "TIME_UNIT_DAY"
+        : limit.window.timeUnit === "TIME_UNIT_DAY"
           ? DAY_MS
           : undefined;
   const duration = unitMs === undefined ? undefined : value * unitMs;
@@ -52,12 +57,12 @@ function durationMs(usage: KimiUsage): number | undefined {
 }
 
 function normalizedAmounts(
-  usage: KimiUsage,
+  detail: KimiUsageDetail,
 ): { limit: number; used: number } | undefined {
-  const limit = Number(usage.limit);
-  const suppliedUsed = usage.used === undefined ? undefined : Number(usage.used);
+  const limit = Number(detail.limit);
+  const suppliedUsed = detail.used === undefined ? undefined : Number(detail.used);
   const remaining =
-    usage.remaining === undefined ? undefined : Number(usage.remaining);
+    detail.remaining === undefined ? undefined : Number(detail.remaining);
 
   if (!Number.isFinite(limit) || limit <= 0 || (suppliedUsed === undefined && remaining === undefined)) {
     return undefined;
@@ -79,12 +84,12 @@ function normalizedAmounts(
 }
 
 function normalizeWindow(
-  usage: KimiUsage,
+  detail: KimiUsageDetail,
   identity: Pick<QuotaWindow, "id" | "label">,
+  duration: number,
 ): QuotaWindow | undefined {
-  const amounts = normalizedAmounts(usage);
-  const duration = durationMs(usage);
-  const resetsAt = Date.parse(usage.reset_time);
+  const amounts = normalizedAmounts(detail);
+  const resetsAt = Date.parse(detail.resetTime);
   if (!amounts || duration === undefined || !Number.isFinite(resetsAt) || resetsAt <= 0) {
     return undefined;
   }
@@ -115,6 +120,7 @@ async function collectKimi({
 
     const response = await injectedFetch(USAGES_ENDPOINT, {
       method: "POST",
+      credentials: "include",
       headers: {
         Authorization: `Bearer ${cookie.value}`,
         "Content-Type": "application/json",
@@ -129,29 +135,52 @@ async function collectKimi({
       return { ok: false, health: healthForStatus(response.status) };
     }
 
-    const parsed = kimiUsageResponseSchema.safeParse(await parseJson(response));
-    if (!parsed.success) {
+    const envelope = kimiUsageResponseSchema.safeParse(await parseJson(response));
+    if (!envelope.success) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const weekly = normalizeWindow(parsed.data.usage, {
+    const codingRecords = envelope.data.usages.filter(
+      (usage): usage is { scope: "FEATURE_CODING" } =>
+        typeof usage === "object" &&
+        usage !== null &&
+        "scope" in usage &&
+        usage.scope === "FEATURE_CODING",
+    );
+    if (codingRecords.length !== 1) {
+      return { ok: false, health: { kind: "provider_changed" } };
+    }
+
+    const coding = kimiCodingUsageSchema.safeParse(codingRecords[0]);
+    if (!coding.success) {
+      return { ok: false, health: { kind: "provider_changed" } };
+    }
+
+    const weekly = normalizeWindow(coding.data.detail, {
       id: "weekly-coding",
       label: "Weekly coding",
-    });
-    if (!weekly || weekly.durationMs !== 7 * DAY_MS) {
+    }, 7 * DAY_MS);
+    if (!weekly) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const fiveHourUsage = parsed.data.usage.nested_usage?.find(
-      (usage) => durationMs(usage) === 5 * HOUR_MS,
+    const fiveHourLimits = coding.data.limits.filter(
+      (limit) =>
+        limit.window.duration === 300 &&
+        limit.window.timeUnit === "TIME_UNIT_MINUTE" &&
+        durationMs(limit) === 5 * HOUR_MS,
     );
-    const fiveHour = fiveHourUsage
-      ? normalizeWindow(fiveHourUsage, {
+    if (fiveHourLimits.length > 1) {
+      return { ok: false, health: { kind: "provider_changed" } };
+    }
+
+    const fiveHour = fiveHourLimits[0]
+      ? normalizeWindow(fiveHourLimits[0].detail, {
           id: "five-hour-coding",
           label: "5-hour coding",
-        })
+        }, 5 * HOUR_MS)
       : undefined;
-    if (fiveHourUsage && !fiveHour) {
+    if (fiveHourLimits.length === 1 && !fiveHour) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
