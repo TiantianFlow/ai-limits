@@ -24,9 +24,11 @@ import {
 export interface CockpitProps {
   state: AppState;
   now: number;
+  isRefreshing?: boolean;
+  refreshAnnouncement?: string;
   onDisplayModeChange: (mode: DisplayMode) => void;
   onRefresh: () => void;
-  onConnectProvider: (providerId: Exclude<ProviderId, "antigravity">) => void;
+  onConnectProvider: (providerId: ProviderId) => void;
 }
 
 const providerNames: Record<ProviderId, string> = {
@@ -34,7 +36,6 @@ const providerNames: Record<ProviderId, string> = {
   claude: "Claude",
   kimi: "Kimi",
   cursor: "Cursor",
-  antigravity: "Antigravity",
 };
 
 const sourceNames = {
@@ -180,16 +181,15 @@ function providerView(
     stale: snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false,
     health: provider.health,
     hasSnapshot: snapshot !== undefined,
-    emptyDescription:
-      provider.providerId === "antigravity"
-        ? "Usage data is not available yet."
-        : `Check ${providerNames[provider.providerId]} using your signed-in browser session.`,
+    emptyDescription: `Check ${providerNames[provider.providerId]} using your signed-in browser session.`,
   };
 }
 
 export function Cockpit({
   state,
   now,
+  isRefreshing = false,
+  refreshAnnouncement = isRefreshing ? "Refreshing usage" : "",
   onDisplayModeChange,
   onRefresh,
   onConnectProvider,
@@ -224,10 +224,16 @@ export function Cockpit({
             className="icon-button"
             type="button"
             onClick={onRefresh}
-            aria-label="Refresh usage"
-            title="Refresh usage"
+            disabled={isRefreshing}
+            aria-busy={isRefreshing}
+            aria-label={isRefreshing ? "Refreshing usage" : "Refresh usage"}
+            title={isRefreshing ? "Refreshing usage" : "Refresh usage"}
           >
-            <span aria-hidden="true">↻</span>
+            {isRefreshing ? (
+              <span className="refresh-spinner" aria-hidden="true" />
+            ) : (
+              <span aria-hidden="true">↻</span>
+            )}
           </button>
           <button
             className="icon-button"
@@ -240,23 +246,25 @@ export function Cockpit({
         </div>
       </header>
 
+      {refreshAnnouncement ? (
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {refreshAnnouncement}
+        </p>
+      ) : null}
+
       <section className="provider-list" aria-label="AI provider usage">
         {state.providers.map((provider) => {
-          const connectableProviderId =
-            provider.providerId === "antigravity" ? undefined : provider.providerId;
-
           return (
             <ProviderCard
               key={provider.providerId}
               {...providerView(provider, mode, now)}
               action={
                 !provider.snapshot &&
-                provider.health.kind !== "connecting" &&
-                connectableProviderId
+                provider.health.kind !== "connecting"
                   ? {
                       label: "Check session",
-                      accessibleLabel: `Check ${providerNames[connectableProviderId]} session`,
-                      onClick: () => onConnectProvider(connectableProviderId),
+                      accessibleLabel: `Check ${providerNames[provider.providerId]} session`,
+                      onClick: () => onConnectProvider(provider.providerId),
                     }
                   : undefined
               }

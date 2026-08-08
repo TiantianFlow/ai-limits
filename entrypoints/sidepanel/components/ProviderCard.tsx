@@ -49,7 +49,6 @@ const healthLabels: Record<ProviderHealth["kind"], string> = {
   challenge_blocked: "Check blocked",
   provider_changed: "Provider changed",
   temporary_error: "Temporarily unavailable",
-  experimental_unavailable: "Experimental",
 };
 
 function healthMessage(health: ProviderHealth): string | undefined {

@@ -4,6 +4,7 @@ import { kimiAdapter } from "./adapter";
 
 const NOW = 1_800_000_000_000;
 const MONTHLY_RESET = "2030-02-01T00:00:00.000Z";
+const MONTHLY_START = "2030-01-01T00:00:00.000Z";
 const WEEKLY_RESET = "2030-01-20T12:00:00.000Z";
 const FIVE_HOUR_RESET = "2030-01-15T10:00:00.000Z";
 
@@ -66,6 +67,20 @@ function statsFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function subscriptionFixture(title = "Kimi Coding Ultra") {
+  return {
+    subscription: {
+      active: true,
+      status: "SUBSCRIPTION_STATUS_ACTIVE",
+      type: "SUBSCRIPTION_TYPE_PAID",
+      goods: {
+        title,
+        membershipLevel: "MEMBERSHIP_LEVEL_ULTRA",
+      },
+    },
+  };
+}
+
 function context(
   fetch: typeof globalThis.fetch,
   getCookie = vi.fn(),
@@ -101,6 +116,7 @@ describe("Kimi adapter", () => {
             label: "Monthly total",
             kind: "calendar",
             usedRatio: 0.019,
+            startedAt: Date.parse(MONTHLY_START),
             resetsAt: Date.parse(MONTHLY_RESET),
             sourceSemantics: "used",
           },
@@ -148,6 +164,83 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("secret-cookie");
   });
 
+  test("uses the previous calendar-month boundary for monthly pacing", async () => {
+    const resetAt = "2030-03-31T16:11:00.000Z";
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      response(
+        statsFixture({
+          subscriptionBalance: {
+            amountUsedRatio: 0.03,
+            expireTime: resetAt,
+          },
+        }),
+      ),
+    );
+
+    const result = await kimiAdapter.collect(
+      context(fetch, vi.fn().mockResolvedValue({ value: "secret-cookie" })),
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(
+        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+      ).toMatchObject({
+        startedAt: Date.parse("2030-02-28T16:11:00.000Z"),
+        resetsAt: Date.parse(resetAt),
+      });
+    }
+  });
+
+  test("adds the exact Kimi subscription title without retaining raw metadata", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response(subscriptionFixture("Kimi Coding Ultra")));
+
+    const result = await kimiAdapter.collect(
+      context(fetch, vi.fn().mockResolvedValue({ value: "secret-cookie" })),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        providerId: "kimi",
+        planLabel: "Kimi Coding Ultra",
+      },
+    });
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscription",
+      expect.objectContaining({ body: JSON.stringify({}) }),
+    );
+    expect(JSON.stringify(result)).not.toContain("MEMBERSHIP_LEVEL_ULTRA");
+  });
+
+  test("keeps valid usage when optional subscription metadata changes", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response({ subscription: { goods: { title: 42 } } }));
+
+    const result = await kimiAdapter.collect(
+      context(fetch, vi.fn().mockResolvedValue({ value: "secret-cookie" })),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        providerId: "kimi",
+        windows: expect.arrayContaining([
+          expect.objectContaining({ id: "monthly-total" }),
+        ]),
+      },
+    });
+    if (result.ok) {
+      expect(result.snapshot.planLabel).toBeUndefined();
+    }
+  });
+
   test("uses the current page access token when the legacy cookie is absent", async () => {
     const getAccessToken = vi.fn().mockResolvedValue("page-token");
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
@@ -173,6 +266,48 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("page-token");
   });
 
+  test("rereads a changed page token once after the sampled token is rejected", async () => {
+    const getAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce("stale-page-token")
+      .mockResolvedValueOnce("fresh-page-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({}, 401))
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response(subscriptionFixture()));
+
+    const result = await kimiAdapter.collect(
+      context(fetch, vi.fn().mockResolvedValue(null), getAccessToken),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
+    });
+    expect(getAccessToken).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer stale-page-token",
+        }),
+      }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-page-token",
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("stale-page-token");
+    expect(JSON.stringify(result)).not.toContain("fresh-page-token");
+  });
+
   test("retries once with the current page token when a stale cookie is rejected", async () => {
     const getAccessToken = vi.fn().mockResolvedValue("page-token");
     const fetch = vi
@@ -193,7 +328,7 @@ describe("Kimi adapter", () => {
       snapshot: { providerId: "kimi", windows: expect.any(Array) },
     });
     expect(getAccessToken).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       expect.any(String),
@@ -294,10 +429,17 @@ describe("Kimi adapter", () => {
       ),
     );
 
-    expect(result).toEqual({
-      ok: false,
-      health: { kind: status === 401 ? "signed_out" : "temporary_error" },
-    });
+    expect(result).toEqual(
+      status === 401
+        ? {
+            ok: false,
+            health: {
+              kind: "temporary_error",
+              message: "Kimi refreshed its session. Use Kimi once, then try again.",
+            },
+          }
+        : { ok: false, health: { kind: "temporary_error" } },
+    );
   });
 
   test.each([

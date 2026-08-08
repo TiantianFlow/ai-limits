@@ -164,13 +164,6 @@ export function createFixtureState(now: number): AppState {
         now,
       ),
     },
-    {
-      providerId: "antigravity",
-      health: {
-        kind: "experimental_unavailable",
-        message: "Usage data is not available yet.",
-      },
-    },
   ];
 
   return {

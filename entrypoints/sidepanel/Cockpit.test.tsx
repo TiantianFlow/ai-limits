@@ -54,18 +54,17 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Check Claude session" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Check Kimi session" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Check Cursor session" })).toBeVisible();
-    expect(screen.getByText("Antigravity")).toBeVisible();
-    expect(screen.getByText("Experimental")).toBeVisible();
+    expect(screen.queryByText("Antigravity")).not.toBeInTheDocument();
   });
 
-  it("renders connected quota pace, credits, and experimental state", () => {
+  it("renders connected quota pace and credits", () => {
     renderCockpit();
 
     expect(screen.getByText("ChatGPT")).toBeVisible();
     expect(screen.getByText("72% used")).toBeVisible();
     expect(screen.getAllByText("5 / 7 days elapsed")[0]).toBeVisible();
     expect(screen.getByText("$8.20 / $20.00 used")).toBeVisible();
-    expect(screen.getByText("Experimental")).toBeVisible();
+    expect(screen.queryByText("Antigravity")).not.toBeInTheDocument();
   });
 
   it("keeps an absolute credit balance unchanged in Used and Left modes", () => {
@@ -168,6 +167,25 @@ describe("Cockpit", () => {
       within(header as HTMLElement).getByRole("group", { name: "Display usage as" }),
     ).toBeVisible();
     expect(screen.queryByText("Show")).not.toBeInTheDocument();
+  });
+
+  it("shows refresh progress inside the existing global action", () => {
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        isRefreshing
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    const refresh = screen.getByRole("button", { name: "Refreshing usage" });
+    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(refresh.querySelector(".refresh-spinner")).not.toBeNull();
+    expect(screen.getByText("72% used")).toBeVisible();
   });
 
   it("omits the wall-time track when a window has no timing bounds", () => {

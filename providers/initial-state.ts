@@ -16,7 +16,6 @@ const PROVIDER_IDS: ProviderId[] = [
   "claude",
   "kimi",
   "cursor",
-  "antigravity",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -107,13 +106,8 @@ function normalizeCredit(value: unknown): CreditBalance | undefined {
   };
 }
 
-function initialHealth(providerId: ProviderId): ProviderHealth {
-  return providerId === "antigravity"
-    ? {
-        kind: "experimental_unavailable",
-        message: "Usage data is not available yet.",
-      }
-    : { kind: "permission_required" };
+function initialHealth(): ProviderHealth {
+  return { kind: "permission_required" };
 }
 
 function normalizeHealth(value: unknown): ProviderHealth | undefined {
@@ -138,8 +132,6 @@ function normalizeHealth(value: unknown): ProviderHealth | undefined {
         ...(message ? { message } : {}),
         ...(typeof value.retryAt === "number" ? { retryAt: value.retryAt } : {}),
       };
-    case "experimental_unavailable":
-      return { kind: value.kind, ...(message ? { message } : {}) };
     default:
       return undefined;
   }
@@ -199,7 +191,7 @@ export function createInitialState(): AppState {
     preferences: { displayMode: "used" },
     providers: PROVIDER_IDS.map((providerId) => ({
       providerId,
-      health: initialHealth(providerId),
+      health: initialHealth(),
     })),
   };
 }
@@ -214,19 +206,11 @@ export function migrateState(value: unknown): AppState {
     );
 
     if (!isRecord(stored)) {
-      return { providerId, health: initialHealth(providerId) };
+      return { providerId, health: initialHealth() };
     }
 
     const snapshot = normalizeSnapshot(stored.snapshot, providerId);
     const health = normalizeHealth(stored.health);
-
-    if (providerId === "antigravity") {
-      return {
-        providerId,
-        ...(snapshot ? { snapshot } : {}),
-        health: snapshot && health ? health : initialHealth(providerId),
-      };
-    }
 
     if (snapshot) {
       return {
@@ -246,7 +230,7 @@ export function migrateState(value: unknown): AppState {
         "temporary_error",
       ].includes(health.kind)
         ? health
-        : initialHealth(providerId);
+        : initialHealth();
 
     return { providerId, health: retainedFailure };
   });

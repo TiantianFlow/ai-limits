@@ -8,6 +8,7 @@ import {
   kimiCodingUsageSchema,
   kimiRateLimitStatSchema,
   kimiSubscriptionBalanceSchema,
+  kimiSubscriptionSchema,
   kimiSubscriptionStatsSchema,
   kimiUsageResponseSchema,
   type KimiUsageDetail,
@@ -18,6 +19,8 @@ const KIMI_ORIGIN = "https://www.kimi.com/*";
 const KIMI_URL = "https://www.kimi.com/";
 const SUBSCRIPTION_STATS_ENDPOINT =
   "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats";
+const SUBSCRIPTION_ENDPOINT =
+  "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscription";
 const LEGACY_USAGES_ENDPOINT =
   "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages";
 const MINUTE_MS = 60 * 1_000;
@@ -120,6 +123,33 @@ function optionalTimestamp(value: string | undefined): number | undefined {
   return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : undefined;
 }
 
+function previousCalendarMonth(timestamp: number): number | undefined {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return undefined;
+  }
+
+  const reset = new Date(timestamp);
+  const resetYear = reset.getUTCFullYear();
+  const resetMonth = reset.getUTCMonth();
+  const targetYear = resetMonth === 0 ? resetYear - 1 : resetYear;
+  const targetMonth = resetMonth === 0 ? 11 : resetMonth - 1;
+  const lastTargetDay = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0),
+  ).getUTCDate();
+  const targetDay = Math.min(reset.getUTCDate(), lastTargetDay);
+  const boundary = Date.UTC(
+    targetYear,
+    targetMonth,
+    targetDay,
+    reset.getUTCHours(),
+    reset.getUTCMinutes(),
+    reset.getUTCSeconds(),
+    reset.getUTCMilliseconds(),
+  );
+
+  return Number.isFinite(boundary) && boundary > 0 ? boundary : undefined;
+}
+
 function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
   const envelope = kimiSubscriptionStatsSchema.safeParse(body);
   if (!envelope.success) {
@@ -131,12 +161,16 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
     envelope.data.subscriptionBalance,
   );
   if (balance.success) {
+    const resetsAt = optionalTimestamp(balance.data.expireTime);
+    const startedAt =
+      resetsAt === undefined ? undefined : previousCalendarMonth(resetsAt);
     windows.push({
       id: "monthly-total",
       label: "Monthly total",
       kind: "calendar",
       usedRatio: balance.data.amountUsedRatio,
-      resetsAt: optionalTimestamp(balance.data.expireTime),
+      ...(startedAt === undefined ? {} : { startedAt }),
+      ...(resetsAt === undefined ? {} : { resetsAt }),
       sourceSemantics: "used",
     });
   }
@@ -264,6 +298,7 @@ async function collectKimi({
     const cookie = await getCookie?.({ url: KIMI_URL, name: "kimi-auth" });
     const cookieToken = cookie?.value.trim();
     let pageTokenLoaded = false;
+    let pageTokenRereadAfterUnauthorized = false;
     let initialAccessToken = cookieToken;
     if (!initialAccessToken) {
       pageTokenLoaded = true;
@@ -292,7 +327,8 @@ async function collectKimi({
         signal,
       );
 
-      if (response.status === 401 && cookieToken && !pageTokenLoaded) {
+      if (response.status === 401 && !pageTokenRereadAfterUnauthorized) {
+        pageTokenRereadAfterUnauthorized = true;
         pageTokenLoaded = true;
         const pageToken = (await getAccessToken?.())?.trim();
         if (pageToken && pageToken !== activeAccessToken) {
@@ -322,7 +358,16 @@ async function collectKimi({
       });
     }
     if (!response.ok) {
-      return { ok: false, health: healthForStatus(response.status) };
+      return {
+        ok: false,
+        health:
+          response.status === 401 && pageTokenLoaded
+            ? {
+                kind: "temporary_error",
+                message: "Kimi refreshed its session. Use Kimi once, then try again.",
+              }
+            : healthForStatus(response.status),
+      };
     }
 
     const body = await parseJson(response);
@@ -333,6 +378,25 @@ async function collectKimi({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
+    let planLabel: string | undefined;
+    if (!legacy) {
+      try {
+        const subscriptionResponse = await requestWithAuthFallback(
+          SUBSCRIPTION_ENDPOINT,
+          {},
+        );
+        if (subscriptionResponse.ok) {
+          const subscriptionBody = await parseJson(subscriptionResponse);
+          const subscription = kimiSubscriptionSchema.safeParse(subscriptionBody);
+          if (subscription.success) {
+            planLabel = subscription.data.subscription.goods.title;
+          }
+        }
+      } catch {
+        // Subscription metadata is optional and must not erase valid usage.
+      }
+    }
+
     return {
       ok: true,
       snapshot: {
@@ -341,6 +405,7 @@ async function collectKimi({
         fetchedAt: now,
         windows,
         credits: [],
+        ...(planLabel === undefined ? {} : { planLabel }),
       },
     };
   } catch {

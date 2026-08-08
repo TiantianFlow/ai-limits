@@ -2,8 +2,7 @@ export type ProviderId =
   | "chatgpt"
   | "claude"
   | "kimi"
-  | "cursor"
-  | "antigravity";
+  | "cursor";
 
 export type DisplayMode = "used" | "left";
 
@@ -48,8 +47,7 @@ export type ProviderHealth =
   | { kind: "signed_out"; message?: string }
   | { kind: "challenge_blocked"; message?: string }
   | { kind: "provider_changed"; message?: string }
-  | { kind: "temporary_error"; message?: string; retryAt?: number }
-  | { kind: "experimental_unavailable"; message?: string };
+  | { kind: "temporary_error"; message?: string; retryAt?: number };
 
 export interface ProviderRecord {
   providerId: ProviderId;

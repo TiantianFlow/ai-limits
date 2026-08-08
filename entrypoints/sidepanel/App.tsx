@@ -18,6 +18,8 @@ function sendMessage(message: RuntimeCommand): void {
 export function App() {
   const [state, setState] = useState<AppState>();
   const [now, setNow] = useState(() => Date.now());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshAnnouncement, setRefreshAnnouncement] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -121,6 +123,31 @@ export function App() {
     }
   };
 
+  const handleRefresh = async () => {
+    if (isRefreshing) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    setRefreshAnnouncement("Refreshing usage");
+
+    try {
+      const nextState = await browser.runtime.sendMessage({
+        type: "REFRESH_ALL",
+      } satisfies RuntimeCommand);
+      if (!nextState) {
+        throw new Error("Missing refresh response");
+      }
+
+      setState(nextState as AppState);
+      setRefreshAnnouncement("Usage refreshed");
+    } catch {
+      setRefreshAnnouncement("Usage refresh failed");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   if (!state) {
     return (
       <main className="loading-state" aria-live="polite">
@@ -133,8 +160,10 @@ export function App() {
     <Cockpit
       state={state}
       now={now}
+      isRefreshing={isRefreshing}
+      refreshAnnouncement={refreshAnnouncement}
       onDisplayModeChange={handleDisplayModeChange}
-      onRefresh={() => sendMessage({ type: "REFRESH_ALL" })}
+      onRefresh={() => void handleRefresh()}
       onConnectProvider={(providerId) =>
         void handleConnectProvider(providerId)
       }

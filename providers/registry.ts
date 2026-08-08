@@ -5,7 +5,7 @@ import { cursorAdapter } from "./cursor/adapter";
 import { kimiAdapter } from "./kimi/adapter";
 import type { ProviderAdapter } from "./types";
 
-export type ConnectableProviderId = Exclude<ProviderId, "antigravity">;
+export type ConnectableProviderId = ProviderId;
 
 export const providerIds = ["chatgpt", "claude", "kimi", "cursor"] as const;
 

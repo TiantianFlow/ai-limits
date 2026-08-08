@@ -21,7 +21,6 @@ describe("fixture state", () => {
       "claude",
       "kimi",
       "cursor",
-      "antigravity",
     ]);
   });
 
@@ -82,7 +81,6 @@ describe("state repository", () => {
       "permission_required",
       "permission_required",
       "permission_required",
-      "experimental_unavailable",
     ]);
     expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
   });
@@ -101,7 +99,6 @@ describe("state repository", () => {
       "permission_required",
       "permission_required",
       "permission_required",
-      "experimental_unavailable",
     ]);
     expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
     expect(await loadState()).toEqual(state);
@@ -124,6 +121,33 @@ describe("state repository", () => {
     expect(state.providers[0]?.snapshot).toEqual(providers[0]!.snapshot);
     expect(state.providers[0]?.snapshot?.providerId).toBe("chatgpt");
     expect(await loadState()).toEqual(state);
+  });
+
+  test("drops a legacy Antigravity record during migration", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 2,
+        preferences: { displayMode: "used" },
+        providers: [
+          {
+            providerId: "antigravity",
+            health: {
+              kind: "experimental_unavailable",
+              message: "Usage data is not available yet.",
+            },
+          },
+        ],
+      },
+    });
+
+    const state = await ensureState(now);
+
+    expect(state.providers.map(({ providerId }) => providerId)).toEqual([
+      "chatgpt",
+      "claude",
+      "kimi",
+      "cursor",
+    ]);
   });
 
   test("whitelists persisted snapshot, quota, and credit fields", async () => {
@@ -280,7 +304,6 @@ describe("state repository", () => {
       "claude",
       "kimi",
       "cursor",
-      "antigravity",
     ]);
     expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
   });
@@ -304,7 +327,6 @@ describe("state repository", () => {
       "claude",
       "kimi",
       "cursor",
-      "antigravity",
     ]);
     expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
   });

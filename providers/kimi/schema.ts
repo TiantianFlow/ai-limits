@@ -32,6 +32,20 @@ export const kimiSubscriptionStatsSchema = z
   })
   .passthrough();
 
+export const kimiSubscriptionSchema = z
+  .object({
+    subscription: z
+      .object({
+        goods: z
+          .object({
+            title: z.string().trim().min(1),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
 export const kimiTimeUnitSchema = z.enum([
   "TIME_UNIT_MINUTE",
   "TIME_UNIT_HOUR",
