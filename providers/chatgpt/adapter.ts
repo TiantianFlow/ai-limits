@@ -5,6 +5,7 @@ import type {
   ProviderAdapter,
 } from "../types";
 import {
+  chatGptCreditsSchema,
   chatGptSessionSchema,
   chatGptUsageSchema,
   type ChatGptUsageWindow,
@@ -156,6 +157,18 @@ async function collectChatGpt({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
+    const creditSection = chatGptCreditsSchema.safeParse(usage.data.credits);
+    const credits = creditSection.success
+      ? [
+          {
+            id: "credits",
+            label: "Credits",
+            unit: "credits",
+            remaining: creditSection.data.balance,
+          },
+        ]
+      : [];
+
     return {
       ok: true,
       snapshot: {
@@ -164,7 +177,7 @@ async function collectChatGpt({
         source: "web-session",
         fetchedAt: now,
         windows,
-        credits: [],
+        credits,
       },
     };
   } catch {

@@ -27,6 +27,7 @@ function jwt(payload: Record<string, unknown>): string {
 function usageFixture() {
   return {
     plan_type: "plus",
+    credits: { balance: 414 },
     rate_limit: {
       primary_window: {
         used_percent: 72,
@@ -83,7 +84,14 @@ describe("ChatGPT adapter", () => {
             sourceSemantics: "used",
           },
         ],
-        credits: [],
+        credits: [
+          {
+            id: "credits",
+            label: "Credits",
+            unit: "credits",
+            remaining: 414,
+          },
+        ],
       },
     });
     expect(injectedFetch).toHaveBeenNthCalledWith(
@@ -194,6 +202,30 @@ describe("ChatGPT adapter", () => {
     await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toEqual({
       ok: false,
       health: { kind: "provider_changed" },
+    });
+  });
+
+  test("keeps valid quota windows when the optional credit shape changes", async () => {
+    const accessToken = jwt({ chatgpt_account_id: "account-test" });
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({ accessToken }))
+      .mockResolvedValueOnce(
+        response({
+          ...usageFixture(),
+          credits: { balance: { unexpected: true } },
+        }),
+      );
+
+    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: expect.arrayContaining([
+          expect.objectContaining({ id: "five-hour" }),
+          expect.objectContaining({ id: "weekly" }),
+        ]),
+        credits: [],
+      },
     });
   });
 

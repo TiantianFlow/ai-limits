@@ -6,6 +6,9 @@ import type {
 } from "../types";
 import {
   kimiCodingUsageSchema,
+  kimiRateLimitStatSchema,
+  kimiSubscriptionBalanceSchema,
+  kimiSubscriptionStatsSchema,
   kimiUsageResponseSchema,
   type KimiUsageDetail,
   type KimiUsageLimit,
@@ -13,7 +16,9 @@ import {
 
 const KIMI_ORIGIN = "https://www.kimi.com/*";
 const KIMI_URL = "https://www.kimi.com/";
-const USAGES_ENDPOINT =
+const SUBSCRIPTION_STATS_ENDPOINT =
+  "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats";
+const LEGACY_USAGES_ENDPOINT =
   "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages";
 const MINUTE_MS = 60 * 1_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -106,6 +111,148 @@ function normalizeWindow(
   };
 }
 
+function optionalTimestamp(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : undefined;
+}
+
+function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
+  const envelope = kimiSubscriptionStatsSchema.safeParse(body);
+  if (!envelope.success) {
+    return undefined;
+  }
+
+  const windows: QuotaWindow[] = [];
+  const balance = kimiSubscriptionBalanceSchema.safeParse(
+    envelope.data.subscriptionBalance,
+  );
+  if (balance.success) {
+    windows.push({
+      id: "monthly-total",
+      label: "Monthly total",
+      kind: "calendar",
+      usedRatio: balance.data.amountUsedRatio,
+      resetsAt: optionalTimestamp(balance.data.expireTime),
+      sourceSemantics: "used",
+    });
+  }
+
+  const rateLimits = [
+    {
+      value: envelope.data.ratelimitCode5h,
+      id: "five-hour-coding",
+      label: "5-hour coding",
+      durationMs: 5 * HOUR_MS,
+    },
+    {
+      value: envelope.data.ratelimitCode7d,
+      id: "weekly-coding",
+      label: "Weekly coding",
+      durationMs: 7 * DAY_MS,
+    },
+  ] as const;
+
+  for (const rateLimit of rateLimits) {
+    const parsed = kimiRateLimitStatSchema.safeParse(rateLimit.value);
+    if (!parsed.success || parsed.data.enabled === false) {
+      continue;
+    }
+
+    windows.push({
+      id: rateLimit.id,
+      label: rateLimit.label,
+      kind: "feature",
+      usedRatio: parsed.data.ratio,
+      resetsAt: optionalTimestamp(parsed.data.resetTime),
+      durationMs: rateLimit.durationMs,
+      sourceSemantics: "used",
+    });
+  }
+
+  return windows;
+}
+
+function normalizeLegacyUsage(body: unknown): QuotaWindow[] | undefined {
+  const envelope = kimiUsageResponseSchema.safeParse(body);
+  if (!envelope.success) {
+    return undefined;
+  }
+
+  const codingRecords = envelope.data.usages.filter(
+    (usage): usage is { scope: "FEATURE_CODING" } =>
+      typeof usage === "object" &&
+      usage !== null &&
+      "scope" in usage &&
+      usage.scope === "FEATURE_CODING",
+  );
+  if (codingRecords.length !== 1) {
+    return undefined;
+  }
+
+  const coding = kimiCodingUsageSchema.safeParse(codingRecords[0]);
+  if (!coding.success) {
+    return undefined;
+  }
+
+  const weekly = normalizeWindow(
+    coding.data.detail,
+    { id: "weekly-coding", label: "Weekly coding" },
+    7 * DAY_MS,
+  );
+  if (!weekly) {
+    return undefined;
+  }
+
+  const fiveHourLimits = coding.data.limits.filter(
+    (limit) =>
+      limit.window.duration === 300 &&
+      limit.window.timeUnit === "TIME_UNIT_MINUTE" &&
+      durationMs(limit) === 5 * HOUR_MS,
+  );
+  if (fiveHourLimits.length > 1) {
+    return undefined;
+  }
+
+  const fiveHour = fiveHourLimits[0]
+    ? normalizeWindow(
+        fiveHourLimits[0].detail,
+        { id: "five-hour-coding", label: "5-hour coding" },
+        5 * HOUR_MS,
+      )
+    : undefined;
+  if (fiveHourLimits.length === 1 && !fiveHour) {
+    return undefined;
+  }
+
+  return [weekly, ...(fiveHour ? [fiveHour] : [])];
+}
+
+function kimiRequest(
+  injectedFetch: typeof globalThis.fetch,
+  endpoint: string,
+  accessToken: string,
+  body: unknown,
+  signal: AbortSignal,
+): Promise<Response> {
+  return injectedFetch(endpoint, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Connect-Protocol-Version": "1",
+      "X-Language": "en-US",
+      "X-Msh-Platform": "web",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
 async function collectKimi({
   fetch: injectedFetch,
   getCookie,
@@ -115,8 +262,14 @@ async function collectKimi({
 }: CollectionContext): Promise<CollectionResult> {
   try {
     const cookie = await getCookie?.({ url: KIMI_URL, name: "kimi-auth" });
-    const accessToken = cookie?.value.trim() || (await getAccessToken?.())?.trim();
-    if (!accessToken) {
+    const cookieToken = cookie?.value.trim();
+    let pageTokenLoaded = false;
+    let initialAccessToken = cookieToken;
+    if (!initialAccessToken) {
+      pageTokenLoaded = true;
+      initialAccessToken = (await getAccessToken?.())?.trim();
+    }
+    if (!initialAccessToken) {
       return {
         ok: false,
         health: {
@@ -125,70 +278,58 @@ async function collectKimi({
         },
       };
     }
+    let activeAccessToken = initialAccessToken;
 
-    const response = await injectedFetch(USAGES_ENDPOINT, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "Connect-Protocol-Version": "1",
-        "X-Language": "en-US",
-        "X-Msh-Platform": "web",
-      },
-      body: JSON.stringify({ scope: ["FEATURE_CODING"] }),
-      signal,
-    });
+    const requestWithAuthFallback = async (
+      endpoint: string,
+      body: unknown,
+    ): Promise<Response> => {
+      let response = await kimiRequest(
+        injectedFetch,
+        endpoint,
+        activeAccessToken,
+        body,
+        signal,
+      );
+
+      if (response.status === 401 && cookieToken && !pageTokenLoaded) {
+        pageTokenLoaded = true;
+        const pageToken = (await getAccessToken?.())?.trim();
+        if (pageToken && pageToken !== activeAccessToken) {
+          activeAccessToken = pageToken;
+          response = await kimiRequest(
+            injectedFetch,
+            endpoint,
+            activeAccessToken,
+            body,
+            signal,
+          );
+        }
+      }
+
+      return response;
+    };
+
+    let response = await requestWithAuthFallback(
+      SUBSCRIPTION_STATS_ENDPOINT,
+      {},
+    );
+    let legacy = false;
+    if (response.status === 404 || response.status === 405) {
+      legacy = true;
+      response = await requestWithAuthFallback(LEGACY_USAGES_ENDPOINT, {
+        scope: ["FEATURE_CODING"],
+      });
+    }
     if (!response.ok) {
       return { ok: false, health: healthForStatus(response.status) };
     }
 
-    const envelope = kimiUsageResponseSchema.safeParse(await parseJson(response));
-    if (!envelope.success) {
-      return { ok: false, health: { kind: "provider_changed" } };
-    }
-
-    const codingRecords = envelope.data.usages.filter(
-      (usage): usage is { scope: "FEATURE_CODING" } =>
-        typeof usage === "object" &&
-        usage !== null &&
-        "scope" in usage &&
-        usage.scope === "FEATURE_CODING",
-    );
-    if (codingRecords.length !== 1) {
-      return { ok: false, health: { kind: "provider_changed" } };
-    }
-
-    const coding = kimiCodingUsageSchema.safeParse(codingRecords[0]);
-    if (!coding.success) {
-      return { ok: false, health: { kind: "provider_changed" } };
-    }
-
-    const weekly = normalizeWindow(coding.data.detail, {
-      id: "weekly-coding",
-      label: "Weekly coding",
-    }, 7 * DAY_MS);
-    if (!weekly) {
-      return { ok: false, health: { kind: "provider_changed" } };
-    }
-
-    const fiveHourLimits = coding.data.limits.filter(
-      (limit) =>
-        limit.window.duration === 300 &&
-        limit.window.timeUnit === "TIME_UNIT_MINUTE" &&
-        durationMs(limit) === 5 * HOUR_MS,
-    );
-    if (fiveHourLimits.length > 1) {
-      return { ok: false, health: { kind: "provider_changed" } };
-    }
-
-    const fiveHour = fiveHourLimits[0]
-      ? normalizeWindow(fiveHourLimits[0].detail, {
-          id: "five-hour-coding",
-          label: "5-hour coding",
-        }, 5 * HOUR_MS)
-      : undefined;
-    if (fiveHourLimits.length === 1 && !fiveHour) {
+    const body = await parseJson(response);
+    const windows = legacy
+      ? normalizeLegacyUsage(body)
+      : normalizeCurrentStats(body);
+    if (!windows?.length) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
@@ -198,7 +339,7 @@ async function collectKimi({
         providerId: "kimi",
         source: "web-session",
         fetchedAt: now,
-        windows: [weekly, ...(fiveHour ? [fiveHour] : [])],
+        windows,
         credits: [],
       },
     };

@@ -54,8 +54,8 @@ export const claudeExtraUsageSchema = z.union([
 export const claudeUsageSchema = z.object({
   five_hour: claudeUsageWindowSchema.nullable().optional(),
   seven_day: claudeUsageWindowSchema.nullable().optional(),
-  seven_day_opus: claudeUsageWindowSchema.nullable().optional(),
-  seven_day_sonnet: claudeUsageWindowSchema.nullable().optional(),
+  seven_day_opus: z.unknown().nullable().optional(),
+  seven_day_sonnet: z.unknown().nullable().optional(),
   limits: z.array(z.unknown()).nullable().optional(),
   extra_usage: z.unknown().nullable().optional(),
 });

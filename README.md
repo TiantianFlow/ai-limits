@@ -22,6 +22,9 @@ not persisted or logged.
   Claude, Kimi, and Cursor).
 - A background worker that refreshes only providers with their optional
   permissions already granted.
+- Unified Used/Left quota and wall-clock bars with provider reset timestamps.
+- Separate ChatGPT credits, Kimi monthly/5-hour/weekly usage, and both Cursor
+  monthly model pools when those values are present in the provider response.
 
 ## Local development
 
@@ -66,7 +69,9 @@ Kimi's current web session may keep its access token in the signed-in page
 rather than the legacy cookie. If Kimi asks for an open tab, open
 `https://www.kimi.com/`, confirm that it is signed in, leave that tab open, and
 click **Check session** again. The extension reads the token once for that
-request and does not store it.
+request and does not store it. If a legacy cookie is present but rejected, the
+same check retries once with the current page token instead of reporting a
+false signed-out state.
 
 ## Known private-endpoint fragility
 

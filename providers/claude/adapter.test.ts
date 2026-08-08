@@ -391,6 +391,34 @@ describe("Claude adapter", () => {
     });
   });
 
+  test("ignores changed optional model windows without erasing core windows", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            seven_day_opus: { status: "temporarily_promoted" },
+            seven_day_sonnet: { utilization: "25", resets_at: SONNET_RESET },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(response({}));
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [
+          { id: "five-hour" },
+          { id: "weekly" },
+          { id: "weekly-scoped-claude-sonnet-4-5" },
+        ],
+      },
+    });
+  });
+
   test("rejects an active named window with a null reset", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()

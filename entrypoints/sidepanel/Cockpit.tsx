@@ -127,9 +127,13 @@ function formatAmount(value: number, unit: string): string {
 }
 
 function creditView(credit: CreditBalance, mode: DisplayMode): CreditView {
-  let current = credit.used;
+  const isAbsoluteBalance =
+    credit.used === undefined &&
+    credit.limit === undefined &&
+    credit.remaining !== undefined;
+  let current = isAbsoluteBalance ? credit.remaining : credit.used;
 
-  if (mode === "left") {
+  if (!isAbsoluteBalance && mode === "left") {
     current =
       credit.remaining ??
       (credit.limit !== undefined && credit.used !== undefined
@@ -144,7 +148,7 @@ function creditView(credit: CreditBalance, mode: DisplayMode): CreditView {
   return {
     id: credit.id,
     label: credit.label,
-    value: `${value}${limit ? ` / ${limit}` : ""} ${mode}`,
+    value: `${value}${limit ? ` / ${limit}` : ""}${isAbsoluteBalance ? "" : ` ${mode}`}`,
   };
 }
 

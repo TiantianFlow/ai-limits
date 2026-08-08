@@ -68,6 +68,40 @@ describe("Cockpit", () => {
     expect(screen.getByText("Experimental")).toBeVisible();
   });
 
+  it("keeps an absolute credit balance unchanged in Used and Left modes", () => {
+    const state = createFixtureState(NOW);
+    state.providers[0]!.snapshot!.credits = [
+      {
+        id: "credits",
+        label: "Credits",
+        unit: "credits",
+        remaining: 414,
+      },
+    ];
+    const view = render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("414 credits")).toBeVisible();
+
+    view.rerender(
+      <Cockpit
+        state={{ ...state, preferences: { displayMode: "left" } }}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("414 credits")).toBeVisible();
+  });
+
   it("requests left mode and renders the complementary percentage", () => {
     const onDisplayModeChange = vi.fn();
     const state = createFixtureState(NOW);

@@ -15,6 +15,7 @@ import {
   claudeOrganizationSchema,
   claudeScopedLimitSchema,
   claudeUsageSchema,
+  claudeUsageWindowSchema,
   type ClaudeExtraUsage,
   type ClaudeOrganization,
   type ClaudeScopedLimit,
@@ -199,11 +200,27 @@ async function collectClaude({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
+    const optionalModelWindows = [
+      {
+        value: usage.data.seven_day_opus,
+        id: "weekly-opus",
+        label: "Weekly Opus",
+      },
+      {
+        value: usage.data.seven_day_sonnet,
+        id: "weekly-sonnet",
+        label: "Weekly Sonnet",
+      },
+    ].flatMap((candidate) => {
+      const parsed = claudeUsageWindowSchema.safeParse(candidate.value);
+      return parsed.success
+        ? [{ ...candidate, value: parsed.data }]
+        : [];
+    });
     const namedUsageWindows = [
       usage.data.five_hour,
       usage.data.seven_day,
-      usage.data.seven_day_opus,
-      usage.data.seven_day_sonnet,
+      ...optionalModelWindows.map((candidate) => candidate.value),
     ];
     if (
       namedUsageWindows.some(
@@ -228,20 +245,15 @@ async function collectClaude({
             7 * DAY_MS,
           )
         : undefined,
-      usage.data.seven_day_opus?.resets_at
-        ? normalizeWindow(
-            usage.data.seven_day_opus,
-            { id: "weekly-opus", label: "Weekly Opus", kind: "model" },
-            7 * DAY_MS,
-          )
-        : undefined,
-      usage.data.seven_day_sonnet?.resets_at
-        ? normalizeWindow(
-            usage.data.seven_day_sonnet,
-            { id: "weekly-sonnet", label: "Weekly Sonnet", kind: "model" },
-            7 * DAY_MS,
-          )
-        : undefined,
+      ...optionalModelWindows.map((candidate) =>
+        candidate.value.resets_at
+          ? normalizeWindow(
+              candidate.value,
+              { id: candidate.id, label: candidate.label, kind: "model" },
+              7 * DAY_MS,
+            )
+          : undefined,
+      ),
     ].filter((window): window is QuotaWindow => window !== undefined);
 
     const scopedWindows = (usage.data.limits ?? []).flatMap((candidate) => {
