@@ -58,7 +58,7 @@ export interface ProviderRecord {
 }
 
 export interface AppState {
-  demoMode: boolean;
+  version: 2;
   preferences: {
     displayMode: DisplayMode;
   };

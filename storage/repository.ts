@@ -1,5 +1,5 @@
 import type { AppState, DisplayMode, ProviderId, ProviderRecord } from "../domain/model";
-import { createFixtureState } from "../providers/fixtures";
+import { migrateState } from "../providers/initial-state";
 
 const STATE_KEY = "aiLimitsState";
 
@@ -13,15 +13,16 @@ export async function saveState(state: AppState): Promise<void> {
 }
 
 export async function ensureState(now: number): Promise<AppState> {
-  const state = await loadState();
+  void now;
+  const stored = await browser.storage.local.get(STATE_KEY);
+  const value = stored[STATE_KEY] as unknown;
+  const state = migrateState(value);
 
-  if (state) {
-    return state;
+  if (JSON.stringify(value) !== JSON.stringify(state)) {
+    await saveState(state);
   }
 
-  const fixtures = createFixtureState(now);
-  await saveState(fixtures);
-  return fixtures;
+  return state;
 }
 
 export async function setDisplayMode(mode: DisplayMode): Promise<void> {

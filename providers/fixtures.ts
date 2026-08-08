@@ -174,7 +174,7 @@ export function createFixtureState(now: number): AppState {
   ];
 
   return {
-    demoMode: true,
+    version: 2,
     preferences: { displayMode: "used" },
     providers,
   };

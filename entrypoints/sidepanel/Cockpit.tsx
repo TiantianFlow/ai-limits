@@ -26,7 +26,7 @@ export interface CockpitProps {
   now: number;
   onDisplayModeChange: (mode: DisplayMode) => void;
   onRefresh: () => void;
-  onConnectChatGpt: () => void;
+  onConnectProvider: (providerId: Exclude<ProviderId, "antigravity">) => void;
 }
 
 const providerNames: Record<ProviderId, string> = {
@@ -154,6 +154,11 @@ function providerView(
     freshness: snapshot ? formatFreshness(snapshot.fetchedAt, now) : undefined,
     stale: snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false,
     health: provider.health,
+    hasSnapshot: snapshot !== undefined,
+    emptyDescription:
+      provider.providerId === "antigravity"
+        ? "Usage data is not available yet."
+        : `Check ${providerNames[provider.providerId]} using your signed-in browser session.`,
   };
 }
 
@@ -162,7 +167,7 @@ export function Cockpit({
   now,
   onDisplayModeChange,
   onRefresh,
-  onConnectChatGpt,
+  onConnectProvider,
 }: CockpitProps) {
   const mode = state.preferences.displayMode;
 
@@ -194,13 +199,6 @@ export function Cockpit({
         </div>
       </header>
 
-      {state.demoMode ? (
-        <aside className="demo-banner" aria-label="Demo data notice">
-          <strong>Demo data</strong>
-          <span>Illustrative usage — not live account data.</span>
-        </aside>
-      ) : null}
-
       <div className="display-controls">
         <span id="display-mode-label">Show</span>
         <div className="segmented-control" role="group" aria-labelledby="display-mode-label">
@@ -219,20 +217,19 @@ export function Cockpit({
 
       <section className="provider-list" aria-label="AI provider usage">
         {state.providers.map((provider) => {
-          const showConnect =
-            provider.providerId === "chatgpt" &&
-            provider.snapshot?.source === "fixture";
+          const connectableProviderId =
+            provider.providerId === "antigravity" ? undefined : provider.providerId;
 
           return (
             <ProviderCard
               key={provider.providerId}
               {...providerView(provider, mode, now)}
               action={
-                showConnect
+                !provider.snapshot && connectableProviderId
                   ? {
-                      label: "Connect live",
-                      accessibleLabel: "Connect ChatGPT",
-                      onClick: onConnectChatGpt,
+                      label: "Check session",
+                      accessibleLabel: `Check ${providerNames[connectableProviderId]} session`,
+                      onClick: () => onConnectProvider(connectableProviderId),
                     }
                   : undefined
               }

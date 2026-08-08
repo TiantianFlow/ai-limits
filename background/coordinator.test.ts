@@ -48,13 +48,23 @@ function collectionContext() {
   };
 }
 
+function liveState(now: number) {
+  const state = createFixtureState(now);
+  for (const provider of state.providers) {
+    if (provider.snapshot) {
+      provider.snapshot.source = "web-session";
+    }
+  }
+  return state;
+}
+
 beforeEach(async () => {
   await browser.storage.local.clear();
 });
 
 describe("provider refresh coordinator", () => {
-  test("atomically replaces only ChatGPT and clears its error while another fixture keeps demo mode active", async () => {
-    const initial = createFixtureState(NOW - 60_000);
+  test("atomically replaces only ChatGPT and clears its error", async () => {
+    const initial = liveState(NOW - 60_000);
     initial.providers[0]!.health = {
       kind: "temporary_error",
       retryAt: NOW + 300_000,
@@ -75,28 +85,10 @@ describe("provider refresh coordinator", () => {
       snapshot: liveSnapshot(),
     });
     expect(state?.providers[1]).toEqual(claudeBefore);
-    expect(state?.demoMode).toBe(true);
-  });
-
-  test("turns off demo mode when the successful refresh replaces the final fixture", async () => {
-    const initial = createFixtureState(NOW - 60_000);
-    for (const provider of initial.providers.slice(1)) {
-      if (provider.snapshot) {
-        provider.snapshot.source = "web-session";
-      }
-    }
-    await saveState(initial);
-
-    await refreshProvider(
-      adapter(async () => ({ ok: true, snapshot: liveSnapshot() })),
-      collectionContext(),
-    );
-
-    expect((await loadState())?.demoMode).toBe(false);
   });
 
   test("preserves the last-good snapshot while updating failed health", async () => {
-    const initial = createFixtureState(NOW - 60_000);
+    const initial = liveState(NOW - 60_000);
     await saveState(initial);
     const snapshotBefore = initial.providers[0]?.snapshot;
 
@@ -117,7 +109,7 @@ describe("provider refresh coordinator", () => {
   });
 
   test("contains thrown adapter errors as temporary ChatGPT failures without changing Claude", async () => {
-    const initial = createFixtureState(NOW - 60_000);
+    const initial = liveState(NOW - 60_000);
     await saveState(initial);
     const claudeBefore = initial.providers[1];
 
@@ -135,7 +127,7 @@ describe("provider refresh coordinator", () => {
   });
 
   test("applies the collection to fresh repository state without clobbering an in-flight preference update", async () => {
-    await saveState(createFixtureState(NOW - 60_000));
+    await saveState(liveState(NOW - 60_000));
     let finishCollection!: (result: CollectionResult) => void;
     const collect = vi.fn(
       () =>

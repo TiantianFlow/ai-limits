@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AppState } from "../../domain/model";
 import { createFixtureState } from "../../providers/fixtures";
+import { createInitialState } from "../../providers/initial-state";
 import { Cockpit } from "./Cockpit";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
@@ -26,7 +27,7 @@ function renderCockpit(
       now={NOW}
       onDisplayModeChange={onDisplayModeChange}
       onRefresh={vi.fn()}
-      onConnectChatGpt={vi.fn()}
+      onConnectProvider={vi.fn()}
     />,
   );
 
@@ -34,10 +35,32 @@ function renderCockpit(
 }
 
 describe("Cockpit", () => {
-  it("renders fixture providers, quota pace, credits, and experimental state", () => {
+  it("starts with honest provider session checks and no demo usage", () => {
+    const state = createInitialState();
+
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Demo data")).not.toBeInTheDocument();
+    expect(screen.queryByText(/% used/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check ChatGPT session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Check Claude session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Check Kimi session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Check Cursor session" })).toBeVisible();
+    expect(screen.getByText("Antigravity")).toBeVisible();
+    expect(screen.getByText("Experimental")).toBeVisible();
+  });
+
+  it("renders connected quota pace, credits, and experimental state", () => {
     renderCockpit();
 
-    expect(screen.getByText("Demo data")).toBeVisible();
     expect(screen.getByText("ChatGPT")).toBeVisible();
     expect(screen.getByText("72% used")).toBeVisible();
     expect(screen.getAllByText(/time 5 \/ 7 days/)[0]).toBeVisible();
@@ -54,7 +77,7 @@ describe("Cockpit", () => {
         now={NOW}
         onDisplayModeChange={onDisplayModeChange}
         onRefresh={vi.fn()}
-        onConnectChatGpt={vi.fn()}
+        onConnectProvider={vi.fn()}
       />,
     );
 
@@ -70,7 +93,7 @@ describe("Cockpit", () => {
         now={NOW}
         onDisplayModeChange={onDisplayModeChange}
         onRefresh={vi.fn()}
-        onConnectChatGpt={vi.fn()}
+        onConnectProvider={vi.fn()}
       />,
     );
 
@@ -121,52 +144,56 @@ describe("Cockpit", () => {
   });
 
   it("labels all icon actions for assistive technology", () => {
-    renderCockpit();
+    renderCockpit(createInitialState());
 
     expect(screen.getByRole("button", { name: "Refresh usage" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Connect ChatGPT" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Check ChatGPT session" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Settings" })).toBeVisible();
   });
 
-  it("offers an explicit live connection action only for the ChatGPT fixture", () => {
-    const onConnectChatGpt = vi.fn();
+  it("dispatches session checks with the selected provider identity", () => {
+    const onConnectProvider = vi.fn();
     render(
       <Cockpit
-        state={createFixtureState(NOW)}
+        state={createInitialState()}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
-        onConnectChatGpt={onConnectChatGpt}
+        onConnectProvider={onConnectProvider}
       />,
     );
 
-    const connect = screen.getByRole("button", { name: "Connect ChatGPT" });
-    expect(connect).toHaveTextContent("Connect live");
+    const connect = screen.getByRole("button", { name: "Check Claude session" });
+    expect(connect).toHaveTextContent("Check session");
     fireEvent.click(connect);
-    expect(onConnectChatGpt).toHaveBeenCalledTimes(1);
+    expect(onConnectProvider).toHaveBeenCalledWith("claude");
   });
 
   it("shows live source and removes the connection action after collection", () => {
     const state = createFixtureState(NOW);
-    state.demoMode = false;
     state.providers[0]!.snapshot!.source = "web-session";
 
     renderCockpit(state);
 
     expect(screen.getByText("Live")).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: "Connect ChatGPT" }),
+      screen.queryByRole("button", { name: "Check ChatGPT session" }),
     ).not.toBeInTheDocument();
   });
 
-  it("keeps demo usage visible when ChatGPT permission is required", () => {
-    const state = createFixtureState(NOW);
-    state.providers[0]!.health = { kind: "permission_required" };
+  it("shows failed snapshot-free health in the padded empty state", () => {
+    const state = createInitialState();
+    state.providers[0]!.health = {
+      kind: "signed_out",
+      message: "Sign in to ChatGPT and try again.",
+    };
 
     renderCockpit(state);
 
-    expect(screen.getByText("Demo data")).toBeVisible();
-    expect(screen.getByText("Permission required")).toBeVisible();
-    expect(screen.getByText("72% used")).toBeVisible();
+    const card = screen.getByRole("article", { name: "ChatGPT" });
+    const emptyState = card.querySelector(".provider-card__empty");
+    expect(emptyState).not.toBeNull();
+    expect(within(emptyState as HTMLElement).getByText("Sign in to ChatGPT and try again.")).toBeVisible();
+    expect(screen.queryByText("72% used")).not.toBeInTheDocument();
   });
 });

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { createFixtureState } from "../providers/fixtures";
+import { createInitialState } from "../providers/initial-state";
 import {
   ensureState,
   loadState,
+  saveState,
   setDisplayMode,
   updateProvider,
 } from "./repository";
@@ -23,10 +25,9 @@ describe("fixture state", () => {
     ]);
   });
 
-  test("marks every snapshot as a fixture in demo mode", () => {
+  test("marks every fixture snapshot as a fixture", () => {
     const state = createFixtureState(now);
 
-    expect(state.demoMode).toBe(true);
     expect(
       state.providers.flatMap(({ snapshot }) => (snapshot ? [snapshot.source] : [])),
     ).toEqual(["fixture", "fixture", "fixture", "fixture"]);
@@ -73,6 +74,56 @@ describe("state repository", () => {
     expect((await loadState())?.preferences.displayMode).toBe("left");
   });
 
+  test("creates the canonical snapshot-free provider states", () => {
+    const state = createInitialState();
+
+    expect(state.providers.map(({ health }) => health.kind)).toEqual([
+      "permission_required",
+      "permission_required",
+      "permission_required",
+      "permission_required",
+      "experimental_unavailable",
+    ]);
+    expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
+  });
+
+  test("migrates legacy fixture state without exposing fake usage", async () => {
+    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
+    delete legacyState.version;
+    legacyState.preferences = { displayMode: "left" };
+    await browser.storage.local.set({ aiLimitsState: legacyState });
+
+    const state = await ensureState(now);
+
+    expect(state.preferences.displayMode).toBe("left");
+    expect(state.providers.map(({ health }) => health.kind)).toEqual([
+      "permission_required",
+      "permission_required",
+      "permission_required",
+      "permission_required",
+      "experimental_unavailable",
+    ]);
+    expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
+  });
+
+  test("preserves a matching live snapshot during migration", async () => {
+    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
+    delete legacyState.version;
+    const providers = (legacyState.providers as ReturnType<typeof createFixtureState>["providers"]);
+    providers[0]!.snapshot = {
+      ...providers[0]!.snapshot!,
+      source: "web-session",
+      providerId: "chatgpt",
+    };
+    legacyState.preferences = { displayMode: "left" };
+    await browser.storage.local.set({ aiLimitsState: legacyState });
+
+    const state = await ensureState(now);
+
+    expect(state.providers[0]?.snapshot).toEqual(providers[0]!.snapshot);
+    expect(state.providers[0]?.snapshot?.providerId).toBe("chatgpt");
+  });
+
   test("updates only the requested provider record", async () => {
     await ensureState(now);
     const before = await loadState();
@@ -94,7 +145,9 @@ describe("state repository", () => {
   });
 
   test("preserves provider and snapshot identity when an updater changes IDs", async () => {
-    await ensureState(now);
+    const state = createFixtureState(now);
+    state.providers[0]!.snapshot!.source = "web-session";
+    await saveState(state);
 
     await updateProvider("chatgpt", (provider) => ({
       ...provider,
@@ -116,7 +169,9 @@ describe("state repository", () => {
   });
 
   test("preserves identity when an updater mutates the stored record in place", async () => {
-    await ensureState(now);
+    const state = createFixtureState(now);
+    state.providers[0]!.snapshot!.source = "web-session";
+    await saveState(state);
 
     await updateProvider("chatgpt", (provider) => {
       provider.providerId = "claude";

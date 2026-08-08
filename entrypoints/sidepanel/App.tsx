@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 import type { RuntimeCommand } from "../../background/messages";
-import type { AppState, DisplayMode } from "../../domain/model";
+import type { AppState, DisplayMode, ProviderId } from "../../domain/model";
 import {
   ensureState,
   loadState,
@@ -9,7 +9,12 @@ import {
 } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
-function sendMessage(message: RuntimeCommand): void {
+type ConnectProviderCommand = {
+  type: "CONNECT_PROVIDER";
+  providerId: Exclude<ProviderId, "antigravity">;
+};
+
+function sendMessage(message: RuntimeCommand | ConnectProviderCommand): void {
   void browser.runtime.sendMessage(message);
 }
 
@@ -77,8 +82,8 @@ export function App() {
       now={now}
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => sendMessage({ type: "REFRESH_ALL" })}
-      onConnectChatGpt={() =>
-        sendMessage({ type: "CONNECT_PROVIDER", providerId: "chatgpt" })
+      onConnectProvider={(providerId) =>
+        sendMessage({ type: "CONNECT_PROVIDER", providerId })
       }
     />
   );

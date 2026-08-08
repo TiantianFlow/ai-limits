@@ -32,7 +32,6 @@ function applyResult(
 
   return {
     ...state,
-    demoMode: providers.some(({ snapshot }) => snapshot?.source === "fixture"),
     providers,
   };
 }

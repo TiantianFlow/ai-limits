@@ -30,6 +30,8 @@ export interface ProviderCardProps {
   freshness?: string;
   stale: boolean;
   health: ProviderHealth;
+  hasSnapshot: boolean;
+  emptyDescription: string;
   action?: {
     label: string;
     accessibleLabel: string;
@@ -62,6 +64,8 @@ export function ProviderCard({
   freshness,
   stale,
   health,
+  hasSnapshot,
+  emptyDescription,
   action,
 }: ProviderCardProps) {
   const healthIsWarm = !["connected", "connecting"].includes(health.kind);
@@ -88,21 +92,29 @@ export function ProviderCard({
         </p>
       ) : null}
 
-      {healthMessage(health) ? (
+      {!hasSnapshot ? (
+        <section className="provider-card__empty">
+          <p>{emptyDescription}</p>
+          {healthMessage(health) && healthMessage(health) !== emptyDescription ? (
+            <p className="health-message" role={healthIsWarm ? "status" : undefined}>
+              {healthMessage(health)}
+            </p>
+          ) : null}
+          {action ? (
+            <button
+              className="button button--secondary"
+              type="button"
+              aria-label={action.accessibleLabel}
+              onClick={action.onClick}
+            >
+              {action.label}
+            </button>
+          ) : null}
+        </section>
+      ) : healthMessage(health) ? (
         <p className="health-message" role={healthIsWarm ? "status" : undefined}>
           {healthMessage(health)}
         </p>
-      ) : null}
-
-      {action ? (
-        <button
-          className="button button--secondary"
-          type="button"
-          aria-label={action.accessibleLabel}
-          onClick={action.onClick}
-        >
-          {action.label}
-        </button>
       ) : null}
 
       {quotas.length ? (
