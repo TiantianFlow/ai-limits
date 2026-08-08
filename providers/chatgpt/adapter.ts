@@ -11,7 +11,8 @@ import {
 } from "./schema";
 
 const SESSION_ENDPOINT = "https://chatgpt.com/api/auth/session";
-const USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
+const USAGE_ENDPOINT = "https://chatgpt.com/backend-api/codex/usage";
+const LEGACY_USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
 const CHATGPT_ORIGIN = "https://chatgpt.com/*";
 const HOUR_SECONDS = 60 * 60;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
@@ -72,6 +73,34 @@ async function parseJson(response: Response): Promise<unknown> {
   }
 }
 
+function decodeBase64Url(value: string): string {
+  const base64 = value
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const bytes = Uint8Array.from(atob(base64), (character) =>
+    character.charCodeAt(0),
+  );
+  return new TextDecoder().decode(bytes);
+}
+
+function chatGptAccountId(accessToken: string): string | undefined {
+  try {
+    const payload = JSON.parse(
+      decodeBase64Url(accessToken.split(".")[1] ?? ""),
+    ) as Record<string, unknown>;
+    const auth = payload["https://api.openai.com/auth"];
+    const nested =
+      typeof auth === "object" && auth !== null
+        ? (auth as Record<string, unknown>).chatgpt_account_id
+        : undefined;
+    const value = nested ?? payload.chatgpt_account_id;
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function collectChatGpt({
   fetch: injectedFetch,
   now,
@@ -93,12 +122,21 @@ async function collectChatGpt({
       return { ok: false, health: { kind: "signed_out" } };
     }
 
-    const usageResponse = await injectedFetch(USAGE_ENDPOINT, {
+    const accountId = chatGptAccountId(session.data.accessToken);
+    const headers = {
+      Authorization: `Bearer ${session.data.accessToken}`,
+      ...(accountId ? { "ChatGPT-Account-Id": accountId } : {}),
+    };
+    const usageRequest = {
       method: "GET",
       credentials: "include",
       signal,
-      headers: { Authorization: `Bearer ${session.data.accessToken}` },
-    });
+      headers,
+    } as const;
+    let usageResponse = await injectedFetch(USAGE_ENDPOINT, usageRequest);
+    if (usageResponse.status === 404 || usageResponse.status === 405) {
+      usageResponse = await injectedFetch(LEGACY_USAGE_ENDPOINT, usageRequest);
+    }
 
     if (!usageResponse.ok) {
       return { ok: false, health: healthForStatus(usageResponse.status) };

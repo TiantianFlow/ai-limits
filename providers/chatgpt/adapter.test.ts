@@ -16,28 +16,43 @@ function context(fetch: typeof globalThis.fetch, signal = new AbortController().
   return { fetch, now: NOW, signal };
 }
 
+function jwt(payload: Record<string, unknown>): string {
+  const encoded = btoa(JSON.stringify(payload))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+  return `header.${encoded}.signature`;
+}
+
+function usageFixture() {
+  return {
+    plan_type: "plus",
+    rate_limit: {
+      primary_window: {
+        used_percent: 72,
+        reset_at: RESET_SECONDS,
+        limit_window_seconds: 18_000,
+      },
+      secondary_window: {
+        used_percent: 71,
+        reset_at: RESET_SECONDS + 604_800,
+        limit_window_seconds: 604_800,
+      },
+    },
+  };
+}
+
 describe("ChatGPT adapter", () => {
   test("normalizes usage without returning or sending the session token outside the usage request", async () => {
+    const accessToken = jwt({
+      "https://api.openai.com/auth": {
+        chatgpt_account_id: "account-test",
+      },
+    });
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response({ accessToken: "redacted" }))
-      .mockResolvedValueOnce(
-        response({
-          plan_type: "plus",
-          rate_limit: {
-            primary_window: {
-              used_percent: 72,
-              reset_at: RESET_SECONDS,
-              limit_window_seconds: 18_000,
-            },
-            secondary_window: {
-              used_percent: 71,
-              reset_at: RESET_SECONDS + 604_800,
-              limit_window_seconds: 604_800,
-            },
-          },
-        }),
-      );
+      .mockResolvedValueOnce(response({ accessToken }))
+      .mockResolvedValueOnce(response(usageFixture()));
 
     const result = await chatGptAdapter.collect(context(injectedFetch));
 
@@ -79,13 +94,41 @@ describe("ChatGPT adapter", () => {
     expect(injectedFetch.mock.calls[0]?.[1]).not.toHaveProperty("headers.Authorization");
     expect(injectedFetch).toHaveBeenNthCalledWith(
       2,
-      "https://chatgpt.com/backend-api/wham/usage",
+      "https://chatgpt.com/backend-api/codex/usage",
       expect.objectContaining({
         method: "GET",
-        headers: { Authorization: "Bearer redacted" },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "ChatGPT-Account-Id": "account-test",
+        },
       }),
     );
-    expect(JSON.stringify(result)).not.toContain("redacted");
+    expect(JSON.stringify(result)).not.toContain(accessToken);
+    expect(JSON.stringify(result)).not.toContain("account-test");
+  });
+
+  test("falls back to the legacy usage route when the current route is absent", async () => {
+    const accessToken = jwt({ chatgpt_account_id: "account-direct" });
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({ accessToken }))
+      .mockResolvedValueOnce(response({}, 404))
+      .mockResolvedValueOnce(response(usageFixture()));
+
+    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: { planLabel: "plus" },
+    });
+    expect(injectedFetch).toHaveBeenNthCalledWith(
+      3,
+      "https://chatgpt.com/backend-api/wham/usage",
+      expect.objectContaining({
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "ChatGPT-Account-Id": "account-direct",
+        },
+      }),
+    );
   });
 
   test("maps a missing session token to signed out", async () => {
