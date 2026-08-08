@@ -291,6 +291,7 @@ async function collectKimi({
   fetch: injectedFetch,
   getCookie,
   getAccessToken,
+  getRefreshedAccessToken,
   now,
   signal,
 }: CollectionContext): Promise<CollectionResult> {
@@ -299,6 +300,7 @@ async function collectKimi({
     const cookieToken = cookie?.value.trim();
     let pageTokenLoaded = false;
     let pageTokenRereadAfterUnauthorized = false;
+    let backgroundRefreshAttempted = false;
     let initialAccessToken = cookieToken;
     if (!initialAccessToken) {
       pageTokenLoaded = true;
@@ -318,6 +320,7 @@ async function collectKimi({
     const requestWithAuthFallback = async (
       endpoint: string,
       body: unknown,
+      allowBackgroundRefresh = false,
     ): Promise<Response> => {
       let response = await kimiRequest(
         injectedFetch,
@@ -343,19 +346,49 @@ async function collectKimi({
         }
       }
 
+      if (
+        response.status === 401 &&
+        allowBackgroundRefresh &&
+        !backgroundRefreshAttempted
+      ) {
+        backgroundRefreshAttempted = true;
+        let refreshedToken: string | undefined;
+        try {
+          refreshedToken = (
+            await getRefreshedAccessToken?.(activeAccessToken)
+          )?.trim();
+        } catch {
+          // Background recovery is best-effort; preserve the manual fallback.
+        }
+
+        if (refreshedToken && refreshedToken !== activeAccessToken) {
+          activeAccessToken = refreshedToken;
+          response = await kimiRequest(
+            injectedFetch,
+            endpoint,
+            activeAccessToken,
+            body,
+            signal,
+          );
+        }
+      }
+
       return response;
     };
 
     let response = await requestWithAuthFallback(
       SUBSCRIPTION_STATS_ENDPOINT,
       {},
+      true,
     );
     let legacy = false;
     if (response.status === 404 || response.status === 405) {
       legacy = true;
-      response = await requestWithAuthFallback(LEGACY_USAGES_ENDPOINT, {
-        scope: ["FEATURE_CODING"],
-      });
+      response = await requestWithAuthFallback(
+        LEGACY_USAGES_ENDPOINT,
+        { scope: ["FEATURE_CODING"] },
+        true,
+      );
     }
     if (!response.ok) {
       return {
@@ -364,7 +397,8 @@ async function collectKimi({
           response.status === 401 && pageTokenLoaded
             ? {
                 kind: "temporary_error",
-                message: "Kimi refreshed its session. Use Kimi once, then try again.",
+                message:
+                  "Kimi couldn't refresh in the background. Open or reload Kimi once, then retry.",
               }
             : healthForStatus(response.status),
       };

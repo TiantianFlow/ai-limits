@@ -85,11 +85,13 @@ function context(
   fetch: typeof globalThis.fetch,
   getCookie = vi.fn(),
   getAccessToken = vi.fn(),
+  getRefreshedAccessToken = vi.fn(),
 ) {
   return {
     fetch,
     getCookie,
     getAccessToken,
+    getRefreshedAccessToken,
     now: NOW,
     signal: new AbortController().signal,
   };
@@ -308,6 +310,98 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("fresh-page-token");
   });
 
+  test("recovers a rejected page token through one bounded background refresh", async () => {
+    const getAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce("stale-page-token")
+      .mockResolvedValueOnce("stale-page-token");
+    const getRefreshedAccessToken = vi
+      .fn()
+      .mockResolvedValue("fresh-page-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({}, 401))
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response(subscriptionFixture()));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue(null),
+        getAccessToken,
+        getRefreshedAccessToken,
+      ),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
+    });
+    expect(getRefreshedAccessToken).toHaveBeenCalledWith("stale-page-token");
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-page-token",
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("stale-page-token");
+    expect(JSON.stringify(result)).not.toContain("fresh-page-token");
+  });
+
+  test("gives a manual fallback when bounded background refresh finds no token", async () => {
+    const getRefreshedAccessToken = vi.fn().mockResolvedValue(undefined);
+
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(response({}, 401)),
+        vi.fn().mockResolvedValue(null),
+        vi.fn().mockResolvedValue("stale-page-token"),
+        getRefreshedAccessToken,
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      health: {
+        kind: "temporary_error",
+        message:
+          "Kimi couldn't refresh in the background. Open or reload Kimi once, then retry.",
+      },
+    });
+    expect(getRefreshedAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not open a temporary tab when optional subscription metadata is unauthorized", async () => {
+    const getRefreshedAccessToken = vi.fn().mockResolvedValue("fresh-page-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response({}, 401));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue({ value: "valid-cookie" }),
+        vi.fn().mockResolvedValue(undefined),
+        getRefreshedAccessToken,
+      ),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        providerId: "kimi",
+        windows: expect.arrayContaining([
+          expect.objectContaining({ id: "monthly-total" }),
+        ]),
+      },
+    });
+    expect(getRefreshedAccessToken).not.toHaveBeenCalled();
+  });
+
   test("retries once with the current page token when a stale cookie is rejected", async () => {
     const getAccessToken = vi.fn().mockResolvedValue("page-token");
     const fetch = vi
@@ -435,7 +529,8 @@ describe("Kimi adapter", () => {
             ok: false,
             health: {
               kind: "temporary_error",
-              message: "Kimi refreshed its session. Use Kimi once, then try again.",
+              message:
+                "Kimi couldn't refresh in the background. Open or reload Kimi once, then retry.",
             },
           }
         : { ok: false, health: { kind: "temporary_error" } },

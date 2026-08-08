@@ -78,12 +78,18 @@ Declining leaves that provider in the permission-required state with no
 fabricated usage snapshot.
 
 Kimi's current web session may keep its access token in the signed-in page
-rather than the legacy cookie. If Kimi asks for an open tab, open
-`https://www.kimi.com/`, confirm that it is signed in, leave that tab open, and
-click **Check session** again. The extension reads only the `access_token` for
-that request and does not store it. If Kimi rejects the sampled credential, the
-same check rereads the page token once and retries only when it changed instead
-of reporting a false signed-out state.
+rather than the legacy cookie. The extension first reads only the exact
+`access_token` key from an already-open Kimi tab and does not store it. If Kimi
+rejects that sampled credential, the extension rereads the key once. If it is
+still stale, the extension opens one new inactive Kimi homepage tab for less
+than about five seconds so Kimi's own page can refresh its session, samples
+only a changed `access_token`, retries usage once, and closes exactly that
+temporary tab. It never reads or exchanges Kimi's `refresh_token` and never
+reloads an existing tab.
+
+This recovery is best-effort because it depends on Kimi's normal page startup.
+If it fails, open or reload `https://www.kimi.com/` once, confirm that it is
+signed in, and click **Check session** again.
 
 Kimi's subscription title comes from its companion subscription response. Its
 monthly pacing boundary is calculated from the exact reset timestamp by moving

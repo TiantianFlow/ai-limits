@@ -1,5 +1,8 @@
 import { refreshProvider, setProviderHealth } from "../background/coordinator";
-import { findKimiPageAccessToken } from "../background/kimi-session";
+import {
+  findKimiPageAccessToken,
+  refreshKimiAccessTokenInTemporaryTab,
+} from "../background/kimi-session";
 import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
@@ -16,6 +19,15 @@ import { ensureState, setDisplayMode } from "../storage/repository";
 const REFRESH_ALARM = "refresh-connected";
 const REFRESH_PERIOD_MINUTES = 15;
 const COLLECTION_TIMEOUT_MS = 20_000;
+
+async function readKimiPageAccessToken(tabId: number): Promise<unknown> {
+  const [injection] = await browser.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: () => globalThis.localStorage.getItem("access_token"),
+  });
+  return injection?.result;
+}
 
 async function ensureRefreshAlarm(): Promise<void> {
   const current = await browser.alarms.get(REFRESH_ALARM);
@@ -49,14 +61,15 @@ async function collectProvider(providerId: ConnectableProviderId): Promise<void>
               findKimiPageAccessToken({
                 queryTabs: () =>
                   browser.tabs.query({ url: "https://www.kimi.com/*" }),
-                async readAccessToken(tabId) {
-                  const [injection] = await browser.scripting.executeScript({
-                    target: { tabId },
-                    world: "MAIN",
-                    func: () => globalThis.localStorage.getItem("access_token"),
-                  });
-                  return injection?.result;
-                },
+                readAccessToken: readKimiPageAccessToken,
+              }),
+            getRefreshedAccessToken: (staleAccessToken: string) =>
+              refreshKimiAccessTokenInTemporaryTab({
+                staleAccessToken,
+                createTab: (details) => browser.tabs.create(details),
+                readAccessToken: readKimiPageAccessToken,
+                removeTab: (tabId) => browser.tabs.remove(tabId),
+                signal: controller.signal,
               }),
           }
         : {}),
