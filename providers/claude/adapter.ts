@@ -10,12 +10,14 @@ import type {
 } from "../types";
 import {
   claudeAccountSchema,
+  claudeExtraUsageSchema,
   claudeOrganizationListSchema,
   claudeOrganizationSchema,
+  claudeScopedLimitSchema,
   claudeUsageSchema,
+  type ClaudeExtraUsage,
   type ClaudeOrganization,
   type ClaudeScopedLimit,
-  type ClaudeUsage,
   type ClaudeUsageWindow,
 } from "./schema";
 
@@ -125,7 +127,7 @@ function normalizeScopedWindow(limit: ClaudeScopedLimit): QuotaWindow {
 }
 
 function normalizeCredits(
-  extraUsage: ClaudeUsage["extra_usage"],
+  extraUsage: ClaudeExtraUsage,
 ): CreditBalance[] {
   if (!extraUsage?.is_enabled) {
     return [];
@@ -242,7 +244,10 @@ async function collectClaude({
         : undefined,
     ].filter((window): window is QuotaWindow => window !== undefined);
 
-    const scopedWindows = (usage.data.limits ?? []).map(normalizeScopedWindow);
+    const scopedWindows = (usage.data.limits ?? []).flatMap((candidate) => {
+      const parsed = claudeScopedLimitSchema.safeParse(candidate);
+      return parsed.success ? [normalizeScopedWindow(parsed.data)] : [];
+    });
     if (
       new Set(scopedWindows.map((window) => window.id)).size !==
       scopedWindows.length
@@ -256,6 +261,7 @@ async function collectClaude({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
+    const extraUsage = claudeExtraUsageSchema.safeParse(usage.data.extra_usage);
     const account = await accountLabel(injectedFetch, signal);
 
     return {
@@ -267,7 +273,7 @@ async function collectClaude({
         source: "web-session",
         fetchedAt: now,
         windows,
-        credits: normalizeCredits(usage.data.extra_usage),
+        credits: extraUsage.success ? normalizeCredits(extraUsage.data) : [],
       },
     };
   } catch {

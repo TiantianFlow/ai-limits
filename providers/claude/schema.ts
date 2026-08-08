@@ -46,19 +46,18 @@ const claudeEnabledExtraUsageSchema = z.object({
   currency: currencyCode,
 });
 
+export const claudeExtraUsageSchema = z.union([
+  claudeDisabledExtraUsageSchema,
+  claudeEnabledExtraUsageSchema,
+]);
+
 export const claudeUsageSchema = z.object({
   five_hour: claudeUsageWindowSchema.nullable().optional(),
   seven_day: claudeUsageWindowSchema.nullable().optional(),
   seven_day_opus: claudeUsageWindowSchema.nullable().optional(),
   seven_day_sonnet: claudeUsageWindowSchema.nullable().optional(),
-  limits: z.array(claudeScopedLimitSchema).nullable().optional(),
-  extra_usage: z
-    .union([
-      claudeDisabledExtraUsageSchema,
-      claudeEnabledExtraUsageSchema,
-    ])
-    .nullable()
-    .optional(),
+  limits: z.array(z.unknown()).nullable().optional(),
+  extra_usage: z.unknown().nullable().optional(),
 });
 
 export const claudeAccountSchema = z.object({
@@ -66,6 +65,7 @@ export const claudeAccountSchema = z.object({
 });
 
 export type ClaudeOrganization = z.infer<typeof claudeOrganizationSchema>;
+export type ClaudeExtraUsage = z.infer<typeof claudeExtraUsageSchema>;
 export type ClaudeScopedLimit = z.infer<typeof claudeScopedLimitSchema>;
 export type ClaudeUsage = z.infer<typeof claudeUsageSchema>;
 export type ClaudeUsageWindow = z.infer<typeof claudeUsageWindowSchema>;

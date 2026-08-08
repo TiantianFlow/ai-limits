@@ -318,6 +318,79 @@ describe("Claude adapter", () => {
     expect(JSON.stringify(result)).not.toContain("redacted-account");
   });
 
+  test("ignores unfamiliar promotion limits while retaining recognized limits", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            limits: [
+              {
+                kind: "temporary_promotion",
+                percent: 12,
+                resets_at: WEEKLY_RESET,
+                promotion: { name: "boosted weekly limit" },
+              },
+              {
+                kind: "weekly_scoped",
+                percent: 25,
+                resets_at: SONNET_RESET,
+                scope: {
+                  model: {
+                    display_name: "Claude Sonnet 4.5",
+                    raw_model_id: "secret-model-id",
+                  },
+                },
+              },
+            ],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(response({}));
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [
+          { id: "five-hour" },
+          { id: "weekly" },
+          { id: "weekly-scoped-claude-sonnet-4-5" },
+        ],
+      },
+    });
+  });
+
+  test("ignores unfamiliar extra-usage data without erasing core windows", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            limits: null,
+            extra_usage: {
+              is_enabled: "promotional",
+              promotion: { name: "temporary boost" },
+            },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(response({}));
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [{ id: "five-hour" }, { id: "weekly" }],
+        credits: [],
+      },
+    });
+  });
+
   test("rejects an active named window with a null reset", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
@@ -426,31 +499,15 @@ describe("Claude adapter", () => {
     });
   });
 
-  test.each([
-    [
-      "an invalid reset timestamp",
-      usageFixture({
-        five_hour: { utilization: 16, resets_at: "January 15, 2030" },
-      }),
-    ],
-    [
-      "an enabled zero credit limit",
-      usageFixture({
-        extra_usage: {
-          is_enabled: true,
-          used_credits: 0,
-          monthly_limit: 0,
-          currency: "USD",
-        },
-      }),
-    ],
-  ] as const)("maps %s to provider changed", async (_description, body) => {
+  test("maps an invalid reset timestamp to provider changed", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
         response([{ uuid: "org", capabilities: ["chat"] }]),
       )
-      .mockResolvedValueOnce(response(body));
+      .mockResolvedValueOnce(response(usageFixture({
+        five_hour: { utilization: 16, resets_at: "January 15, 2030" },
+      })));
 
     await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
       ok: false,
@@ -504,7 +561,7 @@ describe("Claude adapter", () => {
         scope: { model: { display_name: "!!!" } },
       },
     ],
-  ] as const)("rejects %s", async (_description, limit) => {
+  ] as const)("ignores %s without erasing core windows", async (_description, limit) => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -512,11 +569,12 @@ describe("Claude adapter", () => {
       )
       .mockResolvedValueOnce(response(usageFixture({ limits: [limit] })));
 
-    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
-      ok: false,
-      health: { kind: "provider_changed" },
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: [{ id: "five-hour" }, { id: "weekly" }],
+      },
     });
-    expect(injectedFetch).toHaveBeenCalledTimes(2);
   });
 
   test.each([null, undefined])(
