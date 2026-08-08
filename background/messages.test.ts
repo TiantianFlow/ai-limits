@@ -9,7 +9,7 @@ describe("runtime command router", () => {
   test("dispatches only the exact fixed command shapes", async () => {
     const handlers = {
       refreshAll: vi.fn(async () => "refreshed"),
-      connectProvider: vi.fn(async () => "connected"),
+      collectProvider: vi.fn(async () => "collected"),
       getState: vi.fn(async () => "state"),
       setDisplayMode: vi.fn(async () => "updated"),
     };
@@ -17,17 +17,17 @@ describe("runtime command router", () => {
 
     await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe("refreshed");
     await expect(
-      handle({ type: "CONNECT_PROVIDER", providerId: "chatgpt" }),
-    ).resolves.toBe("connected");
+      handle({ type: "COLLECT_PROVIDER", providerId: "chatgpt" }),
+    ).resolves.toBe("collected");
     await expect(
-      handle({ type: "CONNECT_PROVIDER", providerId: "claude" }),
-    ).resolves.toBe("connected");
+      handle({ type: "COLLECT_PROVIDER", providerId: "claude" }),
+    ).resolves.toBe("collected");
     await expect(
-      handle({ type: "CONNECT_PROVIDER", providerId: "kimi" }),
-    ).resolves.toBe("connected");
+      handle({ type: "COLLECT_PROVIDER", providerId: "kimi" }),
+    ).resolves.toBe("collected");
     await expect(
-      handle({ type: "CONNECT_PROVIDER", providerId: "cursor" }),
-    ).resolves.toBe("connected");
+      handle({ type: "COLLECT_PROVIDER", providerId: "cursor" }),
+    ).resolves.toBe("collected");
     await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
     await expect(
       handle({ type: "SET_DISPLAY_MODE", mode: "used" }),
@@ -35,7 +35,7 @@ describe("runtime command router", () => {
     await expect(
       handle({ type: "SET_DISPLAY_MODE", mode: "left" }),
     ).resolves.toBe("updated");
-    expect(handlers.connectProvider).toHaveBeenNthCalledWith(1, "chatgpt");
+    expect(handlers.collectProvider).toHaveBeenNthCalledWith(1, "chatgpt");
 
     expect(handle({ type: "FETCH", url: "https://attacker.invalid" })).toBeUndefined();
     expect(
@@ -45,11 +45,11 @@ describe("runtime command router", () => {
       }),
     ).toBeUndefined();
     expect(
-      handle({ type: "CONNECT_PROVIDER", providerId: "antigravity" }),
+      handle({ type: "COLLECT_PROVIDER", providerId: "antigravity" }),
     ).toBeUndefined();
     expect(
       handle({
-        type: "CONNECT_PROVIDER",
+        type: "COLLECT_PROVIDER",
         providerId: "claude",
         extra: true,
       }),
@@ -61,7 +61,7 @@ describe("runtime command router", () => {
       handle({ type: "SET_DISPLAY_MODE", mode: "left", extra: true }),
     ).toBeUndefined();
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
-    expect(handlers.connectProvider).toHaveBeenCalledTimes(4);
+    expect(handlers.collectProvider).toHaveBeenCalledTimes(4);
     expect(handlers.getState).toHaveBeenCalledTimes(1);
     expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(1, "used");
     expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(2, "left");

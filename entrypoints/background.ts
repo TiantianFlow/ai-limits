@@ -3,10 +3,7 @@ import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
 } from "../background/messages";
-import {
-  hasProviderPermission,
-  requestProviderPermission,
-} from "../background/permissions";
+import { hasProviderPermission } from "../background/permissions";
 import { refreshGrantedProviders } from "../background/refresh";
 import {
   providerIds,
@@ -72,8 +69,8 @@ const handleRuntimeCommand = createRuntimeCommandHandler({
     await refreshConnectedProviders();
     return currentState();
   },
-  async connectProvider(providerId) {
-    const granted = await requestProviderPermission(providerId);
+  async collectProvider(providerId) {
+    const granted = await hasProviderPermission(providerId);
     if (!granted) {
       await setProviderHealth(
         providerId,

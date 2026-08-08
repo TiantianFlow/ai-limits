@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 
 import type { RuntimeCommand } from "../../background/messages";
-import type { AppState, DisplayMode } from "../../domain/model";
+import { requestProviderPermission } from "../../background/permissions";
+import type {
+  AppState,
+  DisplayMode,
+  ProviderHealth,
+} from "../../domain/model";
+import type { ConnectableProviderId } from "../../providers/registry";
 import { loadState } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
@@ -59,6 +65,62 @@ export function App() {
     sendMessage({ type: "SET_DISPLAY_MODE", mode });
   };
 
+  const setLocalProviderHealth = (
+    providerId: ConnectableProviderId,
+    health: ProviderHealth,
+  ) => {
+    setState((current) =>
+      current
+        ? {
+            ...current,
+            providers: current.providers.map((provider) =>
+              provider.providerId === providerId
+                ? { ...provider, health }
+                : provider,
+            ),
+          }
+        : current,
+    );
+  };
+
+  const handleConnectProvider = async (providerId: ConnectableProviderId) => {
+    let granted: boolean;
+    setLocalProviderHealth(providerId, { kind: "connecting" });
+
+    try {
+      granted = await requestProviderPermission(providerId);
+    } catch {
+      setLocalProviderHealth(providerId, {
+        kind: "temporary_error",
+        message: "Chrome couldn't request access. Reload AI Limits and try again.",
+      });
+      return;
+    }
+
+    if (!granted) {
+      setLocalProviderHealth(providerId, { kind: "permission_required" });
+      return;
+    }
+
+    try {
+      const nextState = await browser.runtime.sendMessage({
+        type: "COLLECT_PROVIDER",
+        providerId,
+      } satisfies RuntimeCommand);
+
+      if (!nextState) {
+        throw new Error("Missing collection response");
+      }
+
+      setState(nextState as AppState);
+    } catch {
+      setLocalProviderHealth(providerId, {
+        kind: "temporary_error",
+        message: "AI Limits couldn't check this session. Reload and try again.",
+      });
+    }
+  };
+
   if (!state) {
     return (
       <main className="loading-state" aria-live="polite">
@@ -74,7 +136,7 @@ export function App() {
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => sendMessage({ type: "REFRESH_ALL" })}
       onConnectProvider={(providerId) =>
-        sendMessage({ type: "CONNECT_PROVIDER", providerId })
+        void handleConnectProvider(providerId)
       }
     />
   );
