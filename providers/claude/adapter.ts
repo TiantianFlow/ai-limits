@@ -14,6 +14,7 @@ import {
   claudeOrganizationSchema,
   claudeUsageSchema,
   type ClaudeOrganization,
+  type ClaudeScopedLimit,
   type ClaudeUsage,
   type ClaudeUsageWindow,
 } from "./schema";
@@ -95,6 +96,30 @@ function normalizeWindow(
   };
 }
 
+function scopedWindowId(displayName: string): string {
+  const sanitizedName = displayName
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return `weekly-scoped-${sanitizedName}`;
+}
+
+function normalizeScopedWindow(limit: ClaudeScopedLimit): QuotaWindow {
+  const displayName = limit.scope.model.display_name;
+  return {
+    id: scopedWindowId(displayName),
+    label: `Weekly ${displayName}`,
+    kind: "model",
+    usedRatio: limit.percent / 100,
+    resetsAt: Date.parse(limit.resets_at),
+    durationMs: 7 * DAY_MS,
+    sourceSemantics: "used",
+  };
+}
+
 function normalizeCredits(
   extraUsage: ClaudeUsage["extra_usage"],
 ): CreditBalance[] {
@@ -168,7 +193,7 @@ async function collectClaude({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const windows = [
+    const namedWindows = [
       usage.data.five_hour
         ? normalizeWindow(
             usage.data.five_hour,
@@ -198,6 +223,16 @@ async function collectClaude({
           )
         : undefined,
     ].filter((window): window is QuotaWindow => window !== undefined);
+
+    const scopedWindows = (usage.data.limits ?? []).map(normalizeScopedWindow);
+    if (
+      new Set(scopedWindows.map((window) => window.id)).size !==
+      scopedWindows.length
+    ) {
+      return { ok: false, health: { kind: "provider_changed" } };
+    }
+
+    const windows = [...namedWindows, ...scopedWindows];
 
     if (windows.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };

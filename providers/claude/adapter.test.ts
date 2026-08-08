@@ -34,10 +34,22 @@ function usageFixture(overrides: Record<string, unknown> = {}) {
       resets_at: WEEKLY_RESET,
     },
     seven_day_opus: null,
-    seven_day_sonnet: {
-      utilization: 25,
-      resets_at: SONNET_RESET,
-    },
+    seven_day_sonnet: null,
+    limits: [
+      {
+        kind: "weekly_scoped",
+        percent: 25,
+        resets_at: SONNET_RESET,
+        scope: {
+          model: {
+            display_name: "Claude Sonnet 4.5",
+            raw_model_id: "secret-model-id",
+          },
+          raw_scope_id: "secret-scope-id",
+        },
+        raw_limit_id: "secret-limit-id",
+      },
+    ],
     extra_usage: {
       is_enabled: true,
       used_credits: 4_132,
@@ -104,8 +116,8 @@ describe("Claude adapter", () => {
             sourceSemantics: "used",
           },
           {
-            id: "weekly-sonnet",
-            label: "Weekly Sonnet",
+            id: "weekly-scoped-claude-sonnet-4-5",
+            label: "Weekly Claude Sonnet 4.5",
             kind: "model",
             usedRatio: 0.25,
             resetsAt: Date.parse(SONNET_RESET),
@@ -157,6 +169,7 @@ describe("Claude adapter", () => {
     );
     expect(JSON.stringify(result)).not.toContain("chat/org");
     expect(JSON.stringify(result)).not.toContain("capabilities");
+    expect(JSON.stringify(result)).not.toContain("secret-");
   });
 
   test("prefers a non-API-only organization when none has chat capability", async () => {
@@ -234,6 +247,7 @@ describe("Claude adapter", () => {
             seven_day: null,
             seven_day_opus: null,
             seven_day_sonnet: null,
+            limits: null,
             extra_usage: {
               is_enabled: false,
               used_credits: null,
@@ -280,6 +294,7 @@ describe("Claude adapter", () => {
             seven_day: null,
             seven_day_opus: null,
             seven_day_sonnet: null,
+            limits: null,
           }),
         ),
       );
@@ -383,6 +398,133 @@ describe("Claude adapter", () => {
       ok: false,
       health: { kind: "provider_changed" },
     });
+  });
+
+  test.each([
+    [
+      "an unknown scoped kind",
+      {
+        kind: "monthly_scoped",
+        percent: 25,
+        resets_at: SONNET_RESET,
+        scope: { model: { display_name: "Claude Sonnet 4.5" } },
+      },
+    ],
+    [
+      "an out-of-range scoped percent",
+      {
+        kind: "weekly_scoped",
+        percent: 101,
+        resets_at: SONNET_RESET,
+        scope: { model: { display_name: "Claude Sonnet 4.5" } },
+      },
+    ],
+    [
+      "a non-ISO scoped reset",
+      {
+        kind: "weekly_scoped",
+        percent: 25,
+        resets_at: "next week",
+        scope: { model: { display_name: "Claude Sonnet 4.5" } },
+      },
+    ],
+    [
+      "a missing scoped model name",
+      {
+        kind: "weekly_scoped",
+        percent: 25,
+        resets_at: SONNET_RESET,
+        scope: { model: {} },
+      },
+    ],
+    [
+      "a scoped model name without a stable identifier",
+      {
+        kind: "weekly_scoped",
+        percent: 25,
+        resets_at: SONNET_RESET,
+        scope: { model: { display_name: "!!!" } },
+      },
+    ],
+  ] as const)("rejects %s", async (_description, limit) => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(response(usageFixture({ limits: [limit] })));
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
+      ok: false,
+      health: { kind: "provider_changed" },
+    });
+    expect(injectedFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([null, undefined])(
+    "omits an optional %s generic limits list",
+    async (limits) => {
+      const injectedFetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(
+          response([{ uuid: "org", capabilities: ["chat"] }]),
+        )
+        .mockResolvedValueOnce(
+          response(
+            usageFixture({
+              limits,
+              seven_day_sonnet: {
+                utilization: 25,
+                resets_at: SONNET_RESET,
+              },
+            }),
+          ),
+        )
+        .mockResolvedValueOnce(response({}));
+
+      const result = await claudeAdapter.collect(context(injectedFetch));
+
+      expect(result).toMatchObject({
+        ok: true,
+        snapshot: {
+          windows: [
+            { id: "five-hour" },
+            { id: "weekly" },
+            { id: "weekly-sonnet" },
+          ],
+        },
+      });
+    },
+  );
+
+  test("rejects scoped model names that collide after ID sanitization", async () => {
+    const scopedLimit = (displayName: string) => ({
+      kind: "weekly_scoped",
+      percent: 25,
+      resets_at: SONNET_RESET,
+      scope: { model: { display_name: displayName } },
+    });
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            limits: [
+              scopedLimit("Claude Sonnet 4.5"),
+              scopedLimit("Claude-Sonnet 4 5"),
+            ],
+          }),
+        ),
+      );
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
+      ok: false,
+      health: { kind: "provider_changed" },
+    });
+    expect(injectedFetch).toHaveBeenCalledTimes(2);
   });
 
   test("maps an aborted request to a temporary error", async () => {

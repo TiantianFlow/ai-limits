@@ -18,6 +18,20 @@ export const claudeUsageWindowSchema = z.object({
   resets_at: z.iso.datetime({ offset: true }),
 });
 
+export const claudeScopedLimitSchema = z.object({
+  kind: z.literal("weekly_scoped"),
+  percent: z.number().finite().min(0).max(100),
+  resets_at: z.iso.datetime({ offset: true }),
+  scope: z.object({
+    model: z.object({
+      display_name: nonEmptyString.refine(
+        (value) => /[a-z0-9]/i.test(value.normalize("NFKD")),
+        "Expected a model name with a stable identifier",
+      ),
+    }),
+  }),
+});
+
 const claudeDisabledExtraUsageSchema = z.object({
   is_enabled: z.literal(false),
   used_credits: minorCurrencyUnits.nullable().optional(),
@@ -37,6 +51,7 @@ export const claudeUsageSchema = z.object({
   seven_day: claudeUsageWindowSchema.nullable().optional(),
   seven_day_opus: claudeUsageWindowSchema.nullable().optional(),
   seven_day_sonnet: claudeUsageWindowSchema.nullable().optional(),
+  limits: z.array(claudeScopedLimitSchema).nullable().optional(),
   extra_usage: z
     .union([
       claudeDisabledExtraUsageSchema,
@@ -51,5 +66,6 @@ export const claudeAccountSchema = z.object({
 });
 
 export type ClaudeOrganization = z.infer<typeof claudeOrganizationSchema>;
+export type ClaudeScopedLimit = z.infer<typeof claudeScopedLimitSchema>;
 export type ClaudeUsage = z.infer<typeof claudeUsageSchema>;
 export type ClaudeUsageWindow = z.infer<typeof claudeUsageWindowSchema>;
