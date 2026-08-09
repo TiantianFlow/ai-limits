@@ -9,6 +9,8 @@ AI Limits is an independent project by wjcjttl. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
 affiliates.
 
+![AI Limits Chrome side panel showing representative subscription usage, reset timing, and pace indicators](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
+
 ## How it works
 
 - Each provider is opt-in. Chrome asks for only that provider's site access.

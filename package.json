@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "assets:store": "node scripts/capture-store-assets.mjs",
     "dev": "wxt",
     "build": "wxt build && node scripts/stage-unpacked.mjs",
     "postinstall": "wxt prepare",
@@ -12,7 +13,8 @@
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit",
     "verify:publication": "node scripts/verify-publication.mjs",
-    "verify": "pnpm test:run && pnpm typecheck && pnpm build && node scripts/verify-build.mjs && pnpm verify:publication",
+    "verify:store-assets": "node scripts/verify-store-assets.mjs",
+    "verify": "pnpm test:run && pnpm typecheck && pnpm build && node scripts/verify-build.mjs && pnpm verify:publication && pnpm verify:store-assets",
     "zip": "wxt zip",
     "verify:zip": "pnpm build && pnpm zip && node scripts/verify-zip.mjs"
   },
@@ -33,7 +35,9 @@
     "fflate": "0.8.3",
     "jsdom": "27.0.1",
     "markdown-it": "15.0.0",
+    "playwright-core": "1.61.0",
     "typescript": "7.0.2",
+    "vite": "7.3.6",
     "vitest": "4.1.10",
     "wxt": "0.21.3"
   },
