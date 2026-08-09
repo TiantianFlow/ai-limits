@@ -25,6 +25,8 @@ import {
   removeProviderPermission,
 } from "./permissions";
 
+let permissionReconciliationGeneration = 0;
+
 function normalizeResult(
   adapter: ProviderAdapter,
   result: CollectionResult,
@@ -227,6 +229,7 @@ export async function refreshProvider(
 export async function reconcileProviderPermissions(
   providerIds: readonly ConnectableProviderId[],
 ): Promise<void> {
+  const generation = ++permissionReconciliationGeneration;
   const access = await Promise.all(
     providerIds.map(async (providerId) => [
       providerId,
@@ -234,6 +237,9 @@ export async function reconcileProviderPermissions(
     ] as const),
   );
 
+  if (generation !== permissionReconciliationGeneration) {
+    return;
+  }
   await reconcileProviderAccess(Object.fromEntries(access));
 }
 
@@ -256,26 +262,12 @@ export async function reconcileRemovedProviderPermissions(
     );
   });
   affectedProviderIds.forEach(invalidateProvider);
-
-  const access = await Promise.all(
-    providerIds.map(async (providerId) => [
-      providerId,
-      await hasProviderPermission(providerId),
-    ] as const),
-  );
-  const grants = Object.fromEntries(access) as Record<
-    ConnectableProviderId,
-    boolean
-  >;
-
-  await reconcileProviderAccess(grants);
   await Promise.all(
-    affectedProviderIds.map(async (providerId) => {
-      if (!grants[providerId]) {
-        await disconnectProviderData(providerId);
-      }
-    }),
+    affectedProviderIds.map((providerId) =>
+      disconnectProviderData(providerId),
+    ),
   );
+  await reconcileProviderPermissions(providerIds);
 }
 
 export type DisconnectProviderResult =

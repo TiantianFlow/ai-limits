@@ -18,6 +18,14 @@ import { refreshGrantedProviders } from "./refresh";
 const NOW = 1_800_000_000_000;
 const FINISHED_AT = NOW + 5_000;
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 function liveSnapshot(
   providerId: ProviderSnapshot["providerId"] = "chatgpt",
 ): ProviderSnapshot {
@@ -442,6 +450,65 @@ describe("provider refresh coordinator", () => {
       access: "required",
     });
     expect((await loadState())?.providers[1]).toEqual(initial.providers[1]);
+  });
+
+  test("clears removal-event data across a rapid regrant and blocks stale work", async () => {
+    const initial = liveState(NOW);
+    initial.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: { kind: "success" },
+    };
+    await saveState(initial);
+    const pending = deferred<CollectionResult>();
+    const collect = vi.fn(() => pending.promise);
+    let isCurrentGeneration = true;
+    const refreshing = refresh(adapter(collect), () => isCurrentGeneration);
+    await vi.waitFor(() => expect(collect).toHaveBeenCalledOnce());
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
+
+    await reconcileRemovedProviderPermissions(
+      { origins: ["https://chatgpt.com/*"] },
+      ["chatgpt"],
+      () => {
+        isCurrentGeneration = false;
+      },
+    );
+    pending.resolve({
+      ok: true,
+      snapshot: { ...liveSnapshot(), planLabel: "Stale refresh" },
+    });
+
+    await expect(refreshing).resolves.toEqual({
+      kind: "skipped",
+      reason: "superseded",
+    });
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+    });
+  });
+
+  test("ignores an older authority sample that resolves after a newer sample", async () => {
+    await saveState(createFixtureState(NOW));
+    const older = deferred<boolean>();
+    const newer = deferred<boolean>();
+    vi.spyOn(browser.permissions, "contains")
+      .mockImplementationOnce(() => older.promise as never)
+      .mockImplementationOnce(() => newer.promise as never);
+
+    const olderReconciliation = reconcileProviderPermissions(["chatgpt"]);
+    const newerReconciliation = reconcileProviderPermissions(["chatgpt"]);
+    newer.resolve(true);
+    await newerReconciliation;
+    older.resolve(false);
+    await olderReconciliation;
+
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+    });
   });
 
   test("disconnect removes permission before deleting provider data", async () => {

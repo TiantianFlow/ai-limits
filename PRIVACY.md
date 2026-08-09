@@ -78,12 +78,14 @@ the extension's browser storage:
   attempts to revoke every provider permission, removes saved usage, and writes
   a clean default settings record. If any permission cannot be revoked, saved
   usage is still removed and automatic refresh remains off.
-- An exact provider-permission removal event invalidates that provider's active
-  refresh before AI Limits checks authoritative permission state and clears the
-  local snapshot and refresh history. If permission is revoked while the
-  background worker is asleep, the next reconciliation clears data when a
-  stored grant is authoritatively absent; it also clears any legacy
-  permission-required record that still contains a snapshot or refresh
+- An exact provider-permission removal event first invalidates that provider's
+  active refresh and unconditionally clears its local snapshot and refresh
+  history. Only then does AI Limits sample authoritative permission state to
+  set the final access flag. A rapid regrant can therefore restore connected
+  access, but it cannot restore the deleted usage history. If permission is
+  revoked while the background worker is asleep, the next reconciliation
+  clears data when a stored grant is authoritatively absent; it also clears any
+  legacy permission-required record that still contains a snapshot or refresh
   history. Empty never-connected permission-required records remain unchanged.
 
 ## Automatic refresh
