@@ -11,9 +11,10 @@ Never include session cookies, access credentials, private usage data, or
 account-identifying screenshots in a public report.
 
 Use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for ordinary,
-non-sensitive security concerns. For sensitive reports, use GitHub's private
-vulnerability reporting through the repository's **Security** tab instead of
-opening a public issue.
+non-sensitive security concerns. If GitHub private vulnerability reporting is
+available in the repository's **Security** tab, use it for sensitive reports.
+If that feature is unavailable, open a minimal issue requesting a private
+contact route without disclosing the vulnerability or sensitive details.
 
 Include the affected version, browser version, expected behavior, actual
 behavior, and a minimal reproduction that contains no real credentials.
