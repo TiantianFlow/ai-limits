@@ -36,7 +36,9 @@ function storageSession(initial: Record<string, unknown> = {}) {
   const values = { ...initial };
   return {
     values,
-    get: vi.fn(async (key: string) => ({ [key]: values[key] })),
+    get: vi.fn(async (key: string | null) =>
+      key === null ? { ...values } : { [key]: values[key] },
+    ),
     set: vi.fn(async (items: Record<string, unknown>) => {
       Object.assign(values, items);
     }),
@@ -161,14 +163,15 @@ describe("Kimi page session", () => {
 
     await expect(result).resolves.toBe("fresh-token");
     expect(readAccessToken).toHaveBeenCalledTimes(2);
-    expect(harness.session.set).toHaveBeenCalledWith({
-      [KIMI_RECOVERY_LEASE_KEY]: {
-        tabId: 42,
-        createdAt: expect.any(Number),
-      },
-    });
+    const writtenLease = harness.session.set.mock.calls[0]?.[0] ?? {};
+    expect(Object.keys(writtenLease)).toEqual([
+      expect.stringMatching(/^kimiRecoveryTabLease:/),
+    ]);
+    expect(Object.values(writtenLease)).toEqual([
+      { tabId: 42, createdAt: expect.any(Number) },
+    ]);
     expect(harness.session.remove).toHaveBeenCalledWith(
-      KIMI_RECOVERY_LEASE_KEY,
+      expect.stringMatching(/^kimiRecoveryTabLease:/),
     );
     expect(harness.removeTab).toHaveBeenCalledOnce();
     expect(harness.removeTab).toHaveBeenCalledWith(42);
@@ -203,7 +206,7 @@ describe("Kimi page session", () => {
     await expect(result).resolves.toBeUndefined();
     expect(harness.removeTab).toHaveBeenCalledWith(42);
     expect(harness.session.remove).toHaveBeenCalledWith(
-      KIMI_RECOVERY_LEASE_KEY,
+      expect.stringMatching(/^kimiRecoveryTabLease:/),
     );
   });
 
@@ -260,9 +263,7 @@ describe("Kimi page session", () => {
     });
     await vi.advanceTimersByTimeAsync(0);
     expect(harness.removeTab).toHaveBeenCalledWith(77);
-    expect(harness.session.remove).toHaveBeenCalledWith(
-      KIMI_RECOVERY_LEASE_KEY,
-    );
+    expect(harness.session.remove).not.toHaveBeenCalled();
   });
 
   test("returns at ten seconds when the lease write never settles", async () => {
@@ -281,7 +282,7 @@ describe("Kimi page session", () => {
     expect(completion).toHaveBeenCalledWith(undefined);
     expect(harness.removeTab).toHaveBeenCalledWith(42);
     expect(harness.session.remove).toHaveBeenCalledWith(
-      KIMI_RECOVERY_LEASE_KEY,
+      expect.stringMatching(/^kimiRecoveryTabLease:/),
     );
   });
 
@@ -300,12 +301,78 @@ describe("Kimi page session", () => {
     );
     await vi.advanceTimersByTimeAsync(10_000);
     expect(completion).toHaveBeenCalledWith(undefined);
-    expect(harness.session.values[KIMI_RECOVERY_LEASE_KEY]).toBeUndefined();
+    expect(Object.keys(harness.session.values)).toHaveLength(0);
 
     leaseWrite.resolve();
     await vi.advanceTimersByTimeAsync(0);
-    expect(harness.session.values[KIMI_RECOVERY_LEASE_KEY]).toBeUndefined();
+    expect(Object.keys(harness.session.values)).toHaveLength(0);
     expect(harness.session.remove).toHaveBeenCalledTimes(2);
+  });
+
+  test("late cleanup from a prior recovery preserves the next recovery lease and tab", async () => {
+    vi.useFakeTimers();
+    const firstLeaseWrite = deferred<void>();
+    const completionA = vi.fn();
+    const controllerB = new AbortController();
+    const harness = recoveryHarness({
+      createTab: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: 41,
+          status: "loading",
+          active: false,
+          url: "https://www.kimi.com/",
+        })
+        .mockResolvedValueOnce({
+          id: 42,
+          status: "loading",
+          active: false,
+          url: "https://www.kimi.com/",
+        }),
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "loading",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+    });
+    let leaseWriteCount = 0;
+    harness.session.set.mockImplementation(async (items) => {
+      leaseWriteCount += 1;
+      if (leaseWriteCount === 1) await firstLeaseWrite.promise;
+      Object.assign(harness.session.values, items);
+    });
+
+    void refreshKimiAccessTokenInTemporaryTab({
+      ...harness.dependencies,
+      createLeaseId: () => "recovery-a",
+    }).then(completionA);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(completionA).toHaveBeenCalledWith(undefined);
+
+    const resultB = refreshKimiAccessTokenInTemporaryTab({
+      ...harness.dependencies,
+      createLeaseId: () => "recovery-b",
+      signal: controllerB.signal,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(Object.values(harness.session.values)).toContainEqual(
+      expect.objectContaining({ tabId: 42 }),
+    );
+
+    firstLeaseWrite.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(Object.values(harness.session.values)).toContainEqual(
+      expect.objectContaining({ tabId: 42 }),
+    );
+    expect(Object.values(harness.session.values)).not.toContainEqual(
+      expect.objectContaining({ tabId: 41 }),
+    );
+    expect(harness.removeTab).not.toHaveBeenCalledWith(42);
+
+    controllerB.abort();
+    await expect(resultB).resolves.toBeUndefined();
   });
 
   test("returns a recovered token without awaiting stuck final cleanup", async () => {
@@ -348,7 +415,7 @@ describe("Kimi page session", () => {
 
     await expect(result).resolves.toBeUndefined();
     expect(harness.session.remove).toHaveBeenCalledWith(
-      KIMI_RECOVERY_LEASE_KEY,
+      expect.stringMatching(/^kimiRecoveryTabLease:/),
     );
     expect(harness.removeTab).toHaveBeenCalledWith(42);
   });
@@ -392,7 +459,7 @@ describe("Kimi page session", () => {
       }),
     ).resolves.toBe("fresh-token");
     expect(harness.session.remove).toHaveBeenCalledWith(
-      KIMI_RECOVERY_LEASE_KEY,
+      expect.stringMatching(/^kimiRecoveryTabLease:/),
     );
   });
 
@@ -424,6 +491,41 @@ describe("Kimi page session", () => {
 
 describe("abandoned Kimi recovery lease cleanup", () => {
   const NOW = 2_000_000;
+
+  test("enumerates ownership-specific leases and cleans each key independently", async () => {
+    const session = storageSession({
+      "kimiRecoveryTabLease:recovery-a": {
+        tabId: 55,
+        createdAt: NOW - 5_000,
+      },
+      "kimiRecoveryTabLease:recovery-b": {
+        tabId: 56,
+        createdAt: NOW - 5_000,
+      },
+    });
+    const removeTab = vi.fn().mockResolvedValue(undefined);
+
+    await cleanupAbandonedKimiRecoveryTab({
+      storageSession: session,
+      getTab: vi.fn(async (tabId: number) => ({
+        id: tabId,
+        active: tabId === 56,
+        url: "https://www.kimi.com/",
+      })),
+      removeTab,
+      now: () => NOW,
+    });
+
+    expect(removeTab).toHaveBeenCalledOnce();
+    expect(removeTab).toHaveBeenCalledWith(55);
+    expect(session.remove).toHaveBeenCalledWith(
+      "kimiRecoveryTabLease:recovery-a",
+    );
+    expect(session.remove).toHaveBeenCalledWith(
+      "kimiRecoveryTabLease:recovery-b",
+    );
+    expect(session.values).toEqual({});
+  });
 
   test("closes a recent inactive leased tab that remains on Kimi", async () => {
     const session = storageSession({

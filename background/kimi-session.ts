@@ -1,6 +1,7 @@
 export const KIMI_RECOVERY_LEASE_KEY = "kimiRecoveryTabLease";
 
 const KIMI_URL = "https://www.kimi.com/";
+const KIMI_RECOVERY_LEASE_KEY_PREFIX = `${KIMI_RECOVERY_LEASE_KEY}:`;
 const KIMI_RECOVERY_TIMEOUT_MS = 10_000;
 const KIMI_RECOVERY_POLL_INTERVAL_MS = 250;
 const KIMI_ABANDONED_LEASE_MAX_AGE_MS = 60_000;
@@ -19,7 +20,7 @@ interface KimiRecoveryLease {
 }
 
 interface StorageSessionLike {
-  get(key: string): Promise<Record<string, unknown>>;
+  get(key: string | null): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
   remove(key: string): Promise<void>;
 }
@@ -49,17 +50,25 @@ function launchBestEffort(operation: () => Promise<unknown>): void {
   }
 }
 
-function launchLeaseClear(storageSession: StorageSessionLike): void {
-  launchBestEffort(() => storageSession.remove(KIMI_RECOVERY_LEASE_KEY));
+function launchLeaseClear(
+  storageSession: StorageSessionLike,
+  leaseKey: string,
+): void {
+  launchBestEffort(() => storageSession.remove(leaseKey));
 }
 
 function launchOwnedTabCleanup(
   tabId: number,
+  leaseKey: string,
   removeTab: (tabId: number) => Promise<void>,
   storageSession: StorageSessionLike,
 ): void {
   launchBestEffort(() => removeTab(tabId));
-  launchLeaseClear(storageSession);
+  launchLeaseClear(storageSession, leaseKey);
+}
+
+function createKimiRecoveryLeaseKey(createLeaseId: () => string): string {
+  return `${KIMI_RECOVERY_LEASE_KEY_PREFIX}${createLeaseId()}`;
 }
 
 function settleBeforeRecoveryBoundary<T>(
@@ -275,6 +284,7 @@ export async function refreshKimiAccessTokenInTemporaryTab({
   signal,
   wait = delay,
   now = Date.now,
+  createLeaseId = () => globalThis.crypto.randomUUID(),
 }: {
   rejectedToken?: string;
   createTab(details: { url: string; active: false }): Promise<KimiTab>;
@@ -287,8 +297,10 @@ export async function refreshKimiAccessTokenInTemporaryTab({
   signal?: AbortSignal;
   wait?: (milliseconds: number) => Promise<void>;
   now?: () => number;
+  createLeaseId?: () => string;
 }): Promise<string | undefined> {
   let ownedTabId: number | undefined;
+  let ownedLeaseKey: string | undefined;
   const deadline = now() + KIMI_RECOVERY_TIMEOUT_MS;
 
   try {
@@ -304,8 +316,9 @@ export async function refreshKimiAccessTokenInTemporaryTab({
     if (createResult === RECOVERY_STOPPED) {
       void createOperation.then(
         (lateTab) => {
-          if (lateTab.id !== undefined) {
-            launchOwnedTabCleanup(lateTab.id, removeTab, storageSession);
+          const lateTabId = lateTab.id;
+          if (lateTabId !== undefined) {
+            launchBestEffort(() => removeTab(lateTabId));
           }
         },
         () => undefined,
@@ -317,9 +330,11 @@ export async function refreshKimiAccessTokenInTemporaryTab({
     const tab = createResult.value;
     if (tab.id === undefined) return undefined;
     ownedTabId = tab.id;
+    const leaseKey = createKimiRecoveryLeaseKey(createLeaseId);
+    ownedLeaseKey = leaseKey;
 
     const leaseWrite = storageSession.set({
-      [KIMI_RECOVERY_LEASE_KEY]: {
+      [leaseKey]: {
         tabId: ownedTabId,
         createdAt: now(),
       } satisfies KimiRecoveryLease,
@@ -332,7 +347,7 @@ export async function refreshKimiAccessTokenInTemporaryTab({
     );
     if (leaseResult === RECOVERY_STOPPED) {
       void leaseWrite.then(
-        () => launchLeaseClear(storageSession),
+        () => launchLeaseClear(storageSession, leaseKey),
         () => undefined,
       );
       return undefined;
@@ -384,8 +399,16 @@ export async function refreshKimiAccessTokenInTemporaryTab({
   } catch {
     // Recovery is bounded best-effort work and never exposes browser errors.
   } finally {
-    if (ownedTabId !== undefined) {
-      launchOwnedTabCleanup(ownedTabId, removeTab, storageSession);
+    if (ownedTabId !== undefined && ownedLeaseKey !== undefined) {
+      launchOwnedTabCleanup(
+        ownedTabId,
+        ownedLeaseKey,
+        removeTab,
+        storageSession,
+      );
+    } else if (ownedTabId !== undefined) {
+      const tabId = ownedTabId;
+      launchBestEffort(() => removeTab(tabId));
     }
   }
 
@@ -404,36 +427,46 @@ export async function cleanupAbandonedKimiRecoveryTab({
   now?: () => number;
 }): Promise<void> {
   try {
-    const stored = await storageSession.get(KIMI_RECOVERY_LEASE_KEY);
-    const lease = parseRecoveryLease(stored[KIMI_RECOVERY_LEASE_KEY]);
-    if (!lease) return;
+    const stored = await storageSession.get(null);
+    const leaseEntries = Object.entries(stored).filter(
+      ([key]) =>
+        key === KIMI_RECOVERY_LEASE_KEY ||
+        key.startsWith(KIMI_RECOVERY_LEASE_KEY_PREFIX),
+    );
 
-    const age = now() - lease.createdAt;
-    if (age < 0 || age > KIMI_ABANDONED_LEASE_MAX_AGE_MS) return;
-
-    let tab: KimiTab;
-    try {
-      tab = await getTab(lease.tabId);
-    } catch {
-      return;
-    }
-
-    const remainsOnKimi =
-      tab.url === KIMI_URL || tab.url?.startsWith(KIMI_URL) === true;
-    if (tab.active === false && remainsOnKimi) {
+    for (const [leaseKey, value] of leaseEntries) {
       try {
-        await removeTab(lease.tabId);
-      } catch {
-        // The leased tab may already have disappeared.
+        const lease = parseRecoveryLease(value);
+        if (!lease) continue;
+
+        const age = now() - lease.createdAt;
+        if (age < 0 || age > KIMI_ABANDONED_LEASE_MAX_AGE_MS) continue;
+
+        let tab: KimiTab;
+        try {
+          tab = await getTab(lease.tabId);
+        } catch {
+          continue;
+        }
+
+        const remainsOnKimi =
+          tab.url === KIMI_URL || tab.url?.startsWith(KIMI_URL) === true;
+        if (tab.active === false && remainsOnKimi) {
+          try {
+            await removeTab(lease.tabId);
+          } catch {
+            // The leased tab may already have disappeared.
+          }
+        }
+      } finally {
+        try {
+          await storageSession.remove(leaseKey);
+        } catch {
+          // Startup cleanup is best-effort for every owned lease.
+        }
       }
     }
   } catch {
     // Startup cleanup must never block normal background registration.
-  } finally {
-    try {
-      await storageSession.remove(KIMI_RECOVERY_LEASE_KEY);
-    } catch {
-      // Startup cleanup is best-effort.
-    }
   }
 }
