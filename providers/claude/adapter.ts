@@ -9,7 +9,6 @@ import type {
   ProviderAdapter,
 } from "../types";
 import {
-  claudeAccountSchema,
   claudeExtraUsageSchema,
   claudeOrganizationListSchema,
   claudeOrganizationSchema,
@@ -23,7 +22,6 @@ import {
 } from "./schema";
 
 const ORGANIZATIONS_ENDPOINT = "https://claude.ai/api/organizations";
-const ACCOUNT_ENDPOINT = "https://claude.ai/api/account";
 const CLAUDE_ORIGIN = "https://claude.ai/*";
 const HOUR_MS = 60 * 60 * 1_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -145,26 +143,6 @@ function normalizeCredits(
   ];
 }
 
-async function accountLabel(
-  injectedFetch: typeof globalThis.fetch,
-  signal: AbortSignal,
-): Promise<string | undefined> {
-  try {
-    const response = await injectedFetch(ACCOUNT_ENDPOINT, {
-      ...REQUEST_INIT,
-      signal,
-    });
-    if (!response.ok) {
-      return undefined;
-    }
-
-    const account = claudeAccountSchema.safeParse(await parseJson(response));
-    return account.success ? (account.data.email_address ?? undefined) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 async function collectClaude({
   fetch: injectedFetch,
   now,
@@ -274,13 +252,10 @@ async function collectClaude({
     }
 
     const extraUsage = claudeExtraUsageSchema.safeParse(usage.data.extra_usage);
-    const account = await accountLabel(injectedFetch, signal);
-
     return {
       ok: true,
       snapshot: {
         providerId: "claude",
-        ...(account ? { accountLabel: account } : {}),
         ...(organization.name ? { planLabel: organization.name } : {}),
         source: "web-session",
         fetchedAt: now,

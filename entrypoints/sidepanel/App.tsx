@@ -1,34 +1,172 @@
 import React, { useEffect, useState } from "react";
 
-import type { RuntimeCommand } from "../../background/messages";
+import {
+  isProviderOperationEvent,
+  type ProviderOperation,
+  type RuntimeCommand,
+} from "../../background/messages";
 import { requestProviderPermission } from "../../background/permissions";
 import type {
   AppState,
   DisplayMode,
-  ProviderHealth,
+  ProviderId,
+  RefreshReport,
 } from "../../domain/model";
 import type { ConnectableProviderId } from "../../providers/registry";
 import { loadState } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
-function sendMessage(message: RuntimeCommand): void {
-  void browser.runtime.sendMessage(message);
+interface RefreshResponse {
+  state: AppState;
+  report: RefreshReport;
+}
+
+interface DeleteResponse {
+  state: AppState;
+  result: "deleted" | "deleted_with_permission_errors";
+}
+
+interface Announcement {
+  id: number;
+  message: string;
+}
+
+type ProviderOperations = Partial<Record<ProviderId, ProviderOperation>>;
+
+const providerNames: Record<ProviderId, string> = {
+  chatgpt: "ChatGPT",
+  claude: "Claude",
+  kimi: "Kimi",
+  cursor: "Cursor",
+};
+
+function sendCommand(message: RuntimeCommand): void {
+  void browser.runtime.sendMessage(message).catch(() => undefined);
+}
+
+function asAppState(value: unknown): AppState {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("version" in value) ||
+    value.version !== 3 ||
+    !("preferences" in value) ||
+    !value.preferences ||
+    typeof value.preferences !== "object" ||
+    !("providers" in value) ||
+    !Array.isArray(value.providers)
+  ) {
+    throw new Error("Missing application state");
+  }
+
+  return value as AppState;
+}
+
+function manualSummary(report: RefreshReport): string {
+  const attempted = Object.entries(report.providers).filter(
+    ([, outcome]) =>
+      outcome &&
+      !(outcome.kind === "skipped" && outcome.reason === "permission_required"),
+  );
+  if (attempted.length === 0) {
+    return "Connect a provider before refreshing.";
+  }
+
+  const successes = attempted.filter(
+    ([, outcome]) => outcome?.kind === "success",
+  );
+  if (successes.length === attempted.length) {
+    return `Updated ${successes.length} provider${successes.length === 1 ? "" : "s"}.`;
+  }
+
+  if (successes.length === 0) {
+    return "No providers updated. Existing data is unchanged.";
+  }
+
+  const nonSuccesses = attempted.filter(
+    ([, outcome]) => outcome?.kind !== "success",
+  );
+  const kimiIsOnlyNonSuccess =
+    nonSuccesses.length === 1 &&
+    nonSuccesses[0]?.[0] === "kimi" &&
+    nonSuccesses[0]?.[1]?.kind === "deferred" &&
+    nonSuccesses[0][1].reason === "session_required";
+
+  return `Updated ${successes.length} of ${attempted.length}. ${
+    kimiIsOnlyNonSuccess
+      ? "Kimi needs a browser session."
+      : "Some providers need attention."
+  }`;
+}
+
+function asRefreshResponse(value: unknown): RefreshResponse {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("state" in value) ||
+    !("report" in value)
+  ) {
+    throw new Error("Missing refresh response");
+  }
+
+  const response = value as Record<string, unknown>;
+  return {
+    state: asAppState(response.state),
+    report: response.report as RefreshReport,
+  };
+}
+
+function asDeleteResponse(value: unknown): DeleteResponse {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("state" in value) ||
+    !("result" in value) ||
+    (value.result !== "deleted" &&
+      value.result !== "deleted_with_permission_errors")
+  ) {
+    throw new Error("Missing delete response");
+  }
+
+  return {
+    state: asAppState(value.state),
+    result: value.result,
+  };
 }
 
 export function App() {
   const [state, setState] = useState<AppState>();
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshAnnouncement, setRefreshAnnouncement] = useState("");
+  const [announcement, setAnnouncement] = useState<Announcement>({
+    id: 0,
+    message: "",
+  });
+  const [isAutoRefreshPending, setIsAutoRefreshPending] = useState(false);
+  const [providerOperations, setProviderOperations] =
+    useState<ProviderOperations>({});
 
   useEffect(() => {
     let mounted = true;
 
-    void browser.runtime.sendMessage({ type: "GET_STATE" }).then((nextState) => {
-      if (mounted) {
-        setState(nextState as AppState);
-      }
-    });
+    void browser.runtime.sendMessage({ type: "GET_STATE" }).then(
+      (nextState) => {
+        if (mounted) {
+          try {
+            setState(asAppState(nextState));
+          } catch {
+            setLoadFailed(true);
+          }
+        }
+      },
+      () => {
+        if (mounted) {
+          setLoadFailed(true);
+        }
+      },
+    );
 
     const handleStorageChange = (
       _changes: Record<string, Browser.storage.StorageChange>,
@@ -44,16 +182,53 @@ export function App() {
         }
       });
     };
+    const handleRuntimeMessage = (message: unknown) => {
+      if (!isProviderOperationEvent(message)) {
+        return false;
+      }
+
+      setProviderOperations((current) =>
+        current.kimi === "fetching"
+          ? { ...current, kimi: message.operation }
+          : current,
+      );
+      return false;
+    };
 
     browser.storage.onChanged.addListener(handleStorageChange);
+    browser.runtime.onMessage.addListener(handleRuntimeMessage);
     const clock = window.setInterval(() => setNow(Date.now()), 60_000);
 
     return () => {
       mounted = false;
       browser.storage.onChanged.removeListener(handleStorageChange);
+      browser.runtime.onMessage.removeListener(handleRuntimeMessage);
       window.clearInterval(clock);
     };
-  }, []);
+  }, [loadAttempt]);
+
+  const setProviderOperation = (
+    providerId: ProviderId,
+    operation?: ProviderOperation,
+  ) => {
+    setProviderOperations((current) => {
+      const next = { ...current };
+      if (operation) {
+        next[providerId] = operation;
+      } else {
+        delete next[providerId];
+      }
+      return next;
+    });
+  };
+
+  const clearAnnouncement = () => {
+    setAnnouncement((current) => ({ id: current.id + 1, message: "" }));
+  };
+
+  const announce = (message: string) => {
+    setAnnouncement((current) => ({ id: current.id + 1, message }));
+  };
 
   const handleDisplayModeChange = (mode: DisplayMode) => {
     setState((current) =>
@@ -64,96 +239,166 @@ export function App() {
           }
         : current,
     );
-    sendMessage({ type: "SET_DISPLAY_MODE", mode });
-  };
-
-  const setLocalProviderHealth = (
-    providerId: ConnectableProviderId,
-    health: ProviderHealth,
-  ) => {
-    setState((current) =>
-      current
-        ? {
-            ...current,
-            providers: current.providers.map((provider) =>
-              provider.providerId === providerId
-                ? { ...provider, health }
-                : provider,
-            ),
-          }
-        : current,
-    );
+    sendCommand({ type: "SET_DISPLAY_MODE", mode });
   };
 
   const handleConnectProvider = async (providerId: ConnectableProviderId) => {
-    let granted: boolean;
-    setLocalProviderHealth(providerId, { kind: "connecting" });
+    clearAnnouncement();
+    setProviderOperation(providerId, "requesting_permission");
 
     try {
-      granted = await requestProviderPermission(providerId);
-    } catch {
-      setLocalProviderHealth(providerId, {
-        kind: "temporary_error",
-        message: "Chrome couldn't request access. Reload AI Limits and try again.",
-      });
-      return;
-    }
-
-    if (!granted) {
-      setLocalProviderHealth(providerId, { kind: "permission_required" });
-      return;
-    }
-
-    try {
-      const nextState = await browser.runtime.sendMessage({
-        type: "COLLECT_PROVIDER",
-        providerId,
-      } satisfies RuntimeCommand);
-
-      if (!nextState) {
-        throw new Error("Missing collection response");
+      const granted = await requestProviderPermission(providerId);
+      if (!granted) {
+        announce(`${providerNames[providerId]} was not connected.`);
+        return;
       }
 
-      setState(nextState as AppState);
+      setProviderOperation(providerId, "fetching");
+      const response = asRefreshResponse(
+        await browser.runtime.sendMessage({
+          type: "COLLECT_PROVIDER",
+          providerId,
+        } satisfies RuntimeCommand),
+      );
+      setState(response.state);
+      announce(manualSummary(response.report));
     } catch {
-      setLocalProviderHealth(providerId, {
-        kind: "temporary_error",
-        message: "AI Limits couldn't check this session. Reload and try again.",
-      });
+      announce(
+        `Couldn’t connect ${providerNames[providerId]}. Existing data is unchanged.`,
+      );
+    } finally {
+      setProviderOperation(providerId);
+    }
+  };
+
+  const handleRefreshProvider = async (providerId: ConnectableProviderId) => {
+    clearAnnouncement();
+    setProviderOperation(providerId, "fetching");
+    try {
+      const response = asRefreshResponse(
+        await browser.runtime.sendMessage({
+          type: "REFRESH_PROVIDER",
+          providerId,
+        } satisfies RuntimeCommand),
+      );
+      setState(response.state);
+      announce(manualSummary(response.report));
+    } catch {
+      announce("No providers updated. Existing data is unchanged.");
+    } finally {
+      setProviderOperation(providerId);
     }
   };
 
   const handleRefresh = async () => {
-    if (isRefreshing) {
+    if (isRefreshing || !state) {
       return;
     }
 
     setIsRefreshing(true);
-    setRefreshAnnouncement("Refreshing usage");
+    clearAnnouncement();
+    setProviderOperations(
+      Object.fromEntries(
+        state.providers
+          .filter((provider) => provider.access === "granted")
+          .map((provider) => [provider.providerId, "fetching"] as const),
+      ),
+    );
 
     try {
-      const nextState = await browser.runtime.sendMessage({
-        type: "REFRESH_ALL",
-      } satisfies RuntimeCommand);
-      if (!nextState) {
-        throw new Error("Missing refresh response");
-      }
-
-      setState(nextState as AppState);
-      setRefreshAnnouncement("Usage refreshed");
+      const response = asRefreshResponse(
+        await browser.runtime.sendMessage({
+          type: "REFRESH_ALL",
+        } satisfies RuntimeCommand),
+      );
+      setState(response.state);
+      announce(manualSummary(response.report));
     } catch {
-      setRefreshAnnouncement("Usage refresh failed");
+      announce("No providers updated. Existing data is unchanged.");
     } finally {
+      setProviderOperations({});
       setIsRefreshing(false);
     }
   };
 
+  const handleAutoRefreshChange = async (enabled: boolean) => {
+    if (isAutoRefreshPending) {
+      return;
+    }
+
+    clearAnnouncement();
+    setIsAutoRefreshPending(true);
+    try {
+      const nextState = await browser.runtime.sendMessage({
+        type: "SET_AUTO_REFRESH",
+        enabled,
+      } satisfies RuntimeCommand);
+      setState(asAppState(nextState));
+      announce(`Automatic refresh turned ${enabled ? "on" : "off"}.`);
+    } catch {
+      announce("Couldn’t update automatic refresh.");
+    } finally {
+      setIsAutoRefreshPending(false);
+    }
+  };
+
+  const handleDisconnectProvider = async (providerId: ConnectableProviderId) => {
+    clearAnnouncement();
+    try {
+      const nextState = await browser.runtime.sendMessage({
+        type: "DISCONNECT_PROVIDER",
+        providerId,
+      } satisfies RuntimeCommand);
+      setState(asAppState(nextState));
+      announce(
+        `Disconnected ${providerNames[providerId]} and deleted its stored usage.`,
+      );
+    } catch {
+      announce(`Couldn’t disconnect ${providerNames[providerId]}.`);
+    }
+  };
+
+  const handleDeleteLocalData = async () => {
+    clearAnnouncement();
+    try {
+      const response = asDeleteResponse(
+        await browser.runtime.sendMessage({
+          type: "DELETE_LOCAL_DATA",
+        } satisfies RuntimeCommand),
+      );
+      setState(response.state);
+      setProviderOperations({});
+      announce(
+        response.result === "deleted"
+          ? "Local usage data deleted and providers disconnected."
+          : "Local usage data deleted. Some provider access could not be removed.",
+      );
+    } catch {
+      announce("Couldn’t delete local data.");
+    }
+  };
+
   if (!state) {
-    return (
-      <main className="loading-state" aria-live="polite">
-        Loading usage…
-      </main>
-    );
+    if (loadFailed) {
+      return (
+        <main className="loading-state">
+          <p>Couldn’t load usage.</p>
+          <button
+            className="button button--secondary"
+            type="button"
+            aria-label="Retry loading usage"
+            onClick={() => {
+              setLoadFailed(false);
+              setLoadAttempt((attempt) => attempt + 1);
+            }}
+          >
+            Retry
+          </button>
+        </main>
+      );
+    }
+
+    return <main className="loading-state">Loading usage…</main>;
   }
 
   return (
@@ -161,12 +406,19 @@ export function App() {
       state={state}
       now={now}
       isRefreshing={isRefreshing}
-      refreshAnnouncement={refreshAnnouncement}
+      refreshAnnouncement={announcement.message}
+      refreshAnnouncementId={announcement.id}
+      autoRefreshPending={isAutoRefreshPending}
+      providerOperations={providerOperations}
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => void handleRefresh()}
-      onConnectProvider={(providerId) =>
-        void handleConnectProvider(providerId)
+      onConnectProvider={(providerId) => void handleConnectProvider(providerId)}
+      onRefreshProvider={(providerId) => void handleRefreshProvider(providerId)}
+      onAutoRefreshChange={(enabled) => void handleAutoRefreshChange(enabled)}
+      onDisconnectProvider={(providerId) =>
+        void handleDisconnectProvider(providerId)
       }
+      onDeleteLocalData={() => void handleDeleteLocalData()}
     />
   );
 }

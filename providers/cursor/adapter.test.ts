@@ -44,7 +44,7 @@ function planSummary(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Cursor adapter", () => {
-  test("requests live usage and renders Cursor and other model pools independently", async () => {
+  test("keeps plan and quota data without requesting the account email", async () => {
     const controller = new AbortController();
     const fetch = vi
       .fn<typeof globalThis.fetch>()
@@ -57,7 +57,6 @@ describe("Cursor adapter", () => {
       ok: true,
       snapshot: {
         providerId: "cursor",
-        accountLabel: "person@example.com",
         planLabel: "pro",
         source: "web-session",
         fetchedAt: NOW,
@@ -101,7 +100,8 @@ describe("Cursor adapter", () => {
       signal: controller.signal,
     };
     expect(fetch).toHaveBeenNthCalledWith(1, "https://cursor.com/api/usage-summary", init);
-    expect(fetch).toHaveBeenNthCalledWith(2, "https://cursor.com/api/auth/me", init);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toContain("person@example.com");
     expect(JSON.stringify(result)).not.toContain("autoPercentUsed");
     expect(JSON.stringify(result)).not.toContain("remaining");
   });
@@ -217,18 +217,6 @@ describe("Cursor adapter", () => {
         windows: [{ usedRatio: 0.25 }],
         credits: [{ used: 4.5, limit: 20 }],
       },
-    });
-  });
-
-  test("lets a clearly present identity plan override membership type", async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response(planSummary()))
-      .mockResolvedValueOnce(response({ email: "person@example.com", planName: "Enterprise Plus" }));
-
-    await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
-      ok: true,
-      snapshot: { planLabel: "Enterprise Plus" },
     });
   });
 

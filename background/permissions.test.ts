@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { providerRegistry } from "../providers/registry";
 import {
   hasProviderPermission,
+  removeAllProviderPermissions,
   removeProviderPermission,
   requestProviderPermission,
 } from "./permissions";
@@ -87,5 +88,41 @@ describe("provider permissions", () => {
     );
 
     await expect(removeProviderPermission("chatgpt", [])).resolves.toBe(false);
+  });
+
+  test("removes partial provider permissions that do not satisfy the full grant", async () => {
+    vi.spyOn(browser.permissions, "getAll").mockResolvedValue({
+      origins: [],
+      permissions: ["cookies"],
+    } as never);
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockImplementation(async () => true as never);
+
+    await expect(removeAllProviderPermissions(["kimi"])).resolves.toBe(true);
+
+    expect(remove).toHaveBeenCalledWith({ permissions: ["cookies"] });
+  });
+
+  test("attempts every provider permission cleanup when one removal rejects", async () => {
+    vi.spyOn(browser.permissions, "getAll").mockResolvedValue({
+      origins: ["https://chatgpt.com/*", "https://claude.ai/*"],
+      permissions: [],
+    } as never);
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockRejectedValueOnce(new Error("Chrome unavailable"))
+      .mockImplementationOnce(async () => true as never);
+
+    await expect(
+      removeAllProviderPermissions(["chatgpt", "claude"]),
+    ).resolves.toBe(false);
+    expect(remove).toHaveBeenCalledTimes(2);
+    expect(remove).toHaveBeenNthCalledWith(1, {
+      origins: ["https://chatgpt.com/*"],
+    });
+    expect(remove).toHaveBeenNthCalledWith(2, {
+      origins: ["https://claude.ai/*"],
+    });
   });
 });

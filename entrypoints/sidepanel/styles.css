@@ -174,7 +174,7 @@ h3 {
 
 .segmented-control button {
   min-width: 45px;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 9px;
   border-radius: 7px;
   background: transparent;
@@ -238,7 +238,7 @@ h3 {
 
 .provider-card__empty .button {
   justify-self: start;
-  min-height: 40px;
+  min-height: 44px;
   padding: 9px 14px;
 }
 
@@ -279,6 +279,128 @@ h3 {
 .freshness--stale,
 .health-message {
   color: var(--warm);
+}
+
+.operation-copy {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.permission-disclosure {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.permission-disclosure p,
+.settings-copy,
+.delete-confirmation p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.provider-card__action {
+  margin-top: 12px;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(22 22 28 / 4%);
+}
+
+.settings-panel__heading,
+.settings-toggle,
+.settings-provider-list li,
+.confirmation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-panel__heading h2,
+.settings-group h3,
+.danger-zone h3 {
+  margin-bottom: 0;
+}
+
+.settings-toggle {
+  min-height: 52px;
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+
+.settings-toggle span {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-toggle small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.settings-toggle input {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--quota);
+}
+
+.settings-toggle input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.settings-group,
+.danger-zone {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-provider-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-provider-list li {
+  min-height: 44px;
+}
+
+.delete-confirmation {
+  display: grid;
+  gap: 10px;
+}
+
+.confirmation-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.button--danger {
+  padding: 0 13px;
+  border: 1px solid var(--warm);
+  background: var(--warm-soft);
+  color: var(--warm);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .health-message {

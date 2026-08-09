@@ -31,12 +31,6 @@ export const cursorUsageSummarySchema = z.object({
   }).passthrough().nullable().optional(),
 }).passthrough();
 
-export const cursorIdentitySchema = z.object({
-  email: nonEmptyString.optional(),
-  plan: nonEmptyString.optional(),
-  planName: nonEmptyString.optional(),
-}).passthrough();
-
 export type CursorPlanQuota = z.infer<typeof cursorPlanQuotaSchema>;
 export type CursorQuota = z.infer<typeof cursorQuotaSchema>;
 export type CursorUsageSummary = z.infer<typeof cursorUsageSummarySchema>;

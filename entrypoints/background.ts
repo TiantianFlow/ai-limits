@@ -1,4 +1,5 @@
 import {
+  disconnectProvider as disconnectAndCleanupProvider,
   refreshProvider as collectAndCommitProvider,
   reconcileRemovedProviderPermissions,
   reconcileProviderPermissions,
@@ -13,18 +14,27 @@ import {
 import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
+  type ProviderOperationEvent,
 } from "../background/messages";
 import {
   createRefreshOrchestrator,
   type RefreshPolicy,
 } from "../background/orchestrator";
-import { hasProviderPermission } from "../background/permissions";
+import {
+  hasProviderPermission,
+  removeAllProviderPermissions,
+} from "../background/permissions";
 import {
   providerIds,
   providerRegistry,
   type ConnectableProviderId,
 } from "../providers/registry";
-import { ensureState, setDisplayMode } from "../storage/repository";
+import {
+  deleteAllLocalData,
+  ensureState,
+  setAutoRefresh,
+  setDisplayMode,
+} from "../storage/repository";
 
 const REFRESH_ALARM = "refresh-connected";
 const REFRESH_PERIOD_MINUTES = 15;
@@ -49,13 +59,47 @@ async function ensureRefreshAlarm(): Promise<void> {
   });
 }
 
+async function syncRefreshAlarm(
+  state: Awaited<ReturnType<typeof currentState>>,
+): Promise<void> {
+  const shouldRefresh =
+    state.preferences.autoRefresh &&
+    state.providers.some((provider) => provider.access === "granted");
+
+  if (!shouldRefresh) {
+    await browser.alarms.clear(REFRESH_ALARM);
+    return;
+  }
+
+  await ensureRefreshAlarm();
+}
+
+function announceKimiRecovery(): void {
+  void browser.runtime
+    .sendMessage({
+      type: "PROVIDER_OPERATION",
+      providerId: "kimi",
+      operation: "waiting_for_session",
+    } satisfies ProviderOperationEvent)
+    .catch(() => undefined);
+}
+
 async function collectProvider(
   providerId: ConnectableProviderId,
   policy: RefreshPolicy,
   shouldCommit: () => boolean,
   kimiStartupCleanup: Promise<void>,
+  invalidationSignal: AbortSignal,
 ): Promise<ProviderRefreshOutcome> {
   const controller = new AbortController();
+  const abortInvalidatedRun = () => controller.abort();
+  if (invalidationSignal.aborted) {
+    controller.abort();
+  } else {
+    invalidationSignal.addEventListener("abort", abortInvalidatedRun, {
+      once: true,
+    });
+  }
   const timeout = globalThis.setTimeout(
     () => controller.abort(),
     policy.deadlineMs,
@@ -84,8 +128,9 @@ async function collectProvider(
                 recoverAccessToken: createKimiRecoveryAfterStartupCleanup({
                   startupCleanup: kimiStartupCleanup,
                   signal: controller.signal,
-                  recoverAccessToken: (rejectedToken?: string) =>
-                    refreshKimiAccessTokenInTemporaryTab({
+                  recoverAccessToken: (rejectedToken?: string) => {
+                    announceKimiRecovery();
+                    return refreshKimiAccessTokenInTemporaryTab({
                       rejectedToken,
                       createTab: (details) => browser.tabs.create(details),
                       getTab: (tabId) => browser.tabs.get(tabId),
@@ -103,7 +148,8 @@ async function collectProvider(
                       },
                       storageSession: browser.storage.session,
                       signal: controller.signal,
-                    }),
+                    });
+                  },
                 }),
               },
             }
@@ -113,6 +159,7 @@ async function collectProvider(
       shouldCommit,
     );
   } finally {
+    invalidationSignal.removeEventListener("abort", abortInvalidatedRun);
     globalThis.clearTimeout(timeout);
   }
 }
@@ -137,13 +184,16 @@ export default defineBackground(() => {
         policy,
         control.isCurrentGeneration,
         kimiStartupCleanup,
+        control.signal,
       ),
   });
   const handleRuntimeCommand = createRuntimeCommandHandler({
     async refreshAll() {
       await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshAll("manual_all");
-      return { state: await currentState(), report };
+      const state = await currentState();
+      await syncRefreshAlarm(state);
+      return { state, report };
     },
     async collectProvider(providerId) {
       await reconcileProviderPermissions(providerIds);
@@ -151,7 +201,9 @@ export default defineBackground(() => {
         providerId,
         "connect",
       );
-      return { state: await currentState(), report };
+      const state = await currentState();
+      await syncRefreshAlarm(state);
+      return { state, report };
     },
     async refreshProvider(providerId) {
       await reconcileProviderPermissions(providerIds);
@@ -159,26 +211,71 @@ export default defineBackground(() => {
         providerId,
         "manual_provider",
       );
-      return { state: await currentState(), report };
+      const state = await currentState();
+      await syncRefreshAlarm(state);
+      return { state, report };
     },
-    getState: currentState,
+    async getState() {
+      const state = await currentState();
+      await syncRefreshAlarm(state);
+      return state;
+    },
     async setDisplayMode(mode) {
       await setDisplayMode(mode);
       return currentState();
+    },
+    async setAutoRefresh(enabled) {
+      await setAutoRefresh(enabled);
+      const state = await currentState();
+      await syncRefreshAlarm(state);
+      return state;
+    },
+    async disconnectProvider(providerId) {
+      refreshOrchestrator.invalidateProvider(providerId);
+      const before = await currentState();
+      const connected = before.providers
+        .filter((provider) => provider.access === "granted")
+        .map((provider) => provider.providerId);
+      const result = await disconnectAndCleanupProvider(providerId, connected);
+      if (!result.ok) {
+        throw new Error("permission_removal_failed");
+      }
+
+      const state = await currentState();
+      await syncRefreshAlarm(state);
+      return state;
+    },
+    async deleteLocalData() {
+      refreshOrchestrator.invalidateAll();
+      await browser.alarms.clear(REFRESH_ALARM);
+      const fullyRevoked = await removeAllProviderPermissions(providerIds);
+      let state = await deleteAllLocalData();
+      if (!fullyRevoked) {
+        await setAutoRefresh(false);
+        state = await currentState();
+      }
+
+      await syncRefreshAlarm(state);
+      return {
+        state,
+        result: fullyRevoked
+          ? "deleted"
+          : "deleted_with_permission_errors",
+      };
     },
   });
   const handleRuntimeMessage = createChromeRuntimeMessageListener(
     handleRuntimeCommand,
   );
 
-  void ensureRefreshAlarm();
+  void currentState().then(syncRefreshAlarm);
 
   browser.runtime.onInstalled.addListener(() => {
-    void Promise.all([currentState(), ensureRefreshAlarm()]);
+    void currentState().then(syncRefreshAlarm);
   });
 
   browser.runtime.onStartup.addListener(() => {
-    void ensureRefreshAlarm();
+    void currentState().then(syncRefreshAlarm);
   });
 
   browser.action.onClicked.addListener((tab) => {
@@ -190,18 +287,29 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener(handleRuntimeMessage);
 
   browser.permissions.onAdded.addListener(() => {
-    void reconcileProviderPermissions(providerIds);
+    void reconcileProviderPermissions(providerIds)
+      .then(currentState)
+      .then(syncRefreshAlarm);
   });
 
   browser.permissions.onRemoved.addListener((permissions) => {
-    void reconcileRemovedProviderPermissions(permissions, providerIds);
+    void reconcileRemovedProviderPermissions(permissions, providerIds)
+      .then(currentState)
+      .then(syncRefreshAlarm);
   });
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {
-      void reconcileProviderPermissions(providerIds).then(() =>
-        refreshOrchestrator.refreshAll("scheduled"),
-      );
+      void currentState().then((state) => {
+        if (
+          !state.preferences.autoRefresh ||
+          !state.providers.some((provider) => provider.access === "granted")
+        ) {
+          return browser.alarms.clear(REFRESH_ALARM);
+        }
+
+        return refreshOrchestrator.refreshAll("scheduled").then(() => undefined);
+      });
     }
   });
 

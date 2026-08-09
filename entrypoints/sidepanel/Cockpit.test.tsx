@@ -28,6 +28,10 @@ function renderCockpit(
       onDisplayModeChange={onDisplayModeChange}
       onRefresh={vi.fn()}
       onConnectProvider={vi.fn()}
+      onRefreshProvider={vi.fn()}
+      onAutoRefreshChange={vi.fn()}
+      onDisconnectProvider={vi.fn()}
+      onDeleteLocalData={vi.fn()}
     />,
   );
 
@@ -50,10 +54,13 @@ describe("Cockpit", () => {
 
     expect(screen.queryByText("Demo data")).not.toBeInTheDocument();
     expect(screen.queryByText(/% used/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Check ChatGPT session" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Check Claude session" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Check Kimi session" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Check Cursor session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect ChatGPT" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
+    expect(screen.getAllByText("Not connected")).toHaveLength(4);
+    expect(screen.queryByText("Permission required")).not.toBeInTheDocument();
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
     expect(screen.queryByText("Antigravity")).not.toBeInTheDocument();
   });
 
@@ -238,7 +245,7 @@ describe("Cockpit", () => {
     renderCockpit(createInitialState());
 
     expect(screen.getByRole("button", { name: "Refresh usage" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Check ChatGPT session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect ChatGPT" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Settings" })).toBeVisible();
   });
 
@@ -254,33 +261,44 @@ describe("Cockpit", () => {
       />,
     );
 
-    const connect = screen.getByRole("button", { name: "Check Claude session" });
-    expect(connect).toHaveTextContent("Check session");
+    const connect = screen.getByRole("button", { name: "Connect Claude" });
+    expect(connect).toHaveTextContent("Connect");
     fireEvent.click(connect);
     expect(onConnectProvider).toHaveBeenCalledWith("claude");
   });
 
-  it("renders permission-required state from durable access", () => {
+  it("renders a neutral not-connected state and disclosures before permission", () => {
     const state = createInitialState();
 
     renderCockpit(state);
 
     const chatGpt = screen.getByRole("article", { name: "ChatGPT" });
-    expect(within(chatGpt).getByText("Permission required")).toBeVisible();
+    expect(within(chatGpt).getByText("Not connected")).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Check ChatGPT session" }),
+      screen.getByRole("button", { name: "Connect ChatGPT" }),
+    ).toBeVisible();
+    expect(
+      within(chatGpt).getByText(
+        "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
+      ),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("article", { name: "Kimi" })).getByText(
+        "A manual refresh may briefly open an inactive Kimi tab.",
+      ),
     ).toBeVisible();
   });
 
-  it("shows live source and removes the connection action after collection", () => {
+  it("removes redundant source and connection badges after collection", () => {
     const state = createFixtureState(NOW);
     state.providers[0]!.snapshot!.source = "web-session";
 
     renderCockpit(state);
 
-    expect(screen.getByText("Live")).toBeVisible();
+    expect(screen.queryByText("Live")).not.toBeInTheDocument();
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Check ChatGPT session" }),
+      screen.queryByRole("button", { name: "Connect ChatGPT" }),
     ).not.toBeInTheDocument();
   });
 
@@ -310,5 +328,188 @@ describe("Cockpit", () => {
     ).toBeVisible();
     expect(screen.queryByText(/secret-bearing/)).not.toBeInTheDocument();
     expect(screen.queryByText("72% used")).not.toBeInTheDocument();
+  });
+
+  it("marks data stale only after 35 minutes", () => {
+    const state = createFixtureState(NOW);
+    state.providers = [state.providers[0]!];
+    state.providers[0]!.snapshot!.fetchedAt = NOW - 35 * 60 * 1_000;
+    const view = render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Updated 35 minutes ago")).not.toHaveTextContent("Stale");
+
+    view.rerender(
+      <Cockpit
+        state={state}
+        now={NOW + 1}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Stale · Updated 35 minutes ago/)).toBeVisible();
+  });
+
+  it("keeps a fresh scheduled Kimi session deferral quiet", () => {
+    const state = createFixtureState(NOW);
+    state.providers = [state.providers[2]!];
+    state.providers[0]!.snapshot!.fetchedAt = NOW - 34 * 60 * 1_000;
+    state.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 2_000,
+      finishedAt: NOW - 1_000,
+      outcome: { kind: "deferred", reason: "session_required" },
+    };
+
+    renderCockpit(state);
+
+    expect(
+      screen.queryByText("Auto-refresh is waiting for a Kimi session."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Refresh Kimi" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["stale", true],
+    ["empty", false],
+  ])("offers a manual Kimi refresh for a %s scheduled deferral", (_label, hasSnapshot) => {
+    const source = createFixtureState(NOW).providers[2]!;
+    const provider = {
+      ...source,
+      ...(hasSnapshot
+        ? {
+            snapshot: {
+              ...source.snapshot!,
+              fetchedAt: NOW - 36 * 60 * 1_000,
+            },
+          }
+        : { snapshot: undefined }),
+      lastAttempt: {
+        trigger: "scheduled" as const,
+        startedAt: NOW - 2_000,
+        finishedAt: NOW - 1_000,
+        outcome: { kind: "deferred" as const, reason: "session_required" as const },
+      },
+    };
+    const state: AppState = {
+      ...createInitialState(),
+      providers: [provider],
+    };
+    const onRefreshProvider = vi.fn();
+
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onRefreshProvider={onRefreshProvider}
+      />,
+    );
+
+    expect(
+      screen.getByText("Auto-refresh is waiting for a Kimi session."),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Kimi" }));
+    expect(onRefreshProvider).toHaveBeenCalledWith("kimi");
+  });
+
+  it("shows provider operations independently without hiding usage", () => {
+    const state = createFixtureState(NOW);
+    state.providers = [state.providers[2]!];
+
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        providerOperations={{ kimi: "waiting_for_session" }}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Waiting for Kimi…")).toBeVisible();
+    expect(screen.getByText("55% used")).toBeVisible();
+  });
+
+  it("opens and closes a labelled in-panel provider manager", () => {
+    renderCockpit();
+
+    const settings = screen.getByRole("button", { name: "Settings" });
+    fireEvent.click(settings);
+
+    const panel = screen.getByRole("region", { name: "Provider settings" });
+    expect(panel).toBeVisible();
+    expect(screen.queryByRole("region", { name: "AI provider usage" })).not.toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Close settings" }));
+    expect(screen.queryByRole("region", { name: "Provider settings" })).not.toBeInTheDocument();
+    expect(settings).toHaveFocus();
+  });
+
+  it("controls automatic refresh and connected-provider disconnects", () => {
+    const onAutoRefreshChange = vi.fn();
+    const onDisconnectProvider = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onAutoRefreshChange={onAutoRefreshChange}
+        onDisconnectProvider={onDisconnectProvider}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const autoRefresh = screen.getByRole("switch", { name: "Automatic refresh" });
+    expect(autoRefresh).toBeChecked();
+    fireEvent.click(autoRefresh);
+    expect(onAutoRefreshChange).toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Claude" }));
+    expect(onDisconnectProvider).toHaveBeenCalledWith("claude");
+  });
+
+  it("requires inline confirmation before deleting stored usage and disconnecting providers", () => {
+    const onDeleteLocalData = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDeleteLocalData={onDeleteLocalData}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete all local data" }));
+
+    expect(onDeleteLocalData).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("This removes stored usage and disconnects every provider."),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel delete all local data" }));
+    expect(
+      screen.queryByRole("button", { name: "Confirm delete all local data" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete all local data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete all local data" }));
+    expect(onDeleteLocalData).toHaveBeenCalledTimes(1);
   });
 });

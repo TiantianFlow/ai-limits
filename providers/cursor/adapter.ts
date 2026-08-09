@@ -5,7 +5,6 @@ import type {
   ProviderAdapter,
 } from "../types";
 import {
-  cursorIdentitySchema,
   cursorUsageSummarySchema,
   type CursorPlanQuota,
   type CursorQuota,
@@ -14,7 +13,6 @@ import {
 
 const CURSOR_ORIGIN = "https://cursor.com/*";
 const USAGE_ENDPOINT = "https://cursor.com/api/usage-summary";
-const IDENTITY_ENDPOINT = "https://cursor.com/api/auth/me";
 
 const REQUEST_INIT = {
   method: "GET",
@@ -166,22 +164,6 @@ function normalizeWindows(summary: CursorUsageSummary): QuotaWindow[] {
     : [monthlyWindow("monthly", "Monthly usage", "calendar", fallback)];
 }
 
-async function identityLabels(fetch: typeof globalThis.fetch, signal: AbortSignal) {
-  try {
-    const response = await fetch(IDENTITY_ENDPOINT, { ...REQUEST_INIT, signal });
-    if (!response.ok) return {};
-    const identity = cursorIdentitySchema.safeParse(await parseJson(response));
-    if (!identity.success) return {};
-    const explicitPlan = identity.data.planName ?? identity.data.plan;
-    return {
-      ...(identity.data.email ? { accountLabel: identity.data.email } : {}),
-      ...(explicitPlan ? { planLabel: explicitPlan } : {}),
-    };
-  } catch {
-    return {};
-  }
-}
-
 async function collectCursor({ fetch, now, signal }: CollectionContext): Promise<CollectionResult> {
   try {
     const response = await fetch(USAGE_ENDPOINT, { ...REQUEST_INIT, signal });
@@ -195,13 +177,11 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
     if (windows.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
-    const identity = await identityLabels(fetch, signal);
     return {
       ok: true,
       snapshot: {
         providerId: "cursor",
         planLabel: parsed.data.membershipType,
-        ...identity,
         source: "web-session",
         fetchedAt: now,
         windows,

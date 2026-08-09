@@ -1,6 +1,7 @@
 import React from "react";
 
-import type { DisplayMode, ProviderHealth } from "../../../domain/model";
+import type { ProviderOperation } from "../../../background/messages";
+import type { DisplayMode, ProviderRecord } from "../../../domain/model";
 import type { PaceKind } from "../../../domain/quota";
 import { QuotaRow } from "./QuotaRow";
 
@@ -25,15 +26,17 @@ export interface CreditView {
 export interface ProviderCardProps {
   name: string;
   plan?: string;
-  source?: string;
   mode: DisplayMode;
   quotas: QuotaView[];
   credits: CreditView[];
   freshness?: string;
   stale: boolean;
-  health: ProviderHealth;
+  access: ProviderRecord["access"];
+  operation?: ProviderOperation;
+  attemptMessage?: string;
   hasSnapshot: boolean;
   emptyDescription: string;
+  extraDisclosure?: string;
   action?: {
     label: string;
     accessibleLabel: string;
@@ -41,36 +44,28 @@ export interface ProviderCardProps {
   };
 }
 
-const healthLabels: Record<ProviderHealth["kind"], string> = {
-  permission_required: "Permission required",
-  connecting: "Connecting",
-  connected: "Connected",
-  signed_out: "Signed out",
-  challenge_blocked: "Check blocked",
-  provider_changed: "Provider changed",
-  temporary_error: "Temporarily unavailable",
+const operationLabels: Record<ProviderOperation, string> = {
+  requesting_permission: "Requesting permission…",
+  fetching: "Fetching usage…",
+  waiting_for_session: "Waiting for Kimi…",
 };
-
-function healthMessage(health: ProviderHealth): string | undefined {
-  return "message" in health ? health.message : undefined;
-}
 
 export function ProviderCard({
   name,
   plan,
-  source,
   mode,
   quotas,
   credits,
   freshness,
   stale,
-  health,
+  access,
+  operation,
+  attemptMessage,
   hasSnapshot,
   emptyDescription,
+  extraDisclosure,
   action,
 }: ProviderCardProps) {
-  const healthIsWarm = !["connected", "connecting"].includes(health.kind);
-
   return (
     <article className="provider-card" aria-labelledby={`provider-${name}`}>
       <header className="provider-card__header">
@@ -78,13 +73,14 @@ export function ProviderCard({
           <h2 id={`provider-${name}`}>{name}</h2>
           {plan ? <p>{plan}</p> : null}
         </div>
-        <div className="badge-row">
-          {source ? <span className="badge">{source}</span> : null}
-          <span className={`badge ${healthIsWarm ? "badge--warm" : ""}`}>
-            {healthLabels[health.kind]}
-          </span>
-        </div>
+        {access === "required" ? (
+          <span className="badge">Not connected</span>
+        ) : null}
       </header>
+
+      {operation ? (
+        <p className="operation-copy">{operationLabels[operation]}</p>
+      ) : null}
 
       {stale || freshness ? (
         <p className={`freshness ${stale ? "freshness--stale" : ""}`}>
@@ -96,11 +92,8 @@ export function ProviderCard({
       {!hasSnapshot ? (
         <section className="provider-card__empty">
           <p>{emptyDescription}</p>
-          {healthMessage(health) && healthMessage(health) !== emptyDescription ? (
-            <p className="health-message" role={healthIsWarm ? "status" : undefined}>
-              {healthMessage(health)}
-            </p>
-          ) : null}
+          {extraDisclosure ? <p>{extraDisclosure}</p> : null}
+          {attemptMessage ? <p className="health-message">{attemptMessage}</p> : null}
           {action ? (
             <button
               className="button button--secondary"
@@ -112,10 +105,26 @@ export function ProviderCard({
             </button>
           ) : null}
         </section>
-      ) : healthMessage(health) ? (
-        <p className="health-message" role={healthIsWarm ? "status" : undefined}>
-          {healthMessage(health)}
-        </p>
+      ) : attemptMessage ? (
+        <p className="health-message">{attemptMessage}</p>
+      ) : null}
+
+      {hasSnapshot && access === "required" ? (
+        <div className="permission-disclosure">
+          <p>{emptyDescription}</p>
+          {extraDisclosure ? <p>{extraDisclosure}</p> : null}
+        </div>
+      ) : null}
+
+      {hasSnapshot && action ? (
+        <button
+          className="button button--secondary provider-card__action"
+          type="button"
+          aria-label={action.accessibleLabel}
+          onClick={action.onClick}
+        >
+          {action.label}
+        </button>
       ) : null}
 
       {quotas.length ? (

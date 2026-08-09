@@ -22,10 +22,13 @@ export interface RefreshOrchestrator {
     providerId: ConnectableProviderId,
     trigger: "connect" | "manual_provider",
   ): Promise<RefreshReport>;
+  invalidateProvider(providerId: ConnectableProviderId): void;
+  invalidateAll(): void;
 }
 
 export interface ProviderRunControl {
   generation: number;
+  signal: AbortSignal;
   isCurrentGeneration(): boolean;
 }
 
@@ -42,6 +45,7 @@ export interface RefreshOrchestratorDependencies {
 
 interface ActiveRun {
   policy: RefreshPolicy;
+  controller: AbortController;
   promise: Promise<ProviderRefreshOutcome>;
   followUp?: Promise<ProviderRefreshOutcome>;
 }
@@ -90,12 +94,14 @@ export function createRefreshOrchestrator(
   ): Promise<ProviderRefreshOutcome> {
     const generation = (generations.get(providerId) ?? 0) + 1;
     generations.set(providerId, generation);
+    const controller = new AbortController();
 
     const control: ProviderRunControl = {
       generation,
+      signal: controller.signal,
       isCurrentGeneration: () => generations.get(providerId) === generation,
     };
-    const active = { policy } as ActiveRun;
+    const active = { policy, controller } as ActiveRun;
     active.promise = Promise.resolve()
       .then(() => dependencies.runProvider(providerId, policy, control))
       .catch(
@@ -162,6 +168,18 @@ export function createRefreshOrchestrator(
     },
     refreshProvider(providerId, trigger) {
       return refresh([providerId], trigger);
+    },
+    invalidateProvider(providerId) {
+      activeRuns.get(providerId)?.controller.abort();
+      generations.set(providerId, (generations.get(providerId) ?? 0) + 1);
+      activeRuns.delete(providerId);
+    },
+    invalidateAll() {
+      activeRuns.forEach((active) => active.controller.abort());
+      dependencies.providerIds.forEach((providerId) => {
+        generations.set(providerId, (generations.get(providerId) ?? 0) + 1);
+      });
+      activeRuns.clear();
     },
   };
 }

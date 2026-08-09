@@ -61,7 +61,7 @@ function usageFixture(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Claude adapter", () => {
-  test("selects a chat organization and normalizes quota windows and minor-unit credits", async () => {
+  test("keeps plan and quota data without collecting the account email", async () => {
     const controller = new AbortController();
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
@@ -92,7 +92,6 @@ describe("Claude adapter", () => {
       ok: true,
       snapshot: {
         providerId: "claude",
-        accountLabel: "person@example.com",
         planLabel: "Claude Max",
         source: "web-session",
         fetchedAt: NOW,
@@ -136,7 +135,7 @@ describe("Claude adapter", () => {
         ],
       },
     });
-    expect(injectedFetch).toHaveBeenCalledTimes(3);
+    expect(injectedFetch).toHaveBeenCalledTimes(2);
     expect(injectedFetch).toHaveBeenNthCalledWith(
       1,
       "https://claude.ai/api/organizations",
@@ -157,16 +156,7 @@ describe("Claude adapter", () => {
         signal: controller.signal,
       },
     );
-    expect(injectedFetch).toHaveBeenNthCalledWith(
-      3,
-      "https://claude.ai/api/account",
-      {
-        method: "GET",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      },
-    );
+    expect(JSON.stringify(result)).not.toContain("person@example.com");
     expect(JSON.stringify(result)).not.toContain("chat/org");
     expect(JSON.stringify(result)).not.toContain("capabilities");
     expect(JSON.stringify(result)).not.toContain("secret-");
@@ -215,24 +205,6 @@ describe("Claude adapter", () => {
     expect(injectedFetch.mock.calls[1]?.[0]).toBe(
       "https://claude.ai/api/organizations/api-first/usage",
     );
-  });
-
-  test("keeps primary usage when the best-effort account request fails", async () => {
-    const injectedFetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(
-        response([{ uuid: "org", name: "Claude Pro", capabilities: ["chat"] }]),
-      )
-      .mockResolvedValueOnce(response(usageFixture()))
-      .mockRejectedValueOnce(new TypeError("network unavailable"));
-
-    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
-      ok: true,
-      snapshot: {
-        providerId: "claude",
-        planLabel: "Claude Pro",
-      },
-    });
   });
 
   test("omits null optional windows and disabled extra usage instead of inventing zero values", async () => {

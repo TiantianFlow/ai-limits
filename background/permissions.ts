@@ -57,3 +57,52 @@ export async function removeProviderPermission(
     ...(permissions.length > 0 ? { permissions: [...permissions] } : {}),
   } as Browser.permissions.Permissions);
 }
+
+export async function removeAllProviderPermissions(
+  providerIds: readonly ConnectableProviderId[],
+): Promise<boolean> {
+  let granted: Browser.permissions.Permissions;
+  try {
+    granted = await browser.permissions.getAll();
+  } catch {
+    return false;
+  }
+
+  const grantedOrigins = new Set(granted.origins ?? []);
+  const grantedPermissions = new Set(
+    (granted.permissions ?? []) as readonly string[],
+  );
+  const claimedOrigins = new Set<string>();
+  const claimedPermissions = new Set<string>();
+  const requests = providerIds.map((providerId) => {
+    const provider = providerRegistry[providerId];
+    const origins = provider.optionalOrigins.filter(
+      (origin) => grantedOrigins.has(origin) && !claimedOrigins.has(origin),
+    );
+    const permissions = (provider.optionalPermissions ?? []).filter(
+      (permission) =>
+        grantedPermissions.has(permission) &&
+        !claimedPermissions.has(permission),
+    );
+    origins.forEach((origin) => claimedOrigins.add(origin));
+    permissions.forEach((permission) => claimedPermissions.add(permission));
+    return { origins, permissions };
+  });
+
+  const results = await Promise.allSettled(
+    requests.map(({ origins, permissions }) => {
+      if (origins.length === 0 && permissions.length === 0) {
+        return Promise.resolve(true);
+      }
+
+      return browser.permissions.remove({
+        ...(origins.length > 0 ? { origins } : {}),
+        ...(permissions.length > 0 ? { permissions } : {}),
+      } as Browser.permissions.Permissions);
+    }),
+  );
+
+  return results.every(
+    (result) => result.status === "fulfilled" && Boolean(result.value),
+  );
+}
