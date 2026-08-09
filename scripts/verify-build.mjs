@@ -6,6 +6,7 @@ const outputDirectory = resolve(".output/chrome-mv3");
 const manifestPath = resolve(outputDirectory, "manifest.json");
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8"));
 const expectedPermissions = ["alarms", "sidePanel", "storage"];
 
 function assert(condition, message) {
@@ -15,6 +16,10 @@ function assert(condition, message) {
 }
 
 assert(manifest.manifest_version === 3, "Expected manifest_version to be 3.");
+assert(
+  manifest.version === packageJson.version && manifest.version === "0.1.0",
+  "Expected manifest version 0.1.0 derived from package.json.",
+);
 assert(manifest.name === "AI Limits", 'Expected manifest name to be "AI Limits".');
 assert(
   manifest.side_panel?.default_path === "sidepanel.html",
@@ -51,5 +56,9 @@ assert(
 );
 
 await access(resolve(outputDirectory, "sidepanel.html"), constants.F_OK);
+await access(
+  resolve(outputDirectory, manifest.background.service_worker),
+  constants.F_OK,
+);
 
 console.log("AI Limits build verified");

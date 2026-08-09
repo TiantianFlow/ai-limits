@@ -33,6 +33,9 @@ importers:
       '@wxt-dev/module-react':
         specifier: 1.1.4
         version: 1.1.4(vite@7.3.6(jiti@2.7.0))(wxt@0.21.3(esbuild@0.28.1)(rollup@4.62.4)(typescript@7.0.2)(vite@7.3.6(jiti@2.7.0)))
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       jsdom:
         specifier: 27.0.1
         version: 27.0.1
@@ -1014,6 +1017,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   filesize@11.0.22:
     resolution: {integrity: sha512-RlCVs9CY+oSsRnNZn95J9vDXjNjOwddKyTFjOYtA4yxYVIxBnwiVVGJX+TFhsmu3uUf81JDGyijtYL9xgawlTw==}
@@ -2450,6 +2456,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
       picomatch: 4.0.5
+
+  fflate@0.8.3: {}
 
   filesize@11.0.22: {}
 

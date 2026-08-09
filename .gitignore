@@ -4,3 +4,6 @@ node_modules/
 .output/
 coverage/
 .DS_Store
+.env
+.env.*
+!.env.example
