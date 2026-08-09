@@ -22,31 +22,42 @@ extension reads and normalizes:
 - refresh timestamps and sanitized success, retry, sign-in, challenge,
   temporary-error, or response-change status.
 
-The extension discards email-shaped account labels and does not query the
-current Claude or Cursor email endpoints. It does not read prompts,
-conversations, generated responses, or rendered provider page content.
+The extension also handles provider session, usage, subscription, and
+organization-response JSON in memory. A ChatGPT account identifier derived
+from its access credential and the selected Claude organization UUID and
+capabilities are request-local and are not persisted. A Claude organization
+name may be normalized and stored as the visible plan label. The extension
+discards email-shaped account labels and does not query the current Claude or
+Cursor email endpoints. It does not read prompts, conversations, generated
+responses, or rendered provider page content.
 
 ## Browser sessions and provider requests
 
 AI Limits sends read-only requests directly from the extension to the selected
 provider's own web-session services. Browser cookies may accompany requests to
-that same provider origin. ChatGPT and Kimi access credentials and Claude
-organization identifiers may be held in memory long enough to complete the
-related collection attempt and request sequence. They are not written to
-persistent extension storage or included in saved refresh results.
+that same provider origin. ChatGPT and Kimi access credentials, the derived
+ChatGPT account identifier, and the selected Claude organization UUID and
+capabilities may be held in memory long enough to complete the related
+collection attempt and request sequence. Those values are not written to
+persistent extension storage or included in saved refresh results. The selected
+Claude organization name may separately be stored as the visible plan label.
 
-For Kimi, AI Limits may read the exact `kimi-auth` cookie and the exact
-`access_token` entry from a matching Kimi page. It does not read other Kimi
-browser-storage entries. During an interactive Connect or Refresh, a rejected
-credential may cause AI Limits to create one inactive Kimi homepage tab for up
-to 10 seconds. It waits for normal page startup, reads only a changed
-`access_token`, retries the usage request once, and closes only the tab it
-created. Scheduled refresh never creates a Kimi tab.
+For Kimi, AI Limits checks the exact legacy `kimi-auth` cookie first, then the
+exact `access_token` entry from an already-open matching Kimi page. It does not
+read other Kimi browser-storage entries. During an interactive Connect or
+Refresh, either a missing credential or a credential rejected by Kimi may
+cause AI Limits to create one inactive Kimi homepage tab. Recovery has a
+10-second deadline for obtaining a credential. When recovery finishes or times
+out, the extension attempts best-effort cleanup of only the tab and lease it
+owns; browser shutdown or API errors can delay or prevent cleanup. Scheduled
+refresh never creates a Kimi tab.
 
 While that recovery is active, the extension stores only a generated lease
 identifier with the temporary tab ID and creation timestamp in
 `chrome.storage.session`. This transient metadata supports cleanup if the
-background worker is interrupted; it is removed after recovery or cleanup.
+background worker is interrupted. AI Limits attempts to remove it when
+recovery finishes and also performs best-effort abandoned-lease cleanup when
+the background worker starts.
 
 ## Local storage and retention
 
@@ -67,8 +78,13 @@ the extension's browser storage:
   attempts to revoke every provider permission, removes saved usage, and writes
   a clean default settings record. If any permission cannot be revoked, saved
   usage is still removed and automatic refresh remains off.
-- Removing a provider permission in Chrome also causes AI Limits to remove that
-  provider's local snapshot and refresh history when the change is observed.
+- An exact provider-permission removal event invalidates that provider's active
+  refresh before AI Limits checks authoritative permission state and clears the
+  local snapshot and refresh history. If permission is revoked while the
+  background worker is asleep, the next reconciliation clears data when a
+  stored grant is authoritatively absent; it also clears any legacy
+  permission-required record that still contains a snapshot or refresh
+  history. Empty never-connected permission-required records remain unchanged.
 
 ## Automatic refresh
 
@@ -87,7 +103,7 @@ parties. Provider requests go only to the provider service you selected, which
 processes those requests under its own terms and privacy policy.
 
 The extension does not log session credentials or saved usage data. Opening a
-GitHub link or filing an issue is a separate action you take outside the
+support link or filing an issue is a separate action you take outside the
 extension.
 
 ## Limited use
@@ -114,6 +130,10 @@ guidance.
 
 ## Contact
 
-Use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for public
-privacy questions or requests. Do not include cookies, access credentials,
-private usage details, or other secrets in an issue.
+This policy is still in pre-publication acceptance and no public contact route
+is active yet. Before publication, the repository owner must publish the
+repository, enable Issues at the planned
+`https://github.com/wjcjttl/ai-limits/issues` route, and verify that it is
+reachable. Once verified, use that Issues route for public privacy questions or
+requests. Never include cookies, access credentials, private usage details, or
+other secrets in an issue.

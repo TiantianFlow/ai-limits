@@ -41,6 +41,10 @@ assert(
   "Expected the four exact optional provider origins.",
 );
 assert(
+  manifest.host_permissions === undefined,
+  "Expected no required host_permissions.",
+);
+assert(
   JSON.stringify([...(manifest.optional_permissions ?? [])].sort()) ===
     JSON.stringify(["cookies", "scripting"]),
   'Expected optional_permissions to equal ["cookies", "scripting"].',

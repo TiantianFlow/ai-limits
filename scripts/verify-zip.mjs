@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 
-const EXPECTED_VERSION = "0.1.0";
 const EXPECTED_PERMISSIONS = ["alarms", "sidePanel", "storage"];
 const EXPECTED_OPTIONAL_PERMISSIONS = ["cookies", "scripting"];
 const EXPECTED_OPTIONAL_ORIGINS = [
@@ -14,7 +13,7 @@ const EXPECTED_OPTIONAL_ORIGINS = [
 const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8"));
 const archivePath = resolve(
   ".output",
-  `${packageJson.name}-${EXPECTED_VERSION}-chrome.zip`,
+  `${packageJson.name}-${packageJson.version}-chrome.zip`,
 );
 
 function assert(condition, message) {
@@ -45,7 +44,10 @@ const manifest = JSON.parse(strFromU8(archive["manifest.json"]));
 const serviceWorker = manifest.background?.service_worker;
 const sidePanel = manifest.side_panel?.default_path;
 
-assert(manifest.version === EXPECTED_VERSION, "Expected ZIP version to be 0.1.0.");
+assert(
+  manifest.version === packageJson.version,
+  "Expected ZIP manifest version to match package.json.",
+);
 assert(manifest.manifest_version === 3, "Expected ZIP to contain Manifest V3.");
 assert(
   manifest.minimum_chrome_version === "116",
@@ -98,6 +100,10 @@ assert(
     EXPECTED_OPTIONAL_ORIGINS,
   ),
   "Expected the four exact optional provider origins.",
+);
+assert(
+  manifest.host_permissions === undefined,
+  "Expected no required host_permissions in the ZIP manifest.",
 );
 assert(
   !JSON.stringify(manifest).includes("auth.kimi.com"),

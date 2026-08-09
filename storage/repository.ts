@@ -74,9 +74,21 @@ export function reconcileProviderAccess(
     ...state,
     providers: state.providers.map((provider) => {
       const granted = grants[provider.providerId];
-      return granted === undefined
-        ? provider
-        : { ...provider, access: granted ? "granted" : "required" };
+      if (granted === undefined) {
+        return provider;
+      }
+      if (granted) {
+        return { ...provider, access: "granted" };
+      }
+      if (
+        provider.access === "granted" ||
+        provider.snapshot !== undefined ||
+        provider.lastAttempt !== undefined
+      ) {
+        return { providerId: provider.providerId, access: "required" };
+      }
+
+      return provider;
     }),
   }));
 }

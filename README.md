@@ -23,10 +23,12 @@ affiliates.
   Settings.
 
 Kimi may require extra recovery during an interactive Connect or Refresh. The
-extension first checks an already-open Kimi page. If that credential is stale,
-it may open one inactive Kimi homepage tab for up to 10 seconds, read only the
-`access_token` browser-storage entry, retry once, and close the tab it created.
-Scheduled refresh never opens a Kimi tab.
+extension checks the legacy Kimi cookie first, then the exact `access_token`
+entry in an already-open Kimi page. If no credential is available or Kimi
+rejects it, interactive recovery may create one inactive Kimi homepage tab.
+Recovery stops waiting for a credential after 10 seconds and then attempts
+best-effort cleanup of the tab it owns; browser shutdown or API errors can
+delay or prevent that cleanup. Scheduled refresh never creates a Kimi tab.
 
 See [Privacy](PRIVACY.md) for the complete data lifecycle and
 [Security](SECURITY.md) for security reporting and limitations.
@@ -95,8 +97,10 @@ documented provider API if one becomes available.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change. Public
-support and privacy questions use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change. This project
+is still in pre-publication acceptance, so no public support route is active.
+Before publication, the repository owner must enable Issues at the planned
+`https://github.com/wjcjttl/ai-limits/issues` route and verify that it works.
 
 ## License
 

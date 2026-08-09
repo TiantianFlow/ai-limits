@@ -378,9 +378,14 @@ describe("provider refresh coordinator", () => {
     expect(olderOutcome).toEqual({ kind: "skipped", reason: "superseded" });
   });
 
-  test("reconciles external permission revocation without erasing last-good data", async () => {
+  test("clears stored provider data when authoritative permission is absent", async () => {
     const initial = liveState(NOW);
-    const snapshotBefore = initial.providers[0]?.snapshot;
+    initial.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: { kind: "success" },
+    };
     await saveState(initial);
     const contains = vi
       .spyOn(browser.permissions, "contains")
@@ -396,17 +401,16 @@ describe("provider refresh coordinator", () => {
     ]);
 
     expect(contains).toHaveBeenCalledTimes(4);
-    expect((await loadState())?.providers[0]).toMatchObject({
+    expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
-      snapshot: snapshotBefore,
     });
     expect(
       (await loadState())?.providers.slice(1).map(({ access }) => access),
     ).toEqual(["granted", "granted", "granted"]);
   });
 
-  test("treats an exact permission-removal event as an external disconnect", async () => {
+  test("invalidates an exact permission removal before authoritative cleanup", async () => {
     const initial = liveState(NOW);
     initial.providers[0]!.lastAttempt = {
       trigger: "scheduled",
@@ -415,16 +419,24 @@ describe("provider refresh coordinator", () => {
       outcome: { kind: "success" },
     };
     await saveState(initial);
+    const invalidated = new Set<string>();
     vi.spyOn(browser.permissions, "contains").mockImplementation(
-      async ({ origins }) =>
-        (origins?.[0] !== "https://chatgpt.com/*") as never,
+      async ({ origins }) => {
+        if (origins?.[0] === "https://chatgpt.com/*") {
+          expect(invalidated.has("chatgpt")).toBe(true);
+          return false as never;
+        }
+        return true as never;
+      },
     );
 
     await reconcileRemovedProviderPermissions(
       { origins: ["https://chatgpt.com/*"] },
       ["chatgpt", "claude", "kimi", "cursor"],
+      (providerId) => invalidated.add(providerId),
     );
 
+    expect([...invalidated]).toEqual(["chatgpt"]);
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",

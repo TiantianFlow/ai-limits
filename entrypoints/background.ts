@@ -294,7 +294,11 @@ export default defineBackground(() => {
   });
 
   browser.permissions.onRemoved.addListener((permissions) => {
-    void reconcileRemovedProviderPermissions(permissions, providerIds)
+    void reconcileRemovedProviderPermissions(
+      permissions,
+      providerIds,
+      (providerId) => refreshOrchestrator.invalidateProvider(providerId),
+    )
       .then(currentState)
       .then(syncRefreshAlarm);
   });

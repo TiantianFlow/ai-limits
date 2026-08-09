@@ -240,7 +240,23 @@ export async function reconcileProviderPermissions(
 export async function reconcileRemovedProviderPermissions(
   removed: Browser.permissions.Permissions,
   providerIds: readonly ConnectableProviderId[],
+  invalidateProvider: (providerId: ConnectableProviderId) => void,
 ): Promise<void> {
+  const affectedProviderIds = providerIds.filter((providerId) => {
+    const provider = providerRegistry[providerId];
+    return (
+      provider.optionalOrigins.some((origin) =>
+        removed.origins?.includes(origin),
+      ) ||
+      (provider.optionalPermissions ?? []).some((permission) =>
+        (removed.permissions as readonly string[] | undefined)?.includes(
+          permission,
+        ),
+      )
+    );
+  });
+  affectedProviderIds.forEach(invalidateProvider);
+
   const access = await Promise.all(
     providerIds.map(async (providerId) => [
       providerId,
@@ -254,19 +270,8 @@ export async function reconcileRemovedProviderPermissions(
 
   await reconcileProviderAccess(grants);
   await Promise.all(
-    providerIds.map(async (providerId) => {
-      const provider = providerRegistry[providerId];
-      const exactPermissionWasRemoved =
-        provider.optionalOrigins.some((origin) =>
-          removed.origins?.includes(origin),
-        ) ||
-        (provider.optionalPermissions ?? []).some((permission) =>
-          (removed.permissions as readonly string[] | undefined)?.includes(
-            permission,
-          ),
-        );
-
-      if (!grants[providerId] && exactPermissionWasRemoved) {
+    affectedProviderIds.map(async (providerId) => {
+      if (!grants[providerId]) {
         await disconnectProviderData(providerId);
       }
     }),

@@ -354,7 +354,7 @@ describe("state repository", () => {
     });
   });
 
-  test("reconciles authoritative access without deleting provider data", async () => {
+  test("clears provider data when authoritative access revokes a stored grant", async () => {
     const state = liveFixtureState();
     state.providers[0]!.lastAttempt = {
       trigger: "scheduled",
@@ -363,15 +363,44 @@ describe("state repository", () => {
       outcome: { kind: "success" },
     };
     await saveState(state);
-    const before = state.providers[0];
-
     await reconcileProviderAccess({ chatgpt: false, claude: true });
 
     expect((await loadState())?.providers[0]).toEqual({
-      ...before,
+      providerId: "chatgpt",
       access: "required",
     });
     expect((await loadState())?.providers[1]?.access).toBe("granted");
+  });
+
+  test("leaves initial required provider records unchanged when access is absent", async () => {
+    const state = createInitialState();
+    await saveState(state);
+
+    await reconcileProviderAccess({ chatgpt: false });
+
+    expect(await loadState()).toEqual(state);
+  });
+
+  test("clears legacy provider data when required access remains absent", async () => {
+    const state = liveFixtureState();
+    state.providers[0] = {
+      ...state.providers[0]!,
+      access: "required",
+      lastAttempt: {
+        trigger: "scheduled",
+        startedAt: now - 1_000,
+        finishedAt: now,
+        outcome: { kind: "success" },
+      },
+    };
+    await saveState(state);
+
+    await reconcileProviderAccess({ chatgpt: false });
+
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "required",
+    });
   });
 
   test("explicit disconnect deletes only the selected provider's local data", async () => {

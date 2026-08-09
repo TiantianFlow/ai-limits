@@ -40,6 +40,7 @@ pnpm verify:zip
 The pull request should explain the user-visible change, privacy or permission
 impact, test evidence, and any provider compatibility risk.
 
-For contributor questions, use
-[GitHub Issues](https://github.com/wjcjttl/ai-limits/issues). Do not post secrets
-or private account data.
+No public contributor route is active during pre-publication acceptance. Before
+publication, the repository owner must enable and verify the planned
+`https://github.com/wjcjttl/ai-limits/issues` route. Once verified, use it for
+contributor questions, and never post secrets or private account data.
