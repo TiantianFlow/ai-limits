@@ -2,6 +2,7 @@
 node_modules/
 .wxt/
 .output/
+dist/
 coverage/
 .DS_Store
 .env

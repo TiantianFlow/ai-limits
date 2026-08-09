@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wxt",
-    "build": "wxt build",
+    "build": "wxt build && node scripts/stage-unpacked.mjs",
     "postinstall": "wxt prepare",
     "test": "vitest",
     "test:run": "vitest run",

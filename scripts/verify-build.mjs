@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { resolve } from "node:path";
 
 const outputDirectory = resolve(".output/chrome-mv3");
+const stagedDirectory = resolve("dist/chrome-mv3");
 const manifestPath = resolve(outputDirectory, "manifest.json");
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -78,6 +79,13 @@ await Promise.all(
 await access(
   resolve(outputDirectory, manifest.background.service_worker),
   constants.F_OK,
+);
+const stagedManifest = JSON.parse(
+  await readFile(resolve(stagedDirectory, "manifest.json"), "utf8"),
+);
+assert(
+  JSON.stringify(stagedManifest) === JSON.stringify(manifest),
+  "Expected the visible unpacked build to match the verified WXT build.",
 );
 
 console.log("AI Limits build verified");
