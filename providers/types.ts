@@ -1,6 +1,7 @@
 import type {
   ProviderHealth,
   ProviderId,
+  ProviderRefreshOutcome,
   ProviderSnapshot,
 } from "../domain/model";
 
@@ -21,6 +22,10 @@ export interface CollectionContext {
 export type CollectionResult =
   | { ok: true; snapshot: ProviderSnapshot }
   | { ok: false; health: ProviderHealth };
+
+export type RefreshCollector<T extends ProviderId = ProviderId> = (
+  providerId: T,
+) => Promise<ProviderRefreshOutcome | void>;
 
 export interface ProviderCapabilities {
   readonly browserSession: boolean;

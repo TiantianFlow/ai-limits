@@ -82,10 +82,15 @@ describe("provider refresh coordinator", () => {
     const claudeBefore = initial.providers[1];
     const successful = adapter(async (): Promise<CollectionResult> => ({
       ok: true,
-      snapshot: liveSnapshot(),
+      snapshot: liveSnapshot("claude"),
     }));
 
-    await refreshProvider(successful, collectionContext());
+    const outcome = await refreshProvider(successful, collectionContext());
+
+    expect(outcome).toEqual({
+      kind: "success",
+      snapshot: liveSnapshot(),
+    });
 
     const state = await loadState();
     expect(state?.providers[0]).toEqual({
@@ -101,7 +106,7 @@ describe("provider refresh coordinator", () => {
     await saveState(initial);
     const snapshotBefore = initial.providers[0]?.snapshot;
 
-    await refreshProvider(
+    const outcome = await refreshProvider(
       adapter(async () => ({
         ok: false,
         health: { kind: "provider_changed", message: "Usage response changed." },
@@ -115,6 +120,11 @@ describe("provider refresh coordinator", () => {
       kind: "provider_changed",
       message: "Usage response changed.",
     });
+    expect(outcome).toEqual({
+      kind: "failure",
+      category: "provider_changed",
+      message: "Usage response changed.",
+    });
   });
 
   test("contains thrown adapter errors as temporary ChatGPT failures without changing Claude", async () => {
@@ -122,7 +132,7 @@ describe("provider refresh coordinator", () => {
     await saveState(initial);
     const claudeBefore = initial.providers[1];
 
-    await refreshProvider(
+    const outcome = await refreshProvider(
       adapter(async () => {
         throw new Error("secret-bearing provider failure");
       }),
@@ -133,6 +143,10 @@ describe("provider refresh coordinator", () => {
     expect(state?.providers[0]?.snapshot).toEqual(initial.providers[0]?.snapshot);
     expect(state?.providers[0]?.health).toEqual({ kind: "temporary_error" });
     expect(state?.providers[1]).toEqual(claudeBefore);
+    expect(outcome).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+    });
   });
 
   test("applies the collection to fresh repository state without clobbering an in-flight preference update", async () => {

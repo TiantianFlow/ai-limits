@@ -40,6 +40,41 @@ export interface ProviderSnapshot {
   credits: CreditBalance[];
 }
 
+export type RefreshTrigger =
+  | "connect"
+  | "manual_provider"
+  | "manual_all"
+  | "scheduled";
+
+export type DeferredReason = "session_required" | "backoff";
+
+export type FailureCategory =
+  | "signed_out"
+  | "challenge_blocked"
+  | "provider_changed"
+  | "temporary_error";
+
+export type ProviderRefreshOutcome =
+  | { kind: "success"; snapshot: ProviderSnapshot }
+  | { kind: "deferred"; reason: DeferredReason; retryAt?: number }
+  | {
+      kind: "failure";
+      category: FailureCategory;
+      message?: string;
+      retryAt?: number;
+    }
+  | {
+      kind: "skipped";
+      reason: "permission_required" | "auto_refresh_disabled";
+    };
+
+export interface RefreshReport {
+  trigger: RefreshTrigger;
+  startedAt: number;
+  finishedAt: number;
+  providers: Partial<Record<ProviderId, ProviderRefreshOutcome>>;
+}
+
 export type ProviderHealth =
   | { kind: "permission_required" }
   | { kind: "connecting" }
