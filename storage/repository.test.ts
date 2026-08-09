@@ -137,6 +137,30 @@ describe("state repository", () => {
     });
   });
 
+  test("defaults automatic refresh on when migrating an explicit v2 false value", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 2,
+        preferences: { displayMode: "used", autoRefresh: false },
+        providers: [],
+      },
+    });
+
+    expect((await ensureState(now)).preferences.autoRefresh).toBe(true);
+  });
+
+  test("preserves an explicit v3 automatic-refresh false value", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 3,
+        preferences: { displayMode: "used", autoRefresh: false },
+        providers: [],
+      },
+    });
+
+    expect((await ensureState(now)).preferences.autoRefresh).toBe(false);
+  });
+
   test("migrates v2 snapshots and access without inventing historical attempts", async () => {
     const snapshot = liveSnapshot();
     await browser.storage.local.set({

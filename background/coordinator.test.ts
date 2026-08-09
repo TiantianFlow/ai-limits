@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import type { ProviderSnapshot } from "../domain/model";
+import type {
+  ProviderRefreshOutcome,
+  ProviderSnapshot,
+} from "../domain/model";
 import { createFixtureState } from "../providers/fixtures";
 import type { CollectionResult, ProviderAdapter } from "../providers/types";
 import { loadState, saveState, setDisplayMode } from "../storage/repository";
@@ -10,6 +13,7 @@ import {
   reconcileProviderPermissions,
   refreshProvider,
 } from "./coordinator";
+import { refreshGrantedProviders } from "./refresh";
 
 const NOW = 1_800_000_000_000;
 const FINISHED_AT = NOW + 5_000;
@@ -125,6 +129,43 @@ describe("provider refresh coordinator", () => {
       },
     });
     expect((await loadState())?.providers[1]).toEqual(claudeBefore);
+  });
+
+  test("sanitizes a successful snapshot before coordinator outcomes and aggregate reports", async () => {
+    let coordinatorOutcome: ProviderRefreshOutcome | undefined;
+    const report = await refreshGrantedProviders(
+      ["chatgpt"],
+      async () => true,
+      async () => {
+        const outcome = await refresh(
+          adapter(async () => ({
+            ok: true,
+            snapshot: {
+              ...liveSnapshot(),
+              accountLabel: "person@example.com",
+              accessToken: "secret-bearing snapshot field",
+            } as ProviderSnapshot,
+          })),
+        );
+        coordinatorOutcome = outcome;
+        return outcome;
+      },
+      "manual_all",
+      () => FINISHED_AT,
+    );
+    const expectedSnapshot = { ...liveSnapshot(), fetchedAt: FINISHED_AT };
+
+    expect(coordinatorOutcome).toStrictEqual({
+      kind: "success",
+      snapshot: expectedSnapshot,
+    });
+    expect(report.providers.chatgpt).toStrictEqual({
+      kind: "success",
+      snapshot: expectedSnapshot,
+    });
+    expect(JSON.stringify({ coordinatorOutcome, report })).not.toMatch(
+      /person@example|secret-bearing/,
+    );
   });
 
   test("preserves last-good data while recording a sanitized failure", async () => {

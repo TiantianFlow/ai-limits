@@ -10,6 +10,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../providers/types";
+import { normalizeProviderSnapshot } from "../providers/initial-state";
 import {
   providerRegistry,
   type ConnectableProviderId,
@@ -33,13 +34,21 @@ function normalizeResult(
     return result;
   }
 
-  return {
-    ok: true,
-    snapshot: {
+  const snapshot = normalizeProviderSnapshot(
+    {
       ...result.snapshot,
       providerId: adapter.id,
       fetchedAt: finishedAt,
     },
+    adapter.id,
+  );
+  if (!snapshot) {
+    return { ok: false, health: { kind: "provider_changed" } };
+  }
+
+  return {
+    ok: true,
+    snapshot,
   };
 }
 

@@ -111,7 +111,7 @@ function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function normalizeSnapshot(
+export function normalizeProviderSnapshot(
   value: unknown,
   providerId: ProviderId,
 ): ProviderSnapshot | undefined {
@@ -250,6 +250,7 @@ function displayMode(value: unknown): DisplayMode {
 
 function autoRefresh(value: unknown): boolean {
   return isRecord(value) &&
+    value.version === CURRENT_STATE_VERSION &&
     isRecord(value.preferences) &&
     typeof value.preferences.autoRefresh === "boolean"
     ? value.preferences.autoRefresh
@@ -293,7 +294,7 @@ export function migrateState(value: unknown): AppState {
       return { providerId, access: "required" };
     }
 
-    const snapshot = normalizeSnapshot(stored.snapshot, providerId);
+    const snapshot = normalizeProviderSnapshot(stored.snapshot, providerId);
     const lastAttempt = normalizeAttempt(stored.lastAttempt);
 
     return {
