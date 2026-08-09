@@ -1,5 +1,4 @@
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
-const issuesLink = `[GitHub Issues](${issuesUrl})`;
 const limitedUseStatement =
   "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
 const securityCondition =
@@ -25,6 +24,50 @@ function normalizeWhitespace(document) {
   return (document ?? "").replace(/\s+/g, " ");
 }
 
+function stripFencedCodeBlocks(document) {
+  let activeFence;
+
+  return document
+    .split(/\r?\n/)
+    .map((line) => {
+      if (activeFence) {
+        const closingFence = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
+        if (
+          closingFence &&
+          closingFence[1][0] === activeFence.marker &&
+          closingFence[1].length >= activeFence.length
+        ) {
+          activeFence = undefined;
+        }
+        return "";
+      }
+
+      const openingFence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (openingFence) {
+        activeFence = {
+          marker: openingFence[1][0],
+          length: openingFence[1].length,
+        };
+        return "";
+      }
+
+      return line;
+    })
+    .join("\n");
+}
+
+function extractInlineMarkdownLinkDestinations(document) {
+  const renderedMarkdown = stripFencedCodeBlocks(
+    (document ?? "").replace(/<!--[\s\S]*?(?:-->|$)/g, ""),
+  ).replace(/(`+)[\s\S]*?\1/g, "");
+  const inlineLink =
+    /(?<![!\\])\[(?:\\.|[^\[\]\n]|\[[^\[\]\n]*\])*\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^\n)]*\)))?\s*\)/g;
+
+  return [...renderedMarkdown.matchAll(inlineLink)].map(
+    (match) => match[1] ?? match[2],
+  );
+}
+
 export function validatePublicationDocuments(documents) {
   const errors = [];
   const policies = [
@@ -34,11 +77,12 @@ export function validatePublicationDocuments(documents) {
   ];
 
   for (const [label, key] of policies) {
-    const document = normalizeWhitespace(documents[key]);
+    const source = documents[key] ?? "";
+    const document = normalizeWhitespace(source);
     if (document.includes("pre-publication acceptance")) {
       errors.push(`${label} still contains pre-publication placeholder copy.`);
     }
-    if (!document.includes(issuesLink)) {
+    if (!extractInlineMarkdownLinkDestinations(source).includes(issuesUrl)) {
       errors.push(`${label} is missing the canonical GitHub Issues Markdown link.`);
     }
   }

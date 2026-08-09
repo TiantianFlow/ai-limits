@@ -84,6 +84,29 @@ const policyDocuments = [
   },
 ];
 
+const nonRenderedIssuesLinks = [
+  {
+    context: "an HTML comment",
+    document: `<!-- ${issuesLink} -->`,
+  },
+  {
+    context: "an unclosed HTML comment",
+    document: `<!-- ${issuesLink}`,
+  },
+  {
+    context: "an inline code span",
+    document: `\`${issuesLink}\``,
+  },
+  {
+    context: "a fenced code block",
+    document: ["```markdown", issuesLink, "```"].join("\n"),
+  },
+  {
+    context: "escaped Markdown syntax",
+    document: `\\${issuesLink}`,
+  },
+];
+
 describe("publication content", () => {
   it("rejects pre-publication placeholders", () => {
     const errors = validatePublicationDocuments({
@@ -122,6 +145,34 @@ describe("publication content", () => {
       expect(errors).toContain(error);
     },
   );
+
+  it.each(nonRenderedIssuesLinks)(
+    "rejects an Issues link present only in $context",
+    ({ document }) => {
+      const errors = validatePublicationDocuments({ ...valid, readme: document });
+      expect(errors).toContain(
+        "README is missing the canonical GitHub Issues Markdown link.",
+      );
+    },
+  );
+
+  it("accepts a real canonical Issues link with a different label", () => {
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        readme: `[Report a problem](${issuesUrl})`,
+      }),
+    ).toEqual([]);
+  });
+
+  it("accepts a real canonical Issues link with a nested label and title", () => {
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        readme: `[Report [a bug]](<${issuesUrl}> "Issue tracker")`,
+      }),
+    ).toEqual([]);
+  });
 
   it.each(listingDefaults)("rejects an omitted $value listing default", ({ value, error }) => {
     const errors = validatePublicationDocuments({
