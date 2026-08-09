@@ -68,12 +68,12 @@ After `pnpm verify`, open `chrome://extensions`, enable **Developer mode**, and
 choose **Load unpacked**. From the repository root, select:
 
 ```text
-.output/chrome-mv3
+dist/chrome-mv3
 ```
 
-If a file chooser hides `.output`, use its location-entry shortcut and enter
-the repository-relative directory above. Use the extension toolbar action to
-open the side panel.
+`pnpm build` stages this visible directory from WXT's generated `.output`
+directory, so it appears normally in the macOS file chooser. Use the extension
+toolbar action to open the side panel.
 
 ## Build the upload ZIP
 
