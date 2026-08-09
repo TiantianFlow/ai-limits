@@ -1,4 +1,8 @@
-import type { ProviderHealth, QuotaWindow } from "../../domain/model";
+import {
+  KIMI_RECOVERY_GUIDANCE,
+  type ProviderHealth,
+  type QuotaWindow,
+} from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
@@ -26,6 +30,7 @@ const LEGACY_USAGES_ENDPOINT =
 const MINUTE_MS = 60 * 1_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
+const SESSION_REQUIRED = Symbol("kimi-session-required");
 
 function healthForStatus(status: number): ProviderHealth {
   if (status === 401) {
@@ -340,42 +345,45 @@ async function collectKimi({
         ok: false,
         health: {
           kind: "temporary_error",
-          message:
-            "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+          message: KIMI_RECOVERY_GUIDANCE,
         },
       };
     }
     let activeAccessToken = initialAccessToken;
+    let pageTokenRereadAfterUnauthorized = false;
 
-    let response = await kimiRequest(
-      injectedFetch,
-      SUBSCRIPTION_STATS_ENDPOINT,
-      activeAccessToken,
-      {},
-      signal,
-    );
+    const requestWithCredentialPolicy = async (
+      endpoint: string,
+      body: unknown,
+    ): Promise<Response | typeof SESSION_REQUIRED> => {
+      let endpointResponse = await kimiRequest(
+        injectedFetch,
+        endpoint,
+        activeAccessToken,
+        body,
+        signal,
+      );
 
-    if (response.status === 401) {
-      const pageToken = await findAvailableAccessToken();
-      if (pageToken && pageToken !== activeAccessToken) {
-        activeAccessToken = pageToken;
-        response = await kimiRequest(
-          injectedFetch,
-          SUBSCRIPTION_STATS_ENDPOINT,
-          activeAccessToken,
-          {},
-          signal,
-        );
+      if (
+        endpointResponse.status === 401 &&
+        !pageTokenRereadAfterUnauthorized
+      ) {
+        pageTokenRereadAfterUnauthorized = true;
+        const pageToken = await findAvailableAccessToken();
+        if (pageToken && pageToken !== activeAccessToken) {
+          activeAccessToken = pageToken;
+          endpointResponse = await kimiRequest(
+            injectedFetch,
+            endpoint,
+            activeAccessToken,
+            body,
+            signal,
+          );
+        }
       }
-    }
 
-    if (response.status === 401) {
-      if (interaction !== "allowed") {
-        return {
-          ok: false,
-          deferred: { reason: "session_required" },
-        };
-      }
+      if (endpointResponse.status !== 401) return endpointResponse;
+      if (interaction !== "allowed") return SESSION_REQUIRED;
 
       if (!recoveryAttempted) {
         recoveryAttempted = true;
@@ -389,27 +397,43 @@ async function collectKimi({
         }
         if (recoveredToken && recoveredToken !== activeAccessToken) {
           activeAccessToken = recoveredToken;
-          response = await kimiRequest(
+          endpointResponse = await kimiRequest(
             injectedFetch,
-            SUBSCRIPTION_STATS_ENDPOINT,
+            endpoint,
             activeAccessToken,
-            {},
+            body,
             signal,
           );
         }
       }
+
+      return endpointResponse;
+    };
+
+    let response = await requestWithCredentialPolicy(
+      SUBSCRIPTION_STATS_ENDPOINT,
+      {},
+    );
+    if (response === SESSION_REQUIRED) {
+      return {
+        ok: false,
+        deferred: { reason: "session_required" },
+      };
     }
 
     let legacy = false;
     if (response.status === 404 || response.status === 405) {
       legacy = true;
-      response = await kimiRequest(
-        injectedFetch,
+      response = await requestWithCredentialPolicy(
         LEGACY_USAGES_ENDPOINT,
-        activeAccessToken,
         { scope: ["FEATURE_CODING"] },
-        signal,
       );
+      if (response === SESSION_REQUIRED) {
+        return {
+          ok: false,
+          deferred: { reason: "session_required" },
+        };
+      }
     }
     if (!response.ok) {
       return {
@@ -418,8 +442,7 @@ async function collectKimi({
           response.status === 401
             ? {
                 kind: "temporary_error",
-                message:
-                  "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+                message: KIMI_RECOVERY_GUIDANCE,
               }
             : healthForStatus(response.status),
       };

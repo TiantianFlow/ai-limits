@@ -68,7 +68,20 @@ export type ProviderRefreshOutcome =
       reason: "permission_required" | "auto_refresh_disabled" | "superseded";
     };
 
-export function sanitizedFailureMessage(category: FailureCategory): string {
+export const KIMI_RECOVERY_GUIDANCE =
+  "Kimi was still starting. Try Refresh once more, or open or reload Kimi.";
+
+export function sanitizedFailureMessage(
+  category: FailureCategory,
+  requestedMessage?: string,
+): string {
+  if (
+    category === "temporary_error" &&
+    requestedMessage === KIMI_RECOVERY_GUIDANCE
+  ) {
+    return KIMI_RECOVERY_GUIDANCE;
+  }
+
   switch (category) {
     case "signed_out":
       return "Sign in to the provider and try again.";

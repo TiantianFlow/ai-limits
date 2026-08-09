@@ -41,6 +41,27 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
 }
 
+function launchBestEffort(operation: () => Promise<unknown>): void {
+  try {
+    void operation().catch(() => undefined);
+  } catch {
+    // Browser APIs can throw synchronously while a worker is shutting down.
+  }
+}
+
+function launchLeaseClear(storageSession: StorageSessionLike): void {
+  launchBestEffort(() => storageSession.remove(KIMI_RECOVERY_LEASE_KEY));
+}
+
+function launchOwnedTabCleanup(
+  tabId: number,
+  removeTab: (tabId: number) => Promise<void>,
+  storageSession: StorageSessionLike,
+): void {
+  launchBestEffort(() => removeTab(tabId));
+  launchLeaseClear(storageSession);
+}
+
 function settleBeforeRecoveryBoundary<T>(
   operation: Promise<T>,
   deadline: number,
@@ -75,6 +96,52 @@ function settleBeforeRecoveryBoundary<T>(
       () => finish({ status: "rejected" }),
     );
   });
+}
+
+function waitForStartupCleanup(
+  startupCleanup: Promise<void>,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (canRecover: boolean) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", stop);
+      resolve(canRecover);
+    };
+    const stop = () => finish(false);
+
+    signal?.addEventListener("abort", stop, { once: true });
+    if (signal?.aborted) {
+      stop();
+      return;
+    }
+
+    void startupCleanup.then(
+      () => finish(true),
+      () => finish(true),
+    );
+  });
+}
+
+export function createKimiRecoveryAfterStartupCleanup({
+  startupCleanup,
+  recoverAccessToken,
+  signal,
+}: {
+  startupCleanup: Promise<void>;
+  recoverAccessToken(rejectedToken?: string): Promise<string | undefined>;
+  signal?: AbortSignal;
+}): (rejectedToken?: string) => Promise<string | undefined> {
+  return async (rejectedToken?: string) => {
+    if (!(await waitForStartupCleanup(startupCleanup, signal))) {
+      return undefined;
+    }
+    return recoverAccessToken(rejectedToken);
+  };
 }
 
 function isComplete(tab: KimiTab | undefined): boolean {
@@ -227,16 +294,50 @@ export async function refreshKimiAccessTokenInTemporaryTab({
   try {
     if (signal?.aborted) return undefined;
 
-    const tab = await createTab({ url: KIMI_URL, active: false });
+    const createOperation = createTab({ url: KIMI_URL, active: false });
+    const createResult = await settleBeforeRecoveryBoundary(
+      createOperation,
+      deadline,
+      signal,
+      now,
+    );
+    if (createResult === RECOVERY_STOPPED) {
+      void createOperation.then(
+        (lateTab) => {
+          if (lateTab.id !== undefined) {
+            launchOwnedTabCleanup(lateTab.id, removeTab, storageSession);
+          }
+        },
+        () => undefined,
+      );
+      return undefined;
+    }
+    if (createResult.status === "rejected") return undefined;
+
+    const tab = createResult.value;
     if (tab.id === undefined) return undefined;
     ownedTabId = tab.id;
 
-    await storageSession.set({
+    const leaseWrite = storageSession.set({
       [KIMI_RECOVERY_LEASE_KEY]: {
         tabId: ownedTabId,
         createdAt: now(),
       } satisfies KimiRecoveryLease,
     });
+    const leaseResult = await settleBeforeRecoveryBoundary(
+      leaseWrite,
+      deadline,
+      signal,
+      now,
+    );
+    if (leaseResult === RECOVERY_STOPPED) {
+      void leaseWrite.then(
+        () => launchLeaseClear(storageSession),
+        () => undefined,
+      );
+      return undefined;
+    }
+    if (leaseResult.status === "rejected") return undefined;
 
     const ready = await waitForOwnedTabReadiness({
       tabId: ownedTabId,
@@ -284,17 +385,7 @@ export async function refreshKimiAccessTokenInTemporaryTab({
     // Recovery is bounded best-effort work and never exposes browser errors.
   } finally {
     if (ownedTabId !== undefined) {
-      try {
-        await removeTab(ownedTabId);
-      } catch {
-        // The browser or user may already have closed the owned tab.
-      } finally {
-        try {
-          await storageSession.remove(KIMI_RECOVERY_LEASE_KEY);
-        } catch {
-          // Session storage can disappear while the worker is shutting down.
-        }
-      }
+      launchOwnedTabCleanup(ownedTabId, removeTab, storageSession);
     }
   }
 

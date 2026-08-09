@@ -6,6 +6,7 @@ import {
 import type { ProviderRefreshOutcome } from "../domain/model";
 import {
   cleanupAbandonedKimiRecoveryTab,
+  createKimiRecoveryAfterStartupCleanup,
   findKimiPageAccessToken,
   refreshKimiAccessTokenInTemporaryTab,
 } from "../background/kimi-session";
@@ -52,6 +53,7 @@ async function collectProvider(
   providerId: ConnectableProviderId,
   policy: RefreshPolicy,
   shouldCommit: () => boolean,
+  kimiStartupCleanup: Promise<void>,
 ): Promise<ProviderRefreshOutcome> {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(
@@ -79,26 +81,30 @@ async function collectProvider(
                       browser.tabs.query({ url: "https://www.kimi.com/*" }),
                     readAccessToken: readKimiPageAccessToken,
                   }),
-                recoverAccessToken: (rejectedToken?: string) =>
-                  refreshKimiAccessTokenInTemporaryTab({
-                    rejectedToken,
-                    createTab: (details) => browser.tabs.create(details),
-                    getTab: (tabId) => browser.tabs.get(tabId),
-                    readAccessToken: readKimiPageAccessToken,
-                    removeTab: (tabId) => browser.tabs.remove(tabId),
-                    addUpdatedListener: (listener) => {
-                      browser.tabs.onUpdated.addListener(listener);
-                      return () =>
-                        browser.tabs.onUpdated.removeListener(listener);
-                    },
-                    addRemovedListener: (listener) => {
-                      browser.tabs.onRemoved.addListener(listener);
-                      return () =>
-                        browser.tabs.onRemoved.removeListener(listener);
-                    },
-                    storageSession: browser.storage.session,
-                    signal: controller.signal,
-                  }),
+                recoverAccessToken: createKimiRecoveryAfterStartupCleanup({
+                  startupCleanup: kimiStartupCleanup,
+                  signal: controller.signal,
+                  recoverAccessToken: (rejectedToken?: string) =>
+                    refreshKimiAccessTokenInTemporaryTab({
+                      rejectedToken,
+                      createTab: (details) => browser.tabs.create(details),
+                      getTab: (tabId) => browser.tabs.get(tabId),
+                      readAccessToken: readKimiPageAccessToken,
+                      removeTab: (tabId) => browser.tabs.remove(tabId),
+                      addUpdatedListener: (listener) => {
+                        browser.tabs.onUpdated.addListener(listener);
+                        return () =>
+                          browser.tabs.onUpdated.removeListener(listener);
+                      },
+                      addRemovedListener: (listener) => {
+                        browser.tabs.onRemoved.addListener(listener);
+                        return () =>
+                          browser.tabs.onRemoved.removeListener(listener);
+                      },
+                      storageSession: browser.storage.session,
+                      signal: controller.signal,
+                    }),
+                }),
               },
             }
           : {}),
@@ -117,11 +123,21 @@ async function currentState() {
 }
 
 export default defineBackground(() => {
+  const kimiStartupCleanup = cleanupAbandonedKimiRecoveryTab({
+    storageSession: browser.storage.session,
+    getTab: (tabId) => browser.tabs.get(tabId),
+    removeTab: (tabId) => browser.tabs.remove(tabId),
+  });
   const refreshOrchestrator = createRefreshOrchestrator({
     providerIds,
     hasPermission: hasProviderPermission,
     runProvider: (providerId, policy, control) =>
-      collectProvider(providerId, policy, control.isCurrentGeneration),
+      collectProvider(
+        providerId,
+        policy,
+        control.isCurrentGeneration,
+        kimiStartupCleanup,
+      ),
   });
   const handleRuntimeCommand = createRuntimeCommandHandler({
     async refreshAll() {
@@ -189,9 +205,4 @@ export default defineBackground(() => {
     }
   });
 
-  void cleanupAbandonedKimiRecoveryTab({
-    storageSession: browser.storage.session,
-    getTab: (tabId) => browser.tabs.get(tabId),
-    removeTab: (tabId) => browser.tabs.remove(tabId),
-  });
 });

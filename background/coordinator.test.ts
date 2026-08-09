@@ -206,6 +206,40 @@ describe("provider refresh coordinator", () => {
     expect(JSON.stringify(await loadState())).not.toContain("secret-bearing");
   });
 
+  test("preserves allowlisted Kimi recovery guidance in coordinator and aggregate reports", async () => {
+    const guidance =
+      "Kimi was still starting. Try Refresh once more, or open or reload Kimi.";
+    let coordinatorOutcome: ProviderRefreshOutcome | undefined;
+
+    const report = await refreshGrantedProviders(
+      ["kimi"],
+      async () => true,
+      async () => {
+        const outcome = await refresh(
+          providerAdapter("kimi", async () => ({
+            ok: false,
+            health: { kind: "temporary_error", message: guidance },
+          })),
+        );
+        coordinatorOutcome = outcome;
+        return outcome;
+      },
+      "manual_all",
+      () => FINISHED_AT,
+    );
+
+    expect(coordinatorOutcome).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+      message: guidance,
+    });
+    expect(report.providers.kimi).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+      message: guidance,
+    });
+  });
+
   test("preserves last-good data while recording a provider session deferral", async () => {
     const initial = liveState(NOW - 60_000);
     await saveState(initial);

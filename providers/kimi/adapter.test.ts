@@ -590,6 +590,81 @@ describe("Kimi adapter", () => {
     );
   });
 
+  test("defers a scheduled legacy-endpoint 401 after a passive page-token reread", async () => {
+    const findAvailableAccessToken = vi
+      .fn()
+      .mockResolvedValue("stale-cookie");
+    const recoverAccessToken = vi.fn().mockResolvedValue("fresh-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({}, 404))
+      .mockResolvedValueOnce(response({ raw: "secret-error" }, 401));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue({ value: "stale-cookie" }),
+        findAvailableAccessToken,
+        recoverAccessToken,
+        "forbidden",
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      deferred: { reason: "session_required" },
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(findAvailableAccessToken).toHaveBeenCalledOnce();
+    expect(recoverAccessToken).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("secret-error");
+    expect(JSON.stringify(result)).not.toContain("Kimi was still starting");
+  });
+
+  test("recovers a manual legacy-endpoint 401 and retries that endpoint once", async () => {
+    const findAvailableAccessToken = vi
+      .fn()
+      .mockResolvedValue("stale-cookie");
+    const recoverAccessToken = vi.fn().mockResolvedValue("fresh-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({}, 405))
+      .mockResolvedValueOnce(response({}, 401))
+      .mockResolvedValueOnce(response(fixture()));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue({ value: "stale-cookie" }),
+        findAvailableAccessToken,
+        recoverAccessToken,
+      ),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        providerId: "kimi",
+        windows: expect.arrayContaining([
+          expect.objectContaining({ id: "weekly-coding" }),
+        ]),
+      },
+    });
+    expect(findAvailableAccessToken).toHaveBeenCalledOnce();
+    expect(recoverAccessToken).toHaveBeenCalledOnce();
+    expect(recoverAccessToken).toHaveBeenCalledWith("stale-cookie");
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-token",
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("fresh-token");
+  });
+
   test("keeps valid current windows when another stats section changes", async () => {
     const result = await kimiAdapter.collect(
       context(

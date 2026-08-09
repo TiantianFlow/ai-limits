@@ -88,7 +88,12 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
     category: result.health.kind,
     ...(result.health.message === undefined
       ? {}
-      : { message: sanitizedFailureMessage(result.health.kind) }),
+      : {
+          message: sanitizedFailureMessage(
+            result.health.kind,
+            result.health.message,
+          ),
+        }),
     ...(retryAt === undefined ? {} : { retryAt }),
   };
 }
