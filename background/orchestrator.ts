@@ -33,6 +33,7 @@ export interface ProviderRunControl {
 
 export interface RefreshOrchestratorDependencies {
   providerIds: readonly ConnectableProviderId[];
+  isAutoRefreshEnabled(): Promise<boolean>;
   hasPermission(providerId: ConnectableProviderId): Promise<boolean>;
   runProvider(
     providerId: ConnectableProviderId,
@@ -76,7 +77,9 @@ function isStronger(candidate: RefreshPolicy, active: RefreshPolicy): boolean {
 function needsInteractiveFollowUp(outcome: ProviderRefreshOutcome): boolean {
   return (
     (outcome.kind === "deferred" && outcome.reason === "session_required") ||
-    (outcome.kind === "failure" && outcome.category === "temporary_error")
+    (outcome.kind === "failure" && outcome.category === "temporary_error") ||
+    (outcome.kind === "skipped" &&
+      outcome.reason === "auto_refresh_disabled")
   );
 }
 
@@ -105,6 +108,21 @@ export function createRefreshOrchestrator(
       .then(async () => {
         if (control.signal.aborted || !control.isCurrentGeneration()) {
           return { kind: "skipped", reason: "superseded" } as const;
+        }
+
+        if (policy.trigger === "scheduled") {
+          const autoRefreshEnabled =
+            await dependencies.isAutoRefreshEnabled();
+          if (control.signal.aborted || !control.isCurrentGeneration()) {
+            return { kind: "skipped", reason: "superseded" } as const;
+          }
+
+          if (!autoRefreshEnabled) {
+            return {
+              kind: "skipped",
+              reason: "auto_refresh_disabled",
+            } as const;
+          }
         }
 
         const hasPermission = await dependencies.hasPermission(providerId);

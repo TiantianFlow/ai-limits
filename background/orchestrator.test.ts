@@ -6,9 +6,10 @@ import type {
   ProviderSnapshot,
 } from "../domain/model";
 import {
-  createRefreshOrchestrator,
+  createRefreshOrchestrator as createProductionRefreshOrchestrator,
   deriveRefreshPolicy,
   type ProviderRunControl,
+  type RefreshOrchestratorDependencies,
   type RefreshPolicy,
 } from "./orchestrator";
 
@@ -36,6 +37,21 @@ function deferred<T>() {
     resolve = next;
   });
   return { promise, resolve };
+}
+
+function createRefreshOrchestrator(
+  dependencies: Omit<
+    RefreshOrchestratorDependencies,
+    "isAutoRefreshEnabled"
+  > &
+    Partial<
+      Pick<RefreshOrchestratorDependencies, "isAutoRefreshEnabled">
+    >,
+) {
+  return createProductionRefreshOrchestrator({
+    isAutoRefreshEnabled: async () => true,
+    ...dependencies,
+  });
 }
 
 describe("refresh policy derivation", () => {
@@ -85,6 +101,114 @@ describe("refresh policy derivation", () => {
 });
 
 describe("refresh orchestrator", () => {
+  test("invalidates scheduled ingress while its auto-refresh check is pending", async () => {
+    const autoRefresh = deferred<boolean>();
+    const isAutoRefreshEnabled = vi.fn(() => autoRefresh.promise);
+    const hasPermission = vi.fn(async () => true);
+    const runProvider = vi.fn(async () => success("chatgpt"));
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      isAutoRefreshEnabled,
+      hasPermission,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    const staleRun = orchestrator.refreshAll("scheduled");
+    await vi.waitFor(() => expect(isAutoRefreshEnabled).toHaveBeenCalledOnce());
+    orchestrator.invalidateAll();
+    autoRefresh.resolve(true);
+
+    await expect(staleRun).resolves.toMatchObject({
+      providers: { chatgpt: { kind: "skipped", reason: "superseded" } },
+    });
+    expect(hasPermission).not.toHaveBeenCalled();
+    expect(runProvider).not.toHaveBeenCalled();
+  });
+
+  test("skips scheduled providers before permission checks when auto-refresh is off", async () => {
+    const hasPermission = vi.fn(async () => true);
+    const runProvider = vi.fn(async () => success("chatgpt"));
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      isAutoRefreshEnabled: async () => false,
+      hasPermission,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    await expect(orchestrator.refreshAll("scheduled")).resolves.toMatchObject({
+      providers: {
+        chatgpt: { kind: "skipped", reason: "auto_refresh_disabled" },
+      },
+    });
+    expect(hasPermission).not.toHaveBeenCalled();
+    expect(runProvider).not.toHaveBeenCalled();
+  });
+
+  test("lets a manual request follow a disabled scheduled ingress", async () => {
+    const autoRefresh = deferred<boolean>();
+    const policies: RefreshPolicy[] = [];
+    const hasPermission = vi.fn(async () => true);
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      isAutoRefreshEnabled: () => autoRefresh.promise,
+      hasPermission,
+      runProvider: async (_providerId, policy) => {
+        policies.push(policy);
+        return success("chatgpt");
+      },
+      clock: () => NOW,
+    });
+
+    const scheduled = orchestrator.refreshAll("scheduled");
+    const manual = orchestrator.refreshProvider("chatgpt", "manual_provider");
+    autoRefresh.resolve(false);
+
+    await expect(scheduled).resolves.toMatchObject({
+      providers: {
+        chatgpt: { kind: "skipped", reason: "auto_refresh_disabled" },
+      },
+    });
+    await expect(manual).resolves.toMatchObject({
+      providers: { chatgpt: { kind: "success" } },
+    });
+    expect(hasPermission).toHaveBeenCalledOnce();
+    expect(policies).toEqual([deriveRefreshPolicy("manual_provider")]);
+  });
+
+  test("does not follow up a scheduled permission-required skip", async () => {
+    const permission = deferred<boolean>();
+    const hasPermission = vi.fn(() => permission.promise);
+    const runProvider = vi.fn(async () => success("chatgpt"));
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      hasPermission,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    const scheduled = orchestrator.refreshAll("scheduled");
+    await vi.waitFor(() => expect(hasPermission).toHaveBeenCalledOnce());
+    const manual = orchestrator.refreshProvider("chatgpt", "manual_provider");
+    permission.resolve(false);
+
+    await expect(Promise.all([scheduled, manual])).resolves.toEqual([
+      expect.objectContaining({
+        providers: {
+          chatgpt: { kind: "skipped", reason: "permission_required" },
+        },
+      }),
+      expect.objectContaining({
+        providers: {
+          chatgpt: { kind: "skipped", reason: "permission_required" },
+        },
+      }),
+    ]);
+    expect(hasPermission).toHaveBeenCalledOnce();
+    expect(runProvider).not.toHaveBeenCalled();
+  });
+
   test("invalidates a provider while permission preflight is pending without starting collection", async () => {
     const permission = deferred<boolean>();
     const hasPermission = vi.fn(() => permission.promise);

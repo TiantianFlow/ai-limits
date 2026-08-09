@@ -178,6 +178,8 @@ export default defineBackground(() => {
   });
   const refreshOrchestrator = createRefreshOrchestrator({
     providerIds,
+    isAutoRefreshEnabled: async () =>
+      (await ensureState(Date.now())).preferences.autoRefresh,
     hasPermission: hasProviderPermission,
     runProvider: (providerId, policy, control) =>
       collectProvider(
@@ -299,16 +301,7 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {
-      void ensureState(Date.now()).then((state) => {
-        if (
-          !state.preferences.autoRefresh ||
-          !state.providers.some((provider) => provider.access === "granted")
-        ) {
-          return browser.alarms.clear(REFRESH_ALARM);
-        }
-
-        return refreshOrchestrator.refreshAll("scheduled").then(() => undefined);
-      });
+      void refreshOrchestrator.refreshAll("scheduled");
     }
   });
 
