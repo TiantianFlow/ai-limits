@@ -227,6 +227,10 @@ body {
   max-width: 460px;
 }
 
+.capture-page--pacing .extension-frame {
+  height: 622px;
+}
+
 .capture-page--privacy .marketing-copy h1 {
   font-size: 50px;
 }

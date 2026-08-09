@@ -89,18 +89,42 @@ try {
       if (asset.view === "pacing") {
         await page.evaluate(() => {
           const frame = document.querySelector("[data-panel-frame]");
-          const heading = document.getElementById("provider-Claude");
+          const heading = document.getElementById("provider-Kimi");
           const card = heading?.closest(".provider-card");
 
           if (!(frame instanceof HTMLElement) || !(card instanceof HTMLElement)) {
-            throw new Error("Pacing capture could not find the Claude card.");
+            throw new Error("Pacing capture could not find the Kimi card.");
           }
 
           const cardTop =
             card.getBoundingClientRect().top -
             frame.getBoundingClientRect().top +
             frame.scrollTop;
-          frame.scrollTop = cardTop - 10;
+          frame.scrollTop = Math.min(
+            cardTop - 1,
+            frame.scrollHeight - frame.clientHeight,
+          );
+
+          for (const name of ["Kimi", "Cursor"]) {
+            const featuredCard = document
+              .getElementById(`provider-${name}`)
+              ?.closest(".provider-card");
+
+            if (!(featuredCard instanceof HTMLElement)) {
+              throw new Error(`Pacing capture could not find the ${name} card.`);
+            }
+
+            const frameBounds = frame.getBoundingClientRect();
+            const cardBounds = featuredCard.getBoundingClientRect();
+            if (
+              cardBounds.top < frameBounds.top ||
+              cardBounds.bottom > frameBounds.bottom
+            ) {
+              throw new Error(
+                `Pacing capture requires the complete ${name} card inside the panel frame.`,
+              );
+            }
+          }
         });
       }
 
