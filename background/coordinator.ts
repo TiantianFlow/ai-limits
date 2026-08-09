@@ -101,6 +101,7 @@ export async function setProviderHealth(
 export async function refreshProvider(
   adapter: ProviderAdapter,
   context: CollectionContext,
+  shouldCommit: () => boolean,
 ): Promise<ProviderRefreshOutcome> {
   let result: CollectionResult;
 
@@ -114,7 +115,7 @@ export async function refreshProvider(
   const outcome = refreshOutcome(normalizedResult);
 
   await mutateState(context.now, (state) =>
-    applyResult(state, adapter, normalizedResult),
+    shouldCommit() ? applyResult(state, adapter, normalizedResult) : state,
   );
   return outcome;
 }

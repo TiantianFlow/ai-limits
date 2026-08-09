@@ -85,7 +85,11 @@ describe("provider refresh coordinator", () => {
       snapshot: liveSnapshot("claude"),
     }));
 
-    const outcome = await refreshProvider(successful, collectionContext());
+    const outcome = await refreshProvider(
+      successful,
+      collectionContext(),
+      () => true,
+    );
 
     expect(outcome).toEqual({
       kind: "success",
@@ -112,6 +116,7 @@ describe("provider refresh coordinator", () => {
         health: { kind: "provider_changed", message: "Usage response changed." },
       })),
       collectionContext(),
+      () => true,
     );
 
     const chatGpt = (await loadState())?.providers[0];
@@ -137,6 +142,7 @@ describe("provider refresh coordinator", () => {
         throw new Error("secret-bearing provider failure");
       }),
       collectionContext(),
+      () => true,
     );
 
     const state = await loadState();
@@ -159,7 +165,11 @@ describe("provider refresh coordinator", () => {
         }),
     );
 
-    const refreshing = refreshProvider(adapter(collect), collectionContext());
+    const refreshing = refreshProvider(
+      adapter(collect),
+      collectionContext(),
+      () => true,
+    );
     await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(1));
     await setDisplayMode("left");
     finishCollection({ ok: true, snapshot: liveSnapshot() });
@@ -180,6 +190,7 @@ describe("provider refresh coordinator", () => {
           snapshot: chatGptSnapshot,
         })),
         collectionContext(),
+        () => true,
       ),
       refreshProvider(
         providerAdapter("claude", async () => ({
@@ -187,6 +198,7 @@ describe("provider refresh coordinator", () => {
           snapshot: claudeSnapshot,
         })),
         collectionContext(),
+        () => true,
       ),
     ]);
 
@@ -201,5 +213,37 @@ describe("provider refresh coordinator", () => {
       health: { kind: "connected" },
       snapshot: claudeSnapshot,
     });
+  });
+
+  test("does not commit an older result after a newer generation takes ownership", async () => {
+    await saveState(liveState(NOW - 60_000));
+    let currentGeneration = 1;
+    let finishOlderCollection!: (result: CollectionResult) => void;
+    const olderSnapshot = { ...liveSnapshot(), planLabel: "Older" };
+    const newerSnapshot = { ...liveSnapshot(), planLabel: "Newer" };
+    const olderCollection = vi.fn(
+      () =>
+        new Promise<CollectionResult>((resolve) => {
+          finishOlderCollection = resolve;
+        }),
+    );
+
+    const olderRefresh = refreshProvider(
+      adapter(olderCollection),
+      collectionContext(),
+      () => currentGeneration === 1,
+    );
+    await vi.waitFor(() => expect(olderCollection).toHaveBeenCalledTimes(1));
+
+    currentGeneration = 2;
+    await refreshProvider(
+      adapter(async () => ({ ok: true, snapshot: newerSnapshot })),
+      collectionContext(),
+      () => currentGeneration === 2,
+    );
+    finishOlderCollection({ ok: true, snapshot: olderSnapshot });
+    await olderRefresh;
+
+    expect((await loadState())?.providers[0]?.snapshot).toEqual(newerSnapshot);
   });
 });

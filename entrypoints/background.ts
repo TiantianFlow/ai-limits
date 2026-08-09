@@ -49,6 +49,7 @@ async function ensureRefreshAlarm(): Promise<void> {
 async function collectProvider(
   providerId: ConnectableProviderId,
   policy: RefreshPolicy,
+  shouldCommit: () => boolean,
 ): Promise<ProviderRefreshOutcome> {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(
@@ -66,35 +67,39 @@ async function collectProvider(
     }
 
     const adapter = providerRegistry[providerId];
-    return await collectAndCommitProvider(adapter, {
-      fetch: globalThis.fetch.bind(globalThis),
-      now: Date.now(),
-      signal: controller.signal,
-      ...(providerId === "kimi"
-        ? {
-            getCookie: (details: { url: string; name: string }) =>
-              browser.cookies.get(details),
-            getAccessToken: () =>
-              findKimiPageAccessToken({
-                queryTabs: () =>
-                  browser.tabs.query({ url: "https://www.kimi.com/*" }),
-                readAccessToken: readKimiPageAccessToken,
-              }),
-            ...(policy.interaction === "allowed"
-              ? {
-                  getRefreshedAccessToken: (staleAccessToken: string) =>
-                    refreshKimiAccessTokenInTemporaryTab({
-                      staleAccessToken,
-                      createTab: (details) => browser.tabs.create(details),
-                      readAccessToken: readKimiPageAccessToken,
-                      removeTab: (tabId) => browser.tabs.remove(tabId),
-                      signal: controller.signal,
-                    }),
-                }
-              : {}),
-          }
-        : {}),
-    });
+    return await collectAndCommitProvider(
+      adapter,
+      {
+        fetch: globalThis.fetch.bind(globalThis),
+        now: Date.now(),
+        signal: controller.signal,
+        ...(providerId === "kimi"
+          ? {
+              getCookie: (details: { url: string; name: string }) =>
+                browser.cookies.get(details),
+              getAccessToken: () =>
+                findKimiPageAccessToken({
+                  queryTabs: () =>
+                    browser.tabs.query({ url: "https://www.kimi.com/*" }),
+                  readAccessToken: readKimiPageAccessToken,
+                }),
+              ...(policy.interaction === "allowed"
+                ? {
+                    getRefreshedAccessToken: (staleAccessToken: string) =>
+                      refreshKimiAccessTokenInTemporaryTab({
+                        staleAccessToken,
+                        createTab: (details) => browser.tabs.create(details),
+                        readAccessToken: readKimiPageAccessToken,
+                        removeTab: (tabId) => browser.tabs.remove(tabId),
+                        signal: controller.signal,
+                      }),
+                  }
+                : {}),
+            }
+          : {}),
+      },
+      shouldCommit,
+    );
   } finally {
     globalThis.clearTimeout(timeout);
   }
@@ -108,7 +113,8 @@ export default defineBackground(() => {
   const refreshOrchestrator = createRefreshOrchestrator({
     providerIds,
     hasPermission: hasProviderPermission,
-    runProvider: (providerId, policy) => collectProvider(providerId, policy),
+    runProvider: (providerId, policy, control) =>
+      collectProvider(providerId, policy, control.isCurrentGeneration),
   });
   const handleRuntimeCommand = createRuntimeCommandHandler({
     async refreshAll() {

@@ -218,11 +218,10 @@ describe("refresh orchestrator", () => {
     ]);
   });
 
-  test("invalidates an older generation before a newer provider run can commit", async () => {
+  test("makes the older generation stale before an interactive follow-up runs", async () => {
     const passive = deferred<ProviderRefreshOutcome>();
     const interactive = deferred<ProviderRefreshOutcome>();
     const controls: ProviderRunControl[] = [];
-    const committed: number[] = [];
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["kimi"],
       hasPermission: async () => true,
@@ -241,12 +240,11 @@ describe("refresh orchestrator", () => {
     passive.resolve({ kind: "deferred", reason: "session_required" });
     await vi.waitFor(() => expect(controls).toHaveLength(2));
 
-    if (controls[0]!.isCurrentGeneration()) committed.push(controls[0]!.generation);
-    if (controls[1]!.isCurrentGeneration()) committed.push(controls[1]!.generation);
+    expect(controls.map(({ generation }) => generation)).toEqual([1, 2]);
+    expect(controls[0]!.isCurrentGeneration()).toBe(false);
+    expect(controls[1]!.isCurrentGeneration()).toBe(true);
+
     interactive.resolve(success("kimi"));
     await Promise.all([scheduled, manual]);
-
-    expect(controls.map(({ generation }) => generation)).toEqual([1, 2]);
-    expect(committed).toEqual([2]);
   });
 });
