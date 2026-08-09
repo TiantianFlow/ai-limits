@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
+import type { ProviderSnapshot } from "../domain/model";
 import { createFixtureState } from "../providers/fixtures";
 import { createInitialState } from "../providers/initial-state";
 import {
+  deleteAllLocalData,
+  disconnectProviderData,
   ensureState,
   loadState,
+  reconcileProviderAccess,
   saveState,
+  setAutoRefresh,
   setDisplayMode,
   updateProvider,
 } from "./repository";
@@ -13,6 +18,54 @@ import {
 const now = 1_700_000_000_000;
 const hour = 60 * 60 * 1_000;
 const day = 24 * hour;
+
+function liveSnapshot(
+  providerId: ProviderSnapshot["providerId"] = "chatgpt",
+): ProviderSnapshot {
+  return {
+    providerId,
+    accountLabel: "person@example.com",
+    planLabel: "Plus",
+    source: "web-session",
+    fetchedAt: now - hour,
+    windows: [
+      {
+        id: "weekly",
+        label: "Weekly messages",
+        kind: "rolling",
+        usedRatio: 0.25,
+        used: 25,
+        limit: 100,
+        unit: "messages",
+        startedAt: now - day,
+        resetsAt: now + day,
+        durationMs: 2 * day,
+        sourceSemantics: "used",
+      },
+    ],
+    credits: [
+      {
+        id: "extra",
+        label: "Extra usage",
+        unit: "USD",
+        used: 2,
+        limit: 10,
+        remaining: 8,
+        resetsAt: now + day,
+      },
+    ],
+  };
+}
+
+function liveFixtureState() {
+  const state = createFixtureState(now);
+  for (const provider of state.providers) {
+    if (provider.snapshot) {
+      provider.snapshot.source = "web-session";
+    }
+  }
+  return state;
+}
 
 describe("fixture state", () => {
   test("creates all providers in cockpit order", () => {
@@ -25,38 +78,28 @@ describe("fixture state", () => {
   });
 
   test("marks every fixture snapshot as a fixture", () => {
-    const state = createFixtureState(now);
-
     expect(
-      state.providers.flatMap(({ snapshot }) => (snapshot ? [snapshot.source] : [])),
+      createFixtureState(now).providers.flatMap(({ snapshot }) =>
+        snapshot ? [snapshot.source] : [],
+      ),
     ).toEqual(["fixture", "fixture", "fixture", "fixture"]);
   });
 
-  test("uses a five-days-elapsed ChatGPT weekly window", () => {
-    const chatgpt = createFixtureState(now).providers.find(
-      ({ providerId }) => providerId === "chatgpt",
-    )?.snapshot;
-    expect(chatgpt).toBeDefined();
-    if (!chatgpt) {
-      throw new Error("ChatGPT fixture is required for this test.");
-    }
-    const weekly = chatgpt.windows.find(({ id }) => id === "weekly")!;
+  test("uses exact rolling and UTC calendar boundaries", () => {
+    const state = liveFixtureState();
+    const chatgpt = state.providers[0]?.snapshot;
+    const cursor = state.providers[3]?.snapshot;
 
-    expect(weekly.startedAt).toBe(now - 5 * day);
-    expect(weekly.resetsAt).toBe(now + 2 * day);
-    expect(weekly.durationMs).toBe(7 * day);
-    expect(chatgpt.windows.find(({ id }) => id === "five-hour")?.durationMs).toBe(5 * hour);
-  });
-
-  test("uses exact UTC calendar-month boundaries for Cursor", () => {
-    const cursor = createFixtureState(now).providers.find(
-      ({ providerId }) => providerId === "cursor",
-    )?.snapshot;
-    const monthly = cursor?.windows.find(({ id }) => id === "monthly");
-
-    expect(monthly?.startedAt).toBe(Date.UTC(2023, 10, 1));
-    expect(monthly?.resetsAt).toBe(Date.UTC(2023, 11, 1));
-    expect(monthly?.durationMs).toBe(Date.UTC(2023, 11, 1) - Date.UTC(2023, 10, 1));
+    expect(chatgpt?.windows.find(({ id }) => id === "weekly")).toMatchObject({
+      startedAt: now - 5 * day,
+      resetsAt: now + 2 * day,
+      durationMs: 7 * day,
+    });
+    expect(cursor?.windows.find(({ id }) => id === "monthly")).toMatchObject({
+      startedAt: Date.UTC(2023, 10, 1),
+      resetsAt: Date.UTC(2023, 11, 1),
+      durationMs: Date.UTC(2023, 11, 1) - Date.UTC(2023, 10, 1),
+    });
   });
 });
 
@@ -65,133 +108,132 @@ describe("state repository", () => {
     await browser.storage.local.clear();
   });
 
-  test("initializes once and persists the chosen display mode", async () => {
+  test("creates a clean version 3 state with automatic refresh enabled", async () => {
+    const state = await ensureState(now);
+
+    expect(state).toEqual(createInitialState());
+    expect(state.version).toBe(3);
+    expect(state.preferences).toEqual({
+      displayMode: "used",
+      autoRefresh: true,
+    });
+    expect(state.providers).toEqual([
+      { providerId: "chatgpt", access: "required" },
+      { providerId: "claude", access: "required" },
+      { providerId: "kimi", access: "required" },
+      { providerId: "cursor", access: "required" },
+    ]);
+  });
+
+  test("persists display mode and automatic-refresh preferences independently", async () => {
     await ensureState(now);
-    expect((await loadState())?.preferences.displayMode).toBe("used");
 
     await setDisplayMode("left");
-    expect((await loadState())?.preferences.displayMode).toBe("left");
+    await setAutoRefresh(false);
+
+    expect((await loadState())?.preferences).toEqual({
+      displayMode: "left",
+      autoRefresh: false,
+    });
   });
 
-  test("creates the canonical snapshot-free provider states", () => {
-    const state = createInitialState();
-
-    expect(state.providers.map(({ health }) => health.kind)).toEqual([
-      "permission_required",
-      "permission_required",
-      "permission_required",
-      "permission_required",
-    ]);
-    expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
-  });
-
-  test("migrates legacy fixture state without exposing fake usage", async () => {
-    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
-    delete legacyState.version;
-    legacyState.preferences = { displayMode: "left" };
-    await browser.storage.local.set({ aiLimitsState: legacyState });
-
-    const state = await ensureState(now);
-
-    expect(state.preferences.displayMode).toBe("left");
-    expect(state.providers.map(({ health }) => health.kind)).toEqual([
-      "permission_required",
-      "permission_required",
-      "permission_required",
-      "permission_required",
-    ]);
-    expect(state.providers.every(({ snapshot }) => snapshot === undefined)).toBe(true);
-    expect(await loadState()).toEqual(state);
-  });
-
-  test("preserves a matching live snapshot during migration", async () => {
-    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
-    delete legacyState.version;
-    const providers = (legacyState.providers as ReturnType<typeof createFixtureState>["providers"]);
-    providers[0]!.snapshot = {
-      ...providers[0]!.snapshot!,
-      source: "web-session",
-      providerId: "chatgpt",
-    };
-    legacyState.preferences = { displayMode: "left" };
-    await browser.storage.local.set({ aiLimitsState: legacyState });
-
-    const state = await ensureState(now);
-
-    expect(state.providers[0]?.snapshot).toEqual(providers[0]!.snapshot);
-    expect(state.providers[0]?.snapshot?.providerId).toBe("chatgpt");
-    expect(await loadState()).toEqual(state);
-  });
-
-  test("drops a legacy Antigravity record during migration", async () => {
+  test("migrates v2 snapshots and access without inventing historical attempts", async () => {
+    const snapshot = liveSnapshot();
     await browser.storage.local.set({
       aiLimitsState: {
         version: 2,
-        preferences: { displayMode: "used" },
-        providers: [
-          {
-            providerId: "antigravity",
-            health: {
-              kind: "experimental_unavailable",
-              message: "Usage data is not available yet.",
-            },
-          },
-        ],
-      },
-    });
-
-    const state = await ensureState(now);
-
-    expect(state.providers.map(({ providerId }) => providerId)).toEqual([
-      "chatgpt",
-      "claude",
-      "kimi",
-      "cursor",
-    ]);
-  });
-
-  test("whitelists persisted snapshot, quota, and credit fields", async () => {
-    await browser.storage.local.set({
-      aiLimitsState: {
         preferences: { displayMode: "left" },
         providers: [
           {
             providerId: "chatgpt",
-            health: { kind: "connected", token: "health-secret" },
+            health: { kind: "temporary_error", message: "Retry later" },
+            snapshot,
+          },
+          {
+            providerId: "claude",
+            health: { kind: "permission_required" },
+          },
+          {
+            providerId: "kimi",
+            health: { kind: "connecting" },
+          },
+          {
+            providerId: "cursor",
+            health: { kind: "signed_out", message: "Sign in" },
+            snapshot: liveSnapshot("cursor"),
+          },
+        ],
+      },
+    });
+
+    const state = await ensureState(now);
+
+    expect(state.preferences).toEqual({ displayMode: "left", autoRefresh: true });
+    expect(state.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+      snapshot: {
+        ...snapshot,
+        accountLabel: undefined,
+      },
+    });
+    expect(state.providers[1]).toEqual({
+      providerId: "claude",
+      access: "required",
+    });
+    expect(state.providers[2]).toEqual({
+      providerId: "kimi",
+      access: "granted",
+    });
+    expect(state.providers[3]).toEqual({
+      providerId: "cursor",
+      access: "granted",
+      snapshot: {
+        ...liveSnapshot("cursor"),
+        accountLabel: undefined,
+      },
+    });
+    expect(state.providers.every(({ lastAttempt }) => lastAttempt === undefined)).toBe(true);
+  });
+
+  test("keeps a complete forward-compatible attempt while whitelisting every field", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 2,
+        preferences: { displayMode: "used", autoRefresh: false, secret: "drop" },
+        providers: [
+          {
+            providerId: "chatgpt",
+            health: { kind: "connected", token: "drop" },
+            access: "required",
+            lastAttempt: {
+              trigger: "manual_provider",
+              startedAt: now - 2_000,
+              finishedAt: now - 1_000,
+              trace: "drop",
+              outcome: {
+                kind: "failure",
+                category: "temporary_error",
+                message: "secret-bearing historical failure",
+                retryAt: now + hour,
+                rawResponse: "drop",
+              },
+            },
             snapshot: {
-              providerId: "chatgpt",
-              accountLabel: "Plus account",
-              planLabel: "Plus",
-              source: "web-session",
-              fetchedAt: now,
-              token: "snapshot-secret",
-              rawResponse: { accessToken: "raw-secret" },
+              ...liveSnapshot(),
+              accountLabel: "Team account",
+              token: "drop",
+              rawResponse: { secret: "drop" },
               windows: [
                 {
-                  id: "weekly",
-                  label: "Weekly messages",
-                  kind: "rolling",
-                  usedRatio: 0.25,
-                  used: 25,
-                  limit: 100,
-                  unit: "messages",
-                  startedAt: now - day,
-                  resetsAt: now + day,
-                  durationMs: 2 * day,
-                  sourceSemantics: "used",
-                  authorization: "Bearer window-secret",
+                  ...liveSnapshot().windows[0],
+                  authorization: "drop",
                 },
               ],
               credits: [
                 {
-                  id: "extra",
-                  label: "Extra usage",
-                  unit: "USD",
-                  used: 2,
-                  limit: 10,
-                  remaining: 8,
-                  resetsAt: now + day,
-                  cookie: "credit-secret",
+                  ...liveSnapshot().credits[0],
+                  cookie: "drop",
                 },
               ],
             },
@@ -202,132 +244,181 @@ describe("state repository", () => {
 
     const state = await ensureState(now);
 
-    expect(state.providers[0]?.snapshot).toStrictEqual({
+    expect(state.providers[0]).toStrictEqual({
       providerId: "chatgpt",
-      accountLabel: "Plus account",
-      planLabel: "Plus",
-      source: "web-session",
-      fetchedAt: now,
-      windows: [
-        {
-          id: "weekly",
-          label: "Weekly messages",
-          kind: "rolling",
-          usedRatio: 0.25,
-          used: 25,
-          limit: 100,
-          unit: "messages",
-          startedAt: now - day,
-          resetsAt: now + day,
-          durationMs: 2 * day,
-          sourceSemantics: "used",
+      access: "granted",
+      snapshot: {
+        ...liveSnapshot(),
+        accountLabel: "Team account",
+      },
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: now - 2_000,
+        finishedAt: now - 1_000,
+        outcome: {
+          kind: "failure",
+          category: "temporary_error",
+          message: "AI Limits could not refresh this provider. Try again later.",
+          retryAt: now + hour,
         },
-      ],
-      credits: [
-        {
-          id: "extra",
-          label: "Extra usage",
-          unit: "USD",
-          used: 2,
-          limit: 10,
-          remaining: 8,
-          resetsAt: now + day,
-        },
-      ],
+      },
     });
-    expect(await loadState()).toEqual(state);
-    expect(JSON.stringify(state)).not.toMatch(/secret|token|rawResponse|authorization|cookie/);
-  });
-
-  test("drops a snapshot containing a semantically invalid quota window", async () => {
-    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
-    delete legacyState.version;
-    const providers = legacyState.providers as ReturnType<typeof createFixtureState>["providers"];
-    providers[0]!.snapshot!.source = "web-session";
-    providers[0]!.snapshot!.windows[0]!.usedRatio = 1.1;
-    await browser.storage.local.set({ aiLimitsState: legacyState });
-
-    const state = await ensureState(now);
-
-    expect(state.providers[0]?.snapshot).toBeUndefined();
-  });
-
-  test("drops a snapshot containing a semantically invalid credit balance", async () => {
-    const legacyState = createFixtureState(now) as unknown as Record<string, unknown>;
-    delete legacyState.version;
-    const providers = legacyState.providers as ReturnType<typeof createFixtureState>["providers"];
-    providers[1]!.snapshot!.source = "web-session";
-    providers[1]!.snapshot!.credits[0]!.remaining = -1;
-    await browser.storage.local.set({ aiLimitsState: legacyState });
-
-    const state = await ensureState(now);
-
-    expect(state.providers[1]?.snapshot).toBeUndefined();
-  });
-
-  test("updates only the requested provider record", async () => {
-    await ensureState(now);
-    const before = await loadState();
-
-    await updateProvider("chatgpt", (provider) => ({
-      ...provider,
-      health: { kind: "temporary_error", message: "Retry later" },
-    }));
-
-    const after = await loadState();
-    const updatedChatgpt = after?.providers.find(
-      ({ providerId }) => providerId === "chatgpt",
+    expect(JSON.stringify(state)).not.toMatch(
+      /secret-bearing|token|rawResponse|authorization|cookie|trace/,
     );
-    expect(updatedChatgpt?.health).toEqual({
-      kind: "temporary_error",
-      message: "Retry later",
-    });
-    expect(after?.providers.slice(1)).toEqual(before?.providers.slice(1));
   });
 
-  test("preserves provider and snapshot identity when an updater changes IDs", async () => {
-    const state = createFixtureState(now);
-    state.providers[0]!.snapshot!.source = "web-session";
+  test.each([
+    {
+      trigger: "scheduled",
+      startedAt: now,
+      finishedAt: now - 1,
+      outcome: { kind: "success" },
+    },
+    {
+      trigger: "unknown",
+      startedAt: now - 1,
+      finishedAt: now,
+      outcome: { kind: "success" },
+    },
+    {
+      trigger: "scheduled",
+      startedAt: now - 1,
+      finishedAt: now,
+      outcome: { kind: "deferred", reason: "unknown" },
+    },
+    {
+      trigger: "scheduled",
+      startedAt: now - 1,
+      finishedAt: now,
+      outcome: { kind: "failure", category: "unknown" },
+    },
+  ])("drops malformed persisted attempts", async (lastAttempt) => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 3,
+        preferences: { displayMode: "used", autoRefresh: true },
+        providers: [
+          {
+            providerId: "chatgpt",
+            access: "granted",
+            lastAttempt,
+          },
+        ],
+      },
+    });
+
+    expect((await ensureState(now)).providers[0]?.lastAttempt).toBeUndefined();
+  });
+
+  test("drops semantically invalid quota data instead of persisting a partial snapshot", async () => {
+    const snapshot = liveSnapshot();
+    snapshot.windows[0]!.usedRatio = 1.1;
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 3,
+        preferences: { displayMode: "used", autoRefresh: true },
+        providers: [
+          { providerId: "chatgpt", access: "granted", snapshot },
+        ],
+      },
+    });
+
+    expect((await ensureState(now)).providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+    });
+  });
+
+  test("reconciles authoritative access without deleting provider data", async () => {
+    const state = liveFixtureState();
+    state.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: now - 1_000,
+      finishedAt: now,
+      outcome: { kind: "success" },
+    };
     await saveState(state);
+    const before = state.providers[0];
+
+    await reconcileProviderAccess({ chatgpt: false, claude: true });
+
+    expect((await loadState())?.providers[0]).toEqual({
+      ...before,
+      access: "required",
+    });
+    expect((await loadState())?.providers[1]?.access).toBe("granted");
+  });
+
+  test("explicit disconnect deletes only the selected provider's local data", async () => {
+    const state = liveFixtureState();
+    state.providers[0]!.lastAttempt = {
+      trigger: "manual_provider",
+      startedAt: now - 1_000,
+      finishedAt: now,
+      outcome: { kind: "failure", category: "temporary_error" },
+    };
+    await saveState(state);
+    const claudeBefore = state.providers[1];
+
+    await disconnectProviderData("chatgpt");
+
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "required",
+    });
+    expect((await loadState())?.providers[1]).toEqual(claudeBefore);
+  });
+
+  test("delete-all recreates clean v3 state without clearing unrelated local keys", async () => {
+    await browser.storage.local.set({ unrelated: "keep" });
+    await saveState(liveFixtureState());
+
+    const state = await deleteAllLocalData();
+
+    expect(state).toEqual(createInitialState());
+    expect(await loadState()).toEqual(createInitialState());
+    expect(await browser.storage.local.get("unrelated")).toEqual({ unrelated: "keep" });
+  });
+
+  test("updates only the requested provider and preserves provider identities", async () => {
+    const state = liveFixtureState();
+    await saveState(state);
+    const claudeBefore = state.providers[1];
 
     await updateProvider("chatgpt", (provider) => ({
       ...provider,
       providerId: "claude",
+      access: "required",
       snapshot: provider.snapshot
         ? { ...provider.snapshot, providerId: "cursor" }
         : undefined,
     }));
 
     const providers = (await loadState())?.providers;
-    expect(providers?.map(({ providerId }) => providerId)).toEqual([
-      "chatgpt",
-      "claude",
-      "kimi",
-      "cursor",
-    ]);
-    expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
+    expect(providers?.[0]).toMatchObject({
+      providerId: "chatgpt",
+      access: "required",
+      snapshot: { providerId: "chatgpt" },
+    });
+    expect(providers?.[1]).toEqual(claudeBefore);
   });
 
-  test("preserves identity when an updater mutates the stored record in place", async () => {
-    const state = createFixtureState(now);
-    state.providers[0]!.snapshot!.source = "web-session";
-    await saveState(state);
+  test("normalizes mutation output before it reaches durable storage", async () => {
+    await ensureState(now);
 
-    await updateProvider("chatgpt", (provider) => {
-      provider.providerId = "claude";
-      if (provider.snapshot) {
-        provider.snapshot.providerId = "cursor";
-      }
-      return provider;
-    });
+    await updateProvider("chatgpt", (provider) => ({
+      ...provider,
+      access: "granted",
+      snapshot: {
+        ...liveSnapshot(),
+        rawResponse: "drop",
+      } as ProviderSnapshot,
+    }));
 
-    const providers = (await loadState())?.providers;
-    expect(providers?.map(({ providerId }) => providerId)).toEqual([
-      "chatgpt",
-      "claude",
-      "kimi",
-      "cursor",
-    ]);
-    expect(providers?.[0]?.snapshot?.providerId).toBe("chatgpt");
+    const expected = liveSnapshot();
+    delete expected.accountLabel;
+    expect((await loadState())?.providers[0]?.snapshot).toStrictEqual(expected);
+    expect(JSON.stringify(await loadState())).not.toMatch(/person@example|rawResponse/);
   });
 });

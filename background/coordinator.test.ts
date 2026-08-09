@@ -4,9 +4,15 @@ import type { ProviderSnapshot } from "../domain/model";
 import { createFixtureState } from "../providers/fixtures";
 import type { CollectionResult, ProviderAdapter } from "../providers/types";
 import { loadState, saveState, setDisplayMode } from "../storage/repository";
-import { refreshProvider } from "./coordinator";
+import {
+  disconnectProvider,
+  reconcileRemovedProviderPermissions,
+  reconcileProviderPermissions,
+  refreshProvider,
+} from "./coordinator";
 
 const NOW = 1_800_000_000_000;
+const FINISHED_AT = NOW + 5_000;
 
 function liveSnapshot(
   providerId: ProviderSnapshot["providerId"] = "chatgpt",
@@ -31,9 +37,7 @@ function liveSnapshot(
   };
 }
 
-function adapter(
-  collect: ProviderAdapter["collect"],
-): ProviderAdapter {
+function adapter(collect: ProviderAdapter["collect"]): ProviderAdapter {
   return providerAdapter("chatgpt", collect);
 }
 
@@ -60,6 +64,7 @@ function collectionContext() {
 function liveState(now: number) {
   const state = createFixtureState(now);
   for (const provider of state.providers) {
+    provider.access = "granted";
     if (provider.snapshot) {
       provider.snapshot.source = "web-session";
     }
@@ -67,95 +72,118 @@ function liveState(now: number) {
   return state;
 }
 
+function refresh(
+  provider: ProviderAdapter,
+  shouldCommit: () => boolean = () => true,
+) {
+  return refreshProvider(
+    provider,
+    collectionContext(),
+    "manual_provider",
+    shouldCommit,
+    () => FINISHED_AT,
+  );
+}
+
 beforeEach(async () => {
   await browser.storage.local.clear();
+  vi.restoreAllMocks();
 });
 
 describe("provider refresh coordinator", () => {
-  test("atomically replaces only ChatGPT and clears its error", async () => {
+  test("replaces only the selected snapshot and records a successful attempt", async () => {
     const initial = liveState(NOW - 60_000);
-    initial.providers[0]!.health = {
-      kind: "temporary_error",
-      retryAt: NOW + 300_000,
+    initial.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 60_000,
+      finishedAt: NOW - 59_000,
+      outcome: { kind: "failure", category: "temporary_error" },
     };
     await saveState(initial);
     const claudeBefore = initial.providers[1];
-    const successful = adapter(async (): Promise<CollectionResult> => ({
-      ok: true,
-      snapshot: liveSnapshot("claude"),
-    }));
 
-    const outcome = await refreshProvider(
-      successful,
-      collectionContext(),
-      () => true,
+    const outcome = await refresh(
+      adapter(async (): Promise<CollectionResult> => ({
+        ok: true,
+        snapshot: liveSnapshot("claude"),
+      })),
     );
 
     expect(outcome).toEqual({
       kind: "success",
-      snapshot: liveSnapshot(),
+      snapshot: { ...liveSnapshot(), fetchedAt: FINISHED_AT },
     });
-
-    const state = await loadState();
-    expect(state?.providers[0]).toEqual({
+    expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
-      health: { kind: "connected" },
-      snapshot: liveSnapshot(),
+      access: "granted",
+      snapshot: { ...liveSnapshot(), fetchedAt: FINISHED_AT },
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: NOW,
+        finishedAt: FINISHED_AT,
+        outcome: { kind: "success" },
+      },
     });
-    expect(state?.providers[1]).toEqual(claudeBefore);
+    expect((await loadState())?.providers[1]).toEqual(claudeBefore);
   });
 
-  test("preserves the last-good snapshot while updating failed health", async () => {
+  test("preserves last-good data while recording a sanitized failure", async () => {
     const initial = liveState(NOW - 60_000);
     await saveState(initial);
     const snapshotBefore = initial.providers[0]?.snapshot;
 
-    const outcome = await refreshProvider(
+    const outcome = await refresh(
       adapter(async () => ({
         ok: false,
-        health: { kind: "provider_changed", message: "Usage response changed." },
+        health: {
+          kind: "provider_changed",
+          message: "secret-bearing provider response",
+        },
       })),
-      collectionContext(),
-      () => true,
     );
 
-    const chatGpt = (await loadState())?.providers[0];
-    expect(chatGpt?.snapshot).toEqual(snapshotBefore);
-    expect(chatGpt?.health).toEqual({
-      kind: "provider_changed",
-      message: "Usage response changed.",
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+      snapshot: snapshotBefore,
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: NOW,
+        finishedAt: FINISHED_AT,
+        outcome: {
+          kind: "failure",
+          category: "provider_changed",
+          message: "AI Limits could not read this provider's usage response.",
+        },
+      },
     });
     expect(outcome).toEqual({
       kind: "failure",
       category: "provider_changed",
-      message: "Usage response changed.",
+      message: "AI Limits could not read this provider's usage response.",
     });
+    expect(JSON.stringify(await loadState())).not.toContain("secret-bearing");
   });
 
-  test("contains thrown adapter errors as temporary ChatGPT failures without changing Claude", async () => {
+  test("contains thrown adapter details as a safe temporary failure", async () => {
     const initial = liveState(NOW - 60_000);
     await saveState(initial);
-    const claudeBefore = initial.providers[1];
 
-    const outcome = await refreshProvider(
+    const outcome = await refresh(
       adapter(async () => {
         throw new Error("secret-bearing provider failure");
       }),
-      collectionContext(),
-      () => true,
     );
 
-    const state = await loadState();
-    expect(state?.providers[0]?.snapshot).toEqual(initial.providers[0]?.snapshot);
-    expect(state?.providers[0]?.health).toEqual({ kind: "temporary_error" });
-    expect(state?.providers[1]).toEqual(claudeBefore);
-    expect(outcome).toEqual({
+    expect(outcome).toEqual({ kind: "failure", category: "temporary_error" });
+    expect((await loadState())?.providers[0]?.lastAttempt?.outcome).toEqual({
       kind: "failure",
       category: "temporary_error",
     });
+    expect(JSON.stringify(await loadState())).not.toContain("secret-bearing");
   });
 
-  test("applies the collection to fresh repository state without clobbering an in-flight preference update", async () => {
+  test("commits against fresh repository state without clobbering a preference update", async () => {
     await saveState(liveState(NOW - 60_000));
     let finishCollection!: (result: CollectionResult) => void;
     const collect = vi.fn(
@@ -165,11 +193,7 @@ describe("provider refresh coordinator", () => {
         }),
     );
 
-    const refreshing = refreshProvider(
-      adapter(collect),
-      collectionContext(),
-      () => true,
-    );
+    const refreshing = refresh(adapter(collect));
     await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(1));
     await setDisplayMode("left");
     finishCollection({ ok: true, snapshot: liveSnapshot() });
@@ -178,49 +202,41 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.preferences.displayMode).toBe("left");
   });
 
-  test("retains both provider results when successful collections commit concurrently", async () => {
+  test("retains concurrent successful results for different providers", async () => {
     await saveState(liveState(NOW - 60_000));
-    const chatGptSnapshot = liveSnapshot("chatgpt");
-    const claudeSnapshot = liveSnapshot("claude");
 
     await Promise.all([
-      refreshProvider(
+      refresh(
         providerAdapter("chatgpt", async () => ({
           ok: true,
-          snapshot: chatGptSnapshot,
+          snapshot: liveSnapshot("chatgpt"),
         })),
-        collectionContext(),
-        () => true,
       ),
-      refreshProvider(
+      refresh(
         providerAdapter("claude", async () => ({
           ok: true,
-          snapshot: claudeSnapshot,
+          snapshot: liveSnapshot("claude"),
         })),
-        collectionContext(),
-        () => true,
       ),
     ]);
 
     const providers = (await loadState())?.providers;
-    expect(providers?.find(({ providerId }) => providerId === "chatgpt")).toEqual({
+    expect(providers?.find(({ providerId }) => providerId === "chatgpt")).toMatchObject({
       providerId: "chatgpt",
-      health: { kind: "connected" },
-      snapshot: chatGptSnapshot,
+      snapshot: { providerId: "chatgpt", fetchedAt: FINISHED_AT },
+      lastAttempt: { outcome: { kind: "success" } },
     });
-    expect(providers?.find(({ providerId }) => providerId === "claude")).toEqual({
+    expect(providers?.find(({ providerId }) => providerId === "claude")).toMatchObject({
       providerId: "claude",
-      health: { kind: "connected" },
-      snapshot: claudeSnapshot,
+      snapshot: { providerId: "claude", fetchedAt: FINISHED_AT },
+      lastAttempt: { outcome: { kind: "success" } },
     });
   });
 
-  test("does not commit an older result after a newer generation takes ownership", async () => {
+  test("does not persist an older result or attempt after a newer generation takes ownership", async () => {
     await saveState(liveState(NOW - 60_000));
     let currentGeneration = 1;
     let finishOlderCollection!: (result: CollectionResult) => void;
-    const olderSnapshot = { ...liveSnapshot(), planLabel: "Older" };
-    const newerSnapshot = { ...liveSnapshot(), planLabel: "Newer" };
     const olderCollection = vi.fn(
       () =>
         new Promise<CollectionResult>((resolve) => {
@@ -228,22 +244,122 @@ describe("provider refresh coordinator", () => {
         }),
     );
 
-    const olderRefresh = refreshProvider(
+    const olderRefresh = refresh(
       adapter(olderCollection),
-      collectionContext(),
       () => currentGeneration === 1,
     );
     await vi.waitFor(() => expect(olderCollection).toHaveBeenCalledTimes(1));
 
     currentGeneration = 2;
-    await refreshProvider(
-      adapter(async () => ({ ok: true, snapshot: newerSnapshot })),
-      collectionContext(),
+    await refresh(
+      adapter(async () => ({
+        ok: true,
+        snapshot: { ...liveSnapshot(), planLabel: "Newer" },
+      })),
       () => currentGeneration === 2,
     );
-    finishOlderCollection({ ok: true, snapshot: olderSnapshot });
-    await olderRefresh;
+    finishOlderCollection({
+      ok: true,
+      snapshot: { ...liveSnapshot(), planLabel: "Older" },
+    });
+    const olderOutcome = await olderRefresh;
 
-    expect((await loadState())?.providers[0]?.snapshot).toEqual(newerSnapshot);
+    expect((await loadState())?.providers[0]).toMatchObject({
+      snapshot: { planLabel: "Newer" },
+      lastAttempt: { outcome: { kind: "success" } },
+    });
+    expect(olderOutcome).toEqual({ kind: "skipped", reason: "superseded" });
+  });
+
+  test("reconciles external permission revocation without erasing last-good data", async () => {
+    const initial = liveState(NOW);
+    const snapshotBefore = initial.providers[0]?.snapshot;
+    await saveState(initial);
+    const contains = vi
+      .spyOn(browser.permissions, "contains")
+      .mockImplementation(async ({ origins }) =>
+        (origins?.[0] !== "https://chatgpt.com/*") as never,
+      );
+
+    await reconcileProviderPermissions([
+      "chatgpt",
+      "claude",
+      "kimi",
+      "cursor",
+    ]);
+
+    expect(contains).toHaveBeenCalledTimes(4);
+    expect((await loadState())?.providers[0]).toMatchObject({
+      providerId: "chatgpt",
+      access: "required",
+      snapshot: snapshotBefore,
+    });
+    expect(
+      (await loadState())?.providers.slice(1).map(({ access }) => access),
+    ).toEqual(["granted", "granted", "granted"]);
+  });
+
+  test("treats an exact permission-removal event as an external disconnect", async () => {
+    const initial = liveState(NOW);
+    initial.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: { kind: "success" },
+    };
+    await saveState(initial);
+    vi.spyOn(browser.permissions, "contains").mockImplementation(
+      async ({ origins }) =>
+        (origins?.[0] !== "https://chatgpt.com/*") as never,
+    );
+
+    await reconcileRemovedProviderPermissions(
+      { origins: ["https://chatgpt.com/*"] },
+      ["chatgpt", "claude", "kimi", "cursor"],
+    );
+
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "required",
+    });
+    expect((await loadState())?.providers[1]).toEqual(initial.providers[1]);
+  });
+
+  test("disconnect removes permission before deleting provider data", async () => {
+    const initial = liveState(NOW);
+    initial.providers[0]!.lastAttempt = {
+      trigger: "manual_provider",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: { kind: "success" },
+    };
+    await saveState(initial);
+    vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async () => true as never,
+    );
+
+    await expect(disconnectProvider("chatgpt", ["claude"])).resolves.toEqual({
+      ok: true,
+    });
+
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "required",
+    });
+  });
+
+  test("keeps stored data unchanged when Chrome refuses disconnect", async () => {
+    const initial = liveState(NOW);
+    await saveState(initial);
+    vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async () => false as never,
+    );
+
+    await expect(disconnectProvider("chatgpt", ["claude"])).resolves.toEqual({
+      ok: false,
+      error: "permission_removal_failed",
+    });
+
+    expect(await loadState()).toEqual(initial);
   });
 });

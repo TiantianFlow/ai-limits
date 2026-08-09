@@ -91,7 +91,10 @@ describe("Cockpit", () => {
 
     view.rerender(
       <Cockpit
-        state={{ ...state, preferences: { displayMode: "left" } }}
+        state={{
+          ...state,
+          preferences: { ...state.preferences, displayMode: "left" },
+        }}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
@@ -257,16 +260,16 @@ describe("Cockpit", () => {
     expect(onConnectProvider).toHaveBeenCalledWith("claude");
   });
 
-  it("hides the session check while that provider is connecting", () => {
+  it("renders permission-required state from durable access", () => {
     const state = createInitialState();
-    state.providers[0]!.health = { kind: "connecting" };
 
     renderCockpit(state);
 
+    const chatGpt = screen.getByRole("article", { name: "ChatGPT" });
+    expect(within(chatGpt).getByText("Permission required")).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: "Check ChatGPT session" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("Connecting")).toBeVisible();
+      screen.getByRole("button", { name: "Check ChatGPT session" }),
+    ).toBeVisible();
   });
 
   it("shows live source and removes the connection action after collection", () => {
@@ -283,9 +286,16 @@ describe("Cockpit", () => {
 
   it("shows failed snapshot-free health in the padded empty state", () => {
     const state = createInitialState();
-    state.providers[0]!.health = {
-      kind: "signed_out",
-      message: "Sign in to ChatGPT and try again.",
+    state.providers[0]!.access = "granted";
+    state.providers[0]!.lastAttempt = {
+      trigger: "manual_provider",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: {
+        kind: "failure",
+        category: "signed_out",
+        message: "secret-bearing persisted message",
+      },
     };
 
     renderCockpit(state);
@@ -293,7 +303,12 @@ describe("Cockpit", () => {
     const card = screen.getByRole("article", { name: "ChatGPT" });
     const emptyState = card.querySelector(".provider-card__empty");
     expect(emptyState).not.toBeNull();
-    expect(within(emptyState as HTMLElement).getByText("Sign in to ChatGPT and try again.")).toBeVisible();
+    expect(
+      within(emptyState as HTMLElement).getByText(
+        "Sign in to the provider and try again.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/secret-bearing/)).not.toBeInTheDocument();
     expect(screen.queryByText("72% used")).not.toBeInTheDocument();
   });
 });

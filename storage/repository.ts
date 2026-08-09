@@ -14,7 +14,7 @@ function enqueueStateMutation<T>(mutation: () => Promise<T>): Promise<T> {
 }
 
 async function writeState(state: AppState): Promise<void> {
-  await browser.storage.local.set({ [STATE_KEY]: state });
+  await browser.storage.local.set({ [STATE_KEY]: migrateState(state) });
 }
 
 export async function loadState(): Promise<AppState | undefined> {
@@ -58,6 +58,49 @@ export function setDisplayMode(mode: DisplayMode): Promise<void> {
     ...state,
     preferences: { ...state.preferences, displayMode: mode },
   }));
+}
+
+export function setAutoRefresh(autoRefresh: boolean): Promise<void> {
+  return mutateState(Date.now(), (state) => ({
+    ...state,
+    preferences: { ...state.preferences, autoRefresh },
+  }));
+}
+
+export function reconcileProviderAccess(
+  grants: Partial<Record<ProviderId, boolean>>,
+): Promise<void> {
+  return mutateState(Date.now(), (state) => ({
+    ...state,
+    providers: state.providers.map((provider) => {
+      const granted = grants[provider.providerId];
+      return granted === undefined
+        ? provider
+        : { ...provider, access: granted ? "granted" : "required" };
+    }),
+  }));
+}
+
+export function disconnectProviderData(providerId: ProviderId): Promise<void> {
+  return mutateState(Date.now(), (state) => ({
+    ...state,
+    providers: state.providers.map((provider) => {
+      if (provider.providerId !== providerId) {
+        return provider;
+      }
+
+      return { providerId, access: "required" };
+    }),
+  }));
+}
+
+export function deleteAllLocalData(): Promise<AppState> {
+  return enqueueStateMutation(async () => {
+    await browser.storage.local.remove(STATE_KEY);
+    const state = migrateState(undefined);
+    await writeState(state);
+    return state;
+  });
 }
 
 export function updateProvider(

@@ -32,7 +32,7 @@ export function createFixtureState(now: number): AppState {
   const providers: ProviderRecord[] = [
     {
       providerId: "chatgpt",
-      health: { kind: "connected" },
+      access: "granted",
       snapshot: fixtureSnapshot(
         {
           providerId: "chatgpt",
@@ -66,7 +66,7 @@ export function createFixtureState(now: number): AppState {
     },
     {
       providerId: "claude",
-      health: { kind: "connected" },
+      access: "granted",
       snapshot: fixtureSnapshot(
         {
           providerId: "claude",
@@ -100,7 +100,7 @@ export function createFixtureState(now: number): AppState {
     },
     {
       providerId: "kimi",
-      health: { kind: "connected" },
+      access: "granted",
       snapshot: fixtureSnapshot(
         {
           providerId: "kimi",
@@ -134,7 +134,7 @@ export function createFixtureState(now: number): AppState {
     },
     {
       providerId: "cursor",
-      health: { kind: "connected" },
+      access: "granted",
       snapshot: fixtureSnapshot(
         {
           providerId: "cursor",
@@ -167,8 +167,8 @@ export function createFixtureState(now: number): AppState {
   ];
 
   return {
-    version: 2,
-    preferences: { displayMode: "used" },
+    version: 3,
+    preferences: { displayMode: "used", autoRefresh: true },
     providers,
   };
 }

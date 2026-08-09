@@ -1,9 +1,11 @@
 import React from "react";
 
+import { sanitizedFailureMessage } from "../../domain/model";
 import type {
   AppState,
   CreditBalance,
   DisplayMode,
+  ProviderHealth,
   ProviderId,
   ProviderRecord,
   QuotaWindow,
@@ -163,6 +165,45 @@ function formatFreshness(fetchedAt: number, now: number): string {
   return `Updated ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
 }
 
+function presentationHealth(provider: ProviderRecord): ProviderHealth {
+  const transientHealth = (
+    provider as ProviderRecord & { health?: ProviderHealth }
+  ).health;
+  if (transientHealth) {
+    return transientHealth;
+  }
+
+  if (provider.access === "required") {
+    return { kind: "permission_required" };
+  }
+
+  const outcome = provider.lastAttempt?.outcome;
+  if (!outcome || outcome.kind === "success") {
+    return { kind: "connected" };
+  }
+
+  if (outcome.kind === "deferred") {
+    return {
+      kind: "temporary_error",
+      message:
+        outcome.reason === "session_required"
+          ? "Refresh is waiting for a browser session."
+          : "Refresh will retry later.",
+      ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
+    };
+  }
+
+  return {
+    kind: outcome.category,
+    ...(outcome.message === undefined
+      ? {}
+      : { message: sanitizedFailureMessage(outcome.category) }),
+    ...(outcome.category === "temporary_error" && outcome.retryAt !== undefined
+      ? { retryAt: outcome.retryAt }
+      : {}),
+  };
+}
+
 function providerView(
   provider: ProviderRecord,
   mode: DisplayMode,
@@ -179,7 +220,7 @@ function providerView(
     credits: snapshot?.credits.map((credit) => creditView(credit, mode)) ?? [],
     freshness: snapshot ? formatFreshness(snapshot.fetchedAt, now) : undefined,
     stale: snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false,
-    health: provider.health,
+    health: presentationHealth(provider),
     hasSnapshot: snapshot !== undefined,
     emptyDescription: `Check ${providerNames[provider.providerId]} using your signed-in browser session.`,
   };
@@ -254,13 +295,14 @@ export function Cockpit({
 
       <section className="provider-list" aria-label="AI provider usage">
         {state.providers.map((provider) => {
+          const health = presentationHealth(provider);
           return (
             <ProviderCard
               key={provider.providerId}
               {...providerView(provider, mode, now)}
               action={
                 !provider.snapshot &&
-                provider.health.kind !== "connecting"
+                health.kind !== "connecting"
                   ? {
                       label: "Check session",
                       accessibleLabel: `Check ${providerNames[provider.providerId]} session`,

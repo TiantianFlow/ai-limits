@@ -65,14 +65,42 @@ export type ProviderRefreshOutcome =
     }
   | {
       kind: "skipped";
-      reason: "permission_required" | "auto_refresh_disabled";
+      reason: "permission_required" | "auto_refresh_disabled" | "superseded";
     };
+
+export function sanitizedFailureMessage(category: FailureCategory): string {
+  switch (category) {
+    case "signed_out":
+      return "Sign in to the provider and try again.";
+    case "challenge_blocked":
+      return "Open the provider and complete its security check before trying again.";
+    case "provider_changed":
+      return "AI Limits could not read this provider's usage response.";
+    case "temporary_error":
+      return "AI Limits could not refresh this provider. Try again later.";
+  }
+}
 
 export interface RefreshReport {
   trigger: RefreshTrigger;
   startedAt: number;
   finishedAt: number;
   providers: Partial<Record<ProviderId, ProviderRefreshOutcome>>;
+}
+
+export interface ProviderAttempt {
+  trigger: RefreshTrigger;
+  startedAt: number;
+  finishedAt: number;
+  outcome:
+    | { kind: "success" }
+    | { kind: "deferred"; reason: DeferredReason; retryAt?: number }
+    | {
+        kind: "failure";
+        category: FailureCategory;
+        message?: string;
+        retryAt?: number;
+      };
 }
 
 export type ProviderHealth =
@@ -86,14 +114,16 @@ export type ProviderHealth =
 
 export interface ProviderRecord {
   providerId: ProviderId;
+  access: "required" | "granted";
   snapshot?: ProviderSnapshot;
-  health: ProviderHealth;
+  lastAttempt?: ProviderAttempt;
 }
 
 export interface AppState {
-  version: 2;
+  version: 3;
   preferences: {
     displayMode: DisplayMode;
+    autoRefresh: boolean;
   };
   providers: ProviderRecord[];
 }

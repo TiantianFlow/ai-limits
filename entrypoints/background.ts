@@ -1,6 +1,7 @@
 import {
   refreshProvider as collectAndCommitProvider,
-  setProviderHealth,
+  reconcileRemovedProviderPermissions,
+  reconcileProviderPermissions,
 } from "../background/coordinator";
 import type { ProviderRefreshOutcome } from "../domain/model";
 import {
@@ -58,14 +59,6 @@ async function collectProvider(
   );
 
   try {
-    if (policy.trigger === "connect") {
-      await setProviderHealth(
-        providerId,
-        { kind: "connecting" },
-        Date.now(),
-      );
-    }
-
     const adapter = providerRegistry[providerId];
     return await collectAndCommitProvider(
       adapter,
@@ -98,6 +91,7 @@ async function collectProvider(
             }
           : {}),
       },
+      policy.trigger,
       shouldCommit,
     );
   } finally {
@@ -106,6 +100,7 @@ async function collectProvider(
 }
 
 async function currentState() {
+  await reconcileProviderPermissions(providerIds);
   return ensureState(Date.now());
 }
 
@@ -118,10 +113,12 @@ export default defineBackground(() => {
   });
   const handleRuntimeCommand = createRuntimeCommandHandler({
     async refreshAll() {
+      await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshAll("manual_all");
       return { state: await currentState(), report };
     },
     async collectProvider(providerId) {
+      await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshProvider(
         providerId,
         "connect",
@@ -129,6 +126,7 @@ export default defineBackground(() => {
       return { state: await currentState(), report };
     },
     async refreshProvider(providerId) {
+      await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshProvider(
         providerId,
         "manual_provider",
@@ -148,7 +146,7 @@ export default defineBackground(() => {
   void ensureRefreshAlarm();
 
   browser.runtime.onInstalled.addListener(() => {
-    void Promise.all([ensureState(Date.now()), ensureRefreshAlarm()]);
+    void Promise.all([currentState(), ensureRefreshAlarm()]);
   });
 
   browser.runtime.onStartup.addListener(() => {
@@ -163,9 +161,19 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener(handleRuntimeMessage);
 
+  browser.permissions.onAdded.addListener(() => {
+    void reconcileProviderPermissions(providerIds);
+  });
+
+  browser.permissions.onRemoved.addListener((permissions) => {
+    void reconcileRemovedProviderPermissions(permissions, providerIds);
+  });
+
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {
-      void refreshOrchestrator.refreshAll("scheduled");
+      void reconcileProviderPermissions(providerIds).then(() =>
+        refreshOrchestrator.refreshAll("scheduled"),
+      );
     }
   });
 });

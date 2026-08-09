@@ -1,45 +1,33 @@
+import { sanitizedFailureMessage } from "../domain/model";
 import type {
   AppState,
-  ProviderHealth,
+  ProviderAttempt,
   ProviderRefreshOutcome,
+  RefreshTrigger,
 } from "../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
   ProviderAdapter,
 } from "../providers/types";
-import { mutateState } from "../storage/repository";
-
-function applyResult(
-  state: AppState,
-  adapter: ProviderAdapter,
-  result: CollectionResult,
-): AppState {
-  const providers = state.providers.map((provider) => {
-    if (provider.providerId !== adapter.id) {
-      return provider;
-    }
-
-    if (!result.ok) {
-      return { ...provider, health: result.health };
-    }
-
-    return {
-      providerId: provider.providerId,
-      health: { kind: "connected" } as const,
-      snapshot: result.snapshot,
-    };
-  });
-
-  return {
-    ...state,
-    providers,
-  };
-}
+import {
+  providerRegistry,
+  type ConnectableProviderId,
+} from "../providers/registry";
+import {
+  disconnectProviderData,
+  mutateState,
+  reconcileProviderAccess,
+} from "../storage/repository";
+import {
+  hasProviderPermission,
+  removeProviderPermission,
+} from "./permissions";
 
 function normalizeResult(
   adapter: ProviderAdapter,
   result: CollectionResult,
+  finishedAt: number,
 ): CollectionResult {
   if (!result.ok) {
     return result;
@@ -50,6 +38,7 @@ function normalizeResult(
     snapshot: {
       ...result.snapshot,
       providerId: adapter.id,
+      fetchedAt: finishedAt,
     },
   };
 }
@@ -80,28 +69,106 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
     category: result.health.kind,
     ...(result.health.message === undefined
       ? {}
-      : { message: result.health.message }),
+      : { message: sanitizedFailureMessage(result.health.kind) }),
     ...(retryAt === undefined ? {} : { retryAt }),
   };
 }
 
-export async function setProviderHealth(
-  providerId: ProviderAdapter["id"],
-  health: ProviderHealth,
-  now: number,
-): Promise<void> {
-  await mutateState(now, (state) => ({
-    ...state,
-    providers: state.providers.map((provider) =>
-      provider.providerId === providerId ? { ...provider, health } : provider,
-    ),
-  }));
+function providerAttempt(
+  trigger: RefreshTrigger,
+  startedAt: number,
+  finishedAt: number,
+  outcome: ProviderRefreshOutcome,
+): ProviderAttempt | undefined {
+  if (outcome.kind === "success") {
+    return {
+      trigger,
+      startedAt,
+      finishedAt,
+      outcome: { kind: "success" },
+    };
+  }
+
+  if (outcome.kind === "deferred") {
+    return {
+      trigger,
+      startedAt,
+      finishedAt,
+      outcome: {
+        kind: "deferred",
+        reason: outcome.reason,
+        ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
+      },
+    };
+  }
+
+  if (outcome.kind === "failure") {
+    return {
+      trigger,
+      startedAt,
+      finishedAt,
+      outcome: {
+        kind: "failure",
+        category: outcome.category,
+        ...(outcome.message === undefined ? {} : { message: outcome.message }),
+        ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
+      },
+    };
+  }
+
+  return undefined;
+}
+
+function applyOutcome(
+  state: AppState,
+  adapter: ProviderAdapter,
+  outcome: ProviderRefreshOutcome,
+  trigger: RefreshTrigger,
+  startedAt: number,
+  finishedAt: number,
+): AppState {
+  const providers = state.providers.map((provider) => {
+    if (provider.providerId !== adapter.id) {
+      return provider;
+    }
+
+    if (outcome.kind === "skipped") {
+      return outcome.reason === "permission_required"
+        ? { ...provider, access: "required" as const }
+        : provider;
+    }
+
+    const lastAttempt = providerAttempt(
+      trigger,
+      startedAt,
+      finishedAt,
+      outcome,
+    );
+    if (!lastAttempt) {
+      return provider;
+    }
+
+    return {
+      ...provider,
+      ...(outcome.kind === "success"
+        ? {
+            access: "granted" as const,
+            snapshot: outcome.snapshot,
+          }
+        : {}),
+      lastAttempt,
+    };
+  });
+
+  return { ...state, providers };
 }
 
 export async function refreshProvider(
   adapter: ProviderAdapter,
   context: CollectionContext,
+  trigger: RefreshTrigger,
   shouldCommit: () => boolean,
+  clock: () => number = Date.now,
 ): Promise<ProviderRefreshOutcome> {
   let result: CollectionResult;
 
@@ -111,11 +178,101 @@ export async function refreshProvider(
     result = { ok: false, health: { kind: "temporary_error" } };
   }
 
-  const normalizedResult = normalizeResult(adapter, result);
-  const outcome = refreshOutcome(normalizedResult);
+  const finishedAt = Math.max(context.now, clock());
+  const outcome = refreshOutcome(normalizeResult(adapter, result, finishedAt));
+  let committed = false;
 
-  await mutateState(context.now, (state) =>
-    shouldCommit() ? applyResult(state, adapter, normalizedResult) : state,
+  await mutateState(context.now, (state) => {
+    if (!shouldCommit()) {
+      return state;
+    }
+
+    committed = true;
+    return applyOutcome(
+      state,
+      adapter,
+      outcome,
+      trigger,
+      context.now,
+      finishedAt,
+    );
+  });
+  return committed ? outcome : { kind: "skipped", reason: "superseded" };
+}
+
+export async function reconcileProviderPermissions(
+  providerIds: readonly ConnectableProviderId[],
+): Promise<void> {
+  const access = await Promise.all(
+    providerIds.map(async (providerId) => [
+      providerId,
+      await hasProviderPermission(providerId),
+    ] as const),
   );
-  return outcome;
+
+  await reconcileProviderAccess(Object.fromEntries(access));
+}
+
+export async function reconcileRemovedProviderPermissions(
+  removed: Browser.permissions.Permissions,
+  providerIds: readonly ConnectableProviderId[],
+): Promise<void> {
+  const access = await Promise.all(
+    providerIds.map(async (providerId) => [
+      providerId,
+      await hasProviderPermission(providerId),
+    ] as const),
+  );
+  const grants = Object.fromEntries(access) as Record<
+    ConnectableProviderId,
+    boolean
+  >;
+
+  await reconcileProviderAccess(grants);
+  await Promise.all(
+    providerIds.map(async (providerId) => {
+      const provider = providerRegistry[providerId];
+      const exactPermissionWasRemoved =
+        provider.optionalOrigins.some((origin) =>
+          removed.origins?.includes(origin),
+        ) ||
+        (provider.optionalPermissions ?? []).some((permission) =>
+          (removed.permissions as readonly string[] | undefined)?.includes(
+            permission,
+          ),
+        );
+
+      if (!grants[providerId] && exactPermissionWasRemoved) {
+        await disconnectProviderData(providerId);
+      }
+    }),
+  );
+}
+
+export type DisconnectProviderResult =
+  | { ok: true }
+  | { ok: false; error: "permission_removal_failed" };
+
+export async function disconnectProvider(
+  providerId: ConnectableProviderId,
+  remainingConnectedProviderIds: readonly ConnectableProviderId[],
+): Promise<DisconnectProviderResult> {
+  let removed = false;
+  try {
+    removed = await removeProviderPermission(
+      providerId,
+      remainingConnectedProviderIds.filter(
+        (remainingProviderId) => remainingProviderId !== providerId,
+      ),
+    );
+  } catch {
+    return { ok: false, error: "permission_removal_failed" };
+  }
+
+  if (!removed) {
+    return { ok: false, error: "permission_removal_failed" };
+  }
+
+  await disconnectProviderData(providerId);
+  return { ok: true };
 }
