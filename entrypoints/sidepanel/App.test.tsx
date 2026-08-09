@@ -17,6 +17,7 @@ import type {
 } from "../../domain/model";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
+import { saveState } from "../../storage/repository";
 import { App } from "./App";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
@@ -251,6 +252,28 @@ describe("side-panel App", () => {
     );
   });
 
+  test("uses connect-specific recovery copy when permission request fails", async () => {
+    const state = createInitialState();
+    const commands: unknown[] = [];
+    vi.spyOn(browser.permissions, "request").mockRejectedValue(
+      new Error("permissions API unavailable") as never,
+    );
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(state);
+    });
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ChatGPT" }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t connect ChatGPT. Reload AI Limits and try again.",
+    );
+    expect(commands).toEqual([{ type: "GET_STATE" }]);
+  });
+
   test("shows Kimi waiting only after the recovery boundary emits progress", async () => {
     const state = createFixtureState(NOW);
     let finishRefresh: ((value: unknown) => void) | undefined;
@@ -341,6 +364,76 @@ describe("side-panel App", () => {
     );
   });
 
+  test("uses confirmation-failure copy when global refresh transport fails", async () => {
+    const state = createFixtureState(NOW);
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        if ((message as { type?: string }).type === "REFRESH_ALL") {
+          throw new Error("response channel closed");
+        }
+        return state as never;
+      },
+    );
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Refresh usage" }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t confirm the refresh result. Check the latest usage before retrying.",
+    );
+  });
+
+  test("uses confirmation-failure copy when provider refresh transport fails", async () => {
+    const fixture = createFixtureState(0);
+    const kimi = fixture.providers[2]!;
+    kimi.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: 1,
+      finishedAt: 2,
+      outcome: { kind: "deferred", reason: "session_required" },
+    };
+    const state: AppState = { ...fixture, providers: [kimi] };
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        if ((message as { type?: string }).type === "REFRESH_PROVIDER") {
+          throw new Error("response channel closed");
+        }
+        return state as never;
+      },
+    );
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh Kimi" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t confirm the Kimi refresh result. Check the latest usage before retrying.",
+    );
+  });
+
+  test("uses confirmation-failure copy when connect transport fails", async () => {
+    const state = createInitialState();
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        if ((message as { type?: string }).type === "COLLECT_PROVIDER") {
+          throw new Error("response channel closed");
+        }
+        return state as never;
+      },
+    );
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ChatGPT" }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t confirm the ChatGPT refresh result. Check the latest usage before retrying.",
+    );
+  });
+
   test("keeps the authoritative auto-refresh value when the command fails", async () => {
     const state = createFixtureState(NOW);
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
@@ -386,6 +479,34 @@ describe("side-panel App", () => {
 
     expect(autoRefresh).toBeChecked();
     expect(autoRefresh).toBeDisabled();
+    act(() => finishToggle?.(disabledState));
+    await waitFor(() => expect(autoRefresh).not.toBeChecked());
+    expect(autoRefresh).toBeEnabled();
+  });
+
+  test("pins the prior automatic-refresh value during pending storage events", async () => {
+    const state = createFixtureState(NOW);
+    const disabledState = structuredClone(state);
+    disabledState.preferences.autoRefresh = false;
+    let finishToggle: ((value: unknown) => void) | undefined;
+    installMessageHandler((message, respond) => {
+      if (message.type === "SET_AUTO_REFRESH") {
+        finishToggle = respond;
+        return;
+      }
+      respond(state);
+    });
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const autoRefresh = screen.getByRole("switch", { name: "Automatic refresh" });
+    fireEvent.click(autoRefresh);
+
+    await act(async () => saveState(disabledState));
+    expect(autoRefresh).toBeChecked();
+    expect(autoRefresh).toBeDisabled();
+
     act(() => finishToggle?.(disabledState));
     await waitFor(() => expect(autoRefresh).not.toBeChecked());
     expect(autoRefresh).toBeEnabled();

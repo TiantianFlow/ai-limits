@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   isProviderOperationEvent,
@@ -29,6 +29,10 @@ interface DeleteResponse {
 interface Announcement {
   id: number;
   message: string;
+}
+
+interface AutoRefreshGuard {
+  priorValue: boolean;
 }
 
 type ProviderOperations = Partial<Record<ProviderId, ProviderOperation>>;
@@ -99,6 +103,13 @@ function manualSummary(report: RefreshReport): string {
   }`;
 }
 
+function confirmationFailure(providerId?: ProviderId): string {
+  const subject = providerId
+    ? `${providerNames[providerId]} refresh`
+    : "refresh";
+  return `Couldn’t confirm the ${subject} result. Check the latest usage before retrying.`;
+}
+
 function asRefreshResponse(value: unknown): RefreshResponse {
   if (
     !value ||
@@ -145,6 +156,7 @@ export function App() {
     message: "",
   });
   const [isAutoRefreshPending, setIsAutoRefreshPending] = useState(false);
+  const autoRefreshGuard = useRef<AutoRefreshGuard | undefined>(undefined);
   const [providerOperations, setProviderOperations] =
     useState<ProviderOperations>({});
 
@@ -176,9 +188,25 @@ export function App() {
         return;
       }
 
+      const guardAtEvent = autoRefreshGuard.current;
       void loadState().then((nextState) => {
         if (mounted && nextState) {
-          setState(nextState);
+          const activeGuard = autoRefreshGuard.current;
+          if (guardAtEvent && guardAtEvent !== activeGuard) {
+            return;
+          }
+
+          setState(
+            activeGuard
+              ? {
+                  ...nextState,
+                  preferences: {
+                    ...nextState.preferences,
+                    autoRefresh: activeGuard.priorValue,
+                  },
+                }
+              : nextState,
+          );
         }
       });
     };
@@ -246,13 +274,24 @@ export function App() {
     clearAnnouncement();
     setProviderOperation(providerId, "requesting_permission");
 
+    let granted: boolean;
     try {
-      const granted = await requestProviderPermission(providerId);
-      if (!granted) {
-        announce(`${providerNames[providerId]} was not connected.`);
-        return;
-      }
+      granted = await requestProviderPermission(providerId);
+    } catch {
+      announce(
+        `Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`,
+      );
+      setProviderOperation(providerId);
+      return;
+    }
 
+    if (!granted) {
+      announce(`${providerNames[providerId]} was not connected.`);
+      setProviderOperation(providerId);
+      return;
+    }
+
+    try {
       setProviderOperation(providerId, "fetching");
       const response = asRefreshResponse(
         await browser.runtime.sendMessage({
@@ -263,9 +302,7 @@ export function App() {
       setState(response.state);
       announce(manualSummary(response.report));
     } catch {
-      announce(
-        `Couldn’t connect ${providerNames[providerId]}. Existing data is unchanged.`,
-      );
+      announce(confirmationFailure(providerId));
     } finally {
       setProviderOperation(providerId);
     }
@@ -284,7 +321,7 @@ export function App() {
       setState(response.state);
       announce(manualSummary(response.report));
     } catch {
-      announce("No providers updated. Existing data is unchanged.");
+      announce(confirmationFailure(providerId));
     } finally {
       setProviderOperation(providerId);
     }
@@ -314,7 +351,7 @@ export function App() {
       setState(response.state);
       announce(manualSummary(response.report));
     } catch {
-      announce("No providers updated. Existing data is unchanged.");
+      announce(confirmationFailure());
     } finally {
       setProviderOperations({});
       setIsRefreshing(false);
@@ -322,10 +359,12 @@ export function App() {
   };
 
   const handleAutoRefreshChange = async (enabled: boolean) => {
-    if (isAutoRefreshPending) {
+    if (!state || autoRefreshGuard.current) {
       return;
     }
 
+    const guard = { priorValue: state.preferences.autoRefresh };
+    autoRefreshGuard.current = guard;
     clearAnnouncement();
     setIsAutoRefreshPending(true);
     try {
@@ -333,9 +372,20 @@ export function App() {
         type: "SET_AUTO_REFRESH",
         enabled,
       } satisfies RuntimeCommand);
-      setState(asAppState(nextState));
+      const authoritative = asAppState(nextState);
+      if (autoRefreshGuard.current === guard) {
+        autoRefreshGuard.current = undefined;
+        setState(authoritative);
+      }
       announce(`Automatic refresh turned ${enabled ? "on" : "off"}.`);
     } catch {
+      if (autoRefreshGuard.current === guard) {
+        autoRefreshGuard.current = undefined;
+      }
+      const authoritative = await loadState().catch(() => undefined);
+      if (authoritative) {
+        setState(authoritative);
+      }
       announce("Couldn’t update automatic refresh.");
     } finally {
       setIsAutoRefreshPending(false);

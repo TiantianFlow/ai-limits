@@ -444,6 +444,25 @@ describe("Cockpit", () => {
     expect(screen.getByText("55% used")).toBeVisible();
   });
 
+  it("suppresses Connect while any provider operation is active", () => {
+    const state = createInitialState();
+
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        providerOperations={{ chatgpt: "fetching" }}
+        onDisplayModeChange={() => undefined}
+        onRefresh={() => undefined}
+        onConnectProvider={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Connect ChatGPT" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens and closes a labelled in-panel provider manager", () => {
     renderCockpit();
 

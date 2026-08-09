@@ -4,6 +4,7 @@ import {
   reconcileRemovedProviderPermissions,
   reconcileProviderPermissions,
 } from "../background/coordinator";
+import { updateAutoRefreshTransaction } from "../background/auto-refresh";
 import type { ProviderRefreshOutcome } from "../domain/model";
 import {
   cleanupAbandonedKimiRecoveryTab,
@@ -32,7 +33,7 @@ import {
 import {
   deleteAllLocalData,
   ensureState,
-  setAutoRefresh,
+  setAutoRefresh as persistAutoRefresh,
   setDisplayMode,
 } from "../storage/repository";
 
@@ -189,14 +190,12 @@ export default defineBackground(() => {
   });
   const handleRuntimeCommand = createRuntimeCommandHandler({
     async refreshAll() {
-      await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshAll("manual_all");
       const state = await currentState();
       await syncRefreshAlarm(state);
       return { state, report };
     },
     async collectProvider(providerId) {
-      await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshProvider(
         providerId,
         "connect",
@@ -206,7 +205,6 @@ export default defineBackground(() => {
       return { state, report };
     },
     async refreshProvider(providerId) {
-      await reconcileProviderPermissions(providerIds);
       const report = await refreshOrchestrator.refreshProvider(
         providerId,
         "manual_provider",
@@ -225,10 +223,11 @@ export default defineBackground(() => {
       return currentState();
     },
     async setAutoRefresh(enabled) {
-      await setAutoRefresh(enabled);
-      const state = await currentState();
-      await syncRefreshAlarm(state);
-      return state;
+      return updateAutoRefreshTransaction(enabled, {
+        readState: currentState,
+        writePreference: persistAutoRefresh,
+        syncAlarm: syncRefreshAlarm,
+      });
     },
     async disconnectProvider(providerId) {
       refreshOrchestrator.invalidateProvider(providerId);
@@ -251,7 +250,7 @@ export default defineBackground(() => {
       const fullyRevoked = await removeAllProviderPermissions(providerIds);
       let state = await deleteAllLocalData();
       if (!fullyRevoked) {
-        await setAutoRefresh(false);
+        await persistAutoRefresh(false);
         state = await currentState();
       }
 
@@ -300,7 +299,7 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {
-      void currentState().then((state) => {
+      void ensureState(Date.now()).then((state) => {
         if (
           !state.preferences.autoRefresh ||
           !state.providers.some((provider) => provider.access === "granted")

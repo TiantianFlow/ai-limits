@@ -441,8 +441,7 @@ export function Cockpit({
               (!provider.snapshot || view.stale);
             const canConnect =
               provider.access === "required" &&
-              providerOperations[provider.providerId] !==
-                "requesting_permission";
+              !providerOperations[provider.providerId];
             return (
               <ProviderCard
                 key={provider.providerId}

@@ -85,6 +85,28 @@ describe("refresh policy derivation", () => {
 });
 
 describe("refresh orchestrator", () => {
+  test("invalidates a provider while permission preflight is pending without starting collection", async () => {
+    const permission = deferred<boolean>();
+    const hasPermission = vi.fn(() => permission.promise);
+    const runProvider = vi.fn(async () => success("chatgpt"));
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      hasPermission,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    const staleRun = orchestrator.refreshProvider("chatgpt", "manual_provider");
+    await vi.waitFor(() => expect(hasPermission).toHaveBeenCalledOnce());
+    orchestrator.invalidateProvider("chatgpt");
+    permission.resolve(true);
+
+    await expect(staleRun).resolves.toMatchObject({
+      providers: { chatgpt: { kind: "skipped", reason: "superseded" } },
+    });
+    expect(runProvider).not.toHaveBeenCalled();
+  });
+
   test("invalidates active provider work before privacy cleanup and permits a fresh run", async () => {
     const pending = deferred<ProviderRefreshOutcome>();
     const controls: ProviderRunControl[] = [];
@@ -116,6 +138,29 @@ describe("refresh orchestrator", () => {
 
     pending.resolve(success("chatgpt"));
     await staleRun;
+  });
+
+  test("invalidates a queued interactive follow-up before it can start collection", async () => {
+    const passive = deferred<ProviderRefreshOutcome>();
+    const runProvider = vi.fn(async () => passive.promise);
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["kimi"],
+      hasPermission: async () => true,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    const scheduled = orchestrator.refreshAll("scheduled");
+    await vi.waitFor(() => expect(runProvider).toHaveBeenCalledOnce());
+    const manual = orchestrator.refreshProvider("kimi", "manual_provider");
+    orchestrator.invalidateProvider("kimi");
+    passive.resolve({ kind: "deferred", reason: "session_required" });
+
+    await expect(manual).resolves.toMatchObject({
+      providers: { kimi: { kind: "skipped", reason: "superseded" } },
+    });
+    await scheduled;
+    expect(runProvider).toHaveBeenCalledOnce();
   });
 
   test("invalidates active work for every provider before delete-all cleanup", async () => {

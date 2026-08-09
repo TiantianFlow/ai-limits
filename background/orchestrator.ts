@@ -5,7 +5,6 @@ import type {
   RefreshTrigger,
 } from "../domain/model";
 import type { ConnectableProviderId } from "../providers/registry";
-import { refreshGrantedProviders } from "./refresh";
 
 const PROVIDER_DEADLINE_MS = 20_000;
 
@@ -103,7 +102,22 @@ export function createRefreshOrchestrator(
     };
     const active = { policy, controller } as ActiveRun;
     active.promise = Promise.resolve()
-      .then(() => dependencies.runProvider(providerId, policy, control))
+      .then(async () => {
+        if (control.signal.aborted || !control.isCurrentGeneration()) {
+          return { kind: "skipped", reason: "superseded" } as const;
+        }
+
+        const hasPermission = await dependencies.hasPermission(providerId);
+        if (control.signal.aborted || !control.isCurrentGeneration()) {
+          return { kind: "skipped", reason: "superseded" } as const;
+        }
+
+        if (!hasPermission) {
+          return { kind: "skipped", reason: "permission_required" } as const;
+        }
+
+        return dependencies.runProvider(providerId, policy, control);
+      })
       .catch(
         (): ProviderRefreshOutcome => ({
           kind: "failure",
@@ -136,6 +150,13 @@ export function createRefreshOrchestrator(
     }
 
     active.followUp ??= active.promise.then((outcome) => {
+      if (
+        active.controller.signal.aborted ||
+        activeRuns.get(providerId) !== active
+      ) {
+        return { kind: "skipped", reason: "superseded" } as const;
+      }
+
       if (needsInteractiveFollowUp(outcome)) {
         return startRun(providerId, policy);
       }
@@ -153,13 +174,27 @@ export function createRefreshOrchestrator(
     trigger: RefreshTrigger,
   ): Promise<RefreshReport> {
     const policy = deriveRefreshPolicy(trigger);
-    return refreshGrantedProviders(
-      providerIds,
-      dependencies.hasPermission,
-      (providerId) => requestProvider(providerId, policy),
+    const startedAt = clock();
+    const runs = providerIds.map((providerId) => {
+      const run = requestProvider(providerId, policy);
+      return run.then(
+        (outcome) => [providerId, outcome] as const,
+        () =>
+          [
+            providerId,
+            { kind: "failure", category: "temporary_error" } as const,
+          ] as const,
+      );
+    });
+
+    return Promise.all(runs).then((results) => ({
       trigger,
-      clock,
-    );
+      startedAt,
+      finishedAt: clock(),
+      providers: Object.fromEntries(results) as Partial<
+        Record<ProviderId, ProviderRefreshOutcome>
+      >,
+    }));
   }
 
   return {
