@@ -27,9 +27,30 @@ function normalizeWhitespace(document) {
   return (document ?? "").replace(/\s+/g, " ");
 }
 
+function maskHtmlComments(document) {
+  const source = document ?? "";
+  let masked = "";
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const commentStart = source.indexOf("<!--", cursor);
+    if (commentStart === -1) {
+      return masked + source.slice(cursor);
+    }
+
+    masked += source.slice(cursor, commentStart);
+    const commentEnd = source.indexOf("-->", commentStart + 4);
+    const hiddenEnd = commentEnd === -1 ? source.length : commentEnd + 3;
+    masked += source.slice(commentStart, hiddenEnd).replace(/[^\r\n]/g, " ");
+    cursor = hiddenEnd;
+  }
+
+  return masked;
+}
+
 function extractInlineMarkdownLinkDestinations(document) {
   return markdown
-    .parse(document ?? "", {})
+    .parse(maskHtmlComments(document), {})
     .filter((token) => token.type === "inline")
     .flatMap((token) => token.children ?? [])
     .filter((token) => token.type === "link_open")

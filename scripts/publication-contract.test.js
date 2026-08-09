@@ -94,6 +94,18 @@ const nonRenderedIssuesLinks = [
     document: `<!-- ${issuesLink}`,
   },
   {
+    context: "a same-line unclosed HTML comment after ordinary text",
+    document: `ordinary text <!-- ${issuesLink}`,
+  },
+  {
+    context: "a same-line closed HTML comment after ordinary text",
+    document: `ordinary text <!-- ${issuesLink} -->`,
+  },
+  {
+    context: "a multiline HTML comment after ordinary text",
+    document: ["ordinary text <!--", issuesLink, "-->"].join("\n"),
+  },
+  {
     context: "an inline code span",
     document: `\`${issuesLink}\``,
   },
