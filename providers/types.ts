@@ -25,7 +25,7 @@ export type CollectionResult =
 
 export type RefreshCollector<T extends ProviderId = ProviderId> = (
   providerId: T,
-) => Promise<ProviderRefreshOutcome | void>;
+) => Promise<ProviderRefreshOutcome>;
 
 export interface ProviderCapabilities {
   readonly browserSession: boolean;

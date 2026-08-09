@@ -1,9 +1,15 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 
 import type { ProviderId, ProviderRefreshOutcome } from "../domain/model";
+import type { RefreshCollector } from "../providers/types";
 import { refreshGrantedProviders } from "./refresh";
 
 describe("refreshGrantedProviders", () => {
+  test("requires production collectors to return a concrete outcome", () => {
+    expectTypeOf<RefreshCollector>()
+      .returns.resolves.toEqualTypeOf<ProviderRefreshOutcome>();
+  });
+
   test("reports mixed refresh outcomes with the supplied timestamps", async () => {
     const hasPermission = vi.fn(async (providerId: ProviderId) =>
       providerId === "chatgpt" || providerId === "cursor",

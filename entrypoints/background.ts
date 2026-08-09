@@ -1,4 +1,5 @@
 import { refreshProvider, setProviderHealth } from "../background/coordinator";
+import type { ProviderRefreshOutcome } from "../domain/model";
 import {
   findKimiPageAccessToken,
   refreshKimiAccessTokenInTemporaryTab,
@@ -40,7 +41,9 @@ async function ensureRefreshAlarm(): Promise<void> {
   });
 }
 
-async function collectProvider(providerId: ConnectableProviderId): Promise<void> {
+async function collectProvider(
+  providerId: ConnectableProviderId,
+): Promise<ProviderRefreshOutcome> {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(
     () => controller.abort(),
@@ -49,7 +52,7 @@ async function collectProvider(providerId: ConnectableProviderId): Promise<void>
 
   try {
     const adapter = providerRegistry[providerId];
-    await refreshProvider(adapter, {
+    return await refreshProvider(adapter, {
       fetch: globalThis.fetch.bind(globalThis),
       now: Date.now(),
       signal: controller.signal,

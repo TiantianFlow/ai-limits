@@ -25,10 +25,7 @@ export async function refreshGrantedProviders<T extends ProviderId>(
         }
 
         const outcome = await collect(providerId);
-        return [
-          providerId,
-          outcome ?? { kind: "failure", category: "temporary_error" },
-        ] as const;
+        return [providerId, outcome] as const;
       } catch {
         return [
           providerId,
