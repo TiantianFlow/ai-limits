@@ -375,8 +375,75 @@ describe("Cockpit", () => {
       screen.queryByText("Auto-refresh is waiting for a Kimi session."),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Refresh Kimi" }),
+      screen.getByRole("button", { name: "Refresh Kimi" }),
+    ).toBeVisible();
+  });
+
+  it("keeps a fresh scheduled temporary failure quiet but shows it once stale", () => {
+    const state = createFixtureState(NOW);
+    state.providers = [state.providers[0]!];
+    state.providers[0]!.snapshot!.fetchedAt = NOW - 34 * 60 * 1_000;
+    state.providers[0]!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 2_000,
+      finishedAt: NOW - 1_000,
+      outcome: { kind: "failure", category: "temporary_error" },
+    };
+
+    const view = render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByText(
+        "AI Limits could not refresh this provider. Try again later.",
+      ),
     ).not.toBeInTheDocument();
+
+    view.rerender(
+      <Cockpit
+        state={state}
+        now={NOW + 60_001}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "AI Limits could not refresh this provider. Try again later.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("offers provider-scoped refresh on every connected card", () => {
+    const state = createFixtureState(NOW);
+    const onRefreshProvider = vi.fn();
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onRefreshProvider={onRefreshProvider}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Claude" }));
+    expect(onRefreshProvider).toHaveBeenCalledWith("claude");
+    expect(
+      screen.getByRole("button", { name: "Refresh ChatGPT" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Refresh Kimi" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Refresh Cursor" }),
+    ).toBeVisible();
   });
 
   it.each([
@@ -519,6 +586,9 @@ describe("Cockpit", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete all local data" }));
 
     expect(onDeleteLocalData).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Confirm delete all local data" }),
+    ).toHaveFocus();
     expect(
       screen.getByText("This removes stored usage and disconnects every provider."),
     ).toBeVisible();

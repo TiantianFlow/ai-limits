@@ -22,6 +22,11 @@ export interface ProviderOperationEvent {
   operation: "waiting_for_session";
 }
 
+export interface RuntimeCommandFailure {
+  ok: false;
+  error: "command_failed";
+}
+
 function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   return (
     Object.keys(value).length === keys.length &&
@@ -114,7 +119,12 @@ export function createChromeRuntimeMessageListener(
 
     void Promise.resolve()
       .then(() => handleCommand(message))
-      .then(sendResponse, () => sendResponse(undefined));
+      .then(sendResponse, () =>
+        sendResponse({
+          ok: false,
+          error: "command_failed",
+        } satisfies RuntimeCommandFailure),
+      );
     return true;
   };
 }

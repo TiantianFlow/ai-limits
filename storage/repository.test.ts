@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
+import { KIMI_RECOVERY_GUIDANCE } from "../domain/model";
 import type { ProviderSnapshot } from "../domain/model";
 import { createFixtureState } from "../providers/fixtures";
 import { createInitialState } from "../providers/initial-state";
@@ -104,6 +105,38 @@ describe("fixture state", () => {
 });
 
 describe("state repository", () => {
+  test("preserves the allowlisted Kimi recovery guidance across persistence", async () => {
+    const state = createInitialState();
+    const kimi = state.providers.find(
+      (provider) => provider.providerId === "kimi",
+    )!;
+    kimi.access = "granted";
+    kimi.lastAttempt = {
+      trigger: "manual_provider",
+      startedAt: now - 1_000,
+      finishedAt: now,
+      outcome: {
+        kind: "failure",
+        category: "temporary_error",
+        message: KIMI_RECOVERY_GUIDANCE,
+      },
+    };
+
+    await saveState(state);
+    await expect(ensureState(now)).resolves.toMatchObject({
+      providers: expect.arrayContaining([
+        expect.objectContaining({
+          providerId: "kimi",
+          lastAttempt: expect.objectContaining({
+            outcome: expect.objectContaining({
+              message: KIMI_RECOVERY_GUIDANCE,
+            }),
+          }),
+        }),
+      ]),
+    });
+  });
+
   beforeEach(async () => {
     await browser.storage.local.clear();
   });

@@ -198,6 +198,15 @@ function attemptMessage(
       : "Refresh is waiting for a browser session.";
   }
 
+  if (
+    outcome.category === "temporary_error" &&
+    provider.lastAttempt?.trigger === "scheduled" &&
+    provider.snapshot &&
+    !stale
+  ) {
+    return undefined;
+  }
+
   return sanitizedFailureMessage(outcome.category, outcome.message);
 }
 
@@ -401,6 +410,7 @@ export function Cockpit({
                     className="button button--danger"
                     type="button"
                     aria-label="Confirm delete all local data"
+                    autoFocus
                     onClick={() => {
                       setConfirmDelete(false);
                       onDeleteLocalData();
@@ -433,20 +443,16 @@ export function Cockpit({
         <section className="provider-list" aria-label="AI provider usage">
           {state.providers.map((provider) => {
             const view = providerView(provider, mode, now);
-            const needsKimiSession =
-              provider.providerId === "kimi" &&
-              provider.lastAttempt?.trigger === "scheduled" &&
-              provider.lastAttempt.outcome.kind === "deferred" &&
-              provider.lastAttempt.outcome.reason === "session_required" &&
-              (!provider.snapshot || view.stale);
+            const operation = providerOperations[provider.providerId];
             const canConnect =
               provider.access === "required" &&
-              !providerOperations[provider.providerId];
+              !operation;
+            const canRefresh = provider.access === "granted" && !operation;
             return (
               <ProviderCard
                 key={provider.providerId}
                 {...view}
-                operation={providerOperations[provider.providerId]}
+                operation={operation}
                 action={
                   canConnect
                     ? {
@@ -454,11 +460,11 @@ export function Cockpit({
                         accessibleLabel: `Connect ${providerNames[provider.providerId]}`,
                         onClick: () => onConnectProvider(provider.providerId),
                       }
-                    : needsKimiSession && !providerOperations.kimi
+                    : canRefresh
                       ? {
-                          label: "Refresh Kimi",
-                          accessibleLabel: "Refresh Kimi",
-                          onClick: () => onRefreshProvider("kimi"),
+                          label: "Refresh",
+                          accessibleLabel: `Refresh ${providerNames[provider.providerId]}`,
+                          onClick: () => onRefreshProvider(provider.providerId),
                         }
                       : undefined
                 }

@@ -4,6 +4,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../types";
+import { retryAtFromResponse } from "../retry-after";
 import {
   chatGptCreditsSchema,
   chatGptSessionSchema,
@@ -19,13 +20,17 @@ const HOUR_SECONDS = 60 * 60;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
 const WEEK_SECONDS = 7 * DAY_SECONDS;
 
-function healthForStatus(status: number): ProviderHealth {
-  if (status === 401) {
+function healthForResponse(response: Response, now: number): ProviderHealth {
+  if (response.status === 401) {
     return { kind: "signed_out" };
   }
 
-  if (status === 429 || status >= 500) {
-    return { kind: "temporary_error" };
+  if (response.status === 429 || response.status >= 500) {
+    const retryAt = retryAtFromResponse(response, now);
+    return {
+      kind: "temporary_error",
+      ...(retryAt === undefined ? {} : { retryAt }),
+    };
   }
 
   return { kind: "provider_changed" };
@@ -115,7 +120,7 @@ async function collectChatGpt({
     });
 
     if (!sessionResponse.ok) {
-      return { ok: false, health: healthForStatus(sessionResponse.status) };
+      return { ok: false, health: healthForResponse(sessionResponse, now) };
     }
 
     const session = chatGptSessionSchema.safeParse(await parseJson(sessionResponse));
@@ -140,7 +145,7 @@ async function collectChatGpt({
     }
 
     if (!usageResponse.ok) {
-      return { ok: false, health: healthForStatus(usageResponse.status) };
+      return { ok: false, health: healthForResponse(usageResponse, now) };
     }
 
     const usage = chatGptUsageSchema.safeParse(await parseJson(usageResponse));

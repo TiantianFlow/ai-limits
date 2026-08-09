@@ -73,8 +73,22 @@ export function ProviderCard({
           <h2 id={`provider-${name}`}>{name}</h2>
           {plan ? <p>{plan}</p> : null}
         </div>
-        {access === "required" ? (
-          <span className="badge">Not connected</span>
+        {access === "required" || (hasSnapshot && action) ? (
+          <div className="provider-card__header-actions">
+            {access === "required" ? (
+              <span className="badge">Not connected</span>
+            ) : null}
+            {hasSnapshot && action ? (
+              <button
+                className="button button--secondary provider-card__header-action"
+                type="button"
+                aria-label={action.accessibleLabel}
+                onClick={action.onClick}
+              >
+                {action.label}
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </header>
 
@@ -114,17 +128,6 @@ export function ProviderCard({
           <p>{emptyDescription}</p>
           {extraDisclosure ? <p>{extraDisclosure}</p> : null}
         </div>
-      ) : null}
-
-      {hasSnapshot && action ? (
-        <button
-          className="button button--secondary provider-card__action"
-          type="button"
-          aria-label={action.accessibleLabel}
-          onClick={action.onClick}
-        >
-          {action.label}
-        </button>
       ) : null}
 
       {quotas.length ? (

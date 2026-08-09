@@ -8,6 +8,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../types";
+import { retryAtFromResponse } from "../retry-after";
 import {
   claudeExtraUsageSchema,
   claudeOrganizationListSchema,
@@ -32,13 +33,17 @@ const REQUEST_INIT = {
   headers: { Accept: "application/json" },
 } as const;
 
-function healthForStatus(status: number): ProviderHealth {
-  if (status === 401) {
+function healthForResponse(response: Response, now: number): ProviderHealth {
+  if (response.status === 401) {
     return { kind: "signed_out" };
   }
 
-  if (status === 429 || status >= 500) {
-    return { kind: "temporary_error" };
+  if (response.status === 429 || response.status >= 500) {
+    const retryAt = retryAtFromResponse(response, now);
+    return {
+      kind: "temporary_error",
+      ...(retryAt === undefined ? {} : { retryAt }),
+    };
   }
 
   return { kind: "provider_changed" };
@@ -156,7 +161,7 @@ async function collectClaude({
     if (!organizationsResponse.ok) {
       return {
         ok: false,
-        health: healthForStatus(organizationsResponse.status),
+        health: healthForResponse(organizationsResponse, now),
       };
     }
 
@@ -170,7 +175,7 @@ async function collectClaude({
       { ...REQUEST_INIT, signal },
     );
     if (!usageResponse.ok) {
-      return { ok: false, health: healthForStatus(usageResponse.status) };
+      return { ok: false, health: healthForResponse(usageResponse, now) };
     }
 
     const usage = claudeUsageSchema.safeParse(await parseJson(usageResponse));

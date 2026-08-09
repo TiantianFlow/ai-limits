@@ -8,6 +8,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../types";
+import { retryAtFromResponse } from "../retry-after";
 import {
   kimiCodingUsageSchema,
   kimiRateLimitStatSchema,
@@ -32,13 +33,17 @@ const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const SESSION_REQUIRED = Symbol("kimi-session-required");
 
-function healthForStatus(status: number): ProviderHealth {
-  if (status === 401) {
+function healthForResponse(response: Response, now: number): ProviderHealth {
+  if (response.status === 401) {
     return { kind: "signed_out" };
   }
 
-  if (status === 429 || status >= 500) {
-    return { kind: "temporary_error" };
+  if (response.status === 429 || response.status >= 500) {
+    const retryAt = retryAtFromResponse(response, now);
+    return {
+      kind: "temporary_error",
+      ...(retryAt === undefined ? {} : { retryAt }),
+    };
   }
 
   return { kind: "provider_changed" };
@@ -444,7 +449,7 @@ async function collectKimi({
                 kind: "temporary_error",
                 message: KIMI_RECOVERY_GUIDANCE,
               }
-            : healthForStatus(response.status),
+            : healthForResponse(response, now),
       };
     }
 

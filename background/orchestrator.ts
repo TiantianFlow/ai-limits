@@ -35,6 +35,9 @@ export interface RefreshOrchestratorDependencies {
   providerIds: readonly ConnectableProviderId[];
   isAutoRefreshEnabled(): Promise<boolean>;
   hasPermission(providerId: ConnectableProviderId): Promise<boolean>;
+  getBackoffRetryAt(
+    providerId: ConnectableProviderId,
+  ): Promise<number | undefined>;
   runProvider(
     providerId: ConnectableProviderId,
     policy: RefreshPolicy,
@@ -46,6 +49,7 @@ export interface RefreshOrchestratorDependencies {
 interface ActiveRun {
   policy: RefreshPolicy;
   controller: AbortController;
+  invalidated: boolean;
   promise: Promise<ProviderRefreshOutcome>;
   followUp?: Promise<ProviderRefreshOutcome>;
 }
@@ -90,6 +94,52 @@ export function createRefreshOrchestrator(
   const generations = new Map<ProviderId, number>();
   const clock = dependencies.clock ?? Date.now;
 
+  function runWithinDeadline(
+    operation: () => Promise<ProviderRefreshOutcome>,
+    controller: AbortController,
+    deadlineMs: number,
+  ): Promise<ProviderRefreshOutcome> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let timedOut = false;
+      const finish = (outcome: ProviderRefreshOutcome) => {
+        if (settled) return;
+        settled = true;
+        globalThis.clearTimeout(timeout);
+        controller.signal.removeEventListener("abort", onAbort);
+        resolve(outcome);
+      };
+      const onAbort = () =>
+        finish(
+          timedOut
+            ? { kind: "failure", category: "temporary_error" }
+            : { kind: "skipped", reason: "superseded" },
+        );
+      const timeout = globalThis.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, deadlineMs);
+
+      controller.signal.addEventListener("abort", onAbort, { once: true });
+      if (controller.signal.aborted) {
+        onAbort();
+        return;
+      }
+
+      let result: Promise<ProviderRefreshOutcome>;
+      try {
+        result = operation();
+      } catch {
+        finish({ kind: "failure", category: "temporary_error" });
+        return;
+      }
+      void result.then(
+        (outcome) => finish(outcome),
+        () => finish({ kind: "failure", category: "temporary_error" }),
+      );
+    });
+  }
+
   function startRun(
     providerId: ConnectableProviderId,
     policy: RefreshPolicy,
@@ -101,11 +151,13 @@ export function createRefreshOrchestrator(
     const control: ProviderRunControl = {
       generation,
       signal: controller.signal,
-      isCurrentGeneration: () => generations.get(providerId) === generation,
+      isCurrentGeneration: () =>
+        !controller.signal.aborted &&
+        generations.get(providerId) === generation,
     };
-    const active = { policy, controller } as ActiveRun;
-    active.promise = Promise.resolve()
-      .then(async () => {
+    const active = { policy, controller, invalidated: false } as ActiveRun;
+    active.promise = runWithinDeadline(
+      async () => {
         if (control.signal.aborted || !control.isCurrentGeneration()) {
           return { kind: "skipped", reason: "superseded" } as const;
         }
@@ -134,14 +186,26 @@ export function createRefreshOrchestrator(
           return { kind: "skipped", reason: "permission_required" } as const;
         }
 
+        if (!policy.bypassBackoff) {
+          const retryAt = await dependencies.getBackoffRetryAt(providerId);
+          if (control.signal.aborted || !control.isCurrentGeneration()) {
+            return { kind: "skipped", reason: "superseded" } as const;
+          }
+
+          if (retryAt !== undefined && retryAt > clock()) {
+            return {
+              kind: "deferred",
+              reason: "backoff",
+              retryAt,
+            } as const;
+          }
+        }
+
         return dependencies.runProvider(providerId, policy, control);
-      })
-      .catch(
-        (): ProviderRefreshOutcome => ({
-          kind: "failure",
-          category: "temporary_error",
-        }),
-      )
+      },
+      controller,
+      policy.deadlineMs,
+    )
       .finally(() => {
         if (
           activeRuns.get(providerId) === active &&
@@ -169,7 +233,7 @@ export function createRefreshOrchestrator(
 
     active.followUp ??= active.promise.then((outcome) => {
       if (
-        active.controller.signal.aborted ||
+        active.invalidated ||
         activeRuns.get(providerId) !== active
       ) {
         return { kind: "skipped", reason: "superseded" } as const;
@@ -223,12 +287,19 @@ export function createRefreshOrchestrator(
       return refresh([providerId], trigger);
     },
     invalidateProvider(providerId) {
-      activeRuns.get(providerId)?.controller.abort();
+      const active = activeRuns.get(providerId);
+      if (active) {
+        active.invalidated = true;
+        active.controller.abort();
+      }
       generations.set(providerId, (generations.get(providerId) ?? 0) + 1);
       activeRuns.delete(providerId);
     },
     invalidateAll() {
-      activeRuns.forEach((active) => active.controller.abort());
+      activeRuns.forEach((active) => {
+        active.invalidated = true;
+        active.controller.abort();
+      });
       dependencies.providerIds.forEach((providerId) => {
         generations.set(providerId, (generations.get(providerId) ?? 0) + 1);
       });

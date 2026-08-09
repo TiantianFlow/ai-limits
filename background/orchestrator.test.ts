@@ -5,6 +5,7 @@ import type {
   ProviderRefreshOutcome,
   ProviderSnapshot,
 } from "../domain/model";
+import { readKimiPageAccessToken } from "./kimi-page";
 import {
   createRefreshOrchestrator as createProductionRefreshOrchestrator,
   deriveRefreshPolicy,
@@ -42,14 +43,18 @@ function deferred<T>() {
 function createRefreshOrchestrator(
   dependencies: Omit<
     RefreshOrchestratorDependencies,
-    "isAutoRefreshEnabled"
+    "isAutoRefreshEnabled" | "getBackoffRetryAt"
   > &
     Partial<
-      Pick<RefreshOrchestratorDependencies, "isAutoRefreshEnabled">
+      Pick<
+        RefreshOrchestratorDependencies,
+        "isAutoRefreshEnabled" | "getBackoffRetryAt"
+      >
     >,
 ) {
   return createProductionRefreshOrchestrator({
     isAutoRefreshEnabled: async () => true,
+    getBackoffRetryAt: async () => undefined,
     ...dependencies,
   });
 }
@@ -101,6 +106,164 @@ describe("refresh policy derivation", () => {
 });
 
 describe("refresh orchestrator", () => {
+  test("bounds a non-settling provider and prevents its late result from committing", async () => {
+    vi.useFakeTimers();
+    const injection = deferred<Array<{ result?: unknown }>>();
+    let control: ProviderRunControl | undefined;
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["kimi"],
+      hasPermission: async () => true,
+      runProvider: async (_providerId, _policy, nextControl) => {
+        control = nextControl;
+        await readKimiPageAccessToken(42, () => injection.promise);
+        return success("kimi");
+      },
+      clock: () => NOW,
+    });
+
+    const report = orchestrator.refreshProvider("kimi", "manual_provider");
+    await vi.advanceTimersByTimeAsync(19_999);
+    expect(control?.signal.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(report).resolves.toMatchObject({
+      providers: { kimi: { kind: "failure", category: "temporary_error" } },
+    });
+    expect(control?.signal.aborted).toBe(true);
+    expect(control?.isCurrentGeneration()).toBe(false);
+
+    injection.resolve([{ result: "late-token" }]);
+    await vi.advanceTimersByTimeAsync(0);
+    vi.useRealTimers();
+  });
+
+  test("runs one queued manual follow-up after scheduled work times out", async () => {
+    vi.useFakeTimers();
+    const passive = deferred<ProviderRefreshOutcome>();
+    const policies: RefreshPolicy[] = [];
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["kimi"],
+      hasPermission: async () => true,
+      runProvider: async (_providerId, policy) => {
+        policies.push(policy);
+        return policy.interaction === "forbidden"
+          ? passive.promise
+          : success("kimi");
+      },
+      clock: () => NOW,
+    });
+
+    const scheduled = orchestrator.refreshAll("scheduled");
+    await vi.advanceTimersByTimeAsync(0);
+    const manual = orchestrator.refreshProvider("kimi", "manual_provider");
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    await expect(scheduled).resolves.toMatchObject({
+      providers: { kimi: { kind: "failure", category: "temporary_error" } },
+    });
+    await expect(manual).resolves.toMatchObject({
+      providers: { kimi: { kind: "success" } },
+    });
+    expect(policies.map(({ trigger }) => trigger)).toEqual([
+      "scheduled",
+      "manual_provider",
+    ]);
+
+    passive.resolve(success("kimi"));
+    await vi.advanceTimersByTimeAsync(0);
+    vi.useRealTimers();
+  });
+
+  test("defers scheduled work while stored backoff is active", async () => {
+    const runProvider = vi.fn(async () => success("chatgpt"));
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      hasPermission: async () => true,
+      getBackoffRetryAt: async () => NOW + 60_000,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    await expect(orchestrator.refreshAll("scheduled")).resolves.toMatchObject({
+      providers: {
+        chatgpt: {
+          kind: "deferred",
+          reason: "backoff",
+          retryAt: NOW + 60_000,
+        },
+      },
+    });
+    expect(runProvider).not.toHaveBeenCalled();
+  });
+
+  test("manual work bypasses stored scheduled backoff", async () => {
+    const runProvider = vi.fn(async () => success("chatgpt"));
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      hasPermission: async () => true,
+      getBackoffRetryAt: async () => NOW + 60_000,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    await expect(
+      orchestrator.refreshProvider("chatgpt", "manual_provider"),
+    ).resolves.toMatchObject({ providers: { chatgpt: { kind: "success" } } });
+    expect(runProvider).toHaveBeenCalledOnce();
+  });
+
+  test.each([
+    {
+      label: "backoff",
+      outcome: {
+        kind: "deferred",
+        reason: "backoff",
+        retryAt: NOW + 60_000,
+      } satisfies ProviderRefreshOutcome,
+    },
+    {
+      label: "signed out",
+      outcome: {
+        kind: "failure",
+        category: "signed_out",
+      } satisfies ProviderRefreshOutcome,
+    },
+    {
+      label: "challenge blocked",
+      outcome: {
+        kind: "failure",
+        category: "challenge_blocked",
+      } satisfies ProviderRefreshOutcome,
+    },
+    {
+      label: "provider changed",
+      outcome: {
+        kind: "failure",
+        category: "provider_changed",
+      } satisfies ProviderRefreshOutcome,
+    },
+  ])("does not add an interactive follow-up after $label", async ({ outcome }) => {
+    const passive = deferred<ProviderRefreshOutcome>();
+    const runProvider = vi.fn(async () => passive.promise);
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt"],
+      hasPermission: async () => true,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    const scheduled = orchestrator.refreshAll("scheduled");
+    await vi.waitFor(() => expect(runProvider).toHaveBeenCalledOnce());
+    const manual = orchestrator.refreshProvider("chatgpt", "manual_provider");
+    passive.resolve(outcome);
+
+    await expect(Promise.all([scheduled, manual])).resolves.toEqual([
+      expect.objectContaining({ providers: { chatgpt: outcome } }),
+      expect.objectContaining({ providers: { chatgpt: outcome } }),
+    ]);
+    expect(runProvider).toHaveBeenCalledOnce();
+  });
+
   test("invalidates scheduled ingress while its auto-refresh check is pending", async () => {
     const autoRefresh = deferred<boolean>();
     const isAutoRefreshEnabled = vi.fn(() => autoRefresh.promise);

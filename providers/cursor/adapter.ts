@@ -4,6 +4,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../types";
+import { retryAtFromResponse } from "../retry-after";
 import {
   cursorUsageSummarySchema,
   type CursorPlanQuota,
@@ -20,9 +21,15 @@ const REQUEST_INIT = {
   headers: { Accept: "application/json" },
 } as const;
 
-function healthForStatus(status: number): ProviderHealth {
-  if (status === 401) return { kind: "signed_out" };
-  if (status === 429 || status >= 500) return { kind: "temporary_error" };
+function healthForResponse(response: Response, now: number): ProviderHealth {
+  if (response.status === 401) return { kind: "signed_out" };
+  if (response.status === 429 || response.status >= 500) {
+    const retryAt = retryAtFromResponse(response, now);
+    return {
+      kind: "temporary_error",
+      ...(retryAt === undefined ? {} : { retryAt }),
+    };
+  }
   return { kind: "provider_changed" };
 }
 
@@ -167,7 +174,9 @@ function normalizeWindows(summary: CursorUsageSummary): QuotaWindow[] {
 async function collectCursor({ fetch, now, signal }: CollectionContext): Promise<CollectionResult> {
   try {
     const response = await fetch(USAGE_ENDPOINT, { ...REQUEST_INIT, signal });
-    if (!response.ok) return { ok: false, health: healthForStatus(response.status) };
+    if (!response.ok) {
+      return { ok: false, health: healthForResponse(response, now) };
+    }
     const parsed = cursorUsageSummarySchema.safeParse(await parseJson(response));
     if (!parsed.success || !summaryIsSemanticallyValid(parsed.data)) {
       return { ok: false, health: { kind: "provider_changed" } };

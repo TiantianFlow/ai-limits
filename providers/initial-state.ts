@@ -199,6 +199,7 @@ function normalizeAttemptOutcome(
                 ProviderAttempt["outcome"],
                 { kind: "failure" }
               >["category"],
+              value.message,
             ),
           }),
       ...(value.retryAt === undefined ? {} : { retryAt: value.retryAt }),

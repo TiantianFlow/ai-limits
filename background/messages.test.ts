@@ -151,6 +151,31 @@ describe("runtime command router", () => {
     expect(sendResponse).not.toHaveBeenCalled();
   });
 
+  test("returns a fixed failure envelope without exposing handler errors", async () => {
+    const handleCommand = vi.fn(async () => {
+      throw new Error("secret-bearing internal failure");
+    });
+    const sendResponse = vi.fn();
+    const listener = createChromeRuntimeMessageListener(handleCommand);
+
+    expect(
+      listener(
+        { type: "GET_STATE" },
+        {} as Browser.runtime.MessageSender,
+        sendResponse,
+      ),
+    ).toBe(true);
+    await vi.waitFor(() =>
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: false,
+        error: "command_failed",
+      }),
+    );
+    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain(
+      "secret-bearing",
+    );
+  });
+
   test("accepts only the exact credential-free Kimi operation event", () => {
     expect(
       isProviderOperationEvent({

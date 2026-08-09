@@ -204,6 +204,26 @@ describe("ChatGPT adapter", () => {
     },
   );
 
+  test("preserves Retry-After metadata on a transient usage response", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response({ accessToken: "redacted" }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({}), {
+          status: 429,
+          headers: {
+            "content-type": "application/json",
+            "Retry-After": "120",
+          },
+        }),
+      );
+
+    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toEqual({
+      ok: false,
+      health: { kind: "temporary_error", retryAt: NOW + 120_000 },
+    });
+  });
+
   test("maps a successful response with an invalid usage shape to provider changed", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()

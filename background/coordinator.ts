@@ -26,6 +26,7 @@ import {
 } from "./permissions";
 
 let permissionReconciliationGeneration = 0;
+const DEFAULT_SCHEDULED_BACKOFF_MS = 15 * 60 * 1_000;
 
 function normalizeResult(
   adapter: ProviderAdapter,
@@ -97,6 +98,26 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
           ),
         }),
     ...(retryAt === undefined ? {} : { retryAt }),
+  };
+}
+
+function withScheduledBackoff(
+  outcome: ProviderRefreshOutcome,
+  trigger: RefreshTrigger,
+  finishedAt: number,
+): ProviderRefreshOutcome {
+  if (
+    trigger !== "scheduled" ||
+    outcome.kind !== "failure" ||
+    outcome.category !== "temporary_error" ||
+    outcome.retryAt !== undefined
+  ) {
+    return outcome;
+  }
+
+  return {
+    ...outcome,
+    retryAt: finishedAt + DEFAULT_SCHEDULED_BACKOFF_MS,
   };
 }
 
@@ -205,7 +226,11 @@ export async function refreshProvider(
   }
 
   const finishedAt = Math.max(context.now, clock());
-  const outcome = refreshOutcome(normalizeResult(adapter, result, finishedAt));
+  const outcome = withScheduledBackoff(
+    refreshOutcome(normalizeResult(adapter, result, finishedAt)),
+    trigger,
+    finishedAt,
+  );
   let committed = false;
 
   await mutateState(context.now, (state) => {

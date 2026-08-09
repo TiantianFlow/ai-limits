@@ -103,6 +103,47 @@ beforeEach(async () => {
 });
 
 describe("provider refresh coordinator", () => {
+  test("records a next-interval backoff for scheduled temporary failures", async () => {
+    const outcome = await refreshProvider(
+      adapter(async () => ({
+        ok: false,
+        health: { kind: "temporary_error" },
+      })),
+      collectionContext(),
+      "scheduled",
+      () => true,
+      () => FINISHED_AT,
+    );
+
+    expect(outcome).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+      retryAt: FINISHED_AT + 15 * 60 * 1_000,
+    });
+    expect((await loadState())?.providers[0]?.lastAttempt?.outcome).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+      retryAt: FINISHED_AT + 15 * 60 * 1_000,
+    });
+  });
+
+  test("preserves a provider Retry-After instead of replacing it", async () => {
+    const retryAt = FINISHED_AT + 60 * 60 * 1_000;
+
+    await expect(
+      refreshProvider(
+        adapter(async () => ({
+          ok: false,
+          health: { kind: "temporary_error", retryAt },
+        })),
+        collectionContext(),
+        "scheduled",
+        () => true,
+        () => FINISHED_AT,
+      ),
+    ).resolves.toMatchObject({ retryAt });
+  });
+
   test("replaces only the selected snapshot and records a successful attempt", async () => {
     const initial = liveState(NOW - 60_000);
     initial.providers[0]!.lastAttempt = {

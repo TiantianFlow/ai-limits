@@ -12,6 +12,7 @@ import {
   findKimiPageAccessToken,
   refreshKimiAccessTokenInTemporaryTab,
 } from "../background/kimi-session";
+import { readKimiPageAccessToken } from "../background/kimi-page";
 import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
@@ -21,6 +22,7 @@ import {
   createRefreshOrchestrator,
   type RefreshPolicy,
 } from "../background/orchestrator";
+import { launchScheduledRefresh } from "../background/scheduled-refresh";
 import {
   hasProviderPermission,
   removeAllProviderPermissions,
@@ -39,15 +41,6 @@ import {
 
 const REFRESH_ALARM = "refresh-connected";
 const REFRESH_PERIOD_MINUTES = 15;
-
-async function readKimiPageAccessToken(tabId: number): Promise<unknown> {
-  const [injection] = await browser.scripting.executeScript({
-    target: { tabId },
-    world: "MAIN",
-    func: () => globalThis.localStorage.getItem("access_token"),
-  });
-  return injection?.result;
-}
 
 async function ensureRefreshAlarm(): Promise<void> {
   const current = await browser.alarms.get(REFRESH_ALARM);
@@ -92,82 +85,88 @@ async function collectProvider(
   kimiStartupCleanup: Promise<void>,
   invalidationSignal: AbortSignal,
 ): Promise<ProviderRefreshOutcome> {
-  const controller = new AbortController();
-  const abortInvalidatedRun = () => controller.abort();
-  if (invalidationSignal.aborted) {
-    controller.abort();
-  } else {
-    invalidationSignal.addEventListener("abort", abortInvalidatedRun, {
-      once: true,
-    });
-  }
-  const timeout = globalThis.setTimeout(
-    () => controller.abort(),
-    policy.deadlineMs,
-  );
-
-  try {
-    const adapter = providerRegistry[providerId];
-    return await collectAndCommitProvider(
-      adapter,
-      {
-        fetch: globalThis.fetch.bind(globalThis),
-        now: Date.now(),
-        signal: controller.signal,
-        ...(providerId === "kimi"
-          ? {
-              getCookie: (details: { url: string; name: string }) =>
-                browser.cookies.get(details),
-              interaction: policy.interaction,
-              kimiSessionResolver: {
-                findAvailableAccessToken: () =>
-                  findKimiPageAccessToken({
-                    queryTabs: () =>
-                      browser.tabs.query({ url: "https://www.kimi.com/*" }),
-                    readAccessToken: readKimiPageAccessToken,
-                  }),
-                recoverAccessToken: createKimiRecoveryAfterStartupCleanup({
-                  startupCleanup: kimiStartupCleanup,
-                  signal: controller.signal,
-                  recoverAccessToken: (rejectedToken?: string) => {
-                    announceKimiRecovery();
-                    return refreshKimiAccessTokenInTemporaryTab({
-                      rejectedToken,
-                      createTab: (details) => browser.tabs.create(details),
-                      getTab: (tabId) => browser.tabs.get(tabId),
-                      readAccessToken: readKimiPageAccessToken,
-                      removeTab: (tabId) => browser.tabs.remove(tabId),
-                      addUpdatedListener: (listener) => {
-                        browser.tabs.onUpdated.addListener(listener);
-                        return () =>
-                          browser.tabs.onUpdated.removeListener(listener);
-                      },
-                      addRemovedListener: (listener) => {
-                        browser.tabs.onRemoved.addListener(listener);
-                        return () =>
-                          browser.tabs.onRemoved.removeListener(listener);
-                      },
-                      storageSession: browser.storage.session,
-                      signal: controller.signal,
-                    });
-                  },
+  const adapter = providerRegistry[providerId];
+  return collectAndCommitProvider(
+    adapter,
+    {
+      fetch: globalThis.fetch.bind(globalThis),
+      now: Date.now(),
+      signal: invalidationSignal,
+      ...(providerId === "kimi"
+        ? {
+            getCookie: (details: { url: string; name: string }) =>
+              browser.cookies.get(details),
+            interaction: policy.interaction,
+            kimiSessionResolver: {
+              findAvailableAccessToken: () =>
+                findKimiPageAccessToken({
+                  queryTabs: () =>
+                    browser.tabs.query({ url: "https://www.kimi.com/*" }),
+                  readAccessToken: (tabId) =>
+                    readKimiPageAccessToken(tabId, (details) =>
+                      browser.scripting.executeScript(details),
+                    ),
                 }),
-              },
-            }
-          : {}),
-      },
-      policy.trigger,
-      shouldCommit,
-    );
-  } finally {
-    invalidationSignal.removeEventListener("abort", abortInvalidatedRun);
-    globalThis.clearTimeout(timeout);
-  }
+              recoverAccessToken: createKimiRecoveryAfterStartupCleanup({
+                startupCleanup: kimiStartupCleanup,
+                signal: invalidationSignal,
+                recoverAccessToken: (rejectedToken?: string) => {
+                  announceKimiRecovery();
+                  return refreshKimiAccessTokenInTemporaryTab({
+                    rejectedToken,
+                    createTab: (details) => browser.tabs.create(details),
+                    getTab: (tabId) => browser.tabs.get(tabId),
+                    readAccessToken: (tabId) =>
+                      readKimiPageAccessToken(tabId, (details) =>
+                        browser.scripting.executeScript(details),
+                      ),
+                    removeTab: (tabId) => browser.tabs.remove(tabId),
+                    addUpdatedListener: (listener) => {
+                      browser.tabs.onUpdated.addListener(listener);
+                      return () =>
+                        browser.tabs.onUpdated.removeListener(listener);
+                    },
+                    addRemovedListener: (listener) => {
+                      browser.tabs.onRemoved.addListener(listener);
+                      return () =>
+                        browser.tabs.onRemoved.removeListener(listener);
+                    },
+                    storageSession: browser.storage.session,
+                    signal: invalidationSignal,
+                  });
+                },
+              }),
+            },
+          }
+        : {}),
+    },
+    policy.trigger,
+    () => !invalidationSignal.aborted && shouldCommit(),
+  );
 }
 
 async function currentState() {
   await reconcileProviderPermissions(providerIds);
   return ensureState(Date.now());
+}
+
+async function providerBackoffRetryAt(
+  providerId: ConnectableProviderId,
+): Promise<number | undefined> {
+  const state = await ensureState(Date.now());
+  const outcome = state.providers.find(
+    (provider) => provider.providerId === providerId,
+  )?.lastAttempt?.outcome;
+  if (
+    !outcome ||
+    ((outcome.kind !== "failure" ||
+      outcome.category !== "temporary_error") &&
+      (outcome.kind !== "deferred" || outcome.reason !== "backoff"))
+  ) {
+    return undefined;
+  }
+
+  return outcome.retryAt;
 }
 
 export default defineBackground(() => {
@@ -181,6 +180,7 @@ export default defineBackground(() => {
     isAutoRefreshEnabled: async () =>
       (await ensureState(Date.now())).preferences.autoRefresh,
     hasPermission: hasProviderPermission,
+    getBackoffRetryAt: providerBackoffRetryAt,
     runProvider: (providerId, policy, control) =>
       collectProvider(
         providerId,
@@ -305,7 +305,11 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {
-      void refreshOrchestrator.refreshAll("scheduled");
+      launchScheduledRefresh({
+        refreshAll: (trigger) => refreshOrchestrator.refreshAll(trigger),
+        currentState,
+        syncRefreshAlarm,
+      });
     }
   });
 
