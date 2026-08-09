@@ -105,6 +105,24 @@ const nonRenderedIssuesLinks = [
     context: "escaped Markdown syntax",
     document: `\\${issuesLink}`,
   },
+  {
+    context: "4-space indented code",
+    document: `    ${issuesLink}`,
+  },
+  {
+    context: "a raw HTML block",
+    document: ["<div>", issuesLink, "</div>"].join("\n"),
+  },
+  {
+    context: "a raw HTML attribute",
+    document: `<div data-support="${issuesLink}"></div>`,
+  },
+  {
+    context: "a raw script block",
+    document: ["<script>", `const support = "${issuesLink}";`, "</script>"].join(
+      "\n",
+    ),
+  },
 ];
 
 describe("publication content", () => {

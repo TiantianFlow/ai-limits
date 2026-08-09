@@ -1,3 +1,5 @@
+import MarkdownIt from "markdown-it";
+
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const limitedUseStatement =
   "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
@@ -19,53 +21,19 @@ const requiredListingDefaults = [
   `Support: ${issuesUrl}`,
   "Remote hosted code: No",
 ];
+const markdown = new MarkdownIt({ html: true, linkify: false });
 
 function normalizeWhitespace(document) {
   return (document ?? "").replace(/\s+/g, " ");
 }
 
-function stripFencedCodeBlocks(document) {
-  let activeFence;
-
-  return document
-    .split(/\r?\n/)
-    .map((line) => {
-      if (activeFence) {
-        const closingFence = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
-        if (
-          closingFence &&
-          closingFence[1][0] === activeFence.marker &&
-          closingFence[1].length >= activeFence.length
-        ) {
-          activeFence = undefined;
-        }
-        return "";
-      }
-
-      const openingFence = line.match(/^ {0,3}(`{3,}|~{3,})/);
-      if (openingFence) {
-        activeFence = {
-          marker: openingFence[1][0],
-          length: openingFence[1].length,
-        };
-        return "";
-      }
-
-      return line;
-    })
-    .join("\n");
-}
-
 function extractInlineMarkdownLinkDestinations(document) {
-  const renderedMarkdown = stripFencedCodeBlocks(
-    (document ?? "").replace(/<!--[\s\S]*?(?:-->|$)/g, ""),
-  ).replace(/(`+)[\s\S]*?\1/g, "");
-  const inlineLink =
-    /(?<![!\\])\[(?:\\.|[^\[\]\n]|\[[^\[\]\n]*\])*\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^\n)]*\)))?\s*\)/g;
-
-  return [...renderedMarkdown.matchAll(inlineLink)].map(
-    (match) => match[1] ?? match[2],
-  );
+  return markdown
+    .parse(document ?? "", {})
+    .filter((token) => token.type === "inline")
+    .flatMap((token) => token.children ?? [])
+    .filter((token) => token.type === "link_open")
+    .map((token) => token.attrGet("href"));
 }
 
 export function validatePublicationDocuments(documents) {
