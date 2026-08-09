@@ -204,6 +204,22 @@ describe("publication content", () => {
     ).toEqual([]);
   });
 
+  it.each([
+    {
+      context: "inline code",
+      document: `\`literal <!--\` ${issuesLink}`,
+    },
+    {
+      context: "a fenced code block",
+      document: ["```text", "literal <!--", "```", issuesLink].join("\n"),
+    },
+  ])(
+    "accepts a real Issues link after literal unclosed comment syntax in $context",
+    ({ document }) => {
+      expect(validatePublicationDocuments({ ...valid, readme: document })).toEqual([]);
+    },
+  );
+
   it.each(listingDefaults)("rejects an omitted $value listing default", ({ value, error }) => {
     const errors = validatePublicationDocuments({
       ...valid,

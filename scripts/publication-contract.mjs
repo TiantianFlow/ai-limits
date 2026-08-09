@@ -27,34 +27,58 @@ function normalizeWhitespace(document) {
   return (document ?? "").replace(/\s+/g, " ");
 }
 
-function maskHtmlComments(document) {
-  const source = document ?? "";
-  let masked = "";
+function updateHtmlCommentState(content, commentOpen) {
   let cursor = 0;
 
-  while (cursor < source.length) {
-    const commentStart = source.indexOf("<!--", cursor);
-    if (commentStart === -1) {
-      return masked + source.slice(cursor);
+  while (cursor < content.length) {
+    if (commentOpen) {
+      const commentEnd = content.indexOf("-->", cursor);
+      if (commentEnd === -1) {
+        return true;
+      }
+      commentOpen = false;
+      cursor = commentEnd + 3;
+      continue;
     }
 
-    masked += source.slice(cursor, commentStart);
-    const commentEnd = source.indexOf("-->", commentStart + 4);
-    const hiddenEnd = commentEnd === -1 ? source.length : commentEnd + 3;
-    masked += source.slice(commentStart, hiddenEnd).replace(/[^\r\n]/g, " ");
-    cursor = hiddenEnd;
+    const commentStart = content.indexOf("<!--", cursor);
+    if (commentStart === -1) {
+      return false;
+    }
+    commentOpen = true;
+    cursor = commentStart + 4;
   }
 
-  return masked;
+  return commentOpen;
 }
 
 function extractInlineMarkdownLinkDestinations(document) {
-  return markdown
-    .parse(maskHtmlComments(document), {})
-    .filter((token) => token.type === "inline")
-    .flatMap((token) => token.children ?? [])
-    .filter((token) => token.type === "link_open")
-    .map((token) => token.attrGet("href"));
+  const destinations = [];
+  let commentOpen = false;
+
+  for (const blockToken of markdown.parse(document ?? "", {})) {
+    if (blockToken.type === "html_block") {
+      commentOpen = updateHtmlCommentState(blockToken.content, commentOpen);
+      continue;
+    }
+
+    if (blockToken.type !== "inline") {
+      continue;
+    }
+
+    for (const token of blockToken.children ?? []) {
+      if (token.type === "html_inline" || token.type === "text") {
+        commentOpen = updateHtmlCommentState(token.content, commentOpen);
+        continue;
+      }
+
+      if (token.type === "link_open" && !commentOpen) {
+        destinations.push(token.attrGet("href"));
+      }
+    }
+  }
+
+  return destinations;
 }
 
 export function validatePublicationDocuments(documents) {
