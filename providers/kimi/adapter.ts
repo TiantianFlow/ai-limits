@@ -290,111 +290,132 @@ function kimiRequest(
 async function collectKimi({
   fetch: injectedFetch,
   getCookie,
-  getAccessToken,
-  getRefreshedAccessToken,
+  interaction,
+  kimiSessionResolver,
   now,
   signal,
 }: CollectionContext): Promise<CollectionResult> {
   try {
+    const findAvailableAccessToken = async (): Promise<string | undefined> => {
+      try {
+        return (
+          await kimiSessionResolver?.findAvailableAccessToken()
+        )?.trim();
+      } catch {
+        return undefined;
+      }
+    };
     const cookie = await getCookie?.({ url: KIMI_URL, name: "kimi-auth" });
     const cookieToken = cookie?.value.trim();
-    let pageTokenLoaded = false;
-    let pageTokenRereadAfterUnauthorized = false;
-    let backgroundRefreshAttempted = false;
+    let recoveryAttempted = false;
     let initialAccessToken = cookieToken;
     if (!initialAccessToken) {
-      pageTokenLoaded = true;
-      initialAccessToken = (await getAccessToken?.())?.trim();
+      initialAccessToken = await findAvailableAccessToken();
     }
+
+    if (!initialAccessToken) {
+      if (interaction !== "allowed") {
+        return {
+          ok: false,
+          deferred: { reason: "session_required" },
+        };
+      }
+
+      let recoveredToken: string | undefined;
+      recoveryAttempted = true;
+      try {
+        recoveredToken = (
+          await kimiSessionResolver?.recoverAccessToken(undefined)
+        )?.trim();
+      } catch {
+        // Interactive recovery failures are reduced to approved fallback copy.
+      }
+      if (recoveredToken) {
+        initialAccessToken = recoveredToken;
+      }
+    }
+
     if (!initialAccessToken) {
       return {
         ok: false,
         health: {
           kind: "temporary_error",
-          message: "Open Kimi in a tab, make sure you're signed in, then try again.",
+          message:
+            "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
         },
       };
     }
     let activeAccessToken = initialAccessToken;
 
-    const requestWithAuthFallback = async (
-      endpoint: string,
-      body: unknown,
-      allowBackgroundRefresh = false,
-    ): Promise<Response> => {
-      let response = await kimiRequest(
-        injectedFetch,
-        endpoint,
-        activeAccessToken,
-        body,
-        signal,
-      );
+    let response = await kimiRequest(
+      injectedFetch,
+      SUBSCRIPTION_STATS_ENDPOINT,
+      activeAccessToken,
+      {},
+      signal,
+    );
 
-      if (response.status === 401 && !pageTokenRereadAfterUnauthorized) {
-        pageTokenRereadAfterUnauthorized = true;
-        pageTokenLoaded = true;
-        const pageToken = (await getAccessToken?.())?.trim();
-        if (pageToken && pageToken !== activeAccessToken) {
-          activeAccessToken = pageToken;
-          response = await kimiRequest(
-            injectedFetch,
-            endpoint,
-            activeAccessToken,
-            body,
-            signal,
-          );
-        }
+    if (response.status === 401) {
+      const pageToken = await findAvailableAccessToken();
+      if (pageToken && pageToken !== activeAccessToken) {
+        activeAccessToken = pageToken;
+        response = await kimiRequest(
+          injectedFetch,
+          SUBSCRIPTION_STATS_ENDPOINT,
+          activeAccessToken,
+          {},
+          signal,
+        );
+      }
+    }
+
+    if (response.status === 401) {
+      if (interaction !== "allowed") {
+        return {
+          ok: false,
+          deferred: { reason: "session_required" },
+        };
       }
 
-      if (
-        response.status === 401 &&
-        allowBackgroundRefresh &&
-        !backgroundRefreshAttempted
-      ) {
-        backgroundRefreshAttempted = true;
-        let refreshedToken: string | undefined;
+      if (!recoveryAttempted) {
+        recoveryAttempted = true;
+        let recoveredToken: string | undefined;
         try {
-          refreshedToken = (
-            await getRefreshedAccessToken?.(activeAccessToken)
+          recoveredToken = (
+            await kimiSessionResolver?.recoverAccessToken(activeAccessToken)
           )?.trim();
         } catch {
-          // Background recovery is best-effort; preserve the manual fallback.
+          // Interactive recovery failures are reduced to approved fallback copy.
         }
-
-        if (refreshedToken && refreshedToken !== activeAccessToken) {
-          activeAccessToken = refreshedToken;
+        if (recoveredToken && recoveredToken !== activeAccessToken) {
+          activeAccessToken = recoveredToken;
           response = await kimiRequest(
             injectedFetch,
-            endpoint,
+            SUBSCRIPTION_STATS_ENDPOINT,
             activeAccessToken,
-            body,
+            {},
             signal,
           );
         }
       }
+    }
 
-      return response;
-    };
-
-    let response = await requestWithAuthFallback(
-      SUBSCRIPTION_STATS_ENDPOINT,
-      {},
-      true,
-    );
     let legacy = false;
     if (response.status === 404 || response.status === 405) {
       legacy = true;
-      response = await requestWithAuthFallback(
+      response = await kimiRequest(
+        injectedFetch,
         LEGACY_USAGES_ENDPOINT,
+        activeAccessToken,
         { scope: ["FEATURE_CODING"] },
-        true,
+        signal,
       );
     }
     if (!response.ok) {
       return {
         ok: false,
         health:
-          response.status === 401 && pageTokenLoaded
+          response.status === 401
             ? {
                 kind: "temporary_error",
                 message:
@@ -415,9 +436,12 @@ async function collectKimi({
     let planLabel: string | undefined;
     if (!legacy) {
       try {
-        const subscriptionResponse = await requestWithAuthFallback(
+        const subscriptionResponse = await kimiRequest(
+          injectedFetch,
           SUBSCRIPTION_ENDPOINT,
+          activeAccessToken,
           {},
+          signal,
         );
         if (subscriptionResponse.ok) {
           const subscriptionBody = await parseJson(subscriptionResponse);

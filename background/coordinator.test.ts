@@ -206,6 +206,38 @@ describe("provider refresh coordinator", () => {
     expect(JSON.stringify(await loadState())).not.toContain("secret-bearing");
   });
 
+  test("preserves last-good data while recording a provider session deferral", async () => {
+    const initial = liveState(NOW - 60_000);
+    await saveState(initial);
+    const snapshotBefore = initial.providers[0]?.snapshot;
+
+    const outcome = await refresh(
+      adapter(async () => ({
+        ok: false,
+        deferred: { reason: "session_required" },
+      })),
+    );
+
+    expect(outcome).toEqual({
+      kind: "deferred",
+      reason: "session_required",
+    });
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+      snapshot: snapshotBefore,
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: NOW,
+        finishedAt: FINISHED_AT,
+        outcome: {
+          kind: "deferred",
+          reason: "session_required",
+        },
+      },
+    });
+  });
+
   test("contains thrown adapter details as a safe temporary failure", async () => {
     const initial = liveState(NOW - 60_000);
     await saveState(initial);

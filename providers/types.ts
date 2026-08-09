@@ -1,9 +1,15 @@
 import type {
+  DeferredReason,
   ProviderHealth,
   ProviderId,
   ProviderRefreshOutcome,
   ProviderSnapshot,
 } from "../domain/model";
+
+export interface KimiSessionResolver {
+  findAvailableAccessToken(): Promise<string | undefined>;
+  recoverAccessToken(rejectedToken?: string): Promise<string | undefined>;
+}
 
 export interface CollectionContext {
   fetch: typeof globalThis.fetch;
@@ -13,15 +19,17 @@ export interface CollectionContext {
     url: string;
     name: string;
   }) => Promise<{ value: string } | null>;
-  getAccessToken?: () => Promise<string | undefined>;
-  getRefreshedAccessToken?: (
-    staleAccessToken: string,
-  ) => Promise<string | undefined>;
+  interaction?: "allowed" | "forbidden";
+  kimiSessionResolver?: KimiSessionResolver;
 }
 
 export type CollectionResult =
   | { ok: true; snapshot: ProviderSnapshot }
-  | { ok: false; health: ProviderHealth };
+  | { ok: false; health: ProviderHealth }
+  | {
+      ok: false;
+      deferred: { reason: DeferredReason; retryAt?: number };
+    };
 
 export type RefreshCollector<T extends ProviderId = ProviderId> = (
   providerId: T,

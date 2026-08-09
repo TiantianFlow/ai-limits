@@ -57,6 +57,16 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
     return { kind: "success", snapshot: result.snapshot };
   }
 
+  if ("deferred" in result) {
+    return {
+      kind: "deferred",
+      reason: result.deferred.reason,
+      ...(result.deferred.retryAt === undefined
+        ? {}
+        : { retryAt: result.deferred.retryAt }),
+    };
+  }
+
   if (result.health.kind === "permission_required") {
     return { kind: "skipped", reason: "permission_required" };
   }

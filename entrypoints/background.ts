@@ -5,6 +5,7 @@ import {
 } from "../background/coordinator";
 import type { ProviderRefreshOutcome } from "../domain/model";
 import {
+  cleanupAbandonedKimiRecoveryTab,
   findKimiPageAccessToken,
   refreshKimiAccessTokenInTemporaryTab,
 } from "../background/kimi-session";
@@ -70,24 +71,35 @@ async function collectProvider(
           ? {
               getCookie: (details: { url: string; name: string }) =>
                 browser.cookies.get(details),
-              getAccessToken: () =>
-                findKimiPageAccessToken({
-                  queryTabs: () =>
-                    browser.tabs.query({ url: "https://www.kimi.com/*" }),
-                  readAccessToken: readKimiPageAccessToken,
-                }),
-              ...(policy.interaction === "allowed"
-                ? {
-                    getRefreshedAccessToken: (staleAccessToken: string) =>
-                      refreshKimiAccessTokenInTemporaryTab({
-                        staleAccessToken,
-                        createTab: (details) => browser.tabs.create(details),
-                        readAccessToken: readKimiPageAccessToken,
-                        removeTab: (tabId) => browser.tabs.remove(tabId),
-                        signal: controller.signal,
-                      }),
-                  }
-                : {}),
+              interaction: policy.interaction,
+              kimiSessionResolver: {
+                findAvailableAccessToken: () =>
+                  findKimiPageAccessToken({
+                    queryTabs: () =>
+                      browser.tabs.query({ url: "https://www.kimi.com/*" }),
+                    readAccessToken: readKimiPageAccessToken,
+                  }),
+                recoverAccessToken: (rejectedToken?: string) =>
+                  refreshKimiAccessTokenInTemporaryTab({
+                    rejectedToken,
+                    createTab: (details) => browser.tabs.create(details),
+                    getTab: (tabId) => browser.tabs.get(tabId),
+                    readAccessToken: readKimiPageAccessToken,
+                    removeTab: (tabId) => browser.tabs.remove(tabId),
+                    addUpdatedListener: (listener) => {
+                      browser.tabs.onUpdated.addListener(listener);
+                      return () =>
+                        browser.tabs.onUpdated.removeListener(listener);
+                    },
+                    addRemovedListener: (listener) => {
+                      browser.tabs.onRemoved.addListener(listener);
+                      return () =>
+                        browser.tabs.onRemoved.removeListener(listener);
+                    },
+                    storageSession: browser.storage.session,
+                    signal: controller.signal,
+                  }),
+              },
             }
           : {}),
       },
@@ -175,5 +187,11 @@ export default defineBackground(() => {
         refreshOrchestrator.refreshAll("scheduled"),
       );
     }
+  });
+
+  void cleanupAbandonedKimiRecoveryTab({
+    storageSession: browser.storage.session,
+    getTab: (tabId) => browser.tabs.get(tabId),
+    removeTab: (tabId) => browser.tabs.remove(tabId),
   });
 });

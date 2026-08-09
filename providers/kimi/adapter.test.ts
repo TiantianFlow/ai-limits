@@ -84,14 +84,18 @@ function subscriptionFixture(title = "Kimi Coding Ultra") {
 function context(
   fetch: typeof globalThis.fetch,
   getCookie = vi.fn(),
-  getAccessToken = vi.fn(),
-  getRefreshedAccessToken = vi.fn(),
+  findAvailableAccessToken = vi.fn(),
+  recoverAccessToken = vi.fn(),
+  interaction: "allowed" | "forbidden" = "allowed",
 ) {
   return {
     fetch,
     getCookie,
-    getAccessToken,
-    getRefreshedAccessToken,
+    interaction,
+    kimiSessionResolver: {
+      findAvailableAccessToken,
+      recoverAccessToken,
+    },
     now: NOW,
     signal: new AbortController().signal,
   };
@@ -244,13 +248,13 @@ describe("Kimi adapter", () => {
   });
 
   test("uses the current page access token when the legacy cookie is absent", async () => {
-    const getAccessToken = vi.fn().mockResolvedValue("page-token");
+    const findAvailableAccessToken = vi.fn().mockResolvedValue("page-token");
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       response(statsFixture()),
     );
 
     const result = await kimiAdapter.collect(
-      context(fetch, vi.fn().mockResolvedValue(null), getAccessToken),
+      context(fetch, vi.fn().mockResolvedValue(null), findAvailableAccessToken),
     );
 
     expect(result).toMatchObject({
@@ -268,8 +272,120 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("page-token");
   });
 
+  test("defers a scheduled read with no token without attempting recovery", async () => {
+    const recoverAccessToken = vi.fn().mockResolvedValue("fresh-page-token");
+
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>(),
+        vi.fn().mockResolvedValue(null),
+        vi.fn().mockResolvedValue(undefined),
+        recoverAccessToken,
+        "forbidden",
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      deferred: { reason: "session_required" },
+    });
+    expect(recoverAccessToken).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("Kimi was still starting");
+  });
+
+  test("defers a scheduled rejected token after one API call and an open-tab reread", async () => {
+    const findAvailableAccessToken = vi
+      .fn()
+      .mockResolvedValue("stale-page-token");
+    const recoverAccessToken = vi.fn().mockResolvedValue("fresh-page-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(response({ providerError: "raw-secret-error" }, 401));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue(null),
+        findAvailableAccessToken,
+        recoverAccessToken,
+        "forbidden",
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      deferred: { reason: "session_required" },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(findAvailableAccessToken).toHaveBeenCalledTimes(2);
+    expect(recoverAccessToken).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("stale-page-token");
+    expect(JSON.stringify(result)).not.toContain("raw-secret-error");
+  });
+
+  test("manual no-token recovery accepts a newly available token", async () => {
+    const recoverAccessToken = vi.fn().mockResolvedValue("fresh-page-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response(subscriptionFixture()));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue(null),
+        vi.fn().mockResolvedValue(undefined),
+        recoverAccessToken,
+      ),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
+    });
+    expect(recoverAccessToken).toHaveBeenCalledOnce();
+    expect(recoverAccessToken).toHaveBeenCalledWith(undefined);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-page-token",
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("fresh-page-token");
+  });
+
+  test("attempts interactive recovery only once when a recovered initial token is rejected", async () => {
+    const recoverAccessToken = vi.fn().mockResolvedValue("recovered-token");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(response({}, 401));
+
+    const result = await kimiAdapter.collect(
+      context(
+        fetch,
+        vi.fn().mockResolvedValue(null),
+        vi.fn().mockResolvedValue(undefined),
+        recoverAccessToken,
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      health: {
+        kind: "temporary_error",
+        message:
+          "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+      },
+    });
+    expect(recoverAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   test("rereads a changed page token once after the sampled token is rejected", async () => {
-    const getAccessToken = vi
+    const findAvailableAccessToken = vi
       .fn()
       .mockResolvedValueOnce("stale-page-token")
       .mockResolvedValueOnce("fresh-page-token");
@@ -280,14 +396,18 @@ describe("Kimi adapter", () => {
       .mockResolvedValueOnce(response(subscriptionFixture()));
 
     const result = await kimiAdapter.collect(
-      context(fetch, vi.fn().mockResolvedValue(null), getAccessToken),
+      context(
+        fetch,
+        vi.fn().mockResolvedValue(null),
+        findAvailableAccessToken,
+      ),
     );
 
     expect(result).toMatchObject({
       ok: true,
       snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
     });
-    expect(getAccessToken).toHaveBeenCalledTimes(2);
+    expect(findAvailableAccessToken).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       expect.any(String),
@@ -310,12 +430,12 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("fresh-page-token");
   });
 
-  test("recovers a rejected page token through one bounded background refresh", async () => {
-    const getAccessToken = vi
+  test("manual stale-token recovery calls the API first and retries it once", async () => {
+    const findAvailableAccessToken = vi
       .fn()
       .mockResolvedValueOnce("stale-page-token")
       .mockResolvedValueOnce("stale-page-token");
-    const getRefreshedAccessToken = vi
+    const recoverAccessToken = vi
       .fn()
       .mockResolvedValue("fresh-page-token");
     const fetch = vi
@@ -328,8 +448,8 @@ describe("Kimi adapter", () => {
       context(
         fetch,
         vi.fn().mockResolvedValue(null),
-        getAccessToken,
-        getRefreshedAccessToken,
+        findAvailableAccessToken,
+        recoverAccessToken,
       ),
     );
 
@@ -337,7 +457,8 @@ describe("Kimi adapter", () => {
       ok: true,
       snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
     });
-    expect(getRefreshedAccessToken).toHaveBeenCalledWith("stale-page-token");
+    expect(recoverAccessToken).toHaveBeenCalledOnce();
+    expect(recoverAccessToken).toHaveBeenCalledWith("stale-page-token");
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       expect.any(String),
@@ -351,15 +472,15 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("fresh-page-token");
   });
 
-  test("gives a manual fallback when bounded background refresh finds no token", async () => {
-    const getRefreshedAccessToken = vi.fn().mockResolvedValue(undefined);
+  test("gives a manual fallback when explicit recovery finds no token", async () => {
+    const recoverAccessToken = vi.fn().mockResolvedValue(undefined);
 
     const result = await kimiAdapter.collect(
       context(
         vi.fn<typeof globalThis.fetch>().mockResolvedValue(response({}, 401)),
         vi.fn().mockResolvedValue(null),
         vi.fn().mockResolvedValue("stale-page-token"),
-        getRefreshedAccessToken,
+        recoverAccessToken,
       ),
     );
 
@@ -371,11 +492,11 @@ describe("Kimi adapter", () => {
           "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
       },
     });
-    expect(getRefreshedAccessToken).toHaveBeenCalledTimes(1);
+    expect(recoverAccessToken).toHaveBeenCalledTimes(1);
   });
 
   test("does not open a temporary tab when optional subscription metadata is unauthorized", async () => {
-    const getRefreshedAccessToken = vi.fn().mockResolvedValue("fresh-page-token");
+    const recoverAccessToken = vi.fn().mockResolvedValue("fresh-page-token");
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response(statsFixture()))
@@ -386,7 +507,7 @@ describe("Kimi adapter", () => {
         fetch,
         vi.fn().mockResolvedValue({ value: "valid-cookie" }),
         vi.fn().mockResolvedValue(undefined),
-        getRefreshedAccessToken,
+        recoverAccessToken,
       ),
     );
 
@@ -399,11 +520,11 @@ describe("Kimi adapter", () => {
         ]),
       },
     });
-    expect(getRefreshedAccessToken).not.toHaveBeenCalled();
+    expect(recoverAccessToken).not.toHaveBeenCalled();
   });
 
   test("retries once with the current page token when a stale cookie is rejected", async () => {
-    const getAccessToken = vi.fn().mockResolvedValue("page-token");
+    const findAvailableAccessToken = vi.fn().mockResolvedValue("page-token");
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response({}, 401))
@@ -413,7 +534,7 @@ describe("Kimi adapter", () => {
       context(
         fetch,
         vi.fn().mockResolvedValue({ value: "stale-cookie" }),
-        getAccessToken,
+        findAvailableAccessToken,
       ),
     );
 
@@ -421,7 +542,7 @@ describe("Kimi adapter", () => {
       ok: true,
       snapshot: { providerId: "kimi", windows: expect.any(Array) },
     });
-    expect(getAccessToken).toHaveBeenCalledTimes(1);
+    expect(findAvailableAccessToken).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch).toHaveBeenNthCalledWith(
       1,
@@ -494,26 +615,27 @@ describe("Kimi adapter", () => {
     });
   });
 
-  test.each([null, { value: "" }])(
-    "asks for an open signed-in tab when no supported Kimi credential is available",
-    async (cookie) => {
-      const result = await kimiAdapter.collect(
-        context(
-          vi.fn<typeof globalThis.fetch>(),
-          vi.fn().mockResolvedValue(cookie),
-          vi.fn().mockResolvedValue(undefined),
-        ),
-      );
+  test("sanitizes resolver errors from a failed explicit recovery", async () => {
+    const rawError = "raw-secret-resolver-error";
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>(),
+        vi.fn().mockResolvedValue(null),
+        vi.fn().mockResolvedValue(undefined),
+        vi.fn().mockRejectedValue(new Error(rawError)),
+      ),
+    );
 
-      expect(result).toEqual({
-        ok: false,
-        health: {
-          kind: "temporary_error",
-          message: "Open Kimi in a tab, make sure you're signed in, then try again.",
-        },
-      });
-    },
-  );
+    expect(result).toEqual({
+      ok: false,
+      health: {
+        kind: "temporary_error",
+        message:
+          "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(rawError);
+  });
 
   test.each([401, 429, 500])("maps HTTP %i correctly", async (status) => {
     const result = await kimiAdapter.collect(
