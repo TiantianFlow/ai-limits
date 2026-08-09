@@ -109,5 +109,12 @@ assert(
   !JSON.stringify(manifest).includes("auth.kimi.com"),
   "Expected the ZIP manifest not to request auth.kimi.com.",
 );
+assert(
+  [16, 32, 48, 128].every((size) => {
+    const iconPath = manifest.icons?.[size];
+    return typeof iconPath === "string" && entries.includes(iconPath);
+  }),
+  "Expected the complete extension icon set in the ZIP.",
+);
 
 console.log(`AI Limits ZIP verified: ${archivePath}`);

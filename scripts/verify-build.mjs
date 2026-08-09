@@ -54,12 +54,27 @@ assert(
   'Expected minimum_chrome_version to equal "116".',
 );
 assert(
+  JSON.stringify(manifest.icons) ===
+    JSON.stringify({
+      16: "icons/16.png",
+      32: "icons/32.png",
+      48: "icons/48.png",
+      128: "icons/128.png",
+    }),
+  "Expected the complete extension icon set.",
+);
+assert(
   typeof manifest.background?.service_worker === "string" &&
     manifest.background.service_worker.length > 0,
   "Expected a background service worker.",
 );
 
 await access(resolve(outputDirectory, "sidepanel.html"), constants.F_OK);
+await Promise.all(
+  Object.values(manifest.icons).map((iconPath) =>
+    access(resolve(outputDirectory, iconPath), constants.F_OK),
+  ),
+);
 await access(
   resolve(outputDirectory, manifest.background.service_worker),
   constants.F_OK,

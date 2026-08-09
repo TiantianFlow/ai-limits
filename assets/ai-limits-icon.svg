@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">AI Limits</title>
+  <desc id="description">Three usage bars on a purple rounded square.</desc>
+  <defs>
+    <linearGradient id="background" x1="18" y1="12" x2="112" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8464e8"/>
+      <stop offset="1" stop-color="#5932bd"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#background)"/>
+  <g fill="none" stroke-linecap="round" stroke-width="12">
+    <path d="M28 36h72" stroke="#fff" opacity=".24"/>
+    <path d="M28 36h53" stroke="#fff"/>
+    <path d="M28 64h72" stroke="#fff" opacity=".24"/>
+    <path d="M28 64h38" stroke="#fff"/>
+    <path d="M28 92h72" stroke="#fff" opacity=".24"/>
+    <path d="M28 92h24" stroke="#fff"/>
+  </g>
+</svg>
