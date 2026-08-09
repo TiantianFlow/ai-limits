@@ -4,6 +4,7 @@ import type { DisplayMode } from "../domain/model";
 export type RuntimeCommand =
   | { type: "REFRESH_ALL" }
   | { type: "COLLECT_PROVIDER"; providerId: ConnectableProviderId }
+  | { type: "REFRESH_PROVIDER"; providerId: ConnectableProviderId }
   | { type: "GET_STATE" }
   | { type: "SET_DISPLAY_MODE"; mode: DisplayMode };
 
@@ -20,7 +21,10 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   }
 
   const command = value as Record<string, unknown>;
-  if (command.type === "COLLECT_PROVIDER") {
+  if (
+    command.type === "COLLECT_PROVIDER" ||
+    command.type === "REFRESH_PROVIDER"
+  ) {
     return (
       hasExactKeys(command, ["type", "providerId"]) &&
       (command.providerId === "chatgpt" ||
@@ -46,6 +50,7 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
 export interface RuntimeCommandHandlers {
   refreshAll(): unknown;
   collectProvider(providerId: ConnectableProviderId): unknown;
+  refreshProvider(providerId: ConnectableProviderId): unknown;
   getState(): unknown;
   setDisplayMode(mode: DisplayMode): unknown;
 }
@@ -82,6 +87,8 @@ export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
         return handlers.refreshAll();
       case "COLLECT_PROVIDER":
         return handlers.collectProvider(value.providerId);
+      case "REFRESH_PROVIDER":
+        return handlers.refreshProvider(value.providerId);
       case "GET_STATE":
         return handlers.getState();
       case "SET_DISPLAY_MODE":

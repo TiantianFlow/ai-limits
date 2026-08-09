@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 
-import type { ProviderId, ProviderRefreshOutcome } from "../domain/model";
+import type {
+  ProviderId,
+  ProviderRefreshOutcome,
+  RefreshTrigger,
+} from "../domain/model";
 import type { RefreshCollector } from "../providers/types";
 import { refreshGrantedProviders } from "./refresh";
 
@@ -8,6 +12,11 @@ describe("refreshGrantedProviders", () => {
   test("requires production collectors to return a concrete outcome", () => {
     expectTypeOf<RefreshCollector>()
       .returns.resolves.toEqualTypeOf<ProviderRefreshOutcome>();
+  });
+
+  test("requires callers to identify the refresh trigger", () => {
+    expectTypeOf<Parameters<typeof refreshGrantedProviders>[3]>()
+      .toEqualTypeOf<RefreshTrigger>();
   });
 
   test("reports mixed refresh outcomes with the supplied timestamps", async () => {
@@ -67,5 +76,57 @@ describe("refreshGrantedProviders", () => {
     expect(collect).toHaveBeenCalledTimes(2);
     expect(collect).toHaveBeenCalledWith("chatgpt");
     expect(collect).toHaveBeenCalledWith("cursor");
+  });
+
+  test("starts granted providers in parallel", async () => {
+    const started: ProviderId[] = [];
+    const resolvers = new Map<
+      ProviderId,
+      (outcome: ProviderRefreshOutcome) => void
+    >();
+    const collect = (providerId: ProviderId) => {
+      started.push(providerId);
+      return new Promise<ProviderRefreshOutcome>((resolve) => {
+        resolvers.set(providerId, resolve);
+      });
+    };
+
+    const refreshing = refreshGrantedProviders(
+      ["chatgpt", "claude"],
+      async () => true,
+      collect,
+      "scheduled",
+      () => 1_800_000_000_000,
+    );
+
+    await vi.waitFor(() => expect(started).toEqual(["chatgpt", "claude"]));
+    resolvers.get("chatgpt")!({
+      kind: "success",
+      snapshot: {
+        providerId: "chatgpt",
+        source: "fixture",
+        fetchedAt: 1_800_000_000_000,
+        windows: [],
+        credits: [],
+      },
+    });
+    resolvers.get("claude")!({
+      kind: "success",
+      snapshot: {
+        providerId: "claude",
+        source: "fixture",
+        fetchedAt: 1_800_000_000_000,
+        windows: [],
+        credits: [],
+      },
+    });
+
+    await expect(refreshing).resolves.toMatchObject({
+      trigger: "scheduled",
+      providers: {
+        chatgpt: { kind: "success" },
+        claude: { kind: "success" },
+      },
+    });
   });
 });

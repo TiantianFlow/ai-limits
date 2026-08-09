@@ -10,7 +10,7 @@ export async function refreshGrantedProviders<T extends ProviderId>(
   providerIds: readonly T[],
   hasPermission: (providerId: T) => Promise<boolean>,
   collect: RefreshCollector<T>,
-  trigger: RefreshTrigger = "manual_all",
+  trigger: RefreshTrigger,
   clock: () => number = Date.now,
 ): Promise<RefreshReport> {
   const startedAt = clock();

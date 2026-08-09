@@ -1,4 +1,7 @@
-import { refreshProvider, setProviderHealth } from "../background/coordinator";
+import {
+  refreshProvider as collectAndCommitProvider,
+  setProviderHealth,
+} from "../background/coordinator";
 import type { ProviderRefreshOutcome } from "../domain/model";
 import {
   findKimiPageAccessToken,
@@ -8,8 +11,11 @@ import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
 } from "../background/messages";
+import {
+  createRefreshOrchestrator,
+  type RefreshPolicy,
+} from "../background/orchestrator";
 import { hasProviderPermission } from "../background/permissions";
-import { refreshGrantedProviders } from "../background/refresh";
 import {
   providerIds,
   providerRegistry,
@@ -19,7 +25,6 @@ import { ensureState, setDisplayMode } from "../storage/repository";
 
 const REFRESH_ALARM = "refresh-connected";
 const REFRESH_PERIOD_MINUTES = 15;
-const COLLECTION_TIMEOUT_MS = 20_000;
 
 async function readKimiPageAccessToken(tabId: number): Promise<unknown> {
   const [injection] = await browser.scripting.executeScript({
@@ -43,16 +48,25 @@ async function ensureRefreshAlarm(): Promise<void> {
 
 async function collectProvider(
   providerId: ConnectableProviderId,
+  policy: RefreshPolicy,
 ): Promise<ProviderRefreshOutcome> {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(
     () => controller.abort(),
-    COLLECTION_TIMEOUT_MS,
+    policy.deadlineMs,
   );
 
   try {
+    if (policy.trigger === "connect") {
+      await setProviderHealth(
+        providerId,
+        { kind: "connecting" },
+        Date.now(),
+      );
+    }
+
     const adapter = providerRegistry[providerId];
-    return await refreshProvider(adapter, {
+    return await collectAndCommitProvider(adapter, {
       fetch: globalThis.fetch.bind(globalThis),
       now: Date.now(),
       signal: controller.signal,
@@ -66,14 +80,18 @@ async function collectProvider(
                   browser.tabs.query({ url: "https://www.kimi.com/*" }),
                 readAccessToken: readKimiPageAccessToken,
               }),
-            getRefreshedAccessToken: (staleAccessToken: string) =>
-              refreshKimiAccessTokenInTemporaryTab({
-                staleAccessToken,
-                createTab: (details) => browser.tabs.create(details),
-                readAccessToken: readKimiPageAccessToken,
-                removeTab: (tabId) => browser.tabs.remove(tabId),
-                signal: controller.signal,
-              }),
+            ...(policy.interaction === "allowed"
+              ? {
+                  getRefreshedAccessToken: (staleAccessToken: string) =>
+                    refreshKimiAccessTokenInTemporaryTab({
+                      staleAccessToken,
+                      createTab: (details) => browser.tabs.create(details),
+                      readAccessToken: readKimiPageAccessToken,
+                      removeTab: (tabId) => browser.tabs.remove(tabId),
+                      signal: controller.signal,
+                    }),
+                }
+              : {}),
           }
         : {}),
     });
@@ -82,49 +100,45 @@ async function collectProvider(
   }
 }
 
-async function refreshConnectedProviders(): Promise<void> {
-  await refreshGrantedProviders(
-    providerIds,
-    hasProviderPermission,
-    collectProvider,
-  );
-}
-
 async function currentState() {
   return ensureState(Date.now());
 }
 
-const handleRuntimeCommand = createRuntimeCommandHandler({
-  async refreshAll() {
-    await refreshConnectedProviders();
-    return currentState();
-  },
-  async collectProvider(providerId) {
-    const granted = await hasProviderPermission(providerId);
-    if (!granted) {
-      await setProviderHealth(
-        providerId,
-        { kind: "permission_required" },
-        Date.now(),
-      );
-      return currentState();
-    }
-
-    await setProviderHealth(providerId, { kind: "connecting" }, Date.now());
-    await collectProvider(providerId);
-    return currentState();
-  },
-  getState: currentState,
-  async setDisplayMode(mode) {
-    await setDisplayMode(mode);
-    return currentState();
-  },
-});
-const handleRuntimeMessage = createChromeRuntimeMessageListener(
-  handleRuntimeCommand,
-);
-
 export default defineBackground(() => {
+  const refreshOrchestrator = createRefreshOrchestrator({
+    providerIds,
+    hasPermission: hasProviderPermission,
+    runProvider: (providerId, policy) => collectProvider(providerId, policy),
+  });
+  const handleRuntimeCommand = createRuntimeCommandHandler({
+    async refreshAll() {
+      const report = await refreshOrchestrator.refreshAll("manual_all");
+      return { state: await currentState(), report };
+    },
+    async collectProvider(providerId) {
+      const report = await refreshOrchestrator.refreshProvider(
+        providerId,
+        "connect",
+      );
+      return { state: await currentState(), report };
+    },
+    async refreshProvider(providerId) {
+      const report = await refreshOrchestrator.refreshProvider(
+        providerId,
+        "manual_provider",
+      );
+      return { state: await currentState(), report };
+    },
+    getState: currentState,
+    async setDisplayMode(mode) {
+      await setDisplayMode(mode);
+      return currentState();
+    },
+  });
+  const handleRuntimeMessage = createChromeRuntimeMessageListener(
+    handleRuntimeCommand,
+  );
+
   void ensureRefreshAlarm();
 
   browser.runtime.onInstalled.addListener(() => {
@@ -145,7 +159,7 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM) {
-      void refreshConnectedProviders();
+      void refreshOrchestrator.refreshAll("scheduled");
     }
   });
 });

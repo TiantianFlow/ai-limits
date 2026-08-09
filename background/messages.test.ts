@@ -7,27 +7,45 @@ import {
 
 describe("runtime command router", () => {
   test("dispatches only the exact fixed command shapes", async () => {
+    const refreshResult = {
+      state: { version: 2 },
+      report: { trigger: "manual_all" },
+    };
+    const providerRefreshResult = {
+      state: { version: 2 },
+      report: { trigger: "manual_provider" },
+    };
     const handlers = {
-      refreshAll: vi.fn(async () => "refreshed"),
-      collectProvider: vi.fn(async () => "collected"),
+      refreshAll: vi.fn(async () => refreshResult),
+      collectProvider: vi.fn(async () => ({
+        state: { version: 2 },
+        report: { trigger: "connect" },
+      })),
+      refreshProvider: vi.fn(async () => providerRefreshResult),
       getState: vi.fn(async () => "state"),
       setDisplayMode: vi.fn(async () => "updated"),
     };
     const handle = createRuntimeCommandHandler(handlers);
 
-    await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe("refreshed");
+    await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe(refreshResult);
     await expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "chatgpt" }),
-    ).resolves.toBe("collected");
+    ).resolves.toMatchObject({ report: { trigger: "connect" } });
     await expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "claude" }),
-    ).resolves.toBe("collected");
+    ).resolves.toMatchObject({ report: { trigger: "connect" } });
     await expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "kimi" }),
-    ).resolves.toBe("collected");
+    ).resolves.toMatchObject({ report: { trigger: "connect" } });
     await expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "cursor" }),
-    ).resolves.toBe("collected");
+    ).resolves.toEqual({
+      state: { version: 2 },
+      report: { trigger: "connect" },
+    });
+    await expect(
+      handle({ type: "REFRESH_PROVIDER", providerId: "kimi" }),
+    ).resolves.toBe(providerRefreshResult);
     await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
     await expect(
       handle({ type: "SET_DISPLAY_MODE", mode: "used" }),
@@ -48,6 +66,9 @@ describe("runtime command router", () => {
       handle({ type: "COLLECT_PROVIDER", providerId: "antigravity" }),
     ).toBeUndefined();
     expect(
+      handle({ type: "REFRESH_PROVIDER", providerId: "antigravity" }),
+    ).toBeUndefined();
+    expect(
       handle({
         type: "COLLECT_PROVIDER",
         providerId: "claude",
@@ -62,6 +83,8 @@ describe("runtime command router", () => {
     ).toBeUndefined();
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
     expect(handlers.collectProvider).toHaveBeenCalledTimes(4);
+    expect(handlers.refreshProvider).toHaveBeenCalledTimes(1);
+    expect(handlers.refreshProvider).toHaveBeenCalledWith("kimi");
     expect(handlers.getState).toHaveBeenCalledTimes(1);
     expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(1, "used");
     expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(2, "left");
