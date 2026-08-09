@@ -110,6 +110,8 @@ extension.
 
 ## Limited use
 
+AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.
+
 AI Limits uses accessed data only to display and refresh provider usage, report
 bounded refresh health, and carry out the user's permission, retention, and
 display choices. It does not use or transfer that data for advertising,
@@ -132,10 +134,6 @@ guidance.
 
 ## Contact
 
-This policy is still in pre-publication acceptance and no public contact route
-is active yet. Before publication, the repository owner must publish the
-repository, enable Issues at the planned
-`https://github.com/wjcjttl/ai-limits/issues` route, and verify that it is
-reachable. Once verified, use that Issues route for public privacy questions or
-requests. Never include cookies, access credentials, private usage details, or
-other secrets in an issue.
+Use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for public
+privacy questions or requests. Never include cookies, access credentials,
+private usage details, or other secrets in an issue.

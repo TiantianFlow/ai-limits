@@ -10,17 +10,10 @@ Older development builds may not receive separate fixes.
 Never include session cookies, access credentials, private usage data, or
 account-identifying screenshots in a public report.
 
-This project is in pre-publication acceptance, and its planned GitHub Issues
-route is not active yet. Before publication, the repository owner must publish
-the repository, enable and verify
-`https://github.com/wjcjttl/ai-limits/issues`, and update this section if the
-final route differs.
-
-Once that route is verified, use it for a non-sensitive security concern. If a
-report would expose sensitive details, first check whether the repository's
-**Security** tab offers private vulnerability reporting. If it does not, open a
-minimal issue requesting a private contact route without disclosing the
-vulnerability.
+Use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for ordinary,
+non-sensitive security concerns. For sensitive reports, use GitHub's private
+vulnerability reporting through the repository's **Security** tab instead of
+opening a public issue.
 
 Include the affected version, browser version, expected behavior, actual
 behavior, and a minimal reproduction that contains no real credentials.

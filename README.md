@@ -98,9 +98,9 @@ documented provider API if one becomes available.
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change. This project
-is still in pre-publication acceptance, so no public support route is active.
-Before publication, the repository owner must enable Issues at the planned
-`https://github.com/wjcjttl/ai-limits/issues` route and verify that it works.
+uses [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for public
+support and bug reports. Do not include cookies, access credentials, private
+usage data, or other secrets in an issue.
 
 ## License
 
