@@ -9,6 +9,17 @@ const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
+const listingLinks = [
+  {
+    markdown: "[Artwork instructions](store-assets/README.md)",
+    error:
+      "Store listing is missing the root-relative artwork instructions link: store-assets/README.md.",
+  },
+  {
+    markdown: "[Privacy policy](PRIVACY.md)",
+    error: "Store listing is missing the root-relative privacy link: PRIVACY.md.",
+  },
+];
 const listingDefaults = [
   {
     value: "Category: Productivity",
@@ -61,6 +72,7 @@ const valid = {
   security: [issuesLink, securityCondition, securityFallback].join("\n"),
   listing: [
     ...listingDefaults.map(({ value }) => value),
+    ...listingLinks.map(({ markdown }) => markdown),
     publicRouteGate,
   ].join("\n"),
   license: "MIT License\n\nCopyright (c) 2026 wjcjttl",
@@ -227,6 +239,17 @@ describe("publication content", () => {
     });
     expect(errors).toContain(error);
   });
+
+  it.each(listingLinks)(
+    "rejects a missing root-relative listing link from $markdown",
+    ({ markdown, error }) => {
+      const errors = validatePublicationDocuments({
+        ...valid,
+        listing: valid.listing.replace(markdown, ""),
+      });
+      expect(errors).toContain(error);
+    },
+  );
 
   it("requires private vulnerability reporting to be conditional", () => {
     const errors = validatePublicationDocuments({

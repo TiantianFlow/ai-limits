@@ -31,7 +31,7 @@ representative fixture data. Upload the files in this order:
    screenshot carousel.
 
 Regeneration and validation instructions are in
-[`store-assets/README.md`](../store-assets/README.md).
+[`store-assets/README.md`](store-assets/README.md).
 
 ## Single purpose
 
@@ -139,7 +139,7 @@ does not create or activate provider tabs.
   health, permission lifecycle, and user-requested settings. It is not used for
   advertising, credit decisions, or purposes unrelated to the single purpose.
 
-The full policy is in [PRIVACY.md](../PRIVACY.md).
+The full policy is in [PRIVACY.md](PRIVACY.md).
 
 ## Reviewer prerequisites
 

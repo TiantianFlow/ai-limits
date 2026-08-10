@@ -21,6 +21,17 @@ const requiredListingDefaults = [
   `Support: ${issuesUrl}`,
   "Remote hosted code: No",
 ];
+const requiredListingLinks = [
+  {
+    destination: "store-assets/README.md",
+    error:
+      "Store listing is missing the root-relative artwork instructions link: store-assets/README.md.",
+  },
+  {
+    destination: "PRIVACY.md",
+    error: "Store listing is missing the root-relative privacy link: PRIVACY.md.",
+  },
+];
 const markdown = new MarkdownIt({ html: true, linkify: false });
 
 function normalizeWhitespace(document) {
@@ -102,7 +113,9 @@ export function validatePublicationDocuments(documents) {
 
   const privacy = normalizeWhitespace(documents.privacy);
   const security = normalizeWhitespace(documents.security);
-  const listing = normalizeWhitespace(documents.listing);
+  const listingSource = documents.listing ?? "";
+  const listing = normalizeWhitespace(listingSource);
+  const listingDestinations = extractInlineMarkdownLinkDestinations(listingSource);
 
   if (!privacy.includes(limitedUseStatement)) {
     errors.push("Privacy policy is missing the Limited Use compliance statement.");
@@ -121,6 +134,12 @@ export function validatePublicationDocuments(documents) {
   for (const defaultValue of requiredListingDefaults) {
     if (!listing.includes(defaultValue)) {
       errors.push(`Store listing is missing required default: ${defaultValue}.`);
+    }
+  }
+
+  for (const { destination, error } of requiredListingLinks) {
+    if (!listingDestinations.includes(destination)) {
+      errors.push(error);
     }
   }
 
