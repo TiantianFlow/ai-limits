@@ -22,7 +22,7 @@ must use synthetic data.
 - Keep provider access optional and scoped to the provider the user selects.
 - Preserve the local-only data model and never persist session credentials.
 - Add or update behavior-based tests before changing runtime behavior.
-- Update `PRIVACY.md` and `docs/store-listing.md` when data access,
+- Update `PRIVACY.md` and `STORE_LISTING.md` when data access,
   permissions, retention, or provider behavior changes.
 - Describe unsupported provider-endpoint assumptions without claiming provider
   affiliation, endorsement, or authorization.

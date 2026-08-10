@@ -45,7 +45,7 @@ interactive recovery. The extension does not request the broad `tabs`
 permission.
 
 For exact permission justifications and reviewer steps, see the
-[store-listing draft](docs/store-listing.md).
+[store-listing draft](STORE_LISTING.md).
 
 ## Local development
 
