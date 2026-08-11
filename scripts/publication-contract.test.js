@@ -3,6 +3,7 @@ import { validatePublicationDocuments } from "./publication-contract.mjs";
 
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const issuesLink = `[GitHub Issues](${issuesUrl})`;
+const faqLink = "[FAQ](FAQ.md)";
 const historyRetentionStatement =
   "Successful normalized quota observations are stored locally for up to 30 days, subject to a 1,024-observation per-provider safety cap.";
 const uncappedHistoryRetentionStatement =
@@ -68,7 +69,10 @@ const listingDefaults = [
 ];
 
 const valid = {
-  readme: issuesLink,
+  readme: `${issuesLink}\n${faqLink}`,
+  readmeZh: "[常见问题](FAQ.zh-CN.md)",
+  faq: "English | [简体中文](FAQ.zh-CN.md)",
+  faqZh: "[English](FAQ.md) | 简体中文",
   privacy: [
     issuesLink,
     "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.",
@@ -82,6 +86,31 @@ const valid = {
   ].join("\n"),
   license: "MIT License\n\nCopyright (c) 2026 wjcjttl",
 };
+
+const faqNavigationLinks = [
+  {
+    key: "readme",
+    markdown: "[FAQ](FAQ.md)",
+    error: "README is missing the root-relative FAQ link: FAQ.md.",
+  },
+  {
+    key: "readmeZh",
+    markdown: "[常见问题](FAQ.zh-CN.md)",
+    error:
+      "Simplified Chinese README is missing the root-relative FAQ link: FAQ.zh-CN.md.",
+  },
+  {
+    key: "faq",
+    markdown: "[简体中文](FAQ.zh-CN.md)",
+    error:
+      "English FAQ is missing the Simplified Chinese FAQ link: FAQ.zh-CN.md.",
+  },
+  {
+    key: "faqZh",
+    markdown: "[English](FAQ.md)",
+    error: "Simplified Chinese FAQ is missing the English FAQ link: FAQ.md.",
+  },
+];
 
 const policyDocuments = [
   {
@@ -170,6 +199,17 @@ const nonRenderedHistoryDisclosures = [
 ];
 
 describe("publication content", () => {
+  it.each(faqNavigationLinks)(
+    "rejects a missing FAQ navigation link from $key",
+    ({ key, markdown, error }) => {
+      const errors = validatePublicationDocuments({
+        ...valid,
+        [key]: valid[key].replace(markdown, ""),
+      });
+      expect(errors).toContain(error);
+    },
+  );
+
   it("rejects pre-publication placeholders", () => {
     const errors = validatePublicationDocuments({
       ...valid,
@@ -271,7 +311,7 @@ describe("publication content", () => {
     expect(
       validatePublicationDocuments({
         ...valid,
-        readme: `[Report a problem](${issuesUrl})`,
+        readme: `[Report a problem](${issuesUrl})\n${faqLink}`,
       }),
     ).toEqual([]);
   });
@@ -280,7 +320,7 @@ describe("publication content", () => {
     expect(
       validatePublicationDocuments({
         ...valid,
-        readme: `[Report [a bug]](<${issuesUrl}> "Issue tracker")`,
+        readme: `[Report [a bug]](<${issuesUrl}> "Issue tracker")\n${faqLink}`,
       }),
     ).toEqual([]);
   });
@@ -297,7 +337,12 @@ describe("publication content", () => {
   ])(
     "accepts a real Issues link after literal unclosed comment syntax in $context",
     ({ document }) => {
-      expect(validatePublicationDocuments({ ...valid, readme: document })).toEqual([]);
+      expect(
+        validatePublicationDocuments({
+          ...valid,
+          readme: `${document}\n${faqLink}`,
+        }),
+      ).toEqual([]);
     },
   );
 

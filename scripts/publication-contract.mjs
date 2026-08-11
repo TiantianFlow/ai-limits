@@ -34,6 +34,30 @@ const requiredListingLinks = [
     error: "Store listing is missing the root-relative privacy link: PRIVACY.md.",
   },
 ];
+const requiredFaqNavigationLinks = [
+  {
+    key: "readme",
+    destination: "FAQ.md",
+    error: "README is missing the root-relative FAQ link: FAQ.md.",
+  },
+  {
+    key: "readmeZh",
+    destination: "FAQ.zh-CN.md",
+    error:
+      "Simplified Chinese README is missing the root-relative FAQ link: FAQ.zh-CN.md.",
+  },
+  {
+    key: "faq",
+    destination: "FAQ.zh-CN.md",
+    error:
+      "English FAQ is missing the Simplified Chinese FAQ link: FAQ.zh-CN.md.",
+  },
+  {
+    key: "faqZh",
+    destination: "FAQ.md",
+    error: "Simplified Chinese FAQ is missing the English FAQ link: FAQ.md.",
+  },
+];
 const markdown = new MarkdownIt({ html: true, linkify: false });
 
 function normalizeWhitespace(document) {
@@ -141,6 +165,16 @@ export function validatePublicationDocuments(documents) {
     }
     if (!extractInlineMarkdownLinkDestinations(source).includes(issuesUrl)) {
       errors.push(`${label} is missing the canonical GitHub Issues Markdown link.`);
+    }
+  }
+
+  for (const { key, destination, error } of requiredFaqNavigationLinks) {
+    if (
+      !extractInlineMarkdownLinkDestinations(documents[key] ?? "").includes(
+        destination,
+      )
+    ) {
+      errors.push(error);
     }
   }
 

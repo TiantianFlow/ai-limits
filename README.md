@@ -42,7 +42,8 @@ Recovery stops waiting for a credential after 10 seconds and then attempts
 best-effort cleanup of the tab it owns; browser shutdown or API errors can
 delay or prevent that cleanup. Scheduled refresh never creates a Kimi tab.
 
-See [Privacy](PRIVACY.md) for the complete data lifecycle and
+See the [FAQ](FAQ.md) for refresh and History behavior,
+[Privacy](PRIVACY.md) for the complete data lifecycle, and
 [Security](SECURITY.md) for security reporting and limitations.
 
 ## Permissions
