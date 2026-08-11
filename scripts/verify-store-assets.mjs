@@ -31,5 +31,7 @@ if (errors.length > 0) {
   }
   process.exitCode = 1;
 } else {
-  console.log("Verified 4 Chrome Web Store PNG assets at their required dimensions.");
+  console.log(
+    `Verified ${Object.keys(REQUIRED_STORE_ASSET_DIMENSIONS).length} PNG assets at their required dimensions.`,
+  );
 }

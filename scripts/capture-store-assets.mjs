@@ -18,25 +18,35 @@ const chromePath = process.env.AI_LIMITS_CHROME_PATH || defaultChromePath;
 
 const assets = [
   {
+    locale: "en",
     view: "overview",
-    name: "screenshot-overview-1280x800.png",
+    relativePath: "screenshot-overview-1280x800.png",
     viewport: { width: 1280, height: 800 },
   },
   {
+    locale: "en",
     view: "pacing",
-    name: "screenshot-pacing-1280x800.png",
+    relativePath: "screenshot-pacing-1280x800.png",
     viewport: { width: 1280, height: 800 },
   },
   {
+    locale: "en",
     view: "privacy",
-    name: "screenshot-privacy-1280x800.png",
+    relativePath: "screenshot-privacy-1280x800.png",
     viewport: { width: 1280, height: 800 },
   },
   {
+    locale: "en",
     view: "promo",
-    name: "small-promo-440x280.png",
+    relativePath: "small-promo-440x280.png",
     viewport: { width: 440, height: 280 },
   },
+  ...["overview", "pacing", "privacy"].map((view) => ({
+    locale: "zh_CN",
+    view,
+    relativePath: `zh_CN/screenshot-${view}-1280x800.png`,
+    viewport: { width: 1280, height: 800 },
+  })),
 ];
 
 let browser;
@@ -71,6 +81,8 @@ try {
   });
 
   for (const asset of assets) {
+    const assetPath = path.join(outputDirectory, asset.relativePath);
+    await mkdir(path.dirname(assetPath), { recursive: true });
     const context = await browser.newContext({
       colorScheme: "light",
       deviceScaleFactor: 1,
@@ -81,9 +93,12 @@ try {
 
     try {
       const page = await context.newPage();
-      await page.goto(`${previewUrl}?view=${asset.view}`, {
-        waitUntil: "networkidle",
-      });
+      await page.goto(
+        `${previewUrl}?view=${asset.view}&locale=${asset.locale}`,
+        {
+          waitUntil: "networkidle",
+        },
+      );
       await page.locator("[data-preview-ready]").waitFor();
 
       if (asset.view === "pacing") {
@@ -135,7 +150,7 @@ try {
 
       await page.mouse.move(0, 0);
       await page.screenshot({
-        path: path.join(outputDirectory, asset.name),
+        path: assetPath,
         animations: "disabled",
         caret: "hide",
       });

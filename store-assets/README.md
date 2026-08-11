@@ -7,6 +7,8 @@ sizes.
 
 ## Inventory and upload order
 
+### English Chrome Web Store assets
+
 1. `chrome-web-store/screenshot-overview-1280x800.png` — primary product
    overview screenshot, 1280×800.
 2. `chrome-web-store/screenshot-pacing-1280x800.png` — quota, timing, and pace
@@ -18,6 +20,26 @@ sizes.
 
 Upload the three screenshots in the listed order. Upload the final file to the
 Chrome Web Store's small promotional tile slot.
+
+### Simplified Chinese project media
+
+1. `chrome-web-store/zh_CN/screenshot-overview-1280x800.png` — localized
+   project overview, 1280×800.
+2. `chrome-web-store/zh_CN/screenshot-pacing-1280x800.png` — localized quota,
+   timing, and pace overview, 1280×800.
+3. `chrome-web-store/zh_CN/screenshot-privacy-1280x800.png` — localized privacy
+   and local-data overview, 1280×800.
+
+These three images are for the Simplified Chinese GitHub README and social
+media. Their dimensions and content are suitable for future localized Chrome
+Web Store screenshots, but they are not part of the current store submission.
+Chrome Web Store promotional tiles are not localized, so there is no separate
+Chinese promotional tile.
+
+The surrounding project copy is in Simplified Chinese, while the embedded
+production extension UI remains in English. After runtime localization is
+implemented, regenerate these assets so both the surrounding copy and embedded
+UI are Chinese.
 
 ## Regenerate and verify
 
@@ -37,7 +59,9 @@ AI_LIMITS_CHROME_PATH=/absolute/path/to/chrome pnpm assets:store
 
 The preview uses the fixed instant `2026-08-09T14:00:00.000Z`, forces light
 mode, `en-US`, `America/Toronto`, and a device scale factor of 1, and creates a
-fresh browser context without a user profile. The pacing image scrolls only the
+fresh browser context without a user profile. The `locale=zh_CN` preview option
+localizes only the surrounding project copy; it intentionally leaves the
+production extension UI in English. The pacing image scrolls only the
 side-panel frame. The privacy image opens the real Settings view through its
 real button.
 

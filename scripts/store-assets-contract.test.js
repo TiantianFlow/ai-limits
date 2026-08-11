@@ -72,4 +72,21 @@ describe("store assets", () => {
       "screenshot-overview-1280x800.png must be 1280x800.",
     );
   });
+
+  it("requires three Simplified Chinese screenshots without localizing the promo tile", () => {
+    const dimensions = { width: 1280, height: 800 };
+    const errors = validateStoreAssetDimensions({
+      "screenshot-overview-1280x800.png": dimensions,
+      "screenshot-pacing-1280x800.png": dimensions,
+      "screenshot-privacy-1280x800.png": dimensions,
+      "small-promo-440x280.png": { width: 440, height: 280 },
+    });
+
+    expect(errors).toEqual([
+      "zh_CN/screenshot-overview-1280x800.png is missing.",
+      "zh_CN/screenshot-pacing-1280x800.png is missing.",
+      "zh_CN/screenshot-privacy-1280x800.png is missing.",
+    ]);
+    expect(errors).not.toContain("zh_CN/small-promo-440x280.png is missing.");
+  });
 });

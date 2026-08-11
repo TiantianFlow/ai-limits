@@ -1,5 +1,7 @@
 # AI Limits
 
+English | [简体中文](README.zh-CN.md)
+
 AI Limits is a Chrome side-panel extension that shows subscription usage for
 ChatGPT, Claude, Kimi, and Cursor in one compact view. It starts empty and reads
 usage only after you connect an individual provider and approve that provider's
