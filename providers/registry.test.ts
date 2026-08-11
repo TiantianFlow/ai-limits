@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { providerCatalog } from "./catalog";
 import { providerRegistry, providerIds } from "./registry";
 
 describe("provider registry", () => {
@@ -8,8 +9,8 @@ describe("provider registry", () => {
     expect(
       providerIds.map((providerId) => [
         providerId,
-        providerRegistry[providerId].optionalOrigins,
-        providerRegistry[providerId].optionalPermissions ?? [],
+        providerCatalog[providerId].optionalOrigins,
+        providerCatalog[providerId].optionalPermissions,
       ]),
     ).toEqual([
       ["chatgpt", ["https://chatgpt.com/*"], []],
@@ -17,5 +18,8 @@ describe("provider registry", () => {
       ["kimi", ["https://www.kimi.com/*"], ["cookies", "scripting"]],
       ["cursor", ["https://cursor.com/*"], []],
     ]);
+    expect(
+      providerIds.map((providerId) => providerRegistry[providerId].id),
+    ).toEqual(providerIds);
   });
 });

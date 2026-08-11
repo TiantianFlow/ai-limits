@@ -60,8 +60,6 @@ function providerAdapter(
 ): ProviderAdapter {
   return {
     id,
-    capabilities: { browserSession: true },
-    optionalOrigins: [`https://${id}.example/*`],
     collect,
   };
 }

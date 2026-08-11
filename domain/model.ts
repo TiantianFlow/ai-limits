@@ -1,8 +1,6 @@
-export type ProviderId =
-  | "chatgpt"
-  | "claude"
-  | "kimi"
-  | "cursor";
+import type { ProviderId } from "../providers/catalog";
+
+export type { ProviderId } from "../providers/catalog";
 
 export type DisplayMode = "used" | "left";
 

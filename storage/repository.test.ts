@@ -160,13 +160,32 @@ describe("state repository", () => {
     ]);
   });
 
+  test("normalizes durable state on read without waiting for a write path", async () => {
+    const stored = {
+      version: 3,
+      preferences: { displayMode: "left" },
+      providers: [
+        {
+          providerId: "chatgpt",
+          access: "granted",
+          snapshot: liveSnapshot(),
+        },
+      ],
+    };
+    await browser.storage.local.set({ aiLimitsState: stored });
+    const write = vi.spyOn(browser.storage.local, "set");
+
+    await expect(loadState(now)).resolves.toEqual(migrateState(stored, now));
+    expect(write).not.toHaveBeenCalled();
+  });
+
   test("persists display mode and automatic-refresh preferences independently", async () => {
     await ensureState(now);
 
     await setDisplayMode("left");
     await setAutoRefresh(false);
 
-    expect((await loadState())?.preferences).toEqual({
+    expect((await loadState(now))?.preferences).toEqual({
       displayMode: "left",
       autoRefresh: false,
     });
@@ -333,7 +352,7 @@ describe("state repository", () => {
     const provider = (await ensureState(now)).providers[0];
 
     expect(provider?.access).toBe("granted");
-    expect((await loadState())?.preferences).toEqual({
+    expect((await loadState(now))?.preferences).toEqual({
       displayMode: "left",
       autoRefresh: false,
     });
@@ -342,7 +361,9 @@ describe("state repository", () => {
       history[0],
       history[4],
     ]);
-    expect((await loadState())?.providers[0]?.history).toEqual(provider?.history);
+    expect((await loadState(now))?.providers[0]?.history).toEqual(
+      provider?.history,
+    );
   });
 
   test("migrates v2 snapshots and access without inventing historical attempts", async () => {
@@ -635,12 +656,12 @@ describe("state repository", () => {
     await saveState(state, now);
     await reconcileProviderAccess({ chatgpt: false, claude: true });
 
-    expect((await loadState())?.providers[0]).toEqual({
+    expect((await loadState(now))?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
       history: [],
     });
-    expect((await loadState())?.providers[1]?.access).toBe("granted");
+    expect((await loadState(now))?.providers[1]?.access).toBe("granted");
   });
 
   test("leaves initial required provider records unchanged when access is absent", async () => {
@@ -649,7 +670,7 @@ describe("state repository", () => {
 
     await reconcileProviderAccess({ chatgpt: false });
 
-    expect(await loadState()).toEqual(state);
+    expect(await loadState(now)).toEqual(state);
   });
 
   test("clears legacy provider data when required access remains absent", async () => {
@@ -668,7 +689,7 @@ describe("state repository", () => {
 
     await reconcileProviderAccess({ chatgpt: false });
 
-    expect((await loadState())?.providers[0]).toEqual({
+    expect((await loadState(now))?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
       history: [],
@@ -689,12 +710,12 @@ describe("state repository", () => {
 
     await disconnectProviderData("chatgpt");
 
-    expect((await loadState())?.providers[0]).toEqual({
+    expect((await loadState(now))?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
       history: [],
     });
-    expect((await loadState())?.providers[1]).toEqual(claudeBefore);
+    expect((await loadState(now))?.providers[1]).toEqual(claudeBefore);
   });
 
   test("delete-all recreates clean v4 state without clearing unrelated local keys", async () => {
@@ -704,7 +725,7 @@ describe("state repository", () => {
     const state = await deleteAllLocalData();
 
     expect(state).toEqual(createInitialState());
-    expect(await loadState()).toEqual(createInitialState());
+    expect(await loadState(now)).toEqual(createInitialState());
     expect(await browser.storage.local.get("unrelated")).toEqual({ unrelated: "keep" });
   });
 
@@ -723,7 +744,7 @@ describe("state repository", () => {
         : undefined,
     }));
 
-    const providers = (await loadState())?.providers;
+    const providers = (await loadState(now))?.providers;
     expect(providers?.[0]).toMatchObject({
       providerId: "chatgpt",
       access: "required",
@@ -746,7 +767,9 @@ describe("state repository", () => {
 
     const expected = liveSnapshot();
     delete expected.accountLabel;
-    expect((await loadState())?.providers[0]?.snapshot).toStrictEqual(expected);
-    expect(JSON.stringify(await loadState())).not.toMatch(/person@example|rawResponse/);
+    expect((await loadState(now))?.providers[0]?.snapshot).toStrictEqual(expected);
+    expect(JSON.stringify(await loadState(now))).not.toMatch(
+      /person@example|rawResponse/,
+    );
   });
 });

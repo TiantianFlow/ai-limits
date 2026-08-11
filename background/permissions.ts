@@ -1,13 +1,21 @@
-import {
-  providerRegistry,
-  type ConnectableProviderId,
-} from "../providers/registry";
+import { providerCatalog } from "../providers/catalog";
+import type { ConnectableProviderId } from "../providers/registry";
 
-function permissionsFor(providerId: ConnectableProviderId): Browser.permissions.Permissions {
-  const provider = providerRegistry[providerId];
+interface PermissionDefinition {
+  readonly optionalOrigins: readonly string[];
+  readonly optionalPermissions: readonly string[];
+}
+
+type PermissionCatalog = Record<ConnectableProviderId, PermissionDefinition>;
+
+function permissionsFor(
+  providerId: ConnectableProviderId,
+  catalog: PermissionCatalog = providerCatalog,
+): Browser.permissions.Permissions {
+  const provider = catalog[providerId];
   return {
     origins: [...provider.optionalOrigins],
-    ...(provider.optionalPermissions
+    ...(provider.optionalPermissions.length > 0
       ? { permissions: [...provider.optionalPermissions] }
       : {}),
   } as Browser.permissions.Permissions;
@@ -28,23 +36,24 @@ export async function requestProviderPermission(
 export async function removeProviderPermission(
   providerId: ConnectableProviderId,
   remainingConnectedProviderIds: readonly ConnectableProviderId[],
+  catalog: PermissionCatalog = providerCatalog,
 ): Promise<boolean> {
   const remainingOrigins = new Set(
     remainingConnectedProviderIds.flatMap((remainingProviderId) =>
-      providerRegistry[remainingProviderId].optionalOrigins,
+      catalog[remainingProviderId].optionalOrigins,
     ),
   );
   const remainingPermissions = new Set(
     remainingConnectedProviderIds.flatMap(
       (remainingProviderId) =>
-        providerRegistry[remainingProviderId].optionalPermissions ?? [],
+        catalog[remainingProviderId].optionalPermissions,
     ),
   );
-  const provider = providerRegistry[providerId];
+  const provider = catalog[providerId];
   const origins = provider.optionalOrigins.filter(
     (origin) => !remainingOrigins.has(origin),
   );
-  const permissions = (provider.optionalPermissions ?? []).filter(
+  const permissions = provider.optionalPermissions.filter(
     (permission) => !remainingPermissions.has(permission),
   );
 
@@ -60,6 +69,7 @@ export async function removeProviderPermission(
 
 export async function removeAllProviderPermissions(
   providerIds: readonly ConnectableProviderId[],
+  catalog: PermissionCatalog = providerCatalog,
 ): Promise<boolean> {
   let granted: Browser.permissions.Permissions;
   try {
@@ -75,11 +85,11 @@ export async function removeAllProviderPermissions(
   const claimedOrigins = new Set<string>();
   const claimedPermissions = new Set<string>();
   const requests = providerIds.map((providerId) => {
-    const provider = providerRegistry[providerId];
+    const provider = catalog[providerId];
     const origins = provider.optionalOrigins.filter(
       (origin) => grantedOrigins.has(origin) && !claimedOrigins.has(origin),
     );
-    const permissions = (provider.optionalPermissions ?? []).filter(
+    const permissions = provider.optionalPermissions.filter(
       (permission) =>
         grantedPermissions.has(permission) &&
         !claimedPermissions.has(permission),

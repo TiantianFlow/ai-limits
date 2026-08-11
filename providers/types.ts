@@ -35,14 +35,7 @@ export type RefreshCollector<T extends ProviderId = ProviderId> = (
   providerId: T,
 ) => Promise<ProviderRefreshOutcome>;
 
-export interface ProviderCapabilities {
-  readonly browserSession: boolean;
-}
-
-export interface ProviderAdapter {
-  readonly id: ProviderId;
-  readonly capabilities: ProviderCapabilities;
-  readonly optionalOrigins: readonly string[];
-  readonly optionalPermissions?: readonly string[];
+export interface ProviderAdapter<T extends ProviderId = ProviderId> {
+  readonly id: T;
   collect(context: CollectionContext): Promise<CollectionResult>;
 }

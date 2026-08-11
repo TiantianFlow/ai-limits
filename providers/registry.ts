@@ -1,17 +1,17 @@
-import type { ProviderId } from "../domain/model";
 import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
+import type { ProviderId } from "./catalog";
 import { cursorAdapter } from "./cursor/adapter";
 import { kimiAdapter } from "./kimi/adapter";
 import type { ProviderAdapter } from "./types";
 
 export type ConnectableProviderId = ProviderId;
 
-export const providerIds = ["chatgpt", "claude", "kimi", "cursor"] as const;
+export { providerIds } from "./catalog";
 
-export const providerRegistry: Record<ConnectableProviderId, ProviderAdapter> = {
+export const providerRegistry = {
   chatgpt: chatGptAdapter,
   claude: claudeAdapter,
   kimi: kimiAdapter,
   cursor: cursorAdapter,
-};
+} satisfies { [Id in ProviderId]: ProviderAdapter<Id> };

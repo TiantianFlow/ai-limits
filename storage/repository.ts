@@ -17,9 +17,12 @@ async function writeState(state: AppState, now: number): Promise<void> {
   await browser.storage.local.set({ [STATE_KEY]: migrateState(state, now) });
 }
 
-export async function loadState(): Promise<AppState | undefined> {
+export async function loadState(
+  now: number = Date.now(),
+): Promise<AppState | undefined> {
   const stored = await browser.storage.local.get(STATE_KEY);
-  return stored[STATE_KEY] as AppState | undefined;
+  const value = stored[STATE_KEY] as unknown;
+  return value === undefined ? undefined : migrateState(value, now);
 }
 
 export function saveState(state: AppState, now: number): Promise<void> {

@@ -1,4 +1,7 @@
 import { defineConfig } from "wxt";
+import { providerCatalog } from "./providers/catalog";
+
+const providers = Object.values(providerCatalog);
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
@@ -8,13 +11,14 @@ export default defineConfig({
       "See ChatGPT, Claude, Kimi, and Cursor usage as Used or Left, reset timing, pace, and local quota history in one Chrome side panel.",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
-    optional_host_permissions: [
-      "https://chatgpt.com/*",
-      "https://claude.ai/*",
-      "https://www.kimi.com/*",
-      "https://cursor.com/*",
+    optional_host_permissions: providers.flatMap(
+      ({ optionalOrigins }) => optionalOrigins,
+    ),
+    optional_permissions: [
+      ...new Set(
+        providers.flatMap(({ optionalPermissions }) => optionalPermissions),
+      ),
     ],
-    optional_permissions: ["cookies", "scripting"],
     icons: {
       16: "icons/16.png",
       32: "icons/32.png",

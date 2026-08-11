@@ -15,15 +15,9 @@ import type {
   QuotaHistorySample,
   QuotaWindow,
 } from "../domain/model";
+import { providerIds } from "./catalog";
 
 export const CURRENT_STATE_VERSION = 4 as const;
-
-const PROVIDER_IDS: ProviderId[] = [
-  "chatgpt",
-  "claude",
-  "kimi",
-  "cursor",
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -355,7 +349,7 @@ export function createInitialState(): AppState {
   return {
     version: CURRENT_STATE_VERSION,
     preferences: { displayMode: "used", autoRefresh: true },
-    providers: PROVIDER_IDS.map((providerId) => ({
+    providers: providerIds.map((providerId) => ({
       providerId,
       access: "required",
       history: [],
@@ -367,7 +361,7 @@ export function migrateState(value: unknown, now: number): AppState {
   const storedProviders =
     isRecord(value) && Array.isArray(value.providers) ? value.providers : [];
 
-  const providers: ProviderRecord[] = PROVIDER_IDS.map((providerId) => {
+  const providers: ProviderRecord[] = providerIds.map((providerId) => {
     const stored = storedProviders.find(
       (candidate) => isRecord(candidate) && candidate.providerId === providerId,
     );

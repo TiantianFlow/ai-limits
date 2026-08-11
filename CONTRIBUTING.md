@@ -27,6 +27,33 @@ must use synthetic data.
 - Describe unsupported provider-endpoint assumptions without claiming provider
   affiliation, endorsement, or authorization.
 
+## Adding or changing a provider
+
+- Add stable provider identity, display name, ordering, and optional Chrome
+  access to `providers/catalog.ts`. Keep provider endpoints, response schemas,
+  and normalization inside that provider's adapter directory.
+- Grant exact HTTPS hosts without explicit ports. Wildcard hosts, explicit
+  ports, or other overlapping host patterns require a separate
+  permission-lifecycle design review before they can enter the catalog.
+- Register the adapter in `providers/registry.ts`. Catalog and registry tests
+  must prove that initial state, runtime commands, permissions, and UI naming
+  include every provider in the same order.
+- Emit a `QuotaWindow` only for a bounded allowance that can be represented by
+  an honest canonical `usedRatio` from 0 through 1. Keep stable window IDs
+  independent from localized or provider-controlled display labels.
+- Emit point-in-time absolute or currency-denominated balances as
+  `CreditBalance`. Credit balances are intentionally excluded from local
+  History; do not invent a denominator merely to create a percentage graph.
+- Do not persist access credentials, request-local account identifiers, or raw
+  provider responses. A provider with API-key onboarding, OAuth interaction,
+  multiple account/workspace scopes, or a second custom recovery flow requires
+  an explicit architecture and privacy review before implementation.
+- Resolve historical-series identity before supporting account or workspace
+  switching. A plan label is presentation text, not a stable account boundary.
+- Keep build and ZIP permission allowlists independent from the catalog. They
+  are security checks that should fail when provider access expands until the
+  new access has been deliberately reviewed.
+
 ## Verification
 
 Before opening a pull request, run:

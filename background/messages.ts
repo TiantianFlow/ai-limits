@@ -1,5 +1,6 @@
 import type { ConnectableProviderId } from "../providers/registry";
 import type { DisplayMode } from "../domain/model";
+import { isProviderId } from "../providers/catalog";
 
 export type RuntimeCommand =
   | { type: "REFRESH_ALL" }
@@ -47,10 +48,7 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   ) {
     return (
       hasExactKeys(command, ["type", "providerId"]) &&
-      (command.providerId === "chatgpt" ||
-        command.providerId === "claude" ||
-        command.providerId === "kimi" ||
-        command.providerId === "cursor")
+      isProviderId(command.providerId)
     );
   }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { providerRegistry } from "../providers/registry";
+import { providerCatalog } from "../providers/catalog";
 import {
   hasProviderPermission,
   removeAllProviderPermissions,
@@ -61,20 +61,18 @@ describe("provider permissions", () => {
   });
 
   test("preserves optional API permissions required by a remaining connected provider", async () => {
-    const cursor = providerRegistry.cursor as unknown as {
-      optionalPermissions?: readonly string[];
-    };
-    const originalPermissions = cursor.optionalPermissions;
-    cursor.optionalPermissions = ["cookies"];
     const remove = vi
       .spyOn(browser.permissions, "remove")
       .mockImplementation(async () => true as never);
+    const catalog = {
+      ...providerCatalog,
+      cursor: {
+        ...providerCatalog.cursor,
+        optionalPermissions: ["cookies"],
+      },
+    };
 
-    try {
-      await removeProviderPermission("kimi", ["cursor"]);
-    } finally {
-      cursor.optionalPermissions = originalPermissions;
-    }
+    await removeProviderPermission("kimi", ["cursor"], catalog);
 
     expect(remove).toHaveBeenCalledWith({
       origins: ["https://www.kimi.com/*"],

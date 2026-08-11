@@ -15,7 +15,6 @@ import {
 const SESSION_ENDPOINT = "https://chatgpt.com/api/auth/session";
 const USAGE_ENDPOINT = "https://chatgpt.com/backend-api/codex/usage";
 const LEGACY_USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
-const CHATGPT_ORIGIN = "https://chatgpt.com/*";
 const HOUR_SECONDS = 60 * 60;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
 const WEEK_SECONDS = 7 * DAY_SECONDS;
@@ -190,9 +189,7 @@ async function collectChatGpt({
   }
 }
 
-export const chatGptAdapter: ProviderAdapter = {
+export const chatGptAdapter: ProviderAdapter<"chatgpt"> = {
   id: "chatgpt",
-  capabilities: { browserSession: true },
-  optionalOrigins: [CHATGPT_ORIGIN],
   collect: collectChatGpt,
 };

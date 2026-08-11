@@ -16,6 +16,7 @@ import {
   providerRegistry,
   type ConnectableProviderId,
 } from "../providers/registry";
+import { providerCatalog } from "../providers/catalog";
 import {
   disconnectProviderData,
   mutateState,
@@ -283,12 +284,12 @@ export async function reconcileRemovedProviderPermissions(
   invalidateProvider: (providerId: ConnectableProviderId) => void,
 ): Promise<void> {
   const affectedProviderIds = providerIds.filter((providerId) => {
-    const provider = providerRegistry[providerId];
+    const provider = providerCatalog[providerId];
     return (
       provider.optionalOrigins.some((origin) =>
         removed.origins?.includes(origin),
       ) ||
-      (provider.optionalPermissions ?? []).some((permission) =>
+      provider.optionalPermissions.some((permission) =>
         (removed.permissions as readonly string[] | undefined)?.includes(
           permission,
         ),

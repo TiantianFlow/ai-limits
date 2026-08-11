@@ -23,7 +23,6 @@ import {
 } from "./schema";
 
 const ORGANIZATIONS_ENDPOINT = "https://claude.ai/api/organizations";
-const CLAUDE_ORIGIN = "https://claude.ai/*";
 const HOUR_MS = 60 * 60 * 1_000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -273,9 +272,7 @@ async function collectClaude({
   }
 }
 
-export const claudeAdapter: ProviderAdapter = {
+export const claudeAdapter: ProviderAdapter<"claude"> = {
   id: "claude",
-  capabilities: { browserSession: true },
-  optionalOrigins: [CLAUDE_ORIGIN],
   collect: collectClaude,
 };

@@ -12,7 +12,6 @@ import {
   type CursorUsageSummary,
 } from "./schema";
 
-const CURSOR_ORIGIN = "https://cursor.com/*";
 const USAGE_ENDPOINT = "https://cursor.com/api/usage-summary";
 
 const REQUEST_INIT = {
@@ -202,9 +201,7 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
   }
 }
 
-export const cursorAdapter: ProviderAdapter = {
+export const cursorAdapter: ProviderAdapter<"cursor"> = {
   id: "cursor",
-  capabilities: { browserSession: true },
-  optionalOrigins: [CURSOR_ORIGIN],
   collect: collectCursor,
 };

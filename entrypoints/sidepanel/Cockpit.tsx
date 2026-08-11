@@ -16,6 +16,7 @@ import {
   paceStatus,
   type PaceStatus,
 } from "../../domain/quota";
+import { providerNames } from "../../providers/catalog";
 import {
   ProviderCard,
   type CreditView,
@@ -39,13 +40,6 @@ export interface CockpitProps {
   onDisconnectProvider?: (providerId: ProviderId) => void;
   onDeleteLocalData?: () => void;
 }
-
-const providerNames: Record<ProviderId, string> = {
-  chatgpt: "ChatGPT",
-  claude: "Claude",
-  kimi: "Kimi",
-  cursor: "Cursor",
-};
 
 const STALE_AFTER_MS = 35 * 60 * 1_000;
 const CONNECT_DISCLOSURE =

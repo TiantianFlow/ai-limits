@@ -21,7 +21,6 @@ import {
   type KimiUsageLimit,
 } from "./schema";
 
-const KIMI_ORIGIN = "https://www.kimi.com/*";
 const KIMI_URL = "https://www.kimi.com/";
 const SUBSCRIPTION_STATS_ENDPOINT =
   "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats";
@@ -519,10 +518,7 @@ async function collectKimi({
   }
 }
 
-export const kimiAdapter: ProviderAdapter = {
+export const kimiAdapter: ProviderAdapter<"kimi"> = {
   id: "kimi",
-  capabilities: { browserSession: true },
-  optionalOrigins: [KIMI_ORIGIN],
-  optionalPermissions: ["cookies", "scripting"],
   collect: collectKimi,
 };

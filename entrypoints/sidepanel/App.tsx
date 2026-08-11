@@ -13,6 +13,7 @@ import type {
   RefreshReport,
 } from "../../domain/model";
 import type { ConnectableProviderId } from "../../providers/registry";
+import { providerNames } from "../../providers/catalog";
 import { loadState } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
 
@@ -36,13 +37,6 @@ interface AutoRefreshGuard {
 }
 
 type ProviderOperations = Partial<Record<ProviderId, ProviderOperation>>;
-
-const providerNames: Record<ProviderId, string> = {
-  chatgpt: "ChatGPT",
-  claude: "Claude",
-  kimi: "Kimi",
-  cursor: "Cursor",
-};
 
 function sendCommand(message: RuntimeCommand): void {
   void browser.runtime.sendMessage(message).catch(() => undefined);
