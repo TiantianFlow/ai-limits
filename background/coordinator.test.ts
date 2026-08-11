@@ -153,7 +153,7 @@ describe("provider refresh coordinator", () => {
       finishedAt: NOW - 59_000,
       outcome: { kind: "failure", category: "temporary_error" },
     };
-    await saveState(initial);
+    await saveState(initial, NOW);
     const claudeBefore = initial.providers[1];
 
     const outcome = await refresh(
@@ -192,7 +192,7 @@ describe("provider refresh coordinator", () => {
       fetchedAt: NOW - 60_000,
     });
     initial.providers[0]!.history = [previous];
-    await saveState(initial);
+    await saveState(initial, NOW);
 
     await refresh(
       adapter(async () => ({ ok: true, snapshot: liveSnapshot() })),
@@ -211,7 +211,7 @@ describe("provider refresh coordinator", () => {
       fetchedAt: NOW - 60_000,
     });
     initial.providers[0]!.history = [previous];
-    await saveState(initial);
+    await saveState(initial, NOW);
 
     await refresh(
       adapter(async () => ({
@@ -252,7 +252,7 @@ describe("provider refresh coordinator", () => {
       fetchedAt: NOW - 60_000,
     };
     initial.providers[0]!.history = [previous];
-    await saveState(initial);
+    await saveState(initial, NOW);
 
     await refresh(
       adapter(async () => ({
@@ -339,7 +339,7 @@ describe("provider refresh coordinator", () => {
 
   test("preserves last-good data while recording a sanitized failure", async () => {
     const initial = liveState(NOW - 60_000);
-    await saveState(initial);
+    await saveState(initial, NOW);
     const snapshotBefore = initial.providers[0]?.snapshot;
 
     const outcome = await refresh(
@@ -412,7 +412,7 @@ describe("provider refresh coordinator", () => {
 
   test("preserves last-good data while recording a provider session deferral", async () => {
     const initial = liveState(NOW - 60_000);
-    await saveState(initial);
+    await saveState(initial, NOW);
     const snapshotBefore = initial.providers[0]?.snapshot;
 
     const outcome = await refresh(
@@ -445,7 +445,7 @@ describe("provider refresh coordinator", () => {
 
   test("contains thrown adapter details as a safe temporary failure", async () => {
     const initial = liveState(NOW - 60_000);
-    await saveState(initial);
+    await saveState(initial, NOW);
 
     const outcome = await refresh(
       adapter(async () => {
@@ -462,7 +462,7 @@ describe("provider refresh coordinator", () => {
   });
 
   test("commits against fresh repository state without clobbering a preference update", async () => {
-    await saveState(liveState(NOW - 60_000));
+    await saveState(liveState(NOW - 60_000), NOW);
     let finishCollection!: (result: CollectionResult) => void;
     const collect = vi.fn(
       () =>
@@ -481,7 +481,7 @@ describe("provider refresh coordinator", () => {
   });
 
   test("retains concurrent successful results for different providers", async () => {
-    await saveState(liveState(NOW - 60_000));
+    await saveState(liveState(NOW - 60_000), NOW);
 
     await Promise.all([
       refresh(
@@ -512,7 +512,7 @@ describe("provider refresh coordinator", () => {
   });
 
   test("does not persist an older result or attempt after a newer generation takes ownership", async () => {
-    await saveState(liveState(NOW - 60_000));
+    await saveState(liveState(NOW - 60_000), NOW);
     let currentGeneration = 1;
     let finishOlderCollection!: (result: CollectionResult) => void;
     const olderCollection = vi.fn(
@@ -557,7 +557,7 @@ describe("provider refresh coordinator", () => {
       finishedAt: NOW,
       outcome: { kind: "success" },
     };
-    await saveState(initial);
+    await saveState(initial, NOW);
     const contains = vi
       .spyOn(browser.permissions, "contains")
       .mockImplementation(async ({ origins }) =>
@@ -590,7 +590,7 @@ describe("provider refresh coordinator", () => {
       finishedAt: NOW,
       outcome: { kind: "success" },
     };
-    await saveState(initial);
+    await saveState(initial, NOW);
     const invalidated = new Set<string>();
     vi.spyOn(browser.permissions, "contains").mockImplementation(
       async ({ origins }) => {
@@ -625,7 +625,7 @@ describe("provider refresh coordinator", () => {
       finishedAt: NOW,
       outcome: { kind: "success" },
     };
-    await saveState(initial);
+    await saveState(initial, NOW);
     const pending = deferred<CollectionResult>();
     const collect = vi.fn(() => pending.promise);
     let isCurrentGeneration = true;
@@ -657,7 +657,7 @@ describe("provider refresh coordinator", () => {
   });
 
   test("ignores an older authority sample that resolves after a newer sample", async () => {
-    await saveState(createFixtureState(NOW));
+    await saveState(createFixtureState(NOW), NOW);
     const older = deferred<boolean>();
     const newer = deferred<boolean>();
     vi.spyOn(browser.permissions, "contains")
@@ -686,7 +686,7 @@ describe("provider refresh coordinator", () => {
       finishedAt: NOW,
       outcome: { kind: "success" },
     };
-    await saveState(initial);
+    await saveState(initial, NOW);
     vi.spyOn(browser.permissions, "remove").mockImplementation(
       async () => true as never,
     );
@@ -704,7 +704,7 @@ describe("provider refresh coordinator", () => {
 
   test("keeps stored data unchanged when Chrome refuses disconnect", async () => {
     const initial = liveState(NOW);
-    await saveState(initial);
+    await saveState(initial, NOW);
     vi.spyOn(browser.permissions, "remove").mockImplementation(
       async () => false as never,
     );

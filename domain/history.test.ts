@@ -8,6 +8,7 @@ import {
   appendQuotaObservation,
   observationFromSnapshot,
   quotaHistorySegments,
+  retainQuotaHistory,
 } from "./history";
 
 const HOUR = 60 * 60 * 1_000;
@@ -51,6 +52,23 @@ function observation(
 }
 
 describe("quota history", () => {
+  test("applies bounded retention without inventing a new observation", () => {
+    const sameHourStart = Date.UTC(2026, 7, 7, 9);
+    const history = [
+      observation(NOW - 31 * DAY, 0.1),
+      observation(sameHourStart + 5 * 60 * 1_000, 0.2),
+      observation(sameHourStart + 55 * 60 * 1_000, 0.3),
+      observation(NOW - HOUR, 0.4),
+      observation(NOW - 30 * 60 * 1_000, 0.5),
+    ];
+
+    expect(retainQuotaHistory(history, NOW)).toEqual([
+      observation(sameHourStart + 55 * 60 * 1_000, 0.3),
+      observation(NOW - HOUR, 0.4),
+      observation(NOW - 30 * 60 * 1_000, 0.5),
+    ]);
+  });
+
   test("converts a snapshot to canonical quota-only history without complementing ratios", () => {
     expect(observationFromSnapshot(snapshot())).toEqual({
       observedAt: NOW,

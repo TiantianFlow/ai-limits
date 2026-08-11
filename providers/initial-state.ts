@@ -1,5 +1,8 @@
 import { sanitizedFailureMessage } from "../domain/model";
-import { observationFromSnapshot } from "../domain/history";
+import {
+  observationFromSnapshot,
+  retainQuotaHistory,
+} from "../domain/history";
 import type {
   AppState,
   CreditBalance,
@@ -14,7 +17,6 @@ import type {
 } from "../domain/model";
 
 export const CURRENT_STATE_VERSION = 4 as const;
-const MAX_HISTORY_OBSERVATIONS = 1_024;
 
 const PROVIDER_IDS: ProviderId[] = [
   "chatgpt",
@@ -221,9 +223,9 @@ function normalizeHistory(value: unknown): QuotaHistoryObservation[] {
     }
   }
 
-  return [...byTimestamp.values()]
-    .sort((left, right) => left.observedAt - right.observedAt)
-    .slice(-MAX_HISTORY_OBSERVATIONS);
+  return [...byTimestamp.values()].sort(
+    (left, right) => left.observedAt - right.observedAt,
+  );
 }
 
 function normalizeAttemptOutcome(
@@ -361,7 +363,7 @@ export function createInitialState(): AppState {
   };
 }
 
-export function migrateState(value: unknown): AppState {
+export function migrateState(value: unknown, now: number): AppState {
   const storedProviders =
     isRecord(value) && Array.isArray(value.providers) ? value.providers : [];
 
@@ -378,9 +380,9 @@ export function migrateState(value: unknown): AppState {
     const lastAttempt = normalizeAttempt(stored.lastAttempt);
     const history =
       isRecord(value) && value.version === CURRENT_STATE_VERSION
-        ? normalizeHistory(stored.history)
+        ? retainQuotaHistory(normalizeHistory(stored.history), now)
         : isRecord(value) && value.version === 3 && snapshot
-          ? [observationFromSnapshot(snapshot)]
+          ? retainQuotaHistory([observationFromSnapshot(snapshot)], now)
           : [];
 
     return {

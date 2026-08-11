@@ -36,13 +36,23 @@ export function appendQuotaObservation(
   history: readonly QuotaHistoryObservation[],
   snapshot: ProviderSnapshot,
 ): QuotaHistoryObservation[] {
+  return retainQuotaHistory(
+    [...history, observationFromSnapshot(snapshot)],
+    snapshot.fetchedAt,
+  );
+}
+
+export function retainQuotaHistory(
+  history: readonly QuotaHistoryObservation[],
+  referenceAt: number,
+): QuotaHistoryObservation[] {
   const byTimestamp = new Map<number, QuotaHistoryObservation>();
-  for (const observation of [...history, observationFromSnapshot(snapshot)]) {
+  for (const observation of history) {
     byTimestamp.set(observation.observedAt, observation);
   }
 
-  const cutoff = snapshot.fetchedAt - MAX_RETENTION_MS;
-  const rawCutoff = snapshot.fetchedAt - RAW_RETENTION_MS;
+  const cutoff = referenceAt - MAX_RETENTION_MS;
+  const rawCutoff = referenceAt - RAW_RETENTION_MS;
   const ordered = [...byTimestamp.values()]
     .filter(({ observedAt }) => observedAt >= cutoff)
     .sort((left, right) => left.observedAt - right.observedAt);

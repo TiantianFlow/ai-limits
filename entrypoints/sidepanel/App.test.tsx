@@ -503,7 +503,7 @@ describe("side-panel App", () => {
     const autoRefresh = screen.getByRole("switch", { name: "Automatic refresh" });
     fireEvent.click(autoRefresh);
 
-    await act(async () => saveState(disabledState));
+    await act(async () => saveState(disabledState, NOW));
     expect(autoRefresh).toBeChecked();
     expect(autoRefresh).toBeDisabled();
 

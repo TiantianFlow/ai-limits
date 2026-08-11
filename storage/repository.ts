@@ -13,8 +13,8 @@ function enqueueStateMutation<T>(mutation: () => Promise<T>): Promise<T> {
   return result;
 }
 
-async function writeState(state: AppState): Promise<void> {
-  await browser.storage.local.set({ [STATE_KEY]: migrateState(state) });
+async function writeState(state: AppState, now: number): Promise<void> {
+  await browser.storage.local.set({ [STATE_KEY]: migrateState(state, now) });
 }
 
 export async function loadState(): Promise<AppState | undefined> {
@@ -22,18 +22,17 @@ export async function loadState(): Promise<AppState | undefined> {
   return stored[STATE_KEY] as AppState | undefined;
 }
 
-export function saveState(state: AppState): Promise<void> {
-  return enqueueStateMutation(() => writeState(state));
+export function saveState(state: AppState, now: number): Promise<void> {
+  return enqueueStateMutation(() => writeState(state, now));
 }
 
 async function ensureStateInsideMutation(now: number): Promise<AppState> {
-  void now;
   const stored = await browser.storage.local.get(STATE_KEY);
   const value = stored[STATE_KEY] as unknown;
-  const state = migrateState(value);
+  const state = migrateState(value, now);
 
   if (JSON.stringify(value) !== JSON.stringify(state)) {
-    await writeState(state);
+    await writeState(state, now);
   }
 
   return state;
@@ -49,7 +48,7 @@ export function mutateState(
 ): Promise<void> {
   return enqueueStateMutation(async () => {
     const state = await ensureStateInsideMutation(now);
-    await writeState(updater(state));
+    await writeState(updater(state), now);
   });
 }
 
@@ -113,9 +112,10 @@ export function disconnectProviderData(providerId: ProviderId): Promise<void> {
 
 export function deleteAllLocalData(): Promise<AppState> {
   return enqueueStateMutation(async () => {
+    const now = Date.now();
     await browser.storage.local.remove(STATE_KEY);
-    const state = migrateState(undefined);
-    await writeState(state);
+    const state = migrateState(undefined, now);
+    await writeState(state, now);
     return state;
   });
 }

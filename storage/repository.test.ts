@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { KIMI_RECOVERY_GUIDANCE } from "../domain/model";
 import type { ProviderSnapshot } from "../domain/model";
@@ -123,7 +123,7 @@ describe("state repository", () => {
       },
     };
 
-    await saveState(state);
+    await saveState(state, now);
     await expect(ensureState(now)).resolves.toMatchObject({
       providers: expect.arrayContaining([
         expect.objectContaining({
@@ -140,6 +140,7 @@ describe("state repository", () => {
 
   beforeEach(async () => {
     await browser.storage.local.clear();
+    vi.restoreAllMocks();
   });
 
   test("creates a clean version 4 state with automatic refresh enabled", async () => {
@@ -209,13 +210,16 @@ describe("state repository", () => {
 
   test("migrates a valid v3 snapshot to exactly one real history observation", () => {
     const snapshot = liveSnapshot();
-    const state = migrateState({
-      version: 3,
-      preferences: { displayMode: "used", autoRefresh: false },
-      providers: [
-        { providerId: "chatgpt", access: "granted", snapshot },
-      ],
-    });
+    const state = migrateState(
+      {
+        version: 3,
+        preferences: { displayMode: "used", autoRefresh: false },
+        providers: [
+          { providerId: "chatgpt", access: "granted", snapshot },
+        ],
+      },
+      now,
+    );
 
     expect(state.version).toBe(4);
     expect(state.providers[0]?.history).toEqual([
@@ -224,17 +228,121 @@ describe("state repository", () => {
   });
 
   test("preserves explicit required access while migrating v3 records", () => {
-    const state = migrateState({
-      version: 3,
-      preferences: { displayMode: "used", autoRefresh: true },
-      providers: [{ providerId: "chatgpt", access: "required" }],
-    });
+    const state = migrateState(
+      {
+        version: 3,
+        preferences: { displayMode: "used", autoRefresh: true },
+        providers: [{ providerId: "chatgpt", access: "required" }],
+      },
+      now,
+    );
 
     expect(state.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
       history: [],
     });
+  });
+
+  test("does not seed V3 history from a snapshot older than 30 days", () => {
+    const staleSnapshot = {
+      ...liveSnapshot(),
+      fetchedAt: now - 30 * day - 1,
+    };
+    const cutoffSnapshot = {
+      ...liveSnapshot("claude"),
+      fetchedAt: now - 30 * day,
+    };
+    const state = migrateState(
+      {
+        version: 3,
+        preferences: { displayMode: "left", autoRefresh: false },
+        providers: [
+          {
+            providerId: "chatgpt",
+            access: "granted",
+            snapshot: staleSnapshot,
+          },
+          {
+            providerId: "claude",
+            access: "required",
+            snapshot: cutoffSnapshot,
+          },
+        ],
+      },
+      now,
+    );
+
+    expect(state.preferences).toEqual({
+      displayMode: "left",
+      autoRefresh: true,
+    });
+    expect(state.providers[0]).toMatchObject({
+      access: "granted",
+      snapshot: { fetchedAt: staleSnapshot.fetchedAt },
+      history: [],
+    });
+    expect(state.providers[1]).toMatchObject({
+      access: "required",
+      snapshot: { fetchedAt: cutoffSnapshot.fetchedAt },
+      history: [
+        expect.objectContaining({ observedAt: cutoffSnapshot.fetchedAt }),
+      ],
+    });
+  });
+
+  test("prunes and compacts V4 history during deterministic startup migration", async () => {
+    const compactedHour = Math.floor((now - 3 * day) / hour) * hour;
+    const history = [
+      observationFromSnapshot({
+        ...liveSnapshot(),
+        fetchedAt: now - hour,
+      }),
+      observationFromSnapshot({
+        ...liveSnapshot(),
+        fetchedAt: compactedHour + 5 * 60 * 1_000,
+      }),
+      observationFromSnapshot({
+        ...liveSnapshot(),
+        fetchedAt: now - 31 * day,
+      }),
+      observationFromSnapshot({
+        ...liveSnapshot(),
+        fetchedAt: compactedHour + 55 * 60 * 1_000,
+      }),
+      observationFromSnapshot({
+        ...liveSnapshot(),
+        fetchedAt: now - 30 * 60 * 1_000,
+      }),
+    ];
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 4,
+        preferences: { displayMode: "left", autoRefresh: false },
+        providers: [
+          {
+            providerId: "chatgpt",
+            access: "granted",
+            snapshot: liveSnapshot(),
+            history,
+          },
+        ],
+      },
+    });
+
+    const provider = (await ensureState(now)).providers[0];
+
+    expect(provider?.access).toBe("granted");
+    expect((await loadState())?.preferences).toEqual({
+      displayMode: "left",
+      autoRefresh: false,
+    });
+    expect(provider?.history).toEqual([
+      history[3],
+      history[0],
+      history[4],
+    ]);
+    expect((await loadState())?.providers[0]?.history).toEqual(provider?.history);
   });
 
   test("migrates v2 snapshots and access without inventing historical attempts", async () => {
@@ -524,7 +632,7 @@ describe("state repository", () => {
       finishedAt: now,
       outcome: { kind: "success" },
     };
-    await saveState(state);
+    await saveState(state, now);
     await reconcileProviderAccess({ chatgpt: false, claude: true });
 
     expect((await loadState())?.providers[0]).toEqual({
@@ -537,7 +645,7 @@ describe("state repository", () => {
 
   test("leaves initial required provider records unchanged when access is absent", async () => {
     const state = createInitialState();
-    await saveState(state);
+    await saveState(state, now);
 
     await reconcileProviderAccess({ chatgpt: false });
 
@@ -556,7 +664,7 @@ describe("state repository", () => {
         outcome: { kind: "success" },
       },
     };
-    await saveState(state);
+    await saveState(state, now);
 
     await reconcileProviderAccess({ chatgpt: false });
 
@@ -568,6 +676,7 @@ describe("state repository", () => {
   });
 
   test("explicit disconnect deletes only the selected provider's local data", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
     const state = liveFixtureState();
     state.providers[0]!.lastAttempt = {
       trigger: "manual_provider",
@@ -575,7 +684,7 @@ describe("state repository", () => {
       finishedAt: now,
       outcome: { kind: "failure", category: "temporary_error" },
     };
-    await saveState(state);
+    await saveState(state, now);
     const claudeBefore = state.providers[1];
 
     await disconnectProviderData("chatgpt");
@@ -590,7 +699,7 @@ describe("state repository", () => {
 
   test("delete-all recreates clean v4 state without clearing unrelated local keys", async () => {
     await browser.storage.local.set({ unrelated: "keep" });
-    await saveState(liveFixtureState());
+    await saveState(liveFixtureState(), now);
 
     const state = await deleteAllLocalData();
 
@@ -600,8 +709,9 @@ describe("state repository", () => {
   });
 
   test("updates only the requested provider and preserves provider identities", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
     const state = liveFixtureState();
-    await saveState(state);
+    await saveState(state, now);
     const claudeBefore = state.providers[1];
 
     await updateProvider("chatgpt", (provider) => ({
