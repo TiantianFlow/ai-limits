@@ -9,6 +9,8 @@ const manifestPath = resolve(outputDirectory, "manifest.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8"));
 const expectedPermissions = ["alarms", "sidePanel", "storage"];
+const expectedDescription =
+  "See ChatGPT, Claude, Kimi, and Cursor usage as Used or Left, reset timing, pace, and local quota history in one Chrome side panel.";
 
 function assert(condition, message) {
   if (!condition) {
@@ -22,6 +24,10 @@ assert(
   "Expected manifest version 0.1.0 derived from package.json.",
 );
 assert(manifest.name === "AI Limits", 'Expected manifest name to be "AI Limits".');
+assert(
+  manifest.description === expectedDescription,
+  "Expected the manifest description to match the Chrome Web Store short description.",
+);
 assert(
   manifest.side_panel?.default_path === "sidepanel.html",
   'Expected side_panel.default_path to be "sidepanel.html".',

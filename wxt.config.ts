@@ -4,7 +4,8 @@ export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   manifest: {
     name: "AI Limits",
-    description: "One quiet cockpit for AI subscription limits.",
+    description:
+      "See ChatGPT, Claude, Kimi, and Cursor usage as Used or Left, reset timing, pace, and local quota history in one Chrome side panel.",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
     optional_host_permissions: [

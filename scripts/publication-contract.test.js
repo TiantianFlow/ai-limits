@@ -14,6 +14,8 @@ const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
+const paceAvailabilityStatement =
+  "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
 const kimiAutoRefreshStatement =
   "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.";
 const kimiAutoRefreshStatementZh =
@@ -86,6 +88,7 @@ const valid = {
   listing: [
     ...listingDefaults.map(({ value }) => value),
     ...listingLinks.map(({ markdown }) => markdown),
+    paceAvailabilityStatement,
     publicRouteGate,
   ].join("\n"),
   license: "MIT License\n\nCopyright (c) 2026 wjcjttl",
@@ -218,6 +221,16 @@ const nonRenderedHistoryDisclosures = [
 ];
 
 describe("publication content", () => {
+  it("requires the store listing to describe the actual pace inputs", () => {
+    const errors = validatePublicationDocuments({
+      ...valid,
+      listing: valid.listing.replace(paceAvailabilityStatement, ""),
+    });
+    expect(errors).toContain(
+      "Store listing is missing the reset-time-or-duration pace qualification.",
+    );
+  });
+
   it.each(kimiFaqStatements)(
     "requires the rendered Kimi automatic-refresh limitation in $key",
     ({ key, statement, error }) => {

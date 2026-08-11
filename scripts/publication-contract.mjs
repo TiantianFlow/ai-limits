@@ -11,6 +11,8 @@ const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
+const paceAvailabilityStatement =
+  "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
 const requiredVisibleFaqStatements = [
   {
     key: "faq",
@@ -205,6 +207,7 @@ export function validatePublicationDocuments(documents) {
   const security = normalizeWhitespace(documents.security);
   const listingSource = documents.listing ?? "";
   const listing = normalizeWhitespace(listingSource);
+  const visibleListing = extractVisibleRenderedProse(listingSource);
   const listingDestinations = extractInlineMarkdownLinkDestinations(listingSource);
 
   if (!privacy.includes(limitedUseStatement)) {
@@ -237,6 +240,12 @@ export function validatePublicationDocuments(documents) {
     if (!listingDestinations.includes(destination)) {
       errors.push(error);
     }
+  }
+
+  if (!visibleListing.includes(paceAvailabilityStatement)) {
+    errors.push(
+      "Store listing is missing the reset-time-or-duration pace qualification.",
+    );
   }
 
   if (!listing.includes(publicRouteGate)) {

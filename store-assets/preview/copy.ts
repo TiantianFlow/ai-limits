@@ -38,7 +38,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     promo: {
       eyebrow: "Chrome side panel",
       title: "AI limits, at a glance.",
-      description: "Used or Left, reset timing, pace, and local history for your AI subscriptions.",
+      description: "Used or Left, reset timing, pace, and local history.",
     },
     chromeSidePanelLabel: "Chrome side panel",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
@@ -72,7 +72,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     promo: {
       eyebrow: "Chrome 侧边栏",
       title: "AI 用量，一目了然。",
-      description: "集中查看已用或剩余、重置时间、用量节奏和本地历史。",
+      description: "查看已用或剩余、重置时间、用量节奏和本地历史。",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
