@@ -24,9 +24,11 @@ representative fixture data. Upload the files in this order:
    overview screenshot, 1280×800.
 2. `store-assets/chrome-web-store/screenshot-pacing-1280x800.png` — quota,
    timing, and pace screenshot, 1280×800.
-3. `store-assets/chrome-web-store/screenshot-privacy-1280x800.png` — Settings
+3. `store-assets/chrome-web-store/screenshot-history-1280x800.png` — expanded
+   local quota-history graph, 1280×800.
+4. `store-assets/chrome-web-store/screenshot-privacy-1280x800.png` — Settings
    and local-data controls screenshot, 1280×800.
-4. `store-assets/chrome-web-store/small-promo-440x280.png` — small promotional
+5. `store-assets/chrome-web-store/small-promo-440x280.png` — small promotional
    tile, 440×280; upload it to the small promotional tile slot rather than the
    screenshot carousel.
 

@@ -31,6 +31,12 @@ const assets = [
   },
   {
     locale: "en",
+    view: "history",
+    relativePath: "screenshot-history-1280x800.png",
+    viewport: { width: 1280, height: 800 },
+  },
+  {
+    locale: "en",
     view: "privacy",
     relativePath: "screenshot-privacy-1280x800.png",
     viewport: { width: 1280, height: 800 },
@@ -41,7 +47,7 @@ const assets = [
     relativePath: "small-promo-440x280.png",
     viewport: { width: 440, height: 280 },
   },
-  ...["overview", "pacing", "privacy"].map((view) => ({
+  ...["overview", "pacing", "history", "privacy"].map((view) => ({
     locale: "zh_CN",
     view,
     relativePath: `zh_CN/screenshot-${view}-1280x800.png`,
@@ -139,6 +145,51 @@ try {
                 `Pacing capture requires the complete ${name} card inside the panel frame.`,
               );
             }
+          }
+        });
+      }
+
+      if (asset.view === "history") {
+        const chatGptHeading = page.getByRole("heading", { name: "ChatGPT" });
+        const chatGptCard = page
+          .locator(".provider-card")
+          .filter({ has: chatGptHeading });
+
+        await chatGptCard.getByRole("button", { name: "History" }).click();
+        await chatGptCard
+          .getByRole("img", { name: /ChatGPT .* usage history/ })
+          .waitFor();
+
+        await page.evaluate(() => {
+          const frame = document.querySelector("[data-panel-frame]");
+          const heading = document.getElementById("provider-ChatGPT");
+          const card = heading?.closest(".provider-card");
+
+          if (
+            !(frame instanceof HTMLElement) ||
+            !(card instanceof HTMLElement)
+          ) {
+            throw new Error("History capture could not find the ChatGPT card.");
+          }
+
+          const cardTop =
+            card.getBoundingClientRect().top -
+            frame.getBoundingClientRect().top +
+            frame.scrollTop;
+          frame.scrollTop = Math.min(
+            cardTop - 1,
+            frame.scrollHeight - frame.clientHeight,
+          );
+
+          const frameBounds = frame.getBoundingClientRect();
+          const cardBounds = card.getBoundingClientRect();
+          if (
+            cardBounds.top < frameBounds.top ||
+            cardBounds.bottom > frameBounds.bottom
+          ) {
+            throw new Error(
+              "History capture requires the complete ChatGPT card inside the panel frame.",
+            );
           }
         });
       }

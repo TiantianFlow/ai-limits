@@ -17,6 +17,7 @@ const state = createFixtureState(CAPTURE_NOW);
 function parseView(parameters: URLSearchParams): PreviewView {
   const candidate = parameters.get("view");
   return candidate === "pacing" ||
+    candidate === "history" ||
     candidate === "privacy" ||
     candidate === "promo"
     ? candidate

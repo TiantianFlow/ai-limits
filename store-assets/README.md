@@ -13,12 +13,14 @@ sizes.
    overview screenshot, 1280×800.
 2. `chrome-web-store/screenshot-pacing-1280x800.png` — quota, timing, and pace
    screenshot, 1280×800.
-3. `chrome-web-store/screenshot-privacy-1280x800.png` — Settings and local-data
+3. `chrome-web-store/screenshot-history-1280x800.png` — expanded local quota
+   history graph, 1280×800.
+4. `chrome-web-store/screenshot-privacy-1280x800.png` — Settings and local-data
    controls screenshot, 1280×800.
-4. `chrome-web-store/small-promo-440x280.png` — small promotional tile,
+5. `chrome-web-store/small-promo-440x280.png` — small promotional tile,
    440×280.
 
-Upload the three screenshots in the listed order. Upload the final file to the
+Upload the four screenshots in the listed order. Upload the final file to the
 Chrome Web Store's small promotional tile slot.
 
 ### Simplified Chinese project media
@@ -27,10 +29,12 @@ Chrome Web Store's small promotional tile slot.
    project overview, 1280×800.
 2. `chrome-web-store/zh_CN/screenshot-pacing-1280x800.png` — localized quota,
    timing, and pace overview, 1280×800.
-3. `chrome-web-store/zh_CN/screenshot-privacy-1280x800.png` — localized privacy
+3. `chrome-web-store/zh_CN/screenshot-history-1280x800.png` — localized project
+   media with the production History graph expanded, 1280×800.
+4. `chrome-web-store/zh_CN/screenshot-privacy-1280x800.png` — localized privacy
    and local-data overview, 1280×800.
 
-These three images are for the Simplified Chinese GitHub README and social
+These four images are for the Simplified Chinese GitHub README and social
 media. Their dimensions and content are suitable for future localized Chrome
 Web Store screenshots, but they are not part of the current store submission.
 Chrome Web Store promotional tiles are not localized, so there is no separate
@@ -64,7 +68,9 @@ localizes only the surrounding project copy; it intentionally leaves the
 production extension UI in English. The pacing image uses a taller capture-only
 side-panel frame and scrolls only that frame so the complete Kimi and Cursor
 cards, including their collapsed History controls, remain visible at production
-scale. The privacy image opens the real Settings view through its real button.
+scale. The History image opens the real ChatGPT History control and verifies
+that the full card and chart fit inside the panel frame. The privacy image opens
+the real Settings view through its real button.
 
 Never generate store artwork from a browser profile, extension storage,
 provider website, network credential, or live provider response. Representative

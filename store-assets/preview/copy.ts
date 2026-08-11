@@ -1,4 +1,9 @@
-export type PreviewView = "overview" | "pacing" | "privacy" | "promo";
+export type PreviewView =
+  | "overview"
+  | "pacing"
+  | "history"
+  | "privacy"
+  | "promo";
 export type PreviewLanguage = "en" | "zh_CN";
 
 interface ViewCopy {
@@ -28,6 +33,12 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       title: "Know the limit. See the pace.",
       description:
         "Compare quota consumption with elapsed time in its reset window, so bursts, reset windows, and remaining headroom are easy to scan.",
+    },
+    history: {
+      eyebrow: "See the trend",
+      title: "History that stays on your device.",
+      description:
+        "Successful refreshes build a local quota graph, with reset-aware gaps instead of misleading lines.",
     },
     privacy: {
       eyebrow: "Local by design",
@@ -62,6 +73,12 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       title: "看清上限，掌握节奏。",
       description:
         "将配额消耗与重置周期内已过的时间放在一起看，用量高峰、重置周期和剩余额度都能快速掌握。",
+    },
+    history: {
+      eyebrow: "查看变化趋势",
+      title: "用量历史，仅存本地。",
+      description:
+        "每次成功刷新都会更新本地配额图表；跨越重置周期或数据缺失时保留间隔，避免误导趋势。",
     },
     privacy: {
       eyebrow: "数据仅存本地",
