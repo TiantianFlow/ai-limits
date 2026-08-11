@@ -1,4 +1,5 @@
 import { sanitizedFailureMessage } from "../domain/model";
+import { appendQuotaObservation } from "../domain/history";
 import type {
   AppState,
   ProviderAttempt,
@@ -201,6 +202,14 @@ function applyOutcome(
         ? {
             access: "granted" as const,
             snapshot: outcome.snapshot,
+            history: appendQuotaObservation(
+              provider.snapshot?.planLabel &&
+                outcome.snapshot.planLabel &&
+                provider.snapshot.planLabel !== outcome.snapshot.planLabel
+                ? []
+                : provider.history,
+              outcome.snapshot,
+            ),
           }
         : {}),
       lastAttempt,

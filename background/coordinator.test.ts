@@ -4,6 +4,7 @@ import type {
   ProviderRefreshOutcome,
   ProviderSnapshot,
 } from "../domain/model";
+import { observationFromSnapshot } from "../domain/history";
 import { createFixtureState } from "../providers/fixtures";
 import type { CollectionResult, ProviderAdapter } from "../providers/types";
 import { loadState, saveState, setDisplayMode } from "../storage/repository";
@@ -169,6 +170,10 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: [
+        ...initial.providers[0]!.history,
+        observationFromSnapshot({ ...liveSnapshot(), fetchedAt: FINISHED_AT }),
+      ],
       snapshot: { ...liveSnapshot(), fetchedAt: FINISHED_AT },
       lastAttempt: {
         trigger: "manual_provider",
@@ -178,6 +183,91 @@ describe("provider refresh coordinator", () => {
       },
     });
     expect((await loadState())?.providers[1]).toEqual(claudeBefore);
+  });
+
+  test("appends exactly one quota observation for a successful refresh", async () => {
+    const initial = liveState(NOW - 60_000);
+    const previous = observationFromSnapshot({
+      ...liveSnapshot(),
+      fetchedAt: NOW - 60_000,
+    });
+    initial.providers[0]!.history = [previous];
+    await saveState(initial);
+
+    await refresh(
+      adapter(async () => ({ ok: true, snapshot: liveSnapshot() })),
+    );
+
+    expect((await loadState())?.providers[0]?.history).toEqual([
+      previous,
+      observationFromSnapshot({ ...liveSnapshot(), fetchedAt: FINISHED_AT }),
+    ]);
+  });
+
+  test("does not append history for failure, deferral, permission skip, or superseded work", async () => {
+    const initial = liveState(NOW - 60_000);
+    const previous = observationFromSnapshot({
+      ...liveSnapshot(),
+      fetchedAt: NOW - 60_000,
+    });
+    initial.providers[0]!.history = [previous];
+    await saveState(initial);
+
+    await refresh(
+      adapter(async () => ({
+        ok: false,
+        health: { kind: "temporary_error" },
+      })),
+    );
+    await refresh(
+      adapter(async () => ({
+        ok: false,
+        deferred: { reason: "session_required" },
+      })),
+    );
+    await refresh(
+      adapter(async () => ({
+        ok: false,
+        health: { kind: "permission_required" },
+      })),
+    );
+    await refresh(
+      adapter(async () => ({ ok: true, snapshot: liveSnapshot() })),
+      () => false,
+    );
+
+    expect((await loadState())?.providers[0]?.history).toEqual([previous]);
+  });
+
+  test("clears prior history before appending when a non-empty plan label changes", async () => {
+    const initial = liveState(NOW - 60_000);
+    const previous = observationFromSnapshot({
+      ...liveSnapshot(),
+      planLabel: "Plus",
+      fetchedAt: NOW - 60_000,
+    });
+    initial.providers[0]!.snapshot = {
+      ...liveSnapshot(),
+      planLabel: "Plus",
+      fetchedAt: NOW - 60_000,
+    };
+    initial.providers[0]!.history = [previous];
+    await saveState(initial);
+
+    await refresh(
+      adapter(async () => ({
+        ok: true,
+        snapshot: { ...liveSnapshot(), planLabel: "Team" },
+      })),
+    );
+
+    expect((await loadState())?.providers[0]?.history).toEqual([
+      observationFromSnapshot({
+        ...liveSnapshot(),
+        planLabel: "Team",
+        fetchedAt: FINISHED_AT,
+      }),
+    ]);
   });
 
   test("sanitizes a successful snapshot before coordinator outcomes and aggregate reports", async () => {
@@ -217,6 +307,36 @@ describe("provider refresh coordinator", () => {
     );
   });
 
+  test("rejects duplicate quota window IDs before persisting snapshot or history", async () => {
+    const duplicateWindows = [
+      liveSnapshot().windows[0]!,
+      { ...liveSnapshot().windows[0]! },
+    ];
+
+    const outcome = await refresh(
+      adapter(async () => ({
+        ok: true,
+        snapshot: { ...liveSnapshot(), windows: duplicateWindows },
+      })),
+    );
+
+    expect(outcome).toEqual({
+      kind: "failure",
+      category: "provider_changed",
+    });
+    expect((await loadState())?.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "required",
+      history: [],
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: NOW,
+        finishedAt: FINISHED_AT,
+        outcome: { kind: "failure", category: "provider_changed" },
+      },
+    });
+  });
+
   test("preserves last-good data while recording a sanitized failure", async () => {
     const initial = liveState(NOW - 60_000);
     await saveState(initial);
@@ -235,6 +355,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: initial.providers[0]!.history,
       snapshot: snapshotBefore,
       lastAttempt: {
         trigger: "manual_provider",
@@ -308,6 +429,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: initial.providers[0]!.history,
       snapshot: snapshotBefore,
       lastAttempt: {
         trigger: "manual_provider",
@@ -453,6 +575,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
+      history: [],
     });
     expect(
       (await loadState())?.providers.slice(1).map(({ access }) => access),
@@ -489,6 +612,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
+      history: [],
     });
     expect((await loadState())?.providers[1]).toEqual(initial.providers[1]);
   });
@@ -528,6 +652,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: [],
     });
   });
 
@@ -549,6 +674,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: createFixtureState(NOW).providers[0]!.history,
     });
   });
 
@@ -572,6 +698,7 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
+      history: [],
     });
   });
 

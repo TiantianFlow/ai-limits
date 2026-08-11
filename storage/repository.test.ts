@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, test } from "vitest";
 
 import { KIMI_RECOVERY_GUIDANCE } from "../domain/model";
 import type { ProviderSnapshot } from "../domain/model";
+import { observationFromSnapshot } from "../domain/history";
 import { createFixtureState } from "../providers/fixtures";
-import { createInitialState } from "../providers/initial-state";
+import { createInitialState, migrateState } from "../providers/initial-state";
 import {
   deleteAllLocalData,
   disconnectProviderData,
@@ -141,20 +142,20 @@ describe("state repository", () => {
     await browser.storage.local.clear();
   });
 
-  test("creates a clean version 3 state with automatic refresh enabled", async () => {
+  test("creates a clean version 4 state with automatic refresh enabled", async () => {
     const state = await ensureState(now);
 
     expect(state).toEqual(createInitialState());
-    expect(state.version).toBe(3);
+    expect(state.version).toBe(4);
     expect(state.preferences).toEqual({
       displayMode: "used",
       autoRefresh: true,
     });
     expect(state.providers).toEqual([
-      { providerId: "chatgpt", access: "required" },
-      { providerId: "claude", access: "required" },
-      { providerId: "kimi", access: "required" },
-      { providerId: "cursor", access: "required" },
+      { providerId: "chatgpt", access: "required", history: [] },
+      { providerId: "claude", access: "required", history: [] },
+      { providerId: "kimi", access: "required", history: [] },
+      { providerId: "cursor", access: "required", history: [] },
     ]);
   });
 
@@ -182,7 +183,7 @@ describe("state repository", () => {
     expect((await ensureState(now)).preferences.autoRefresh).toBe(true);
   });
 
-  test("preserves an explicit v3 automatic-refresh false value", async () => {
+  test("defaults automatic refresh on when migrating an explicit v3 false value", async () => {
     await browser.storage.local.set({
       aiLimitsState: {
         version: 3,
@@ -191,7 +192,49 @@ describe("state repository", () => {
       },
     });
 
+    expect((await ensureState(now)).preferences.autoRefresh).toBe(true);
+  });
+
+  test("preserves an explicit v4 automatic-refresh false value", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 4,
+        preferences: { displayMode: "used", autoRefresh: false },
+        providers: [],
+      },
+    });
+
     expect((await ensureState(now)).preferences.autoRefresh).toBe(false);
+  });
+
+  test("migrates a valid v3 snapshot to exactly one real history observation", () => {
+    const snapshot = liveSnapshot();
+    const state = migrateState({
+      version: 3,
+      preferences: { displayMode: "used", autoRefresh: false },
+      providers: [
+        { providerId: "chatgpt", access: "granted", snapshot },
+      ],
+    });
+
+    expect(state.version).toBe(4);
+    expect(state.providers[0]?.history).toEqual([
+      observationFromSnapshot({ ...snapshot, accountLabel: undefined }),
+    ]);
+  });
+
+  test("preserves explicit required access while migrating v3 records", () => {
+    const state = migrateState({
+      version: 3,
+      preferences: { displayMode: "used", autoRefresh: true },
+      providers: [{ providerId: "chatgpt", access: "required" }],
+    });
+
+    expect(state.providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "required",
+      history: [],
+    });
   });
 
   test("migrates v2 snapshots and access without inventing historical attempts", async () => {
@@ -224,31 +267,33 @@ describe("state repository", () => {
     });
 
     const state = await ensureState(now);
+    const expectedSnapshot = { ...snapshot };
+    delete expectedSnapshot.accountLabel;
+    const expectedCursorSnapshot = liveSnapshot("cursor");
+    delete expectedCursorSnapshot.accountLabel;
 
     expect(state.preferences).toEqual({ displayMode: "left", autoRefresh: true });
     expect(state.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
-      snapshot: {
-        ...snapshot,
-        accountLabel: undefined,
-      },
+      history: [],
+      snapshot: expectedSnapshot,
     });
     expect(state.providers[1]).toEqual({
       providerId: "claude",
       access: "required",
+      history: [],
     });
     expect(state.providers[2]).toEqual({
       providerId: "kimi",
       access: "granted",
+      history: [],
     });
     expect(state.providers[3]).toEqual({
       providerId: "cursor",
       access: "granted",
-      snapshot: {
-        ...liveSnapshot("cursor"),
-        accountLabel: undefined,
-      },
+      history: [],
+      snapshot: expectedCursorSnapshot,
     });
     expect(state.providers.every(({ lastAttempt }) => lastAttempt === undefined)).toBe(true);
   });
@@ -304,6 +349,7 @@ describe("state repository", () => {
     expect(state.providers[0]).toStrictEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: [],
       snapshot: {
         ...liveSnapshot(),
         accountLabel: "Team account",
@@ -384,7 +430,90 @@ describe("state repository", () => {
     expect((await ensureState(now)).providers[0]).toEqual({
       providerId: "chatgpt",
       access: "granted",
+      history: [],
     });
+  });
+
+  test("drops a current snapshot with duplicate quota window IDs", async () => {
+    const snapshot = liveSnapshot();
+    snapshot.windows.push({ ...snapshot.windows[0]! });
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 4,
+        preferences: { displayMode: "used", autoRefresh: true },
+        providers: [
+          {
+            providerId: "chatgpt",
+            access: "granted",
+            history: [],
+            snapshot,
+          },
+        ],
+      },
+    });
+
+    expect((await ensureState(now)).providers[0]).toEqual({
+      providerId: "chatgpt",
+      access: "granted",
+      history: [],
+    });
+  });
+
+  test("sanitizes stored history independently without losing a valid current snapshot", async () => {
+    const snapshot = liveSnapshot();
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 4,
+        preferences: { displayMode: "used", autoRefresh: true },
+        providers: [
+          {
+            providerId: "chatgpt",
+            access: "granted",
+            snapshot,
+            history: [
+              {
+                observedAt: now - 2 * hour,
+                secret: "drop",
+                windows: [
+                  {
+                    windowId: "weekly",
+                    usedRatio: 0.2,
+                    resetsAt: now + day,
+                    label: "drop",
+                  },
+                ],
+              },
+              {
+                observedAt: now - hour,
+                windows: [
+                  { windowId: "weekly", usedRatio: 0.3 },
+                  { windowId: "weekly", usedRatio: 0.4 },
+                ],
+              },
+              {
+                observedAt: Number.NaN,
+                windows: [],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const provider = (await ensureState(now)).providers[0];
+    expect(provider?.snapshot).toEqual({
+      ...snapshot,
+      accountLabel: undefined,
+    });
+    expect(provider?.history).toEqual([
+      {
+        observedAt: now - 2 * hour,
+        windows: [
+          { windowId: "weekly", usedRatio: 0.2, resetsAt: now + day },
+        ],
+      },
+    ]);
+    expect(JSON.stringify(provider)).not.toContain("secret");
   });
 
   test("clears provider data when authoritative access revokes a stored grant", async () => {
@@ -401,6 +530,7 @@ describe("state repository", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
+      history: [],
     });
     expect((await loadState())?.providers[1]?.access).toBe("granted");
   });
@@ -433,6 +563,7 @@ describe("state repository", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
+      history: [],
     });
   });
 
@@ -452,11 +583,12 @@ describe("state repository", () => {
     expect((await loadState())?.providers[0]).toEqual({
       providerId: "chatgpt",
       access: "required",
+      history: [],
     });
     expect((await loadState())?.providers[1]).toEqual(claudeBefore);
   });
 
-  test("delete-all recreates clean v3 state without clearing unrelated local keys", async () => {
+  test("delete-all recreates clean v4 state without clearing unrelated local keys", async () => {
     await browser.storage.local.set({ unrelated: "keep" });
     await saveState(liveFixtureState());
 

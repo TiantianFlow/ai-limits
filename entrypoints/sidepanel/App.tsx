@@ -53,7 +53,7 @@ function asAppState(value: unknown): AppState {
     !value ||
     typeof value !== "object" ||
     !("version" in value) ||
-    value.version !== 3 ||
+    value.version !== 4 ||
     !("preferences" in value) ||
     !value.preferences ||
     typeof value.preferences !== "object" ||

@@ -40,6 +40,19 @@ export interface ProviderSnapshot {
   credits: CreditBalance[];
 }
 
+export interface QuotaHistorySample {
+  windowId: string;
+  usedRatio: number;
+  startedAt?: number;
+  resetsAt?: number;
+  durationMs?: number;
+}
+
+export interface QuotaHistoryObservation {
+  observedAt: number;
+  windows: QuotaHistorySample[];
+}
+
 export type RefreshTrigger =
   | "connect"
   | "manual_provider"
@@ -128,12 +141,13 @@ export type ProviderHealth =
 export interface ProviderRecord {
   providerId: ProviderId;
   access: "required" | "granted";
+  history: QuotaHistoryObservation[];
   snapshot?: ProviderSnapshot;
   lastAttempt?: ProviderAttempt;
 }
 
 export interface AppState {
-  version: 3;
+  version: 4;
   preferences: {
     displayMode: DisplayMode;
     autoRefresh: boolean;

@@ -1,4 +1,5 @@
 import type { AppState, ProviderRecord, ProviderSnapshot } from "../domain/model";
+import { observationFromSnapshot } from "../domain/history";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -33,6 +34,7 @@ export function createFixtureState(now: number): AppState {
     {
       providerId: "chatgpt",
       access: "granted",
+      history: [],
       snapshot: fixtureSnapshot(
         {
           providerId: "chatgpt",
@@ -67,6 +69,7 @@ export function createFixtureState(now: number): AppState {
     {
       providerId: "claude",
       access: "granted",
+      history: [],
       snapshot: fixtureSnapshot(
         {
           providerId: "claude",
@@ -101,6 +104,7 @@ export function createFixtureState(now: number): AppState {
     {
       providerId: "kimi",
       access: "granted",
+      history: [],
       snapshot: fixtureSnapshot(
         {
           providerId: "kimi",
@@ -135,6 +139,7 @@ export function createFixtureState(now: number): AppState {
     {
       providerId: "cursor",
       access: "granted",
+      history: [],
       snapshot: fixtureSnapshot(
         {
           providerId: "cursor",
@@ -166,8 +171,14 @@ export function createFixtureState(now: number): AppState {
     },
   ];
 
+  for (const provider of providers) {
+    provider.history = provider.snapshot
+      ? [observationFromSnapshot(provider.snapshot)]
+      : [];
+  }
+
   return {
-    version: 3,
+    version: 4,
     preferences: { displayMode: "used", autoRefresh: true },
     providers,
   };

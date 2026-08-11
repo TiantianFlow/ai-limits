@@ -518,6 +518,7 @@ describe("side-panel App", () => {
     disconnected.providers[0] = {
       providerId: "chatgpt",
       access: "required",
+      history: [],
     };
     installMessageHandler((message, respond) => {
       respond(message.type === "DISCONNECT_PROVIDER" ? disconnected : state);

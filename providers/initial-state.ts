@@ -1,4 +1,5 @@
 import { sanitizedFailureMessage } from "../domain/model";
+import { observationFromSnapshot } from "../domain/history";
 import type {
   AppState,
   CreditBalance,
@@ -7,10 +8,13 @@ import type {
   ProviderId,
   ProviderRecord,
   ProviderSnapshot,
+  QuotaHistoryObservation,
+  QuotaHistorySample,
   QuotaWindow,
 } from "../domain/model";
 
-export const CURRENT_STATE_VERSION = 3 as const;
+export const CURRENT_STATE_VERSION = 4 as const;
+const MAX_HISTORY_OBSERVATIONS = 1_024;
 
 const PROVIDER_IDS: ProviderId[] = [
   "chatgpt",
@@ -133,7 +137,8 @@ export function normalizeProviderSnapshot(
   const credits = value.credits.map(normalizeCredit);
   if (
     windows.some((window) => window === undefined) ||
-    credits.some((credit) => credit === undefined)
+    credits.some((credit) => credit === undefined) ||
+    new Set(windows.map((window) => window?.id)).size !== windows.length
   ) {
     return undefined;
   }
@@ -149,6 +154,76 @@ export function normalizeProviderSnapshot(
     windows: windows as QuotaWindow[],
     credits: credits as CreditBalance[],
   };
+}
+
+function normalizeHistorySample(value: unknown): QuotaHistorySample | undefined {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.windowId) ||
+    !isFiniteNumber(value.usedRatio) ||
+    value.usedRatio < 0 ||
+    value.usedRatio > 1 ||
+    !isOptionalNumber(value.startedAt, (number) => number >= 0) ||
+    !isOptionalNumber(value.resetsAt, (number) => number >= 0) ||
+    !isOptionalNumber(value.durationMs, (number) => number > 0) ||
+    (isFiniteNumber(value.startedAt) &&
+      isFiniteNumber(value.resetsAt) &&
+      value.resetsAt <= value.startedAt)
+  ) {
+    return undefined;
+  }
+
+  return {
+    windowId: value.windowId,
+    usedRatio: value.usedRatio,
+    ...(value.startedAt === undefined ? {} : { startedAt: value.startedAt }),
+    ...(value.resetsAt === undefined ? {} : { resetsAt: value.resetsAt }),
+    ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
+  };
+}
+
+function normalizeHistoryObservation(
+  value: unknown,
+): QuotaHistoryObservation | undefined {
+  if (
+    !isRecord(value) ||
+    !isFiniteNumber(value.observedAt) ||
+    value.observedAt < 0 ||
+    !Array.isArray(value.windows)
+  ) {
+    return undefined;
+  }
+
+  const windows = value.windows.map(normalizeHistorySample);
+  if (
+    windows.some((window) => window === undefined) ||
+    new Set(windows.map((window) => window?.windowId)).size !== windows.length
+  ) {
+    return undefined;
+  }
+
+  return {
+    observedAt: value.observedAt,
+    windows: windows as QuotaHistorySample[],
+  };
+}
+
+function normalizeHistory(value: unknown): QuotaHistoryObservation[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const byTimestamp = new Map<number, QuotaHistoryObservation>();
+  for (const candidate of value) {
+    const observation = normalizeHistoryObservation(candidate);
+    if (observation) {
+      byTimestamp.set(observation.observedAt, observation);
+    }
+  }
+
+  return [...byTimestamp.values()]
+    .sort((left, right) => left.observedAt - right.observedAt)
+    .slice(-MAX_HISTORY_OBSERVATIONS);
 }
 
 function normalizeAttemptOutcome(
@@ -262,7 +337,10 @@ function normalizedAccess(
   root: unknown,
   stored: Record<string, unknown>,
 ): ProviderRecord["access"] {
-  if (isRecord(root) && root.version === CURRENT_STATE_VERSION) {
+  if (
+    isRecord(root) &&
+    (root.version === 3 || root.version === CURRENT_STATE_VERSION)
+  ) {
     return stored.access === "granted" ? "granted" : "required";
   }
 
@@ -278,6 +356,7 @@ export function createInitialState(): AppState {
     providers: PROVIDER_IDS.map((providerId) => ({
       providerId,
       access: "required",
+      history: [],
     })),
   };
 }
@@ -292,15 +371,22 @@ export function migrateState(value: unknown): AppState {
     );
 
     if (!isRecord(stored)) {
-      return { providerId, access: "required" };
+      return { providerId, access: "required", history: [] };
     }
 
     const snapshot = normalizeProviderSnapshot(stored.snapshot, providerId);
     const lastAttempt = normalizeAttempt(stored.lastAttempt);
+    const history =
+      isRecord(value) && value.version === CURRENT_STATE_VERSION
+        ? normalizeHistory(stored.history)
+        : isRecord(value) && value.version === 3 && snapshot
+          ? [observationFromSnapshot(snapshot)]
+          : [];
 
     return {
       providerId,
       access: normalizedAccess(value, stored),
+      history,
       ...(snapshot ? { snapshot } : {}),
       ...(lastAttempt ? { lastAttempt } : {}),
     };

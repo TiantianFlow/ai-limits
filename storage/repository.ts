@@ -82,10 +82,15 @@ export function reconcileProviderAccess(
       }
       if (
         provider.access === "granted" ||
+        provider.history.length > 0 ||
         provider.snapshot !== undefined ||
         provider.lastAttempt !== undefined
       ) {
-        return { providerId: provider.providerId, access: "required" };
+        return {
+          providerId: provider.providerId,
+          access: "required",
+          history: [],
+        };
       }
 
       return provider;
@@ -101,7 +106,7 @@ export function disconnectProviderData(providerId: ProviderId): Promise<void> {
         return provider;
       }
 
-      return { providerId, access: "required" };
+      return { providerId, access: "required", history: [] };
     }),
   }));
 }
