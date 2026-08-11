@@ -238,6 +238,14 @@ describe("Kimi adapter", () => {
       ratelimitCode5h: null,
       ratelimitCode7d: { enabled: true, resetTime: WEEKLY_RESET },
     },
+    {
+      name: "five-hour limit with a non-positive reset timestamp",
+      ratelimitCode5h: {
+        enabled: true,
+        resetTime: "1969-12-31T23:59:59.000Z",
+      },
+      ratelimitCode7d: null,
+    },
   ])("does not infer zero for an ambiguous $name", async (rateLimits) => {
     const result = await kimiAdapter.collect(
       context(

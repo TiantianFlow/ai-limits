@@ -217,6 +217,9 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
       if (!enabledZero.success) {
         continue;
       }
+      if (optionalTimestamp(enabledZero.data.resetTime) === undefined) {
+        continue;
+      }
       usedRatio = 0;
       resetTime = enabledZero.data.resetTime;
     } else {
