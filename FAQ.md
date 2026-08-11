@@ -48,16 +48,20 @@ later scheduled refresh.
 
 Kimi has an additional limitation described below.
 
-## Why can Kimi refresh manually but not automatically?
+## Why doesn't Kimi automatic refresh always work, and why can manual refresh open a background tab?
+
+Kimi automatic refresh is best-effort and may not always work; a manual Connect
+or Refresh may briefly open an inactive Kimi tab in the background to recover
+the session.
 
 Kimi's scheduled refresh deliberately never opens a tab. It can use the legacy
 Kimi cookie or read an `access_token` from an already-open Kimi page. If neither
 is available, automatic refresh defers until a later refresh, preserves the last
 good data, and adds no history observation.
 
-A manual **Connect** or **Refresh** is interactive and may briefly open an
-inactive Kimi homepage tab to let Kimi refresh its own session. This difference
-means manual Kimi refresh can work when scheduled refresh cannot.
+A manual **Connect** or **Refresh** is interactive and may use that inactive
+homepage tab to let Kimi refresh its own session. This difference means manual
+Kimi refresh can work when scheduled refresh cannot.
 
 ## Does automatic refresh open provider tabs?
 

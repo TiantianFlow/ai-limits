@@ -14,6 +14,10 @@ const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
+const kimiAutoRefreshStatement =
+  "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.";
+const kimiAutoRefreshStatementZh =
+  "Kimi 自动刷新属于尽力而为，并不保证每次都能成功；手动 Connect 或 Refresh 可能会在后台短暂打开一个非活动 Kimi 标签页以恢复会话。";
 const listingLinks = [
   {
     markdown: "[Artwork instructions](store-assets/README.md)",
@@ -71,8 +75,8 @@ const listingDefaults = [
 const valid = {
   readme: `${issuesLink}\n${faqLink}`,
   readmeZh: "[常见问题](FAQ.zh-CN.md)",
-  faq: "English | [简体中文](FAQ.zh-CN.md)",
-  faqZh: "[English](FAQ.md) | 简体中文",
+  faq: `English | [简体中文](FAQ.zh-CN.md)\n${kimiAutoRefreshStatement}`,
+  faqZh: `[English](FAQ.md) | 简体中文\n${kimiAutoRefreshStatementZh}`,
   privacy: [
     issuesLink,
     "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.",
@@ -109,6 +113,21 @@ const faqNavigationLinks = [
     key: "faqZh",
     markdown: "[English](FAQ.md)",
     error: "Simplified Chinese FAQ is missing the English FAQ link: FAQ.md.",
+  },
+];
+
+const kimiFaqStatements = [
+  {
+    key: "faq",
+    statement: kimiAutoRefreshStatement,
+    error:
+      "English FAQ is missing the rendered Kimi automatic-refresh limitation.",
+  },
+  {
+    key: "faqZh",
+    statement: kimiAutoRefreshStatementZh,
+    error:
+      "Simplified Chinese FAQ is missing the rendered Kimi automatic-refresh limitation.",
   },
 ];
 
@@ -199,6 +218,17 @@ const nonRenderedHistoryDisclosures = [
 ];
 
 describe("publication content", () => {
+  it.each(kimiFaqStatements)(
+    "requires the rendered Kimi automatic-refresh limitation in $key",
+    ({ key, statement, error }) => {
+      const errors = validatePublicationDocuments({
+        ...valid,
+        [key]: valid[key].replace(statement, ""),
+      });
+      expect(errors).toContain(error);
+    },
+  );
+
   it.each(faqNavigationLinks)(
     "rejects a missing FAQ navigation link from $key",
     ({ key, markdown, error }) => {

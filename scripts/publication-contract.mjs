@@ -11,6 +11,22 @@ const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
+const requiredVisibleFaqStatements = [
+  {
+    key: "faq",
+    statement:
+      "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.",
+    error:
+      "English FAQ is missing the rendered Kimi automatic-refresh limitation.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "Kimi 自动刷新属于尽力而为，并不保证每次都能成功；手动 Connect 或 Refresh 可能会在后台短暂打开一个非活动 Kimi 标签页以恢复会话。",
+    error:
+      "Simplified Chinese FAQ is missing the rendered Kimi automatic-refresh limitation.",
+  },
+];
 
 const requiredListingDefaults = [
   "Category: Productivity",
@@ -174,6 +190,12 @@ export function validatePublicationDocuments(documents) {
         destination,
       )
     ) {
+      errors.push(error);
+    }
+  }
+
+  for (const { key, statement, error } of requiredVisibleFaqStatements) {
+    if (!extractVisibleRenderedProse(documents[key] ?? "").includes(statement)) {
       errors.push(error);
     }
   }
