@@ -446,6 +446,89 @@ describe("Cockpit", () => {
     ).toBeVisible();
   });
 
+  it("reveals an accessible history chart and current-window selector from each connected card", () => {
+    const state = createFixtureState(NOW);
+    state.providers[0]!.history.push({
+      observedAt: NOW - 15 * 60 * 1_000,
+      windows: [{ windowId: "retired-window", usedRatio: 0.9 }],
+    });
+
+    renderCockpit(state);
+
+    expect(screen.getAllByRole("button", { name: "History" })).toHaveLength(4);
+    const chatGpt = screen.getByRole("article", { name: "ChatGPT" });
+    const historyButton = within(chatGpt).getByRole("button", {
+      name: "History",
+    });
+    expect(historyButton).toHaveAttribute("aria-expanded", "false");
+    expect(
+      within(chatGpt).queryByRole("img", {
+        name: /ChatGPT .* usage history/,
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(historyButton);
+
+    expect(historyButton).toHaveAttribute("aria-expanded", "true");
+    const windowSelect = within(chatGpt).getByRole("combobox", {
+      name: "Quota window",
+    });
+    expect(windowSelect).toBeVisible();
+    expect(
+      within(windowSelect)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["5-hour messages", "Weekly messages"]);
+    expect(
+      within(windowSelect).queryByRole("option", {
+        name: "retired-window",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(chatGpt).getByRole("img", {
+        name: "ChatGPT 5-hour messages usage history",
+      }),
+    ).toBeVisible();
+  });
+
+  it("does not offer history without both provider access and a current snapshot", () => {
+    const disconnected = createFixtureState(NOW);
+    disconnected.providers = [
+      { ...disconnected.providers[0]!, access: "required" },
+    ];
+    const firstView = render(
+      <Cockpit
+        state={disconnected}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "History" }),
+    ).not.toBeInTheDocument();
+
+    const snapshotFree = createInitialState();
+    snapshotFree.providers = [
+      { ...snapshotFree.providers[0]!, access: "granted" },
+    ];
+    firstView.rerender(
+      <Cockpit
+        state={snapshotFree}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "History" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     ["stale", true],
     ["empty", false],

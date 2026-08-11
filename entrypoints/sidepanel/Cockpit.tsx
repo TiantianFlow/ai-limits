@@ -229,6 +229,13 @@ function providerView(
     access: provider.access,
     attemptMessage: attemptMessage(provider, stale),
     hasSnapshot: snapshot !== undefined,
+    history: snapshot
+      ? {
+          windows: snapshot.windows,
+          observations: provider.history,
+          now,
+        }
+      : undefined,
     emptyDescription:
       provider.access === "required"
         ? CONNECT_DISCLOSURE

@@ -15,6 +15,27 @@ function fixtureSnapshot(
   };
 }
 
+function fixtureHistory(snapshot: ProviderSnapshot) {
+  const current = observationFromSnapshot(snapshot);
+  return [
+    {
+      observedAt: snapshot.fetchedAt - HOUR,
+      windows: current.windows.map((window) => ({
+        ...window,
+        usedRatio: Math.max(0, window.usedRatio - 0.18),
+      })),
+    },
+    {
+      observedAt: snapshot.fetchedAt - 30 * 60 * 1_000,
+      windows: current.windows.map((window) => ({
+        ...window,
+        usedRatio: Math.max(0, window.usedRatio - 0.08),
+      })),
+    },
+    current,
+  ];
+}
+
 export function createFixtureState(now: number): AppState {
   const fiveHours = 5 * HOUR;
   const week = 7 * DAY;
@@ -173,7 +194,7 @@ export function createFixtureState(now: number): AppState {
 
   for (const provider of providers) {
     provider.history = provider.snapshot
-      ? [observationFromSnapshot(provider.snapshot)]
+      ? fixtureHistory(provider.snapshot)
       : [];
   }
 

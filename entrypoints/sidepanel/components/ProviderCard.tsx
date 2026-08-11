@@ -1,8 +1,14 @@
-import React from "react";
+import React, { useId, useState } from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
-import type { DisplayMode, ProviderRecord } from "../../../domain/model";
+import type {
+  DisplayMode,
+  ProviderRecord,
+  QuotaHistoryObservation,
+  QuotaWindow,
+} from "../../../domain/model";
 import type { PaceKind } from "../../../domain/quota";
+import { HistoryChart } from "./HistoryChart";
 import { QuotaRow } from "./QuotaRow";
 
 export interface QuotaView {
@@ -35,6 +41,11 @@ export interface ProviderCardProps {
   operation?: ProviderOperation;
   attemptMessage?: string;
   hasSnapshot: boolean;
+  history?: {
+    windows: QuotaWindow[];
+    observations: QuotaHistoryObservation[];
+    now: number;
+  };
   emptyDescription: string;
   extraDisclosure?: string;
   action?: {
@@ -62,10 +73,15 @@ export function ProviderCard({
   operation,
   attemptMessage,
   hasSnapshot,
+  history,
   emptyDescription,
   extraDisclosure,
   action,
 }: ProviderCardProps) {
+  const historyPanelId = useId();
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const canShowHistory = access === "granted" && hasSnapshot && history;
+
   return (
     <article className="provider-card" aria-labelledby={`provider-${name}`}>
       <header className="provider-card__header">
@@ -136,6 +152,32 @@ export function ProviderCard({
             <QuotaRow key={quota.id} {...quota} mode={mode} />
           ))}
         </div>
+      ) : null}
+
+      {canShowHistory ? (
+        <section className="history-disclosure">
+          <button
+            className="history-disclosure__toggle"
+            type="button"
+            aria-expanded={historyExpanded}
+            aria-controls={historyPanelId}
+            onClick={() => setHistoryExpanded((expanded) => !expanded)}
+          >
+            <span>History</span>
+            <span aria-hidden="true">{historyExpanded ? "−" : "+"}</span>
+          </button>
+          {historyExpanded ? (
+            <div id={historyPanelId}>
+              <HistoryChart
+                providerName={name}
+                mode={mode}
+                windows={history.windows}
+                history={history.observations}
+                now={history.now}
+              />
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {credits.length ? (
