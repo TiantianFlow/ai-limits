@@ -3,6 +3,8 @@ import MarkdownIt from "markdown-it";
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const limitedUseStatement =
   "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
+const historyRetentionStatement =
+  "Successful normalized quota observations are stored locally for up to 30 days.";
 const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
@@ -119,6 +121,12 @@ export function validatePublicationDocuments(documents) {
 
   if (!privacy.includes(limitedUseStatement)) {
     errors.push("Privacy policy is missing the Limited Use compliance statement.");
+  }
+
+  if (!privacy.includes(historyRetentionStatement)) {
+    errors.push(
+      "Privacy policy is missing the 30-day local quota-history disclosure.",
+    );
   }
 
   if (!security.includes(securityCondition)) {

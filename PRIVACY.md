@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: August 9, 2026
+Last updated: August 10, 2026
 
 AI Limits is a locally running Chrome extension by wjcjttl. This policy
 describes version 0.1.0.
@@ -18,6 +18,8 @@ extension reads and normalizes:
 - plan, subscription, or organization labels;
 - quota-window labels, usage or remaining ratios and amounts, limit units,
   window start times, reset times, and durations;
+- quota history made from successful normalized observations of those
+  quota-window fields;
 - credit balances, limits, usage, units, and reset times; and
 - refresh timestamps and sanitized success, retry, sign-in, challenge,
   temporary-error, or response-change status.
@@ -66,27 +68,40 @@ contains display and automatic-refresh preferences, provider permission state,
 the normalized usage fields listed above, and sanitized refresh-attempt
 metadata. It does not contain provider cookies or access credentials.
 
+Successful normalized quota observations are stored locally for up to 30 days.
+Every observation from the newest 48 hours remains at full collection
+resolution. Older observations are compacted to the latest observation in each
+UTC hour until they age out. This history contains quota-window usage only: it
+does not retain credit balances, limits, usage, or reset times. Failed,
+deferred, skipped, or malformed refresh results do not add observations.
+When existing extension state is upgraded for this feature, one valid normalized
+current snapshot can become the first observation at its original `fetchedAt`
+time. The extension does not query a provider to reconstruct or backfill any
+earlier history.
+
 The local record remains in the current Chrome profile until you disconnect a
 provider, choose **Delete all local data**, uninstall the extension, or clear
 the extension's browser storage:
 
 - **Disconnect** first revokes that provider's optional access, then deletes
-  that provider's saved snapshot and refresh history. If Chrome cannot revoke
-  the permission, AI Limits reports failure and keeps the local provider data
-  so it does not falsely claim disconnection.
+  that provider's saved snapshot, quota history, and refresh-attempt history.
+  If Chrome cannot revoke the permission, AI Limits reports failure and keeps
+  the local provider data so it does not falsely claim disconnection.
 - **Delete all local data** stops refresh work, clears the refresh alarm,
   attempts to revoke every provider permission, removes saved usage, and writes
-  a clean default settings record. If any permission cannot be revoked, saved
-  usage is still removed and automatic refresh remains off.
+  a clean default settings record with no quota history. If any permission
+  cannot be revoked, saved usage and quota history are still removed and
+  automatic refresh remains off.
 - An exact provider-permission removal event first invalidates that provider's
-  active refresh and unconditionally clears its local snapshot and refresh
-  history. Only then does AI Limits sample authoritative permission state to
-  set the final access flag. A rapid regrant can therefore restore connected
-  access, but it cannot restore the deleted usage history. If permission is
-  revoked while the background worker is asleep, the next reconciliation
-  clears data when a stored grant is authoritatively absent; it also clears any
-  legacy permission-required record that still contains a snapshot or refresh
-  history. Empty never-connected permission-required records remain unchanged.
+  active refresh and unconditionally clears its local snapshot, quota history,
+  and refresh-attempt history. Only then does AI Limits sample authoritative
+  permission state to set the final access flag. A rapid regrant can therefore
+  restore connected access, but it cannot restore the deleted usage history.
+  If permission is revoked while the background worker is asleep, the next
+  reconciliation clears data when a stored grant is authoritatively absent; it
+  also clears any legacy permission-required record that still contains a
+  snapshot or history. Empty never-connected permission-required records remain
+  unchanged.
 
 ## Automatic refresh
 
@@ -103,6 +118,9 @@ reporting, or telemetry. The extension does not sell personal data and does not
 share it with the developer, advertisers, data brokers, or unrelated third
 parties. Provider requests go only to the provider service you selected, which
 processes those requests under its own terms and privacy policy.
+
+Quota history remains in the local Chrome profile and is never transmitted to
+the developer.
 
 The extension does not log session credentials or saved usage data. Opening a
 support link or filing an issue is a separate action you take outside the

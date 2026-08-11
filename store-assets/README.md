@@ -61,9 +61,10 @@ The preview uses the fixed instant `2026-08-09T14:00:00.000Z`, forces light
 mode, `en-US`, `America/Toronto`, and a device scale factor of 1, and creates a
 fresh browser context without a user profile. The `locale=zh_CN` preview option
 localizes only the surrounding project copy; it intentionally leaves the
-production extension UI in English. The pacing image scrolls only the
-side-panel frame. The privacy image opens the real Settings view through its
-real button.
+production extension UI in English. The pacing image uses a taller capture-only
+side-panel frame and scrolls only that frame so the complete Kimi and Cursor
+cards, including their collapsed History controls, remain visible at production
+scale. The privacy image opens the real Settings view through its real button.
 
 Never generate store artwork from a browser profile, extension storage,
 provider website, network credential, or live provider response. Representative

@@ -2,10 +2,10 @@
 
 English | [简体中文](README.zh-CN.md)
 
-AI Limits is a Chrome side-panel extension that shows subscription usage for
-ChatGPT, Claude, Kimi, and Cursor in one compact view. It starts empty and reads
-usage only after you connect an individual provider and approve that provider's
-optional access.
+AI Limits is a Chrome side-panel extension that shows current subscription
+usage and local quota-history graphs for ChatGPT, Claude, Kimi, and Cursor in
+one compact view. It starts empty and reads usage only after you connect an
+individual provider and approve that provider's optional access.
 
 AI Limits is an independent project by wjcjttl. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
@@ -18,8 +18,14 @@ affiliates.
 - Each provider is opt-in. Chrome asks for only that provider's site access.
 - The extension sends low-frequency, read-only requests to the provider's own
   web-session usage services. It does not scrape rendered page content.
-- Normalized quota, credit, plan, refresh-status, and preference data is stored
-  in Chrome extension storage on the local browser profile.
+- The latest normalized quota, credit, plan, refresh-status, and preference data
+  is stored in Chrome extension storage on the local browser profile.
+- After each successful normalized refresh, quota observations are stored
+  locally for up to 30 days for the History graphs. The newest 48 hours remain
+  at full collection resolution; older observations keep only the latest value
+  in each UTC hour. On upgrade, one valid current snapshot can become the first
+  observation at its original fetch time; the extension does not reconstruct
+  earlier provider history and does not store credit-balance history.
 - Session cookies and access credentials are used only for the current provider
   collection attempt and are not saved in persistent extension storage.
 - Automatic refresh is enabled by default and runs about every 15 minutes only

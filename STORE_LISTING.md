@@ -35,14 +35,14 @@ Regeneration and validation instructions are in
 
 ## Single purpose
 
-AI Limits gives a user one Chrome side panel for viewing subscription usage and
-reset timing from four provider accounts already signed in within that user's
-browser profile.
+AI Limits gives a user one Chrome side panel for viewing current subscription
+usage, reset timing, and local quota-history graphs from four provider accounts
+already signed in within that user's browser profile.
 
 ## Short description
 
-See ChatGPT, Claude, Kimi, and Cursor subscription usage in one Chrome side
-panel.
+See current ChatGPT, Claude, Kimi, and Cursor usage and local quota history in
+one Chrome side panel.
 
 ## Detailed description
 
@@ -51,6 +51,15 @@ account pages. Connect ChatGPT, Claude, Kimi, or Cursor individually, approve
 that provider's optional access, and view the usage windows, reset times,
 credits, and plan labels that the provider makes available to the signed-in web
 session.
+
+Each connected provider card includes a collapsed History control for local
+quota graphs. Successful normalized quota observations are stored locally for
+up to 30 days. The newest 48 hours remain at full collection resolution; older
+observations keep only the latest value in each UTC hour. History begins with
+one valid locally stored current snapshot on upgrade or with subsequent
+successful refreshes. The extension does not reconstruct earlier provider
+history and does not store credit-balance history. History is never transmitted
+to the developer.
 
 The extension stores normalized results in the local Chrome profile. Refresh
 can be manual or automatic about every 15 minutes. Settings let the user turn
@@ -67,10 +76,10 @@ compatibility may change without notice.
 ### Required permissions
 
 - `storage`: saves display and refresh preferences, provider access state,
-  normalized quota/credit snapshots, and sanitized refresh status in
-  `chrome.storage.local`. It also holds temporary Kimi tab-cleanup lease
-  metadata in `chrome.storage.session`. Session cookies and access credentials
-  are not persisted.
+  normalized quota/credit snapshots, up to 30 days of quota-only history, and
+  sanitized refresh status in `chrome.storage.local`. It also holds temporary
+  Kimi tab-cleanup lease metadata in `chrome.storage.session`. Session cookies
+  and access credentials are not persisted.
 - `alarms`: schedules the approximately 15-minute refresh cycle only while
   automatic refresh is enabled and at least one provider is connected.
 - `sidePanel`: displays the extension's only application interface in Chrome's
@@ -122,7 +131,8 @@ does not create or activate provider tabs.
 - **Financial and payment information:** Yes, limited to provider-reported
   usage-credit balances, extra-usage amounts or limits, and on-demand spend
   limits included in a usage response. Payment cards, bank details, and
-  transaction histories are not accessed.
+  transaction histories are not accessed. The local history feature does not
+  retain these credit fields over time.
 - **Web history:** No browsing history or list of visited pages is collected or
   retained. During Kimi collection, AI Limits may check for an already-open tab
   matching the exact Kimi origin.
@@ -132,9 +142,14 @@ does not create or activate provider tabs.
 - **Sale or unrelated sharing:** No. Data is not sold and is not sent to the
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
-- **Retention and controls:** Normalized data stays in the local Chrome profile
-  until provider disconnect, **Delete all local data**, extension uninstall, or
-  browser-storage clearing. Users can disable automatic refresh at any time.
+- **Retention and controls:** Successful normalized quota observations stay in
+  the local Chrome profile for up to 30 days. The newest 48 hours stay at full
+  collection resolution; older observations keep the latest value in each UTC
+  hour. Disconnect or permission revocation removes that provider's history;
+  **Delete all local data** removes every provider's history even if a
+  permission cannot be revoked. Extension uninstall or browser-storage clearing
+  also removes the local record. Users can disable automatic refresh at any
+  time.
 - **Use limitation:** Data is used only to provide the usage dashboard, refresh
   health, permission lifecycle, and user-requested settings. It is not used for
   advertising, credit decisions, or purposes unrelated to the single purpose.
@@ -176,6 +191,8 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    the Cursor origin, and confirm available monthly model usage and on-demand
    credit data appears. Use the card's **Refresh** action once.
 6. Use the header refresh and confirm connected providers retain their previous
-   visible data while refreshing. In Settings, turn automatic refresh off and
-   on, disconnect one provider, then use **Delete all local data** and confirm
-   the cards return to the permission-required state.
+   visible data while refreshing. Open a connected card's collapsed **History**
+   control and confirm a successful refresh adds quota history without adding
+   credit history. In Settings, turn automatic refresh off and on, disconnect
+   one provider, then use **Delete all local data** and confirm the cards return
+   to the permission-required state.

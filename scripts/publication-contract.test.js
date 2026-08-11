@@ -3,6 +3,8 @@ import { validatePublicationDocuments } from "./publication-contract.mjs";
 
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const issuesLink = `[GitHub Issues](${issuesUrl})`;
+const historyRetentionStatement =
+  "Successful normalized quota observations are stored locally for up to 30 days.";
 const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
@@ -68,6 +70,7 @@ const valid = {
   privacy: [
     issuesLink,
     "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.",
+    historyRetentionStatement,
   ].join("\n"),
   security: [issuesLink, securityCondition, securityFallback].join("\n"),
   listing: [
@@ -161,6 +164,16 @@ describe("publication content", () => {
   it("requires an affirmative Limited Use statement", () => {
     const errors = validatePublicationDocuments({ ...valid, privacy: "Privacy policy" });
     expect(errors).toContain("Privacy policy is missing the Limited Use compliance statement.");
+  });
+
+  it("requires the privacy policy to disclose the 30-day local quota-history limit", () => {
+    const errors = validatePublicationDocuments({
+      ...valid,
+      privacy: valid.privacy.replace(historyRetentionStatement, ""),
+    });
+    expect(errors).toContain(
+      "Privacy policy is missing the 30-day local quota-history disclosure.",
+    );
   });
 
   it.each(policyDocuments)(

@@ -233,8 +233,12 @@ body {
   max-width: 460px;
 }
 
+.capture-page--pacing {
+  padding-block: 16px;
+}
+
 .capture-page--pacing .extension-frame {
-  height: 622px;
+  height: 740px;
 }
 
 .capture-page--privacy .marketing-copy h1 {
