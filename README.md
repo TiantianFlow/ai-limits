@@ -21,11 +21,13 @@ affiliates.
 - The latest normalized quota, credit, plan, refresh-status, and preference data
   is stored in Chrome extension storage on the local browser profile.
 - After each successful normalized refresh, quota observations are stored
-  locally for up to 30 days for the History graphs. The newest 48 hours remain
-  at full collection resolution; older observations keep only the latest value
-  in each UTC hour. On upgrade, one valid current snapshot can become the first
-  observation at its original fetch time; the extension does not reconstruct
-  earlier provider history and does not store credit-balance history.
+  locally for up to 30 days for the History graphs, subject to a
+  1,024-observation per-provider safety cap. Within that cap, observations from
+  the newest 48 hours are kept at collection resolution; older retained history
+  keeps only the latest value in each UTC hour. On upgrade, one valid current
+  snapshot can become the first observation at its original fetch time; the
+  extension does not reconstruct earlier provider history and does not store
+  credit-balance history.
 - Session cookies and access credentials are used only for the current provider
   collection attempt and are not saved in persistent extension storage.
 - Automatic refresh is enabled by default and runs about every 15 minutes only

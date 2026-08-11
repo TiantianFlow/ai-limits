@@ -4,7 +4,7 @@ const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const limitedUseStatement =
   "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
 const historyRetentionStatement =
-  "Successful normalized quota observations are stored locally for up to 30 days.";
+  "Successful normalized quota observations are stored locally for up to 30 days, subject to a 1,024-observation per-provider safety cap.";
 const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
@@ -94,6 +94,37 @@ function extractInlineMarkdownLinkDestinations(document) {
   return destinations;
 }
 
+function extractVisibleRenderedProse(document) {
+  const visible = [];
+  let commentOpen = false;
+
+  for (const blockToken of markdown.parse(document ?? "", {})) {
+    if (blockToken.type !== "inline") {
+      continue;
+    }
+
+    for (const token of blockToken.children ?? []) {
+      if (token.type === "html_inline") {
+        commentOpen = updateHtmlCommentState(token.content, commentOpen);
+        continue;
+      }
+
+      if (commentOpen) {
+        commentOpen = updateHtmlCommentState(token.content, commentOpen);
+        continue;
+      }
+
+      if (token.type === "text") {
+        visible.push(token.content);
+      } else if (token.type === "softbreak" || token.type === "hardbreak") {
+        visible.push(" ");
+      }
+    }
+  }
+
+  return normalizeWhitespace(visible.join(" "));
+}
+
 export function validatePublicationDocuments(documents) {
   const errors = [];
   const policies = [
@@ -114,6 +145,7 @@ export function validatePublicationDocuments(documents) {
   }
 
   const privacy = normalizeWhitespace(documents.privacy);
+  const visiblePrivacy = extractVisibleRenderedProse(documents.privacy);
   const security = normalizeWhitespace(documents.security);
   const listingSource = documents.listing ?? "";
   const listing = normalizeWhitespace(listingSource);
@@ -123,7 +155,7 @@ export function validatePublicationDocuments(documents) {
     errors.push("Privacy policy is missing the Limited Use compliance statement.");
   }
 
-  if (!privacy.includes(historyRetentionStatement)) {
+  if (!visiblePrivacy.includes(historyRetentionStatement)) {
     errors.push(
       "Privacy policy is missing the 30-day local quota-history disclosure.",
     );

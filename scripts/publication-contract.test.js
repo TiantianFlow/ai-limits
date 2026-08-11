@@ -4,6 +4,8 @@ import { validatePublicationDocuments } from "./publication-contract.mjs";
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const issuesLink = `[GitHub Issues](${issuesUrl})`;
 const historyRetentionStatement =
+  "Successful normalized quota observations are stored locally for up to 30 days, subject to a 1,024-observation per-provider safety cap.";
+const uncappedHistoryRetentionStatement =
   "Successful normalized quota observations are stored locally for up to 30 days.";
 const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
@@ -152,6 +154,21 @@ const nonRenderedIssuesLinks = [
   },
 ];
 
+const nonRenderedHistoryDisclosures = [
+  {
+    context: "an HTML comment",
+    replacement: `<!-- ${historyRetentionStatement} -->`,
+  },
+  {
+    context: "a fenced code block",
+    replacement: ["```text", historyRetentionStatement, "```"].join("\n"),
+  },
+  {
+    context: "an inline code span",
+    replacement: `\`${historyRetentionStatement}\``,
+  },
+];
+
 describe("publication content", () => {
   it("rejects pre-publication placeholders", () => {
     const errors = validatePublicationDocuments({
@@ -174,6 +191,45 @@ describe("publication content", () => {
     expect(errors).toContain(
       "Privacy policy is missing the 30-day local quota-history disclosure.",
     );
+  });
+
+  it("requires the local quota-history limit to disclose the per-provider safety cap", () => {
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(
+          historyRetentionStatement,
+          uncappedHistoryRetentionStatement,
+        ),
+      }),
+    ).toContain(
+      "Privacy policy is missing the 30-day local quota-history disclosure.",
+    );
+  });
+
+  it.each(nonRenderedHistoryDisclosures)(
+    "rejects the quota-history disclosure when it appears only in $context",
+    ({ replacement }) => {
+      const errors = validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(historyRetentionStatement, replacement),
+      });
+      expect(errors).toContain(
+        "Privacy policy is missing the 30-day local quota-history disclosure.",
+      );
+    },
+  );
+
+  it("accepts the quota-history disclosure when ordinary prose wraps across lines", () => {
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(
+          historyRetentionStatement,
+          "Successful normalized quota observations are stored locally for up to 30 days,\nsubject to a 1,024-observation per-provider safety cap.",
+        ),
+      }),
+    ).toEqual([]);
   });
 
   it.each(policyDocuments)(

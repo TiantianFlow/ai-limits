@@ -54,12 +54,13 @@ session.
 
 Each connected provider card includes a collapsed History control for local
 quota graphs. Successful normalized quota observations are stored locally for
-up to 30 days. The newest 48 hours remain at full collection resolution; older
-observations keep only the latest value in each UTC hour. History begins with
-one valid locally stored current snapshot on upgrade or with subsequent
-successful refreshes. The extension does not reconstruct earlier provider
-history and does not store credit-balance history. History is never transmitted
-to the developer.
+up to 30 days, subject to a 1,024-observation per-provider safety cap. Within
+that cap, observations from the newest 48 hours are kept at collection
+resolution; older retained history keeps only the latest value in each UTC
+hour. History begins with one valid locally stored current snapshot on upgrade
+or with subsequent successful refreshes. The extension does not reconstruct
+earlier provider history and does not store credit-balance history. History is
+never transmitted to the developer.
 
 The extension stores normalized results in the local Chrome profile. Refresh
 can be manual or automatic about every 15 minutes. Settings let the user turn
@@ -143,13 +144,14 @@ does not create or activate provider tabs.
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
 - **Retention and controls:** Successful normalized quota observations stay in
-  the local Chrome profile for up to 30 days. The newest 48 hours stay at full
-  collection resolution; older observations keep the latest value in each UTC
-  hour. Disconnect or permission revocation removes that provider's history;
-  **Delete all local data** removes every provider's history even if a
-  permission cannot be revoked. Extension uninstall or browser-storage clearing
-  also removes the local record. Users can disable automatic refresh at any
-  time.
+  the local Chrome profile for up to 30 days, subject to a 1,024-observation
+  per-provider safety cap. Within that cap, observations from the newest 48
+  hours stay at collection resolution; older retained history keeps the latest
+  value in each UTC hour. Disconnect or permission revocation removes that
+  provider's history; **Delete all local data** removes every provider's history
+  even if a permission cannot be revoked. Extension uninstall or browser-storage
+  clearing also removes the local record. Users can disable automatic refresh
+  at any time.
 - **Use limitation:** Data is used only to provide the usage dashboard, refresh
   health, permission lifecycle, and user-requested settings. It is not used for
   advertising, credit decisions, or purposes unrelated to the single purpose.

@@ -68,12 +68,13 @@ contains display and automatic-refresh preferences, provider permission state,
 the normalized usage fields listed above, and sanitized refresh-attempt
 metadata. It does not contain provider cookies or access credentials.
 
-Successful normalized quota observations are stored locally for up to 30 days.
-Every observation from the newest 48 hours remains at full collection
-resolution. Older observations are compacted to the latest observation in each
-UTC hour until they age out. This history contains quota-window usage only: it
-does not retain credit balances, limits, usage, or reset times. Failed,
-deferred, skipped, or malformed refresh results do not add observations.
+Successful normalized quota observations are stored locally for up to 30 days,
+subject to a 1,024-observation per-provider safety cap. Within that cap,
+observations from the newest 48 hours are kept at collection resolution. Older
+retained history is compacted to the latest observation in each UTC hour until
+it ages out. This history contains quota-window usage only: it does not retain
+credit balances, limits, usage, or reset times. Failed, deferred, skipped, or
+malformed refresh results do not add observations.
 When existing extension state is upgraded for this feature, one valid normalized
 current snapshot can become the first observation at its original `fetchedAt`
 time. The extension does not query a provider to reconstruct or backfill any
