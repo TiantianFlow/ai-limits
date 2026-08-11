@@ -1,4 +1,4 @@
-import React, { useId, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 
 import {
   quotaHistorySegments,
@@ -84,6 +84,11 @@ export function HistoryChart({
   const [selectedWindowId, setSelectedWindowId] = useState(
     () => windows[0]?.id ?? "",
   );
+  useEffect(() => {
+    if (!windows.some((window) => window.id === selectedWindowId)) {
+      setSelectedWindowId(windows[0]?.id ?? "");
+    }
+  }, [selectedWindowId, windows]);
   const selectedWindow =
     windows.find((window) => window.id === selectedWindowId) ?? windows[0];
 
@@ -171,6 +176,29 @@ export function HistoryChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          {segments.map((segment, index) => {
+            if (segment.length !== 1) {
+              return null;
+            }
+
+            const point = segment[0]!;
+            const [cx, cy] = pointPosition(
+              point,
+              mode,
+              firstPoint!.observedAt,
+              rangeEnd,
+            );
+            return (
+              <circle
+                className="history-chart__marker"
+                key={`marker-${point.observedAt}-${index}`}
+                cx={cx}
+                cy={cy}
+                r="3"
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
         </svg>
       )}
 

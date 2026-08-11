@@ -590,6 +590,10 @@ h3 {
   stroke-width: 2;
 }
 
+.history-chart__marker {
+  fill: var(--quota);
+}
+
 .history-chart__range,
 .history-chart__empty {
   margin: 4px 0 0;

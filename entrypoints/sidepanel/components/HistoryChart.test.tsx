@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -76,6 +76,45 @@ describe("HistoryChart", () => {
     ).toHaveClass("visually-hidden");
   });
 
+  it("renders visible markers without connecting reset-separated singleton segments", () => {
+    const singletonHistory: QuotaHistoryObservation[] = [
+      {
+        observedAt: NOW - HOUR,
+        windows: [
+          { windowId: "weekly", usedRatio: 0.91, resetsAt: FIRST_RESET },
+        ],
+      },
+      {
+        observedAt: NOW,
+        windows: [
+          { windowId: "weekly", usedRatio: 0.18, resetsAt: SECOND_RESET },
+        ],
+      },
+    ];
+    const { container } = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        windows={windows}
+        history={singletonHistory}
+        now={NOW}
+      />,
+    );
+
+    expect(
+      container.querySelectorAll("path.history-chart__line"),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll("circle.history-chart__marker"),
+    ).toHaveLength(2);
+    expect(
+      Array.from(
+        container.querySelectorAll("path.history-chart__line"),
+        (path) => path.getAttribute("d")?.includes("L"),
+      ),
+    ).toEqual([false, false]);
+  });
+
   it("complements canonical used ratios only when rendering Left mode", () => {
     render(
       <HistoryChart
@@ -93,6 +132,58 @@ describe("HistoryChart", () => {
         name: /ChatGPT Weekly messages usage history/,
       }),
     ).toHaveAccessibleDescription(/latest value is 58% left/i);
+  });
+
+  it("keeps the valid fallback selected when a removed window later returns", () => {
+    const fiveHourWindow: QuotaWindow = {
+      id: "five-hour",
+      label: "5-hour messages",
+      kind: "rolling",
+      usedRatio: 0.2,
+      resetsAt: NOW + HOUR,
+      durationMs: 5 * HOUR,
+      sourceSemantics: "used",
+    };
+    const currentWindows = [fiveHourWindow, windows[0]!];
+    const view = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        windows={currentWindows}
+        history={history}
+        now={NOW}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Quota window" }), {
+      target: { value: "weekly" },
+    });
+    expect(
+      screen.getByRole("combobox", { name: "Quota window" }),
+    ).toHaveValue("weekly");
+
+    view.rerender(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        windows={[fiveHourWindow]}
+        history={history}
+        now={NOW}
+      />,
+    );
+    view.rerender(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        windows={currentWindows}
+        history={history}
+        now={NOW}
+      />,
+    );
+
+    expect(
+      screen.getByRole("combobox", { name: "Quota window" }),
+    ).toHaveValue("five-hour");
   });
 
   it("does not imply a trend from a single observation", () => {
