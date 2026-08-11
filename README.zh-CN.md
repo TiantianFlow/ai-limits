@@ -3,9 +3,10 @@
 [English](README.md) | 简体中文
 
 AI Limits 是一款 Chrome 侧边栏扩展，可在一个紧凑的界面中查看 ChatGPT、
-Claude、Kimi 和 Cursor 的当前订阅用量及本地配额历史图表。扩展初始不读取
-任何数据；只有当你主动连接某个服务并批准该服务的可选访问权限后，才会读取
-其用量。
+Claude、Kimi 和 Cursor 的当前订阅用量及本地配额历史图表。它会将不同服务商
+的用量统一为“已用”或“剩余”视图；当服务商提供完整的重置周期信息时，还会将
+配额消耗与已过时间比较，显示用量节奏。扩展初始不读取任何数据；只有当你主动
+连接某个服务并批准该服务的可选访问权限后，才会读取其用量。
 
 AI Limits 是 wjcjttl 开发的独立项目，与 OpenAI、Anthropic、Moonshot AI、
 Cursor 或其关联公司不存在隶属、背书或授权关系。
@@ -13,7 +14,7 @@ Cursor 或其关联公司不存在隶属、背书或授权关系。
 > 当前扩展界面为英文。下图的中文文字是项目介绍文案；嵌入的实际扩展界面
 > 仍为英文。后续完成扩展本身的简体中文支持后，我们会重新生成截图。
 
-![AI Limits Chrome 侧边栏展示示例订阅用量、重置时间和用量节奏](store-assets/chrome-web-store/zh_CN/screenshot-overview-1280x800.png)
+![AI Limits Chrome 侧边栏展示示例已用视图、订阅用量、重置时间、用量节奏和 History 控件](store-assets/chrome-web-store/zh_CN/screenshot-overview-1280x800.png)
 
 ## 工作原理
 

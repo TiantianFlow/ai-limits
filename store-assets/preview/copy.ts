@@ -21,13 +21,13 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "One Chrome side panel",
       title: "Every AI limit, in one quiet view.",
       description:
-        "See subscription usage, reset timing, and plan details without hopping between account pages.",
+        "See every provider as Used or Left, with reset timing, plan details, and local History—without hopping between account pages.",
     },
     pacing: {
       eyebrow: "Plan your usage",
       title: "Know the limit. See the pace.",
       description:
-        "Quota and time bars sit together, so bursts, reset windows, and remaining headroom are easy to scan.",
+        "Compare quota consumption with elapsed time in its reset window, so bursts, reset windows, and remaining headroom are easy to scan.",
     },
     privacy: {
       eyebrow: "Local by design",
@@ -38,10 +38,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     promo: {
       eyebrow: "Chrome side panel",
       title: "AI limits, at a glance.",
-      description: "Usage and reset timing for your AI subscriptions.",
+      description: "Used or Left, reset timing, pace, and local history for your AI subscriptions.",
     },
     chromeSidePanelLabel: "Chrome side panel",
-    pacingNotes: ["Quota used", "Time elapsed", "Pace signal"],
+    pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
       "Provider access is opt-in",
       "Normalized usage stays local",
@@ -55,13 +55,13 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "一个 Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
       description:
-        "无需在各个账户页面之间切换，即可查看订阅用量、重置时间和套餐详情。",
+        "无需在各个账户页面之间切换，即可统一查看已用或剩余、重置时间、套餐详情和本地历史。",
     },
     pacing: {
       eyebrow: "规划你的用量",
       title: "看清上限，掌握节奏。",
       description:
-        "配额与时间进度并排呈现，用量高峰、重置周期和剩余额度都能快速掌握。",
+        "将配额消耗与重置周期内已过的时间放在一起看，用量高峰、重置周期和剩余额度都能快速掌握。",
     },
     privacy: {
       eyebrow: "数据仅存本地",
@@ -72,10 +72,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     promo: {
       eyebrow: "Chrome 侧边栏",
       title: "AI 用量，一目了然。",
-      description: "集中查看 AI 订阅用量和重置时间。",
+      description: "集中查看已用或剩余、重置时间、用量节奏和本地历史。",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
-    pacingNotes: ["已用配额", "已过时间", "用量节奏"],
+    pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
       "服务访问需主动授权",
       "标准化用量数据仅存本地",

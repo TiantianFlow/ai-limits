@@ -36,13 +36,14 @@ Regeneration and validation instructions are in
 ## Single purpose
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
-usage, reset timing, and local quota-history graphs from four provider accounts
-already signed in within that user's browser profile.
+usage as **Used** or **Left**, reset timing, pace, and local quota-history
+graphs from four provider accounts already signed in within that user's browser
+profile.
 
 ## Short description
 
-See current ChatGPT, Claude, Kimi, and Cursor usage and local quota history in
-one Chrome side panel.
+See ChatGPT, Claude, Kimi, and Cursor usage as Used or Left, reset timing,
+pace, and local quota history in one Chrome side panel.
 
 ## Detailed description
 
@@ -51,6 +52,14 @@ account pages. Connect ChatGPT, Claude, Kimi, or Cursor individually, approve
 that provider's optional access, and view the usage windows, reset times,
 credits, and plan labels that the provider makes available to the signed-in web
 session.
+
+Providers use different conventions: some report quota consumed, while others
+report quota remaining. AI Limits normalizes them into a single display and lets
+the user switch between **Used** and **Left** without changing stored data. For
+quota windows that include both a reliable start and reset time, a pace signal
+compares the quota consumed with the elapsed part of that window. When either
+boundary is unavailable, the extension leaves pace unavailable instead of
+estimating it.
 
 Each connected provider card includes a collapsed History control for local
 quota graphs. Successful normalized quota observations are stored locally for

@@ -4,14 +4,17 @@ English | [简体中文](README.zh-CN.md)
 
 AI Limits is a Chrome side-panel extension that shows current subscription
 usage and local quota-history graphs for ChatGPT, Claude, Kimi, and Cursor in
-one compact view. It starts empty and reads usage only after you connect an
-individual provider and approve that provider's optional access.
+one compact view. It normalizes provider-specific reporting into one **Used**
+or **Left** display and, when a provider exposes a complete reset window,
+compares quota consumption with elapsed time to show a pace signal. It starts
+empty and reads usage only after you connect an individual provider and approve
+that provider's optional access.
 
 AI Limits is an independent project by wjcjttl. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
 affiliates.
 
-![AI Limits Chrome side panel showing representative subscription usage, reset timing, and pace indicators](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
+![AI Limits Chrome side panel showing representative subscription usage in Used mode, reset timing, pace indicators, and the History control](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
 
 ## How it works
 
