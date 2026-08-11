@@ -16,6 +16,14 @@ export const kimiRateLimitStatSchema = z
   })
   .passthrough();
 
+export const kimiEnabledZeroRateLimitStatSchema = z
+  .object({
+    ratio: z.undefined().optional(),
+    enabled: z.literal(true),
+    resetTime: z.iso.datetime({ offset: true }),
+  })
+  .passthrough();
+
 export const kimiSubscriptionBalanceSchema = z
   .object({
     amountUsedRatio: kimiRatioSchema,

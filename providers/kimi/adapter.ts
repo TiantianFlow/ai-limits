@@ -11,6 +11,7 @@ import type {
 import { retryAtFromResponse } from "../retry-after";
 import {
   kimiCodingUsageSchema,
+  kimiEnabledZeroRateLimitStatSchema,
   kimiRateLimitStatSchema,
   kimiSubscriptionBalanceSchema,
   kimiSubscriptionSchema,
@@ -191,18 +192,34 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
       id: "five-hour-coding",
       label: "5-hour coding",
       durationMs: 5 * HOUR_MS,
+      acceptsOmittedZero: true,
     },
     {
       value: envelope.data.ratelimitCode7d,
       id: "weekly-coding",
       label: "Weekly coding",
       durationMs: 7 * DAY_MS,
+      acceptsOmittedZero: false,
     },
   ] as const;
 
   for (const rateLimit of rateLimits) {
     const parsed = kimiRateLimitStatSchema.safeParse(rateLimit.value);
-    if (!parsed.success || parsed.data.enabled === false) {
+    let usedRatio: number;
+    let resetTime: string | undefined;
+    if (parsed.success && parsed.data.enabled !== false) {
+      usedRatio = parsed.data.ratio;
+      resetTime = parsed.data.resetTime;
+    } else if (rateLimit.acceptsOmittedZero) {
+      const enabledZero = kimiEnabledZeroRateLimitStatSchema.safeParse(
+        rateLimit.value,
+      );
+      if (!enabledZero.success) {
+        continue;
+      }
+      usedRatio = 0;
+      resetTime = enabledZero.data.resetTime;
+    } else {
       continue;
     }
 
@@ -210,8 +227,8 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
       id: rateLimit.id,
       label: rateLimit.label,
       kind: "feature",
-      usedRatio: parsed.data.ratio,
-      resetsAt: optionalTimestamp(parsed.data.resetTime),
+      usedRatio,
+      resetsAt: optionalTimestamp(resetTime),
       durationMs: rateLimit.durationMs,
       sourceSemantics: "used",
     });

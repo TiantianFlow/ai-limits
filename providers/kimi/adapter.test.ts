@@ -170,6 +170,96 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("secret-cookie");
   });
 
+  test("normalizes an enabled five-hour limit to zero when Kimi omits its ratio", async () => {
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            statsFixture({
+              ratelimitCode5h: {
+                enabled: true,
+                resetTime: FIVE_HOUR_RESET,
+              },
+            }),
+          ),
+        ),
+        vi.fn().mockResolvedValue({ value: "secret-cookie" }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        windows: expect.arrayContaining([
+          {
+            id: "five-hour-coding",
+            label: "5-hour coding",
+            kind: "feature",
+            usedRatio: 0,
+            resetsAt: Date.parse(FIVE_HOUR_RESET),
+            durationMs: 5 * 60 * 60 * 1_000,
+            sourceSemantics: "used",
+          },
+        ]),
+      },
+    });
+  });
+
+  test("does not invent zero usage when both ratio and enabled are absent", async () => {
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            statsFixture({
+              subscriptionBalance: null,
+              ratelimitCode5h: { resetTime: FIVE_HOUR_RESET },
+              ratelimitCode7d: null,
+            }),
+          ),
+        ),
+        vi.fn().mockResolvedValue({ value: "secret-cookie" }),
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      health: { kind: "provider_changed" },
+    });
+  });
+
+  test.each([
+    {
+      name: "five-hour limit without a reset",
+      ratelimitCode5h: { enabled: true },
+      ratelimitCode7d: null,
+    },
+    {
+      name: "weekly limit without a ratio",
+      ratelimitCode5h: null,
+      ratelimitCode7d: { enabled: true, resetTime: WEEKLY_RESET },
+    },
+  ])("does not infer zero for an ambiguous $name", async (rateLimits) => {
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            statsFixture({
+              subscriptionBalance: null,
+              ratelimitCode5h: rateLimits.ratelimitCode5h,
+              ratelimitCode7d: rateLimits.ratelimitCode7d,
+            }),
+          ),
+        ),
+        vi.fn().mockResolvedValue({ value: "secret-cookie" }),
+      ),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      health: { kind: "provider_changed" },
+    });
+  });
+
   test("uses the previous calendar-month boundary for monthly pacing", async () => {
     const resetAt = "2030-03-31T16:11:00.000Z";
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
