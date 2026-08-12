@@ -27,7 +27,7 @@ export const kimiEnabledZeroRateLimitStatSchema = z
 export const kimiSubscriptionBalanceSchema = z
   .object({
     amountUsedRatio: kimiRatioSchema,
-    kimiCodeUsedRatio: kimiRatioSchema.optional(),
+    kimiCodeUsedRatio: z.unknown().optional(),
     expireTime: z.iso.datetime({ offset: true }).optional(),
   })
   .passthrough();

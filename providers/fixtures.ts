@@ -83,6 +83,14 @@ export function createFixtureState(now: number): AppState {
             },
           ],
           credits: [],
+          usageGroups: [
+            {
+              id: "usage",
+              label: "Usage",
+              windowIds: ["five-hour", "weekly"],
+              creditIds: [],
+            },
+          ],
         },
         now,
       ),
@@ -116,6 +124,14 @@ export function createFixtureState(now: number): AppState {
               used: 8.2,
               limit: 20,
               resetsAt: now + 2 * DAY,
+            },
+          ],
+          usageGroups: [
+            {
+              id: "usage",
+              label: "Usage",
+              windowIds: ["weekly"],
+              creditIds: ["extra-usage"],
             },
           ],
         },
@@ -153,6 +169,14 @@ export function createFixtureState(now: number): AppState {
             },
           ],
           credits: [],
+          usageGroups: [
+            {
+              id: "usage",
+              label: "Usage",
+              windowIds: ["five-hour", "weekly"],
+              creditIds: [],
+            },
+          ],
         },
         now,
       ),
@@ -184,6 +208,14 @@ export function createFixtureState(now: number): AppState {
               label: "On-demand spend",
               unit: "USD",
               used: 3.2,
+            },
+          ],
+          usageGroups: [
+            {
+              id: "usage",
+              label: "Usage",
+              windowIds: ["monthly"],
+              creditIds: ["on-demand"],
             },
           ],
         },

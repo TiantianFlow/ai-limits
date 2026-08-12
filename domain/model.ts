@@ -4,6 +4,12 @@ export type { ProviderId } from "../providers/catalog";
 
 export type DisplayMode = "used" | "left";
 
+export interface QuotaSegment {
+  id: string;
+  label: string;
+  usedRatio: number;
+}
+
 export interface QuotaWindow {
   id: string;
   label: string;
@@ -16,6 +22,7 @@ export interface QuotaWindow {
   resetsAt?: number;
   durationMs?: number;
   sourceSemantics: "used" | "remaining";
+  segments?: QuotaSegment[];
 }
 
 export interface CreditBalance {
@@ -28,6 +35,14 @@ export interface CreditBalance {
   resetsAt?: number;
 }
 
+export interface UsageGroup {
+  id: string;
+  label: string;
+  description?: string;
+  windowIds: string[];
+  creditIds: string[];
+}
+
 export interface ProviderSnapshot {
   providerId: ProviderId;
   accountLabel?: string;
@@ -36,6 +51,7 @@ export interface ProviderSnapshot {
   fetchedAt: number;
   windows: QuotaWindow[];
   credits: CreditBalance[];
+  usageGroups?: UsageGroup[];
 }
 
 export interface QuotaHistorySample {

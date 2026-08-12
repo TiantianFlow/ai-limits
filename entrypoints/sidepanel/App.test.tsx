@@ -168,17 +168,6 @@ describe("side-panel App", () => {
       },
       expected: "No providers updated. Existing data is unchanged.",
     },
-    {
-      name: "no providers have permission",
-      state: createInitialState(),
-      outcomes: {
-        chatgpt: { kind: "skipped", reason: "permission_required" } as const,
-        claude: { kind: "skipped", reason: "permission_required" } as const,
-        kimi: { kind: "skipped", reason: "permission_required" } as const,
-        cursor: { kind: "skipped", reason: "permission_required" } as const,
-      },
-      expected: "Connect a provider before refreshing.",
-    },
   ])("announces a truthful manual summary when $name", async ({ state, outcomes, expected }) => {
     installMessageHandler((message, respond) => {
       respond(

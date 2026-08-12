@@ -185,6 +185,7 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
     if (windows.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
+    const credits = onDemandCredit(parsed.data);
     return {
       ok: true,
       snapshot: {
@@ -193,7 +194,15 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
         source: "web-session",
         fetchedAt: now,
         windows,
-        credits: onDemandCredit(parsed.data),
+        credits,
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: windows.map((window) => window.id),
+            creditIds: credits.map((credit) => credit.id),
+          },
+        ],
       },
     };
   } catch {

@@ -146,6 +146,14 @@ describe("Kimi adapter", () => {
           },
         ],
         credits: [],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["monthly-total", "five-hour-coding", "weekly-coding"],
+            creditIds: [],
+          },
+        ],
       },
     });
     expect(getCookie).toHaveBeenCalledWith({
@@ -168,6 +176,85 @@ describe("Kimi adapter", () => {
       }),
     );
     expect(JSON.stringify(result)).not.toContain("secret-cookie");
+  });
+
+  test("normalizes consistent Work and Code contributions for the monthly total", async () => {
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            statsFixture({
+              subscriptionBalance: {
+                amountUsedRatio: 0.1,
+                kimiCodeUsedRatio: 0.07,
+                expireTime: MONTHLY_RESET,
+              },
+            }),
+          ),
+        ),
+        vi.fn().mockResolvedValue({ value: "secret-cookie" }),
+      ),
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(
+        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+      ).toMatchObject({
+        usedRatio: 0.1,
+        segments: [
+          { id: "work", label: "Work", usedRatio: 0.03 },
+          { id: "code", label: "Code", usedRatio: 0.07 },
+        ],
+      });
+    }
+  });
+
+  test.each([
+    {
+      name: "the Code contribution is absent",
+      subscriptionBalance: {
+        amountUsedRatio: 0.1,
+        expireTime: MONTHLY_RESET,
+      },
+    },
+    {
+      name: "the Code contribution is outside the valid ratio range",
+      subscriptionBalance: {
+        amountUsedRatio: 0.1,
+        kimiCodeUsedRatio: 1.1,
+        expireTime: MONTHLY_RESET,
+      },
+    },
+    {
+      name: "the Code contribution exceeds the monthly total",
+      subscriptionBalance: {
+        amountUsedRatio: 0.1,
+        kimiCodeUsedRatio: 0.11,
+        expireTime: MONTHLY_RESET,
+      },
+    },
+  ])("keeps the monthly total without segments when $name", async ({ subscriptionBalance }) => {
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(statsFixture({ subscriptionBalance })),
+        ),
+        vi.fn().mockResolvedValue({ value: "secret-cookie" }),
+      ),
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(
+        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+      ).toEqual(
+        expect.objectContaining({ usedRatio: 0.1 }),
+      );
+      expect(
+        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+      ).not.toHaveProperty("segments");
+    }
   });
 
   test("normalizes an enabled five-hour limit to zero when Kimi omits its ratio", async () => {

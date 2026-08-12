@@ -133,6 +133,18 @@ describe("Claude adapter", () => {
             limit: 1_000,
           },
         ],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: [
+              "five-hour",
+              "weekly",
+              "weekly-scoped-claude-sonnet-4-5",
+            ],
+            creditIds: ["extra-usage"],
+          },
+        ],
       },
     });
     expect(injectedFetch).toHaveBeenCalledTimes(2);
@@ -249,6 +261,14 @@ describe("Claude adapter", () => {
           },
         ],
         credits: [],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["five-hour"],
+            creditIds: [],
+          },
+        ],
       },
     });
   });

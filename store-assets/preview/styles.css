@@ -229,15 +229,21 @@ body {
   display: none;
 }
 
+.capture-page--overview .extension-frame {
+  height: 577px;
+}
+
 .panel-frame .cockpit {
   max-width: 460px;
 }
 
-.capture-page--pacing {
+.capture-page--pacing,
+.capture-page--history {
   padding-block: 16px;
 }
 
-.capture-page--pacing .extension-frame {
+.capture-page--pacing .extension-frame,
+.capture-page--history .extension-frame {
   height: 740px;
 }
 
@@ -322,4 +328,30 @@ body {
 
 .capture-page--promo .panel-frame {
   height: calc(100% - 36px);
+}
+
+html:has([data-fidelity-preview]),
+body:has([data-fidelity-preview]),
+body:has([data-fidelity-preview]) #root {
+  height: auto;
+  min-height: 100%;
+}
+
+body:has([data-fidelity-preview]) {
+  overflow: visible;
+  background: var(--bg);
+}
+
+.fidelity-page {
+  min-width: 0;
+  min-height: 100vh;
+  margin: 0 auto;
+  overflow-x: clip;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.fidelity-page .cockpit {
+  width: 100%;
+  max-width: 460px;
 }

@@ -1,9 +1,9 @@
 # Privacy Policy
 
-Last updated: August 10, 2026
+Last updated: August 12, 2026
 
 AI Limits is a locally running Chrome extension by wjcjttl. This policy
-describes version 0.1.0.
+describes version 0.2.0.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
 or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their affiliates.

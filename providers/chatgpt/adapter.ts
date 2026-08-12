@@ -182,6 +182,14 @@ async function collectChatGpt({
         fetchedAt: now,
         windows,
         credits,
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: windows.map((window) => window.id),
+            creditIds: credits.map((credit) => credit.id),
+          },
+        ],
       },
     };
   } catch {

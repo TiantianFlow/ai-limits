@@ -55,6 +55,7 @@ describe("HistoryChart", () => {
         windows={windows}
         history={history}
         now={NOW}
+        rangeHours={48}
       />,
     );
 
@@ -69,11 +70,22 @@ describe("HistoryChart", () => {
     expect(
       container.querySelectorAll("path.history-chart__line")[0],
     ).toHaveAttribute("vector-effect", "non-scaling-stroke");
+    const areas = container.querySelectorAll("path.history-chart__area");
+    expect(areas).toHaveLength(2);
+    expect(Array.from(areas, (area) => area.getAttribute("d"))).toEqual([
+      expect.stringMatching(/^M .* L .* L .* L .* Z$/),
+      expect.stringMatching(/^M .* L .* L .* L .* Z$/),
+    ]);
     expect(screen.getByText("42% used")).toBeVisible();
-    expect(screen.getByText(/History from .* to .*/)).toBeVisible();
+    expect(screen.getByText("48 hours ago")).toBeVisible();
+    expect(screen.getByText("Now")).toBeVisible();
     expect(
       screen.getByText(/4 observations across 2 chart segments/),
     ).toHaveClass("visually-hidden");
+    expect(screen.getByText("Observed quota used")).toBeVisible();
+    expect(screen.getByText("No observations")).toBeVisible();
+    expect(screen.getByText("Reset or missing observations · line breaks")).toBeVisible();
+    expect(container.querySelectorAll("rect.history-chart__break")).toHaveLength(1);
   });
 
   it("renders visible markers without connecting reset-separated singleton segments", () => {
@@ -108,11 +120,44 @@ describe("HistoryChart", () => {
       container.querySelectorAll("circle.history-chart__marker"),
     ).toHaveLength(2);
     expect(
+      container.querySelectorAll("path.history-chart__area"),
+    ).toHaveLength(0);
+    expect(
       Array.from(
         container.querySelectorAll("path.history-chart__line"),
         (path) => path.getAttribute("d")?.includes("L"),
       ),
     ).toEqual([false, false]);
+  });
+
+  it("adapts the truthful range endpoint label to the active range", () => {
+    const { rerender } = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        windows={windows}
+        history={history}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+
+    expect(screen.getByText("48 hours ago")).toBeVisible();
+    expect(screen.getByText("Now")).toBeVisible();
+
+    rerender(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        windows={windows}
+        history={history}
+        now={NOW}
+        rangeHours={7 * 24}
+      />,
+    );
+
+    expect(screen.getByText("7 days ago")).toBeVisible();
+    expect(screen.getByText("Now")).toBeVisible();
   });
 
   it("complements canonical used ratios only when rendering Left mode", () => {

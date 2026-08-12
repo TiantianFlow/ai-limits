@@ -256,6 +256,7 @@ async function collectClaude({
     }
 
     const extraUsage = claudeExtraUsageSchema.safeParse(usage.data.extra_usage);
+    const credits = extraUsage.success ? normalizeCredits(extraUsage.data) : [];
     return {
       ok: true,
       snapshot: {
@@ -264,7 +265,15 @@ async function collectClaude({
         source: "web-session",
         fetchedAt: now,
         windows,
-        credits: extraUsage.success ? normalizeCredits(extraUsage.data) : [],
+        credits,
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: windows.map((window) => window.id),
+            creditIds: credits.map((credit) => credit.id),
+          },
+        ],
       },
     };
   } catch {

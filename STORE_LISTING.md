@@ -1,6 +1,6 @@
 # Chrome Web Store listing draft
 
-This document describes AI Limits version 0.1.0. It is submission copy and a
+This document describes AI Limits version 0.2.0. It is submission copy and a
 review checklist, not a claim that any provider has approved the extension.
 
 ## Store configuration
@@ -24,8 +24,8 @@ representative fixture data. Upload the files in this order:
    overview screenshot, 1280×800.
 2. `store-assets/chrome-web-store/screenshot-pacing-1280x800.png` — quota,
    timing, and pace screenshot, 1280×800.
-3. `store-assets/chrome-web-store/screenshot-history-1280x800.png` — expanded
-   local quota-history graph, 1280×800.
+3. `store-assets/chrome-web-store/screenshot-history-1280x800.png` — dedicated
+   local quota-History screen, 1280×800.
 4. `store-assets/chrome-web-store/screenshot-privacy-1280x800.png` — Settings
    and local-data controls screenshot, 1280×800.
 5. `store-assets/chrome-web-store/small-promo-440x280.png` — small promotional
@@ -63,8 +63,8 @@ duration, a pace signal compares quota consumed with elapsed time. When that
 timing information is unavailable, the extension leaves pace unavailable
 instead of estimating it.
 
-Each connected provider card includes a collapsed History control for local
-quota graphs. Successful normalized quota observations are stored locally for
+Each quota window can open a dedicated History screen with a local quota graph.
+Successful normalized quota observations are stored locally for
 up to 30 days, subject to a 1,024-observation per-provider safety cap. Within
 that cap, observations from the newest 48 hours are kept at collection
 resolution; older retained history keeps only the latest value in each UTC
@@ -172,7 +172,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.1.0-chrome.zip` upload artifact.
+- The validated `ai-limits-0.2.0-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired provider sites in the
   same Chrome profile. No credentials or provider accounts are embedded or
   supplied by the extension.
@@ -204,8 +204,8 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    the Cursor origin, and confirm available monthly model usage and on-demand
    credit data appears. Use the card's **Refresh** action once.
 6. Use the header refresh and confirm connected providers retain their previous
-   visible data while refreshing. Open a connected card's collapsed **History**
-   control and confirm a successful refresh adds quota history without adding
-   credit history. In Settings, turn automatic refresh off and on, disconnect
-   one provider, then use **Delete all local data** and confirm the cards return
-   to the permission-required state.
+   visible data while refreshing. Open a quota window's **History** action and
+   confirm the dedicated screen appears, then confirm a successful refresh adds
+   quota history without adding credit history. In Settings, turn automatic
+   refresh off and on, disconnect one provider, then use **Delete all local
+   data** and confirm the cards return to the permission-required state.

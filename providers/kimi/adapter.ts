@@ -12,6 +12,7 @@ import { retryAtFromResponse } from "../retry-after";
 import {
   kimiCodingUsageSchema,
   kimiEnabledZeroRateLimitStatSchema,
+  kimiRatioSchema,
   kimiRateLimitStatSchema,
   kimiSubscriptionBalanceSchema,
   kimiSubscriptionSchema,
@@ -32,6 +33,7 @@ const MINUTE_MS = 60 * 1_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const SESSION_REQUIRED = Symbol("kimi-session-required");
+const SEGMENT_SUM_TOLERANCE = 1e-6;
 
 function healthForResponse(response: Response, now: number): ProviderHealth {
   if (response.status === 401) {
@@ -160,6 +162,26 @@ function previousCalendarMonth(timestamp: number): number | undefined {
   return Number.isFinite(boundary) && boundary > 0 ? boundary : undefined;
 }
 
+function monthlySegments(
+  totalUsedRatio: number,
+  codeUsedRatio: unknown,
+): QuotaWindow["segments"] | undefined {
+  const code = kimiRatioSchema.safeParse(codeUsedRatio);
+  if (!code.success || code.data > totalUsedRatio) {
+    return undefined;
+  }
+
+  const segments = [
+    { id: "work", label: "Work", usedRatio: totalUsedRatio - code.data },
+    { id: "code", label: "Code", usedRatio: code.data },
+  ];
+  const sum = segments.reduce((total, segment) => total + segment.usedRatio, 0);
+
+  return Math.abs(sum - totalUsedRatio) <= SEGMENT_SUM_TOLERANCE
+    ? segments
+    : undefined;
+}
+
 function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
   const envelope = kimiSubscriptionStatsSchema.safeParse(body);
   if (!envelope.success) {
@@ -174,6 +196,10 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
     const resetsAt = optionalTimestamp(balance.data.expireTime);
     const startedAt =
       resetsAt === undefined ? undefined : previousCalendarMonth(resetsAt);
+    const segments = monthlySegments(
+      balance.data.amountUsedRatio,
+      balance.data.kimiCodeUsedRatio,
+    );
     windows.push({
       id: "monthly-total",
       label: "Monthly total",
@@ -182,6 +208,7 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
       ...(startedAt === undefined ? {} : { startedAt }),
       ...(resetsAt === undefined ? {} : { resetsAt }),
       sourceSemantics: "used",
+      ...(segments === undefined ? {} : { segments }),
     });
   }
 
@@ -510,6 +537,14 @@ async function collectKimi({
         fetchedAt: now,
         windows,
         credits: [],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: windows.map((window) => window.id),
+            creditIds: [],
+          },
+        ],
         ...(planLabel === undefined ? {} : { planLabel }),
       },
     };

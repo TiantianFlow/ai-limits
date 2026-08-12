@@ -6,6 +6,206 @@ export type PreviewView =
   | "promo";
 export type PreviewLanguage = "en" | "zh_CN";
 
+export const FIDELITY_FIXED_CLOCK = "2026-08-09T14:00:00.000Z";
+
+export type FidelityScreen =
+  | "first-run"
+  | "overview"
+  | "provider-detail"
+  | "history"
+  | "add-provider"
+  | "settings";
+export type FidelityState =
+  | "default"
+  | "refresh-pending"
+  | "partial-refresh"
+  | "kimi-interaction"
+  | "delete-confirmation";
+export type FidelityMode = "used" | "left";
+export type FidelityTheme = "light" | "dark";
+export type FidelityPanelWidth = 340 | 400 | 460;
+
+export interface FidelityRequest {
+  screen: FidelityScreen;
+  state: FidelityState;
+  mode: FidelityMode;
+  theme: FidelityTheme;
+  panelWidth: FidelityPanelWidth;
+  dataSource: "fixture";
+  fixedClock: string;
+  locale: "en-US";
+  now: number;
+}
+
+export interface FidelityNavigationStep {
+  actionSelector: string;
+  readySelector: string;
+}
+
+export interface FidelityScenario {
+  fixtureVariant: "empty" | "partial" | "full";
+  readySelector: string;
+  navigationSteps: FidelityNavigationStep[];
+  isRefreshing: boolean;
+  autoRefreshPending: boolean;
+  refreshAnnouncement: string;
+  providerOperation?: "waiting_for_session";
+}
+
+const FIDELITY_SCREENS = new Set<FidelityScreen>([
+  "first-run",
+  "overview",
+  "provider-detail",
+  "history",
+  "add-provider",
+  "settings",
+]);
+const FIDELITY_STATES = new Set<FidelityState>([
+  "default",
+  "refresh-pending",
+  "partial-refresh",
+  "kimi-interaction",
+  "delete-confirmation",
+]);
+const FIDELITY_MODES = new Set<FidelityMode>(["used", "left"]);
+const FIDELITY_THEMES = new Set<FidelityTheme>(["light", "dark"]);
+const FIDELITY_WIDTHS = new Set<FidelityPanelWidth>([340, 400, 460]);
+
+function requiredChoice<T extends string>(
+  parameters: URLSearchParams,
+  name: string,
+  choices: ReadonlySet<T>,
+): T {
+  const value = parameters.get(name);
+  if (!value || !choices.has(value as T)) {
+    throw new Error(`Fidelity ${name} is missing or unsupported.`);
+  }
+  return value as T;
+}
+
+export function parseFidelityRequest(
+  parameters: URLSearchParams,
+): FidelityRequest | null {
+  if (parameters.get("fidelity") !== "1") {
+    return null;
+  }
+
+  if (parameters.get("dataSource") !== "fixture") {
+    throw new Error("Fidelity renders require fixture data only.");
+  }
+  if (parameters.get("locale") !== "en-US") {
+    throw new Error("Fidelity renders require the pinned en-US locale.");
+  }
+
+  const fixedClock = parameters.get("fixedClock");
+  const now = fixedClock ? Date.parse(fixedClock) : Number.NaN;
+  if (!fixedClock || !Number.isFinite(now)) {
+    throw new Error("Fidelity renders require an explicit fixed clock.");
+  }
+
+  const panelWidth = Number(parameters.get("panelWidth"));
+  if (!FIDELITY_WIDTHS.has(panelWidth as FidelityPanelWidth)) {
+    throw new Error("Fidelity panelWidth is missing or unsupported.");
+  }
+
+  return {
+    screen: requiredChoice(parameters, "screen", FIDELITY_SCREENS),
+    state: requiredChoice(parameters, "state", FIDELITY_STATES),
+    mode: requiredChoice(parameters, "mode", FIDELITY_MODES),
+    theme: requiredChoice(parameters, "theme", FIDELITY_THEMES),
+    panelWidth: panelWidth as FidelityPanelWidth,
+    dataSource: "fixture",
+    fixedClock,
+    locale: "en-US",
+    now,
+  };
+}
+
+export function createFidelityScenario(
+  request: FidelityRequest,
+): FidelityScenario {
+  const screenNavigation: Record<
+    FidelityScreen,
+    Pick<FidelityScenario, "fixtureVariant" | "readySelector" | "navigationSteps">
+  > = {
+    "first-run": {
+      fixtureVariant: "empty",
+      readySelector: '[aria-labelledby="first-run-title"]',
+      navigationSteps: [],
+    },
+    overview: {
+      fixtureVariant: "full",
+      readySelector: ".app-header",
+      navigationSteps: [],
+    },
+    "provider-detail": {
+      fixtureVariant: "full",
+      readySelector: '[aria-label="Kimi detail"]',
+      navigationSteps: [
+        {
+          actionSelector: 'button[aria-label="Open Kimi details"]',
+          readySelector: '[aria-label="Kimi detail"]',
+        },
+      ],
+    },
+    history: {
+      fixtureVariant: "full",
+      readySelector: '[aria-label="Kimi history"]',
+      navigationSteps: [
+        {
+          actionSelector:
+            'button[aria-label="Open Kimi history for 5-hour usage"]',
+          readySelector: '[aria-label="Kimi history"]',
+        },
+      ],
+    },
+    "add-provider": {
+      fixtureVariant: "partial",
+      readySelector: '[aria-label="Add provider"]',
+      navigationSteps: [
+        {
+          actionSelector: ".add-provider-action",
+          readySelector: '[aria-label="Add provider"]',
+        },
+      ],
+    },
+    settings: {
+      fixtureVariant: "full",
+      readySelector: '[aria-label="Provider settings"]',
+      navigationSteps: [
+        {
+          actionSelector: 'button[aria-label="Settings"]',
+          readySelector: '[aria-label="Provider settings"]',
+        },
+      ],
+    },
+  };
+  const navigation = screenNavigation[request.screen];
+  const navigationSteps = [...navigation.navigationSteps];
+
+  if (request.state === "delete-confirmation") {
+    navigationSteps.push({
+      actionSelector: ".danger-zone__trigger",
+      readySelector: '[aria-label="Confirm local data deletion"]',
+    });
+  }
+
+  return {
+    ...navigation,
+    navigationSteps,
+    isRefreshing: request.state === "refresh-pending",
+    autoRefreshPending: request.state === "refresh-pending",
+    refreshAnnouncement:
+      request.state === "partial-refresh"
+        ? "3 providers updated. Kimi needs attention."
+        : "",
+    providerOperation:
+      request.state === "kimi-interaction"
+        ? "waiting_for_session"
+        : undefined,
+  };
+}
+
 interface ViewCopy {
   eyebrow: string;
   title: string;

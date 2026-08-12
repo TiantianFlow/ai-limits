@@ -16,6 +16,7 @@ export interface HistoryChartProps {
   windows: QuotaWindow[];
   history: QuotaHistoryObservation[];
   now: number;
+  rangeHours?: number;
 }
 
 const VIEWBOX_WIDTH = 320;
@@ -59,6 +60,24 @@ function segmentPath(
     .join(" ");
 }
 
+function segmentAreaPath(
+  segment: QuotaHistoryPoint[],
+  mode: DisplayMode,
+  rangeStart: number,
+  rangeEnd: number,
+): string | undefined {
+  if (segment.length < 2) {
+    return undefined;
+  }
+
+  const firstPoint = segment[0]!;
+  const lastPoint = segment.at(-1)!;
+  const [firstX] = pointPosition(firstPoint, mode, rangeStart, rangeEnd);
+  const [lastX] = pointPosition(lastPoint, mode, rangeStart, rangeEnd);
+
+  return `${segmentPath(segment, mode, rangeStart, rangeEnd)} L ${lastX.toFixed(2)} ${PLOT_BOTTOM} L ${firstX.toFixed(2)} ${PLOT_BOTTOM} Z`;
+}
+
 function percent(ratio: number): number {
   return Math.round(ratio * 100);
 }
@@ -72,15 +91,31 @@ function formatRangeTime(value: number): string {
   }).format(new Date(value));
 }
 
+function formatRangeStart(rangeHours: number | undefined, rangeStart: number): string {
+  if (rangeHours === undefined) {
+    return formatRangeTime(rangeStart);
+  }
+
+  if (rangeHours >= 72 && rangeHours % 24 === 0) {
+    const days = rangeHours / 24;
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
+
+  return `${rangeHours} hour${rangeHours === 1 ? "" : "s"} ago`;
+}
+
 export function HistoryChart({
   providerName,
   mode,
   windows,
   history,
   now,
+  rangeHours,
 }: HistoryChartProps) {
   const windowSelectId = useId();
   const summaryId = useId();
+  const gapPatternId = useId();
+  const areaGradientId = useId();
   const [selectedWindowId, setSelectedWindowId] = useState(
     () => windows[0]?.id ?? "",
   );
@@ -96,11 +131,23 @@ export function HistoryChart({
     return null;
   }
 
-  const segments = quotaHistorySegments(history, selectedWindow.id);
+  const requestedRangeStart =
+    rangeHours === undefined ? undefined : now - rangeHours * 60 * 60 * 1_000;
+  const visibleHistory =
+    requestedRangeStart === undefined
+      ? history
+      : history.filter((observation) => observation.observedAt >= requestedRangeStart);
+  const segments = quotaHistorySegments(visibleHistory, selectedWindow.id);
   const points = segments.flat();
   const firstPoint = points[0];
   const latestPoint = points.at(-1);
   const rangeEnd = Math.max(now, latestPoint?.observedAt ?? now);
+  const rangeStart = requestedRangeStart ?? firstPoint?.observedAt ?? rangeEnd;
+  const breaks = segments.slice(1).flatMap((segment, index) => {
+    const previous = segments[index]?.at(-1);
+    const next = segment[0];
+    return previous && next ? [{ previous, next }] : [];
+  });
   const latestValue = latestPoint
     ? percent(displayedRatio(latestPoint, mode))
     : undefined;
@@ -111,9 +158,9 @@ export function HistoryChart({
 
   return (
     <div className="history-chart">
-      <div className="history-chart__toolbar">
-        <h3>History</h3>
-        {windows.length > 1 ? (
+      {windows.length > 1 ? (
+        <div className="history-chart__toolbar">
+          <h3>History</h3>
           <label htmlFor={windowSelectId}>
             <span>Quota window</span>
             <select
@@ -130,8 +177,8 @@ export function HistoryChart({
               ))}
             </select>
           </label>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {latestValue === undefined ? null : (
         <strong className="history-chart__latest">
@@ -151,6 +198,28 @@ export function HistoryChart({
           aria-label={accessibleName}
           aria-describedby={summaryId}
         >
+          <defs>
+            <pattern
+              id={gapPatternId}
+              width="6"
+              height="6"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <line x1="0" y1="0" x2="0" y2="6" />
+            </pattern>
+            <linearGradient
+              id={areaGradientId}
+              x1="0"
+              y1={PLOT_TOP}
+              x2="0"
+              y2={PLOT_BOTTOM}
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop offset="0" stopColor="var(--quota)" stopOpacity="0.24" />
+              <stop offset="1" stopColor="var(--quota)" stopOpacity="0.03" />
+            </linearGradient>
+          </defs>
           {[100, 50, 0].map((guide) => {
             const y =
               PLOT_BOTTOM - (guide / 100) * (PLOT_BOTTOM - PLOT_TOP);
@@ -163,6 +232,37 @@ export function HistoryChart({
               </g>
             );
           })}
+          {segments.map((segment, index) => {
+            const areaPath = segmentAreaPath(
+              segment,
+              mode,
+              rangeStart,
+              rangeEnd,
+            );
+            return areaPath ? (
+              <path
+                className="history-chart__area"
+                key={`area-${segment[0]?.observedAt ?? index}-${index}`}
+                d={areaPath}
+                fill={`url(#${areaGradientId})`}
+              />
+            ) : null;
+          })}
+          {breaks.map(({ previous, next }) => {
+            const [from] = pointPosition(previous, mode, rangeStart, rangeEnd);
+            const [to] = pointPosition(next, mode, rangeStart, rangeEnd);
+            return (
+              <rect
+                className="history-chart__break"
+                key={`${previous.observedAt}-${next.observedAt}`}
+                x={Math.min(from, to)}
+                y={PLOT_TOP}
+                width={Math.max(2, Math.abs(to - from))}
+                height={PLOT_BOTTOM - PLOT_TOP}
+                fill={`url(#${gapPatternId})`}
+              />
+            );
+          })}
           {segments.map((segment, index) => (
             <path
               className="history-chart__line"
@@ -170,7 +270,7 @@ export function HistoryChart({
               d={segmentPath(
                 segment,
                 mode,
-                firstPoint!.observedAt,
+                rangeStart,
                 rangeEnd,
               )}
               vectorEffect="non-scaling-stroke"
@@ -185,7 +285,7 @@ export function HistoryChart({
             const [cx, cy] = pointPosition(
               point,
               mode,
-              firstPoint!.observedAt,
+              rangeStart,
               rangeEnd,
             );
             return (
@@ -203,10 +303,20 @@ export function HistoryChart({
       )}
 
       {firstPoint ? (
-        <p className="history-chart__range">
-          History from {formatRangeTime(firstPoint.observedAt)} to{" "}
-          {formatRangeTime(rangeEnd)}
+        <p
+          className="history-chart__range"
+          aria-label={`History range from ${formatRangeStart(rangeHours, rangeStart)} to now`}
+        >
+          <span>{formatRangeStart(rangeHours, rangeStart)}</span>
+          <span>Now</span>
         </p>
+      ) : null}
+      {points.length >= 2 ? (
+        <ul className="history-chart__legend">
+          <li><span className="history-chart__legend-line" aria-hidden="true" />Observed quota {mode}</li>
+          <li><span className="history-chart__legend-gap" aria-hidden="true" />No observations</li>
+          <li><span className="history-chart__legend-break" aria-hidden="true" />Reset or missing observations · line breaks</li>
+        </ul>
       ) : null}
       <p className="visually-hidden" id={summaryId}>
         {summary}

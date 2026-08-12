@@ -1,0 +1,78 @@
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+const releaseVersion = "0.2.0";
+
+function read(relativePath) {
+  return readFileSync(path.join(process.cwd(), relativePath), "utf8");
+}
+
+describe("release version", () => {
+  it("uses 0.2.0 as the package and verified manifest version", () => {
+    const packageJson = JSON.parse(read("package.json"));
+    const buildVerifier = read("scripts/verify-build.mjs");
+
+    expect(packageJson.version).toBe(releaseVersion);
+    expect(buildVerifier).toContain(
+      `manifest.version === packageJson.version && manifest.version === "${releaseVersion}"`,
+    );
+    expect(buildVerifier).toContain(
+      `Expected manifest version ${releaseVersion} derived from package.json.`,
+    );
+  });
+
+  it("names the 0.2.0 archive consistently in release documentation", () => {
+    for (const relativePath of [
+      "README.md",
+      "README.zh-CN.md",
+      "STORE_LISTING.md",
+    ]) {
+      const contents = read(relativePath);
+
+      expect(contents).toContain(`ai-limits-${releaseVersion}-chrome.zip`);
+      expect(contents).not.toMatch(/ai-limits-0\.1\.[01]-chrome\.zip/);
+    }
+  });
+
+  it("describes the current release consistently in policy documents", () => {
+    expect(read("PRIVACY.md")).toContain(
+      `describes version ${releaseVersion}.`,
+    );
+    expect(read("STORE_LISTING.md")).toContain(
+      `describes AI Limits version ${releaseVersion}.`,
+    );
+    expect(read("SECURITY.md")).toContain("latest 0.2.x release");
+  });
+
+  it("keeps personal email addresses out of public capture fixtures", () => {
+    expect(read("scripts/capture-store-assets.mjs")).not.toMatch(
+      /[A-Z0-9._%+-]+@gmail\.com/i,
+    );
+  });
+
+  it("keeps local workstation paths out of tracked text files", () => {
+    const textExtensions = new Set([
+      ".css",
+      ".html",
+      ".js",
+      ".json",
+      ".md",
+      ".mjs",
+      ".ts",
+      ".tsx",
+    ]);
+    const trackedFiles = execFileSync("git", ["ls-files", "-z"])
+      .toString("utf8")
+      .split("\0")
+      .filter(Boolean)
+      .filter((file) => textExtensions.has(path.extname(file)));
+    const offenders = trackedFiles.filter((file) =>
+      /\/(?:Users|home)\/[^/]+\//u.test(read(file)),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+});

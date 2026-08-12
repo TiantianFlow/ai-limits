@@ -1,0 +1,83 @@
+import type { Ref } from "react";
+import React from "react";
+
+import type { ProviderOperation } from "../../../background/messages";
+import type { ProviderId } from "../../../domain/model";
+import { providerNames } from "../../../providers/catalog";
+import { OpenSourceFooter } from "../components/OpenSourceFooter";
+import {
+  ProviderCard,
+  type ProviderCardProps,
+} from "../components/ProviderCard";
+
+export interface OverviewProvider {
+  providerId: ProviderId;
+  card: Omit<ProviderCardProps, "providerId" | "operation" | "action">;
+}
+
+export interface OverviewViewProps {
+  providers: OverviewProvider[];
+  providerOperations: Partial<Record<ProviderId, ProviderOperation>>;
+  addProviderButtonRef: Ref<HTMLButtonElement>;
+  onAddProvider: (invoker: HTMLButtonElement) => void;
+  onRefreshProvider: (providerId: ProviderId) => void;
+  onOpenProvider: (providerId: ProviderId) => void;
+  onOpenHistory: (providerId: ProviderId, windowId: string) => void;
+}
+
+export function OverviewView({
+  providers,
+  providerOperations,
+  addProviderButtonRef,
+  onAddProvider,
+  onRefreshProvider,
+  onOpenProvider,
+  onOpenHistory,
+}: OverviewViewProps) {
+  return (
+    <section aria-labelledby="overview-title">
+      <h2 className="visually-hidden" id="overview-title">
+        Overview
+      </h2>
+      <div className="provider-list">
+        {providers.map(({ providerId, card }) => {
+          const operation = providerOperations[providerId];
+          return (
+            <ProviderCard
+              key={providerId}
+              {...card}
+              providerId={providerId}
+              operation={operation}
+              openDetailsFocusKey={`overview-provider-${providerId}`}
+              onOpenDetails={() => onOpenProvider(providerId)}
+              onOpenHistory={
+                card.hasSnapshot
+                  ? (windowId) => onOpenHistory(providerId, windowId)
+                  : undefined
+              }
+              action={
+                operation
+                  ? undefined
+                  : {
+                      label: "Refresh",
+                      accessibleLabel: `Refresh ${providerNames[providerId]}`,
+                      onClick: () => onRefreshProvider(providerId),
+                    }
+              }
+            />
+          );
+        })}
+      </div>
+      <button
+        ref={addProviderButtonRef}
+        className="add-provider-action"
+        type="button"
+        onClick={(event) => onAddProvider(event.currentTarget)}
+      >
+        <span aria-hidden="true">+</span>
+        Add provider
+      </button>
+      <OpenSourceFooter />
+    </section>
+  );
+}

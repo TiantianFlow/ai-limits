@@ -103,6 +103,59 @@ describe("fixture state", () => {
       durationMs: Date.UTC(2023, 11, 1) - Date.UTC(2023, 10, 1),
     });
   });
+
+  test("authors one truthful usage group for every fixture snapshot", () => {
+    expect(
+      createFixtureState(now).providers.flatMap(({ snapshot }) =>
+        snapshot ? [{ providerId: snapshot.providerId, usageGroups: snapshot.usageGroups }] : [],
+      ),
+    ).toEqual([
+      {
+        providerId: "chatgpt",
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["five-hour", "weekly"],
+            creditIds: [],
+          },
+        ],
+      },
+      {
+        providerId: "claude",
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["weekly"],
+            creditIds: ["extra-usage"],
+          },
+        ],
+      },
+      {
+        providerId: "kimi",
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["five-hour", "weekly"],
+            creditIds: [],
+          },
+        ],
+      },
+      {
+        providerId: "cursor",
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["monthly"],
+            creditIds: ["on-demand"],
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("state repository", () => {
@@ -177,6 +230,206 @@ describe("state repository", () => {
 
     await expect(loadState(now)).resolves.toEqual(migrateState(stored, now));
     expect(write).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    {
+      name: "a segment has an invalid ratio",
+      segments: [
+        { id: "work", label: "Work", usedRatio: 0.25 },
+        { id: "code", label: "Code", usedRatio: 1.1 },
+      ],
+      usageGroups: [
+        {
+          id: "usage",
+          label: "Usage",
+          windowIds: ["weekly"],
+          creditIds: ["extra"],
+        },
+      ],
+      keepsSegments: false,
+      keepsUsageGroups: true,
+    },
+    {
+      name: "segment IDs are duplicated",
+      segments: [
+        { id: "work", label: "Work", usedRatio: 0.125 },
+        { id: "work", label: "Code", usedRatio: 0.125 },
+      ],
+      usageGroups: [
+        {
+          id: "usage",
+          label: "Usage",
+          windowIds: ["weekly"],
+          creditIds: ["extra"],
+        },
+      ],
+      keepsSegments: false,
+      keepsUsageGroups: true,
+    },
+    {
+      name: "segments do not sum to the total used ratio",
+      segments: [
+        { id: "work", label: "Work", usedRatio: 0.1 },
+        { id: "code", label: "Code", usedRatio: 0.05 },
+      ],
+      usageGroups: [
+        {
+          id: "usage",
+          label: "Usage",
+          windowIds: ["weekly"],
+          creditIds: ["extra"],
+        },
+      ],
+      keepsSegments: false,
+      keepsUsageGroups: true,
+    },
+    {
+      name: "group IDs are duplicated",
+      segments: undefined,
+      usageGroups: [
+        { id: "usage", label: "Usage", windowIds: ["weekly"], creditIds: [] },
+        { id: "usage", label: "More usage", windowIds: [], creditIds: ["extra"] },
+      ],
+      keepsSegments: true,
+      keepsUsageGroups: false,
+    },
+    {
+      name: "a group references a missing measure",
+      segments: undefined,
+      usageGroups: [
+        { id: "usage", label: "Usage", windowIds: ["missing"], creditIds: [] },
+      ],
+      keepsSegments: true,
+      keepsUsageGroups: false,
+    },
+    {
+      name: "a measure is assigned to more than one group",
+      segments: undefined,
+      usageGroups: [
+        { id: "usage", label: "Usage", windowIds: ["weekly"], creditIds: [] },
+        { id: "credits", label: "Credits", windowIds: ["weekly"], creditIds: ["extra"] },
+      ],
+      keepsSegments: true,
+      keepsUsageGroups: false,
+    },
+  ])(
+    "sanitizes only the invalid optional composition metadata when $name",
+    ({ segments, usageGroups, keepsSegments, keepsUsageGroups }) => {
+      const snapshot = liveSnapshot();
+      const validSegments = [
+        { id: "work", label: "Work", usedRatio: 0.1 },
+        { id: "code", label: "Code", usedRatio: 0.15 },
+      ];
+      const state = migrateState(
+        {
+          version: 4,
+          preferences: { displayMode: "used", autoRefresh: true },
+          providers: [
+            {
+              providerId: "chatgpt",
+              access: "granted",
+              snapshot: {
+                ...snapshot,
+                windows: [
+                  {
+                    ...snapshot.windows[0],
+                    segments: segments ?? validSegments,
+                  },
+                ],
+                ...(usageGroups === undefined ? {} : { usageGroups }),
+              },
+            },
+          ],
+        },
+        now,
+      );
+
+      expect(state.providers[0]?.snapshot).toMatchObject({
+        windows: [expect.objectContaining({ id: "weekly", usedRatio: 0.25 })],
+      });
+      if (keepsSegments) {
+        expect(state.providers[0]?.snapshot?.windows[0]).toMatchObject({
+          segments: validSegments,
+        });
+      } else {
+        expect(state.providers[0]?.snapshot?.windows[0]).not.toHaveProperty(
+          "segments",
+        );
+      }
+      if (keepsUsageGroups) {
+        expect(state.providers[0]?.snapshot).toMatchObject({ usageGroups });
+      } else {
+        expect(state.providers[0]?.snapshot).not.toHaveProperty("usageGroups");
+      }
+    },
+  );
+
+  test("keeps validated composition metadata and total-only history during migration", () => {
+    const snapshot = liveSnapshot();
+    const state = migrateState(
+      {
+        version: 3,
+        preferences: { displayMode: "used", autoRefresh: true },
+        providers: [
+          {
+            providerId: "chatgpt",
+            access: "granted",
+            snapshot: {
+              ...snapshot,
+              windows: [
+                {
+                  ...snapshot.windows[0],
+                  segments: [
+                    { id: "work", label: "Work", usedRatio: 0.1 },
+                    { id: "code", label: "Code", usedRatio: 0.15 },
+                  ],
+                },
+              ],
+              usageGroups: [
+                {
+                  id: "usage",
+                  label: "Usage",
+                  description: "Current usage and extra usage.",
+                  windowIds: ["weekly"],
+                  creditIds: ["extra"],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      now,
+    );
+
+    expect(state.providers[0]?.snapshot).toMatchObject({
+      windows: [
+        expect.objectContaining({
+          segments: [
+            { id: "work", label: "Work", usedRatio: 0.1 },
+            { id: "code", label: "Code", usedRatio: 0.15 },
+          ],
+        }),
+      ],
+      usageGroups: [
+        {
+          id: "usage",
+          label: "Usage",
+          description: "Current usage and extra usage.",
+          windowIds: ["weekly"],
+          creditIds: ["extra"],
+        },
+      ],
+    });
+    expect(state.providers[0]?.history).toEqual([
+      {
+        observedAt: snapshot.fetchedAt,
+        windows: [
+          expect.objectContaining({ windowId: "weekly", usedRatio: 0.25 }),
+        ],
+      },
+    ]);
+    expect(state.providers[0]?.history[0]?.windows[0]).not.toHaveProperty("segments");
   });
 
   test("persists display mode and automatic-refresh preferences independently", async () => {

@@ -14,7 +14,7 @@ Cursor 或其关联公司不存在隶属、背书或授权关系。
 > 当前扩展界面为英文。下图的中文文字是项目介绍文案；嵌入的实际扩展界面
 > 仍为英文。后续完成扩展本身的简体中文支持后，我们会重新生成截图。
 
-![AI Limits Chrome 侧边栏展示示例已用视图、订阅用量、重置时间、用量节奏和 History 控件](store-assets/chrome-web-store/zh_CN/screenshot-overview-1280x800.png)
+![AI Limits Chrome 侧边栏展示示例已用视图、订阅用量、重置时间、用量节奏和服务导航](store-assets/chrome-web-store/zh_CN/screenshot-overview-1280x800.png)
 
 ## 工作原理
 
@@ -92,7 +92,7 @@ macOS 文件选择器中正常显示。点击扩展工具栏图标即可打开�
 pnpm verify:zip
 ```
 
-该命令会重新构建扩展，创建 `.output/ai-limits-0.1.0-chrome.zip`，打开压缩包，
+该命令会重新构建扩展，创建 `.output/ai-limits-0.2.0-chrome.zip`，打开压缩包，
 并验证清单、入口文件、权限和禁止包含的文件规则。
 
 ## 服务兼容性

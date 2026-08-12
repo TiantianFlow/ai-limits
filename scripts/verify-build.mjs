@@ -20,8 +20,8 @@ function assert(condition, message) {
 
 assert(manifest.manifest_version === 3, "Expected manifest_version to be 3.");
 assert(
-  manifest.version === packageJson.version && manifest.version === "0.1.0",
-  "Expected manifest version 0.1.0 derived from package.json.",
+  manifest.version === packageJson.version && manifest.version === "0.2.0",
+  "Expected manifest version 0.2.0 derived from package.json.",
 );
 assert(manifest.name === "AI Limits", 'Expected manifest name to be "AI Limits".');
 assert(

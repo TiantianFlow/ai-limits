@@ -13,11 +13,14 @@ import type {
   ProviderSnapshot,
   QuotaHistoryObservation,
   QuotaHistorySample,
+  QuotaSegment,
   QuotaWindow,
+  UsageGroup,
 } from "../domain/model";
 import { providerIds } from "./catalog";
 
 export const CURRENT_STATE_VERSION = 4 as const;
+const SEGMENT_SUM_TOLERANCE = 1e-6;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -40,6 +43,49 @@ function isOptionalNumber(
   predicate: (value: number) => boolean,
 ): value is number | undefined {
   return value === undefined || (isFiniteNumber(value) && predicate(value));
+}
+
+function normalizeSegments(
+  value: unknown,
+  totalUsedRatio: number,
+): QuotaSegment[] | undefined {
+  if (value === undefined || !Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+
+  const segments = value.map((segment): QuotaSegment | undefined => {
+    if (
+      !isRecord(segment) ||
+      !isNonEmptyString(segment.id) ||
+      !isNonEmptyString(segment.label) ||
+      !isFiniteNumber(segment.usedRatio) ||
+      segment.usedRatio < 0 ||
+      segment.usedRatio > 1
+    ) {
+      return undefined;
+    }
+
+    return {
+      id: segment.id,
+      label: segment.label,
+      usedRatio: segment.usedRatio,
+    };
+  });
+
+  if (
+    segments.some((segment) => segment === undefined) ||
+    new Set(segments.map((segment) => segment?.id)).size !== segments.length
+  ) {
+    return undefined;
+  }
+
+  const sum = (segments as QuotaSegment[]).reduce(
+    (total, segment) => total + segment.usedRatio,
+    0,
+  );
+  return Math.abs(sum - totalUsedRatio) <= SEGMENT_SUM_TOLERANCE
+    ? (segments as QuotaSegment[])
+    : undefined;
 }
 
 function normalizeWindow(value: unknown): QuotaWindow | undefined {
@@ -67,6 +113,8 @@ function normalizeWindow(value: unknown): QuotaWindow | undefined {
     return undefined;
   }
 
+  const segments = normalizeSegments(value.segments, value.usedRatio);
+
   return {
     id: value.id,
     label: value.label,
@@ -79,6 +127,7 @@ function normalizeWindow(value: unknown): QuotaWindow | undefined {
     ...(value.resetsAt !== undefined ? { resetsAt: value.resetsAt } : {}),
     ...(value.durationMs !== undefined ? { durationMs: value.durationMs } : {}),
     sourceSemantics: value.sourceSemantics,
+    ...(segments === undefined ? {} : { segments }),
   };
 }
 
@@ -105,6 +154,65 @@ function normalizeCredit(value: unknown): CreditBalance | undefined {
     ...(value.remaining !== undefined ? { remaining: value.remaining } : {}),
     ...(value.resetsAt !== undefined ? { resetsAt: value.resetsAt } : {}),
   };
+}
+
+function normalizeUsageGroups(
+  value: unknown,
+  windows: readonly QuotaWindow[],
+  credits: readonly CreditBalance[],
+): UsageGroup[] | undefined {
+  if (value === undefined || !Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+
+  const groups = value.map((group): UsageGroup | undefined => {
+    if (
+      !isRecord(group) ||
+      !isNonEmptyString(group.id) ||
+      !isNonEmptyString(group.label) ||
+      !isOptionalString(group.description) ||
+      !Array.isArray(group.windowIds) ||
+      !Array.isArray(group.creditIds) ||
+      !group.windowIds.every(isNonEmptyString) ||
+      !group.creditIds.every(isNonEmptyString) ||
+      (group.windowIds.length === 0 && group.creditIds.length === 0)
+    ) {
+      return undefined;
+    }
+
+    return {
+      id: group.id,
+      label: group.label,
+      ...(group.description === undefined ? {} : { description: group.description }),
+      windowIds: group.windowIds,
+      creditIds: group.creditIds,
+    };
+  });
+
+  if (
+    groups.some((group) => group === undefined) ||
+    new Set(groups.map((group) => group?.id)).size !== groups.length
+  ) {
+    return undefined;
+  }
+
+  const measureIds = new Set([
+    ...windows.map((window) => `window:${window.id}`),
+    ...credits.map((credit) => `credit:${credit.id}`),
+  ]);
+  const memberships = (groups as UsageGroup[]).flatMap((group) => [
+    ...group.windowIds.map((id) => `window:${id}`),
+    ...group.creditIds.map((id) => `credit:${id}`),
+  ]);
+
+  if (
+    memberships.some((membership) => !measureIds.has(membership)) ||
+    new Set(memberships).size !== memberships.length
+  ) {
+    return undefined;
+  }
+
+  return groups as UsageGroup[];
 }
 
 function looksLikeEmail(value: string): boolean {
@@ -134,10 +242,17 @@ export function normalizeProviderSnapshot(
   if (
     windows.some((window) => window === undefined) ||
     credits.some((credit) => credit === undefined) ||
-    new Set(windows.map((window) => window?.id)).size !== windows.length
+    new Set(windows.map((window) => window?.id)).size !== windows.length ||
+    new Set(credits.map((credit) => credit?.id)).size !== credits.length
   ) {
     return undefined;
   }
+
+  const usageGroups = normalizeUsageGroups(
+    value.usageGroups,
+    windows as QuotaWindow[],
+    credits as CreditBalance[],
+  );
 
   return {
     providerId,
@@ -149,6 +264,7 @@ export function normalizeProviderSnapshot(
     fetchedAt: value.fetchedAt,
     windows: windows as QuotaWindow[],
     credits: credits as CreditBalance[],
+    ...(usageGroups === undefined ? {} : { usageGroups }),
   };
 }
 

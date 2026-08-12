@@ -3,16 +3,50 @@ import { createRoot } from "react-dom/client";
 
 import { Cockpit } from "../../entrypoints/sidepanel/Cockpit";
 import "../../entrypoints/sidepanel/styles.css";
+import type { AppState, DisplayMode, ProviderId } from "../../domain/model";
 import { createFixtureState } from "../../providers/fixtures";
+import { createInitialState } from "../../providers/initial-state";
 import {
+  FIDELITY_FIXED_CLOCK,
+  createFidelityScenario,
+  parseFidelityRequest,
   parsePreviewLanguage,
   previewContent,
+  type FidelityRequest,
+  type FidelityScenario,
   type PreviewView,
 } from "./copy";
 import "./styles.css";
 
-const CAPTURE_NOW = Date.parse("2026-08-09T14:00:00.000Z");
-const state = createFixtureState(CAPTURE_NOW);
+const DEFAULT_CAPTURE_NOW = Date.parse(FIDELITY_FIXED_CLOCK);
+
+function createPreviewState(parameters: URLSearchParams, now: number): AppState {
+  const fixture = createFixtureState(now);
+
+  if (parameters.get("providers") === "none") {
+    return createInitialState();
+  }
+
+  if (parameters.get("providers") === "partial") {
+    const initial = createInitialState();
+    initial.providers[0] = fixture.providers[0]!;
+    return initial;
+  }
+
+  return fixture;
+}
+
+function parseMarketingClock(parameters: URLSearchParams): {
+  fixedClock: string;
+  now: number;
+} {
+  const fixedClock = parameters.get("fixedClock") ?? FIDELITY_FIXED_CLOCK;
+  const now = Date.parse(fixedClock);
+  if (!Number.isFinite(now)) {
+    throw new Error("Store artwork preview received an invalid fixed clock.");
+  }
+  return { fixedClock, now };
+}
 
 function parseView(parameters: URLSearchParams): PreviewView {
   const candidate = parameters.get("view");
@@ -22,6 +56,13 @@ function parseView(parameters: URLSearchParams): PreviewView {
     candidate === "promo"
     ? candidate
     : "overview";
+}
+
+function parsePanelWidth(parameters: URLSearchParams): 340 | 400 | 460 | undefined {
+  const candidate = Number(parameters.get("panelWidth"));
+  return candidate === 340 || candidate === 400 || candidate === 460
+    ? candidate
+    : undefined;
 }
 
 function FeatureNotes({
@@ -64,20 +105,33 @@ function FeatureNotes({
 
 function ExtensionPreview({
   chromeSidePanelLabel,
+  now,
+  panelWidth,
+  state,
 }: {
   chromeSidePanelLabel: string;
+  now: number;
+  panelWidth?: 340 | 400 | 460;
+  state: AppState;
 }) {
   return (
-    <div className="extension-frame">
+    <div
+      className="extension-frame"
+      style={panelWidth ? { width: `${panelWidth}px` } : undefined}
+    >
       <div className="extension-frame__bar" aria-hidden="true">
         <span className="extension-frame__dot" />
         <span>AI Limits</span>
         <span className="extension-frame__chrome">{chromeSidePanelLabel}</span>
       </div>
-      <div className="panel-frame" data-panel-frame>
+      <div
+        className="panel-frame"
+        data-panel-frame
+        style={{ background: "var(--bg)", color: "var(--text)" }}
+      >
         <Cockpit
           state={state}
-          now={CAPTURE_NOW}
+          now={now}
           onDisplayModeChange={() => undefined}
           onRefresh={() => undefined}
           onConnectProvider={() => undefined}
@@ -89,8 +143,11 @@ function ExtensionPreview({
 
 function Preview() {
   const parameters = new URLSearchParams(window.location.search);
+  const { fixedClock, now } = parseMarketingClock(parameters);
   const view = parseView(parameters);
   const language = parsePreviewLanguage(parameters);
+  const panelWidth = parsePanelWidth(parameters);
+  const state = createPreviewState(parameters, now);
   const content = previewContent[language];
   const copy = content[view];
 
@@ -98,6 +155,8 @@ function Preview() {
     <main
       className={`capture-page capture-page--${view}`}
       data-preview-ready
+      data-data-source="fixture"
+      data-fixed-clock={fixedClock}
       lang={language === "zh_CN" ? "zh-CN" : "en"}
     >
       <section className="marketing-copy">
@@ -122,9 +181,185 @@ function Preview() {
         {view !== "promo" ? (
           <p className="representative-label">{content.representativeLabel}</p>
         ) : null}
-        <ExtensionPreview chromeSidePanelLabel={content.chromeSidePanelLabel} />
+        <ExtensionPreview
+          chromeSidePanelLabel={content.chromeSidePanelLabel}
+          now={now}
+          panelWidth={panelWidth}
+          state={state}
+        />
       </section>
     </main>
+  );
+}
+
+function createFidelityState(
+  request: FidelityRequest,
+  scenario: FidelityScenario,
+): AppState {
+  const fixture = createFixtureState(request.now);
+  let state: AppState;
+
+  if (scenario.fixtureVariant === "empty") {
+    state = createInitialState();
+  } else if (scenario.fixtureVariant === "partial") {
+    state = createInitialState();
+    state.providers[0] = fixture.providers[0]!;
+  } else {
+    state = fixture;
+  }
+
+  state.preferences = {
+    ...state.preferences,
+    displayMode: request.mode,
+  };
+
+  if (
+    request.state === "partial-refresh" ||
+    request.state === "kimi-interaction"
+  ) {
+    const kimi = state.providers.find(
+      (provider) => provider.providerId === "kimi",
+    );
+    if (kimi) {
+      kimi.lastAttempt = {
+        trigger: "scheduled",
+        startedAt: request.now - 15_000,
+        finishedAt: request.now - 10_000,
+        outcome: { kind: "deferred", reason: "session_required" },
+      };
+    }
+  }
+
+  return state;
+}
+
+function waitForElement(
+  selector: string,
+  signal: AbortSignal,
+): Promise<HTMLElement> {
+  const current = document.querySelector<HTMLElement>(selector);
+  if (current) {
+    return Promise.resolve(current);
+  }
+
+  return new Promise((resolve, reject) => {
+    const observer = new MutationObserver(() => {
+      const match = document.querySelector<HTMLElement>(selector);
+      if (match) {
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        resolve(match);
+      }
+    });
+    const timeout = window.setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`Fidelity preview could not find ${selector}.`));
+    }, 5_000);
+
+    signal.addEventListener(
+      "abort",
+      () => {
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+}
+
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+function FidelityPreview({ request }: { request: FidelityRequest }) {
+  const scenario = React.useMemo(
+    () => createFidelityScenario(request),
+    [request],
+  );
+  const [state, setState] = React.useState(() =>
+    createFidelityState(request, scenario),
+  );
+  const [ready, setReady] = React.useState(false);
+
+  React.useEffect(() => {
+    document.documentElement.dataset.fidelityTheme = request.theme;
+    document.documentElement.style.colorScheme = request.theme;
+    const controller = new AbortController();
+
+    void (async () => {
+      await waitForElement(scenario.readySelector, controller.signal);
+      await nextPaint();
+      if (!controller.signal.aborted) {
+        setReady(true);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [request.theme, scenario]);
+
+  const updateMode = (mode: DisplayMode) => {
+    setState((current) => ({
+      ...current,
+      preferences: { ...current.preferences, displayMode: mode },
+    }));
+  };
+  const updateAutoRefresh = (autoRefresh: boolean) => {
+    setState((current) => ({
+      ...current,
+      preferences: { ...current.preferences, autoRefresh },
+    }));
+  };
+  const disconnectProvider = (providerId: ProviderId) => {
+    setState((current) => ({
+      ...current,
+      providers: current.providers.map((provider) =>
+        provider.providerId === providerId
+          ? { ...provider, access: "required", snapshot: undefined, history: [] }
+          : provider,
+      ),
+    }));
+  };
+
+  return (
+    <div
+      className="fidelity-page"
+      data-data-source={request.dataSource}
+      data-fidelity-preview
+      data-fidelity-ready={ready ? "true" : "false"}
+      data-fixed-clock={request.fixedClock}
+      data-mode={request.mode}
+      data-locale={request.locale}
+      data-panel-width={request.panelWidth}
+      data-screen={request.screen}
+      data-state={request.state}
+      data-theme={request.theme}
+      style={{ width: `${request.panelWidth}px` }}
+    >
+      <Cockpit
+        state={state}
+        now={request.now}
+        isRefreshing={scenario.isRefreshing}
+        refreshAnnouncement={scenario.refreshAnnouncement}
+        refreshAnnouncementId={scenario.refreshAnnouncement ? 1 : 0}
+        autoRefreshPending={scenario.autoRefreshPending}
+        providerOperations={
+          scenario.providerOperation
+            ? { kimi: scenario.providerOperation }
+            : undefined
+        }
+        onDisplayModeChange={updateMode}
+        onRefresh={() => undefined}
+        onConnectProvider={() => undefined}
+        onRefreshProvider={() => undefined}
+        onAutoRefreshChange={updateAutoRefresh}
+        onDisconnectProvider={disconnectProvider}
+        onDeleteLocalData={() => undefined}
+      />
+    </div>
   );
 }
 
@@ -134,4 +369,10 @@ if (!root) {
   throw new Error("Store artwork preview root is missing.");
 }
 
-createRoot(root).render(<Preview />);
+const fidelityRequest = parseFidelityRequest(
+  new URLSearchParams(window.location.search),
+);
+
+createRoot(root).render(
+  fidelityRequest ? <FidelityPreview request={fidelityRequest} /> : <Preview />,
+);

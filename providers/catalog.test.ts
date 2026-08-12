@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { isRuntimeCommand } from "../background/messages";
+import * as catalog from "./catalog";
 import {
   assertProviderCatalogPermissionSafety,
   isProviderId,
@@ -12,6 +13,69 @@ import { createInitialState } from "./initial-state";
 import { providerRegistry } from "./registry";
 
 describe("provider catalog", () => {
+  test("provides complete local presentation metadata for every supported provider", () => {
+    type Presentation = {
+      markPath: string;
+      darkMarkPath?: string;
+      connectionLabel: string;
+      connectionDisclosure: string;
+      capabilities: readonly string[];
+      manualRefreshDisclosure?: string;
+    };
+    const providerPresentation = (
+      catalog as typeof catalog & {
+        providerPresentation?: (providerId: (typeof providerIds)[number]) => Presentation;
+      }
+    ).providerPresentation;
+
+    expect(providerPresentation).toBeTypeOf("function");
+    if (!providerPresentation) return;
+
+    expect(
+      providerIds.map((providerId) => ({
+        providerId,
+        ...providerPresentation(providerId),
+      })),
+    ).toEqual([
+      {
+        providerId: "chatgpt",
+        markPath: "/provider-marks/chatgpt.svg",
+        connectionLabel: "Connect ChatGPT",
+        connectionDisclosure:
+          "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
+        capabilities: ["Message limits", "Credits"],
+      },
+      {
+        providerId: "claude",
+        markPath: "/provider-marks/claude.svg",
+        connectionLabel: "Connect Claude",
+        connectionDisclosure:
+          "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
+        capabilities: ["Message limits", "Extra usage"],
+      },
+      {
+        providerId: "kimi",
+        markPath: "/provider-marks/kimi.svg",
+        darkMarkPath: "/provider-marks/kimi-dark.svg",
+        connectionLabel: "Connect Kimi",
+        connectionDisclosure:
+          "With permission, AI Limits may read the exact value of Kimi's signed-in kimi-auth cookie or the page's localStorage.access_token on kimi.com. It stores normalized usage locally, not the credential.",
+        capabilities: ["Subscription usage", "Coding limits"],
+        manualRefreshDisclosure:
+          "Connect and manual Refresh may briefly open one inactive Kimi tab when recovery is needed. Scheduled or automatic refresh never opens a tab.",
+      },
+      {
+        providerId: "cursor",
+        markPath: "/provider-marks/cursor.svg",
+        darkMarkPath: "/provider-marks/cursor-dark.svg",
+        connectionLabel: "Connect Cursor",
+        connectionDisclosure:
+          "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
+        capabilities: ["Monthly usage", "On-demand spend"],
+      },
+    ]);
+  });
+
   test("is the ordered source of provider identity, names, and permissions", () => {
     expect(providerIds).toEqual(["chatgpt", "claude", "kimi", "cursor"]);
     expect(

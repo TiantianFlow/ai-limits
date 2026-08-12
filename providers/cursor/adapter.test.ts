@@ -91,6 +91,14 @@ describe("Cursor adapter", () => {
             limit: 10,
           },
         ],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["cursor-models-monthly", "other-models-monthly"],
+            creditIds: ["on-demand"],
+          },
+        ],
       },
     });
     const init = {

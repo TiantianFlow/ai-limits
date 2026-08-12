@@ -14,7 +14,7 @@ AI Limits is an independent project by wjcjttl. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
 affiliates.
 
-![AI Limits Chrome side panel showing representative subscription usage in Used mode, reset timing, pace indicators, and the History control](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
+![AI Limits Chrome side panel showing representative subscription usage in Used mode, reset timing, pace indicators, and provider navigation](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
 
 ## How it works
 
@@ -100,7 +100,7 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.1.0-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.2.0-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility

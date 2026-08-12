@@ -92,6 +92,14 @@ describe("ChatGPT adapter", () => {
             remaining: 414,
           },
         ],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["five-hour", "weekly"],
+            creditIds: ["credits"],
+          },
+        ],
       },
     });
     expect(injectedFetch).toHaveBeenNthCalledWith(

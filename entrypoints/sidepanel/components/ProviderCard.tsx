@@ -1,26 +1,33 @@
-import React, { useId, useState } from "react";
+import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
 import type {
   DisplayMode,
+  ProviderId,
   ProviderRecord,
   QuotaHistoryObservation,
   QuotaWindow,
 } from "../../../domain/model";
 import type { PaceKind } from "../../../domain/quota";
-import { HistoryChart } from "./HistoryChart";
-import { QuotaRow } from "./QuotaRow";
+import { Icon } from "./Icon";
+import { InteractionBanner } from "./InteractionBanner";
+import { ProviderMark } from "./ProviderMark";
+import { QuotaBars, type QuotaSegmentView } from "./QuotaBars";
+import { StatusChip } from "./StatusChip";
 
 export interface QuotaView {
   id: string;
   label: string;
   quotaPercent: number;
+  usedPercent: number;
+  valueLabel?: string;
   timePercent?: number;
   timeLabel?: string;
   resetAt?: number;
   resetLabel?: string;
   paceKind?: PaceKind;
   paceLabel: string;
+  segments?: QuotaSegmentView[];
 }
 
 export interface CreditView {
@@ -29,12 +36,21 @@ export interface CreditView {
   value: string;
 }
 
+export interface UsageGroupView {
+  id: string;
+  label: string;
+  description?: string;
+  quotas: QuotaView[];
+  credits: CreditView[];
+}
+
 export interface ProviderCardProps {
+  providerId: ProviderId;
   name: string;
   plan?: string;
   mode: DisplayMode;
-  quotas: QuotaView[];
   credits: CreditView[];
+  usageGroups: UsageGroupView[];
   freshness?: string;
   stale: boolean;
   access: ProviderRecord["access"];
@@ -53,6 +69,10 @@ export interface ProviderCardProps {
     accessibleLabel: string;
     onClick: () => void;
   };
+  headingLevel?: 2 | 3;
+  openDetailsFocusKey?: string;
+  onOpenDetails?: () => void;
+  onOpenHistory?: (windowId: string) => void;
 }
 
 const operationLabels: Record<ProviderOperation, string> = {
@@ -62,81 +82,104 @@ const operationLabels: Record<ProviderOperation, string> = {
 };
 
 export function ProviderCard({
+  providerId,
   name,
   plan,
   mode,
-  quotas,
   credits,
+  usageGroups,
   freshness,
   stale,
   access,
   operation,
   attemptMessage,
   hasSnapshot,
-  history,
+  history: _history,
   emptyDescription,
   extraDisclosure,
   action,
+  headingLevel = 2,
+  openDetailsFocusKey,
+  onOpenDetails,
+  onOpenHistory,
 }: ProviderCardProps) {
-  const historyPanelId = useId();
-  const [historyExpanded, setHistoryExpanded] = useState(false);
-  const canShowHistory = access === "granted" && hasSnapshot && history;
+  const quotaGroups = usageGroups.filter((group) => group.quotas.length > 0);
+  const statusLabel = operation
+    ? operationLabels[operation]
+    : stale
+      ? `Stale · ${freshness ?? "last known values"}`
+      : attemptMessage
+        ? freshness
+          ? `Attention · ${freshness}`
+          : "Needs attention"
+        : freshness ?? (access === "required" ? "Not connected" : "No usage yet");
+  const statusAttention =
+    operation === "waiting_for_session" || stale || Boolean(attemptMessage);
+
+  const identity = (
+    <>
+      <ProviderMark providerId={providerId} size="sm" />
+      <span
+        className="provider-card__name"
+        id={`provider-${name}`}
+        role="heading"
+        aria-level={headingLevel}
+      >
+        {name}
+      </span>
+      {plan ? <span className="provider-card__plan">{plan}</span> : null}
+      <span className="provider-card__status">
+        <StatusChip
+          label={statusLabel}
+          tone={statusAttention ? "attention" : "neutral"}
+        />
+      </span>
+    </>
+  );
 
   return (
     <article className="provider-card" aria-labelledby={`provider-${name}`}>
       <header className="provider-card__header">
-        <div>
-          <h2 id={`provider-${name}`}>{name}</h2>
-          {plan ? <p>{plan}</p> : null}
-        </div>
-        {access === "required" || (hasSnapshot && action) ? (
-          <div className="provider-card__header-actions">
-            {access === "required" ? (
-              <span className="badge">Not connected</span>
-            ) : null}
-            {hasSnapshot && action ? (
-              <button
-                className="button button--secondary provider-card__header-action"
-                type="button"
-                aria-label={action.accessibleLabel}
-                onClick={action.onClick}
-              >
-                {action.label}
-              </button>
-            ) : null}
+        {onOpenDetails ? (
+          <button
+            className="provider-card__details provider-card__identity"
+            type="button"
+            aria-label={`Open ${name} details`}
+            data-focus-key={openDetailsFocusKey}
+            onClick={onOpenDetails}
+          >
+            {identity}
+            <Icon name="chevron-right" />
+          </button>
+        ) : (
+          <div className="provider-card__details provider-card__details--static provider-card__identity">
+            {identity}
           </div>
+        )}
+        {action ? (
+          <button
+            className="provider-card__refresh"
+            type="button"
+            aria-label={action.accessibleLabel}
+            disabled={operation !== undefined}
+            onClick={action.onClick}
+          >
+            <Icon
+              name="refresh"
+              className={operation ? "icon--spin" : ""}
+            />
+          </button>
         ) : null}
       </header>
-
-      {operation ? (
-        <p className="operation-copy">{operationLabels[operation]}</p>
-      ) : null}
-
-      {stale || freshness ? (
-        <p className={`freshness ${stale ? "freshness--stale" : ""}`}>
-          {stale ? "Stale · " : ""}
-          {freshness}
-        </p>
-      ) : null}
 
       {!hasSnapshot ? (
         <section className="provider-card__empty">
           <p>{emptyDescription}</p>
           {extraDisclosure ? <p>{extraDisclosure}</p> : null}
-          {attemptMessage ? <p className="health-message">{attemptMessage}</p> : null}
-          {action ? (
-            <button
-              className="button button--secondary"
-              type="button"
-              aria-label={action.accessibleLabel}
-              onClick={action.onClick}
-            >
-              {action.label}
-            </button>
-          ) : null}
+          {attemptMessage ? <InteractionBanner>{attemptMessage}</InteractionBanner> : null}
         </section>
       ) : attemptMessage ? (
-        <p className="health-message">{attemptMessage}</p>
+        <InteractionBanner>{attemptMessage}</InteractionBanner>
       ) : null}
 
       {hasSnapshot && access === "required" ? (
@@ -146,43 +189,32 @@ export function ProviderCard({
         </div>
       ) : null}
 
-      {quotas.length ? (
+      {quotaGroups.length ? (
         <div className="provider-card__quotas">
-          {quotas.map((quota) => (
-            <QuotaRow key={quota.id} {...quota} mode={mode} />
+          {quotaGroups.map((group) => (
+            <section
+              className="provider-card__quota-group"
+              aria-label={group.label}
+              key={group.id}
+            >
+              {group.quotas.map((quota) => (
+                <QuotaBars
+                  key={quota.id}
+                  {...quota}
+                  mode={mode}
+                  historyLabel={`Open ${name} history for ${quota.label}`}
+                  historyFocusKey={`provider-history-${providerId}-${quota.id}`}
+                  onOpenHistory={onOpenHistory}
+                />
+              ))}
+            </section>
           ))}
         </div>
       ) : null}
 
-      {canShowHistory ? (
-        <section className="history-disclosure">
-          <button
-            className="history-disclosure__toggle"
-            type="button"
-            aria-expanded={historyExpanded}
-            aria-controls={historyPanelId}
-            onClick={() => setHistoryExpanded((expanded) => !expanded)}
-          >
-            <span>History</span>
-            <span aria-hidden="true">{historyExpanded ? "−" : "+"}</span>
-          </button>
-          {historyExpanded ? (
-            <div id={historyPanelId}>
-              <HistoryChart
-                providerName={name}
-                mode={mode}
-                windows={history.windows}
-                history={history.observations}
-                now={history.now}
-              />
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
       {credits.length ? (
         <section className="credits" aria-label={`${name} credits`}>
-          <h3>Credits</h3>
+          <h3 className="visually-hidden">Credits</h3>
           {credits.map((credit) => (
             <div className="credit-row" key={credit.id}>
               <span>{credit.label}</span>
