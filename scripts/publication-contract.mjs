@@ -4,7 +4,11 @@ const issuesUrl = "https://github.com/TiantianFlow/ai-limits/issues";
 const storeUrl =
   "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
 const releaseUrl = "https://github.com/TiantianFlow/ai-limits/releases/latest";
-const retiredGithubHandle = "wjcjttl";
+const canonicalRepositoryOwner = "TiantianFlow";
+const repositoryOwnerPatterns = [
+  /https:\/\/github\.com\/([^/\s)]+)\/ai-limits\b/gi,
+  /https:\/\/img\.shields\.io\/github\/(?:license|v\/release)\/([^/\s)]+)\/ai-limits\b/gi,
+];
 const releaseChannelStatement =
   "Chrome Web Store releases can lag while review or publishing is pending; the Store badge shows the currently published version.";
 const releaseChannelStatementZh =
@@ -177,13 +181,16 @@ function extractVisibleRenderedProse(document) {
 
 export function validatePublicationDocuments(documents) {
   const errors = [];
-  if (
-    Object.values(documents).some((source) =>
-      String(source ?? "").includes(retiredGithubHandle),
-    )
-  ) {
+  if (Object.values(documents).some((source) => {
+    const content = String(source ?? "");
+    return repositoryOwnerPatterns.some((pattern) =>
+      [...content.matchAll(pattern)].some(
+        (match) => match[1] !== canonicalRepositoryOwner,
+      ),
+    );
+  })) {
     errors.push(
-      "Publication documents must not mention the retired GitHub handle wjcjttl.",
+      "Publication documents must use the canonical TiantianFlow repository URL.",
     );
   }
   const policies = [

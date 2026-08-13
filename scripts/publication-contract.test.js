@@ -515,13 +515,13 @@ describe("publication content", () => {
     "security",
     "listing",
     "license",
-  ])("rejects the retired GitHub handle in $key", (key) => {
+  ])("rejects a noncanonical repository owner in $key", (key) => {
     const errors = validatePublicationDocuments({
       ...valid,
-      [key]: `${valid[key]}\nwjcjttl`,
+      [key]: `${valid[key]}\nhttps://github.com/retired-owner/ai-limits`,
     });
     expect(errors).toContain(
-      "Publication documents must not mention the retired GitHub handle wjcjttl.",
+      "Publication documents must use the canonical TiantianFlow repository URL.",
     );
   });
 
