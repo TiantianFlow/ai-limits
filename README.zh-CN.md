@@ -3,9 +3,9 @@
 [English](README.md) | 简体中文
 
 [![Chrome 应用商店版本](https://img.shields.io/chrome-web-store/v/hcfdchpajckemcdflcjhigngpipdkdeo.svg?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)
-[![CI](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml?query=branch%3Amain)
-[![GitHub 发布版](https://img.shields.io/github/v/release/wjcjttl/ai-limits.svg?display_name=release&sort=semver)](https://github.com/wjcjttl/ai-limits/releases/latest)
-[![MIT 许可证](https://img.shields.io/github/license/wjcjttl/ai-limits.svg)](LICENSE)
+[![CI](https://github.com/TiantianFlow/ai-limits/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TiantianFlow/ai-limits/actions/workflows/ci.yml?query=branch%3Amain)
+[![GitHub 发布版](https://img.shields.io/github/v/release/TiantianFlow/ai-limits.svg?display_name=release&sort=semver)](https://github.com/TiantianFlow/ai-limits/releases/latest)
+[![MIT 许可证](https://img.shields.io/github/license/TiantianFlow/ai-limits.svg)](LICENSE)
 
 **[从 Chrome 应用商店安装](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)**
 
@@ -18,7 +18,7 @@ Claude、Kimi 和 Cursor 的当前订阅用量及本地配额历史图表。它�
 配额消耗与已过时间比较，显示用量节奏。扩展初始不读取任何数据；只有当你主动
 连接某个服务并批准该服务的可选访问权限后，才会读取其用量。
 
-AI Limits 是 wjcjttl 开发的独立项目，与 OpenAI、Anthropic、Moonshot AI、
+AI Limits 是 TiantianFlow 开发的独立项目，与 OpenAI、Anthropic、Moonshot AI、
 Cursor 或其关联公司不存在隶属、背书或授权关系。
 
 > 当前扩展界面为英文。下图的中文文字是项目介绍文案；嵌入的实际扩展界面
@@ -115,9 +115,9 @@ pnpm verify:zip
 ## 参与贡献
 
 提交修改前请阅读[贡献指南（英文）](CONTRIBUTING.md)。本项目使用
-[GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) 提供公开支持和
+[GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) 提供公开支持和
 错误报告。请勿在 Issue 中包含 Cookie、访问凭据、私人用量数据或其他机密信息。
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 wjcjttl
+[MIT](LICENSE) © 2026 TiantianFlow

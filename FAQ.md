@@ -111,5 +111,5 @@ account identifier. Disconnecting clears the old provider history and prevents
 same-plan accounts from being combined.
 
 For data handling details, see [Privacy](PRIVACY.md). To report a problem, use
-[GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) without including
+[GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) without including
 cookies, credentials, private usage data, or other secrets.

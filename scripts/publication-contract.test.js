@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { validatePublicationDocuments } from "./publication-contract.mjs";
 
-const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
+const issuesUrl = "https://github.com/TiantianFlow/ai-limits/issues";
 const issuesLink = `[GitHub Issues](${issuesUrl})`;
 const storeUrl =
   "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
 const storeLink = `[Chrome Web Store](${storeUrl})`;
-const releaseUrl = "https://github.com/wjcjttl/ai-limits/releases/latest";
+const releaseUrl = "https://github.com/TiantianFlow/ai-limits/releases/latest";
 const releaseLink = `[GitHub release](${releaseUrl})`;
 const faqLink = "[FAQ](FAQ.md)";
 const releaseChannelStatement =
@@ -62,20 +62,20 @@ const listingDefaults = [
     error: "Store listing is missing required default: Pricing: Free.",
   },
   {
-    value: "Homepage: https://github.com/wjcjttl/ai-limits",
+    value: "Homepage: https://github.com/TiantianFlow/ai-limits",
     error:
-      "Store listing is missing required default: Homepage: https://github.com/wjcjttl/ai-limits.",
+      "Store listing is missing required default: Homepage: https://github.com/TiantianFlow/ai-limits.",
   },
   {
     value:
-      "Privacy policy: https://github.com/wjcjttl/ai-limits/blob/main/PRIVACY.md",
+      "Privacy policy: https://github.com/TiantianFlow/ai-limits/blob/main/PRIVACY.md",
     error:
-      "Store listing is missing required default: Privacy policy: https://github.com/wjcjttl/ai-limits/blob/main/PRIVACY.md.",
+      "Store listing is missing required default: Privacy policy: https://github.com/TiantianFlow/ai-limits/blob/main/PRIVACY.md.",
   },
   {
-    value: "Support: https://github.com/wjcjttl/ai-limits/issues",
+    value: "Support: https://github.com/TiantianFlow/ai-limits/issues",
     error:
-      "Store listing is missing required default: Support: https://github.com/wjcjttl/ai-limits/issues.",
+      "Store listing is missing required default: Support: https://github.com/TiantianFlow/ai-limits/issues.",
   },
   {
     value: "Remote hosted code: No",
@@ -100,7 +100,7 @@ const valid = {
     paceAvailabilityStatement,
     publicRouteGate,
   ].join("\n"),
-  license: "MIT License\n\nCopyright (c) 2026 wjcjttl",
+  license: "MIT License\n\nCopyright (c) 2026 TiantianFlow",
 };
 
 const faqNavigationLinks = [
@@ -493,7 +493,7 @@ describe("publication content", () => {
       ...valid,
       listing: valid.listing.replace(
         publicRouteGate,
-        "GitHub Issues is enabled and reachable at https://github.com/wjcjttl/ai-limits/issues.",
+        "GitHub Issues is enabled and reachable at https://github.com/TiantianFlow/ai-limits/issues.",
       ),
     });
     expect(errors).toContain(
@@ -503,7 +503,26 @@ describe("publication content", () => {
 
   it("requires the license notice", () => {
     const errors = validatePublicationDocuments({ ...valid, license: "MIT License" });
-    expect(errors).toContain("LICENSE is missing the 2026 wjcjttl copyright notice.");
+    expect(errors).toContain("LICENSE is missing the 2026 TiantianFlow copyright notice.");
+  });
+
+  it.each([
+    "readme",
+    "readmeZh",
+    "faq",
+    "faqZh",
+    "privacy",
+    "security",
+    "listing",
+    "license",
+  ])("rejects the retired GitHub handle in $key", (key) => {
+    const errors = validatePublicationDocuments({
+      ...valid,
+      [key]: `${valid[key]}\nwjcjttl`,
+    });
+    expect(errors).toContain(
+      "Publication documents must not mention the retired GitHub handle wjcjttl.",
+    );
   });
 
   it("accepts required guidance wrapped across Markdown lines", () => {

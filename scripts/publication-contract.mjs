@@ -1,9 +1,10 @@
 import MarkdownIt from "markdown-it";
 
-const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
+const issuesUrl = "https://github.com/TiantianFlow/ai-limits/issues";
 const storeUrl =
   "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
-const releaseUrl = "https://github.com/wjcjttl/ai-limits/releases/latest";
+const releaseUrl = "https://github.com/TiantianFlow/ai-limits/releases/latest";
+const retiredGithubHandle = "wjcjttl";
 const releaseChannelStatement =
   "Chrome Web Store releases can lag while review or publishing is pending; the Store badge shows the currently published version.";
 const releaseChannelStatementZh =
@@ -43,8 +44,8 @@ const requiredListingDefaults = [
   "Mature content: No",
   "Distribution: Public, all regions",
   "Pricing: Free",
-  "Homepage: https://github.com/wjcjttl/ai-limits",
-  "Privacy policy: https://github.com/wjcjttl/ai-limits/blob/main/PRIVACY.md",
+  "Homepage: https://github.com/TiantianFlow/ai-limits",
+  "Privacy policy: https://github.com/TiantianFlow/ai-limits/blob/main/PRIVACY.md",
   `Support: ${issuesUrl}`,
   "Remote hosted code: No",
 ];
@@ -176,6 +177,15 @@ function extractVisibleRenderedProse(document) {
 
 export function validatePublicationDocuments(documents) {
   const errors = [];
+  if (
+    Object.values(documents).some((source) =>
+      String(source ?? "").includes(retiredGithubHandle),
+    )
+  ) {
+    errors.push(
+      "Publication documents must not mention the retired GitHub handle wjcjttl.",
+    );
+  }
   const policies = [
     ["README", "readme"],
     ["Privacy policy", "privacy"],
@@ -288,8 +298,8 @@ export function validatePublicationDocuments(documents) {
     );
   }
 
-  if (!documents.license?.includes("Copyright (c) 2026 wjcjttl")) {
-    errors.push("LICENSE is missing the 2026 wjcjttl copyright notice.");
+  if (!documents.license?.includes("Copyright (c) 2026 TiantianFlow")) {
+    errors.push("LICENSE is missing the 2026 TiantianFlow copyright notice.");
   }
 
   return errors;

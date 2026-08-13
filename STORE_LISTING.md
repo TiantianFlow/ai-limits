@@ -10,9 +10,9 @@ review checklist, not a claim that any provider has approved the extension.
 - Mature content: No
 - Distribution: Public, all regions
 - Pricing: Free
-- Homepage: https://github.com/wjcjttl/ai-limits
-- Privacy policy: https://github.com/wjcjttl/ai-limits/blob/main/PRIVACY.md
-- Support: https://github.com/wjcjttl/ai-limits/issues
+- Homepage: https://github.com/TiantianFlow/ai-limits
+- Privacy policy: https://github.com/TiantianFlow/ai-limits/blob/main/PRIVACY.md
+- Support: https://github.com/TiantianFlow/ai-limits/issues
 - Remote hosted code: No
 
 ## Artwork inventory and upload order
@@ -78,7 +78,7 @@ can be manual or automatic about every 15 minutes. Settings let the user turn
 automatic refresh off, disconnect one provider and remove its saved usage, or
 delete all saved usage and attempt to revoke every provider permission.
 
-AI Limits is an independent project by wjcjttl. It is not affiliated with,
+AI Limits is an independent project by TiantianFlow. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
 affiliates. Provider web-session endpoints are private and unsupported, so
 compatibility may change without notice.

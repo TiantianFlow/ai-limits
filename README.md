@@ -3,9 +3,9 @@
 English | [简体中文](README.zh-CN.md)
 
 [![Chrome Web Store version](https://img.shields.io/chrome-web-store/v/hcfdchpajckemcdflcjhigngpipdkdeo.svg?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)
-[![CI](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml?query=branch%3Amain)
-[![GitHub release](https://img.shields.io/github/v/release/wjcjttl/ai-limits.svg?display_name=release&sort=semver)](https://github.com/wjcjttl/ai-limits/releases/latest)
-[![MIT license](https://img.shields.io/github/license/wjcjttl/ai-limits.svg)](LICENSE)
+[![CI](https://github.com/TiantianFlow/ai-limits/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TiantianFlow/ai-limits/actions/workflows/ci.yml?query=branch%3Amain)
+[![GitHub release](https://img.shields.io/github/v/release/TiantianFlow/ai-limits.svg?display_name=release&sort=semver)](https://github.com/TiantianFlow/ai-limits/releases/latest)
+[![MIT license](https://img.shields.io/github/license/TiantianFlow/ai-limits.svg)](LICENSE)
 
 **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)**
 
@@ -21,7 +21,7 @@ compares quota consumption with elapsed time to show a pace signal. It starts
 empty and reads usage only after you connect an individual provider and approve
 that provider's optional access.
 
-AI Limits is an independent project by wjcjttl. It is not affiliated with,
+AI Limits is an independent project by TiantianFlow. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
 affiliates.
 
@@ -125,10 +125,10 @@ documented provider API if one becomes available.
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change. This project
-uses [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for public
+uses [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) for public
 support and bug reports. Do not include cookies, access credentials, private
 usage data, or other secrets in an issue.
 
 ## License
 
-[MIT](LICENSE) © 2026 wjcjttl
+[MIT](LICENSE) © 2026 TiantianFlow

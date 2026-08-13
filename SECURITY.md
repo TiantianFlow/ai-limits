@@ -10,7 +10,7 @@ Older development builds may not receive separate fixes.
 Never include session cookies, access credentials, private usage data, or
 account-identifying screenshots in a public report.
 
-Use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for ordinary,
+Use [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) for ordinary,
 non-sensitive security concerns. If GitHub private vulnerability reporting is
 available in the repository's **Security** tab, use it for sensitive reports.
 If that feature is unavailable, open a minimal issue requesting a private

@@ -95,5 +95,5 @@ AI Limits 不会跨越这些位置连接折线。这样可以避免把服务商�
 账号的数据合并。
 
 数据处理细节请参阅[隐私说明（英文）](PRIVACY.md)。如需报告问题，请使用
-[GitHub Issues](https://github.com/wjcjttl/ai-limits/issues)，并且不要提交 Cookie、
+[GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues)，并且不要提交 Cookie、
 凭据、私人用量数据或其他机密信息。

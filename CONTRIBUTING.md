@@ -69,5 +69,5 @@ impact, test evidence, and any provider compatibility risk.
 
 No public contributor route is active during pre-publication acceptance. Before
 publication, the repository owner must enable and verify the planned
-`https://github.com/wjcjttl/ai-limits/issues` route. Once verified, use it for
+`https://github.com/TiantianFlow/ai-limits/issues` route. Once verified, use it for
 contributor questions, and never post secrets or private account data.

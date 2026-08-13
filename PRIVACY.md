@@ -2,7 +2,7 @@
 
 Last updated: August 12, 2026
 
-AI Limits is a locally running Chrome extension by wjcjttl. This policy
+AI Limits is a locally running Chrome extension by TiantianFlow. This policy
 describes version 0.2.0.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
@@ -153,6 +153,6 @@ guidance.
 
 ## Contact
 
-Use [GitHub Issues](https://github.com/wjcjttl/ai-limits/issues) for public
+Use [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) for public
 privacy questions or requests. Never include cookies, access credentials,
 private usage details, or other secrets in an issue.

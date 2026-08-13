@@ -2,7 +2,7 @@ import React from "react";
 
 import { Icon } from "./Icon";
 
-const REPOSITORY_URL = "https://github.com/wjcjttl/ai-limits";
+const REPOSITORY_URL = "https://github.com/TiantianFlow/ai-limits";
 const ISSUES_URL = `${REPOSITORY_URL}/issues`;
 const SAFE_LINK_REL = "noopener noreferrer";
 
