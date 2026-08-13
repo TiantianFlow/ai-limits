@@ -151,6 +151,12 @@ uses [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) for publi
 support and bug reports. Do not include cookies, access credentials, private
 usage data, or other secrets in an issue.
 
+## Community
+
+Thanks to [LINUX DO](https://linux.do/) for providing a space for Chinese
+developers to exchange ideas and feedback. This acknowledgement does not imply
+affiliation or official endorsement.
+
 ## License
 
 [MIT](LICENSE) © 2026 TiantianFlow

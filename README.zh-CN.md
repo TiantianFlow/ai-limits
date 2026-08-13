@@ -134,6 +134,11 @@ AI Limits 会将格式异常或不可用的响应转换为有界的健康状态�
 [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) 提供公开支持和
 错误报告。请勿在 Issue 中包含 Cookie、访问凭据、私人用量数据或其他机密信息。
 
+## 社区
+
+感谢 [LINUX DO](https://linux.do/) 为中文开发者提供交流与反馈的平台。本致谢不代表双方
+存在隶属、合作或官方背书关系。
+
 ## 许可证
 
 [MIT](LICENSE) © 2026 TiantianFlow
