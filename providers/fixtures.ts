@@ -294,6 +294,40 @@ export function createFixtureState(now: number): AppState {
         now,
       ),
     },
+    {
+      providerId: "newapi",
+      access: "granted",
+      history: [],
+      snapshot: fixtureSnapshot(
+        {
+          providerId: "newapi",
+          accountLabel: "Example New API",
+          planLabel: "AI Limits",
+          windows: [
+            {
+              id: "relay-key-quota",
+              label: "API key quota",
+              kind: "feature",
+              usedRatio: 0.25,
+              used: 2_500,
+              limit: 10_000,
+              unit: "quota units",
+              sourceSemantics: "used",
+            },
+          ],
+          credits: [],
+          usageGroups: [
+            {
+              id: "usage",
+              label: "Usage",
+              windowIds: ["relay-key-quota"],
+              creditIds: [],
+            },
+          ],
+        },
+        now,
+      ),
+    },
   ];
 
   for (const provider of providers) {

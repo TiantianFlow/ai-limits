@@ -1,6 +1,6 @@
 # Chrome Web Store listing draft
 
-This document describes AI Limits version 0.2.1. It is submission copy and a
+This document describes AI Limits version 0.2.3. It is submission copy and a
 review checklist, not a claim that any provider has approved the extension.
 
 ## Store configuration
@@ -39,23 +39,27 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs from five providers. ChatGPT, Claude, Kimi, and Cursor use accounts
-already signed in within the user's browser profile; ElevenLabs uses an API key
-the user creates and connects through the guided setup.
+graphs from six providers. ChatGPT, Claude, Kimi, and Cursor use accounts
+already signed in within the user's browser profile; ElevenLabs and New API use
+keys the user connects through guided setup.
 
 ## Short description
 
-Track ChatGPT, Claude, Kimi, Cursor, and ElevenLabs usage, resets, pace, and local history in one Chrome side panel.
+Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.
 
 ## Detailed description
 
 AI Limits keeps subscription limits visible without switching among provider
-account pages. Connect ChatGPT, Claude, Kimi, Cursor, or ElevenLabs
+account pages. Connect ChatGPT, Claude, Kimi, Cursor, ElevenLabs, or New API
 individually, approve that provider's optional access, and view the usage
 windows, reset times, credits, and plan labels that the provider makes
 available. The first four providers use the signed-in browser session.
 ElevenLabs uses a user-created API key and its documented read-only
-subscription request.
+subscription request. New API uses one user-provided instance URL and relay
+key, validates `/api/status`, and reads that key's documented read-only
+`/api/usage/token/` response. Capped keys show used and remaining quota;
+unlimited keys show absolute usage. Account wallet, subscriptions, admin data,
+and multiple New API instances are not currently read.
 
 Providers use different conventions: some report quota consumed, while others
 report quota remaining. AI Limits normalizes them into a single display and lets
@@ -91,15 +95,17 @@ official API-keys page and allows the user to reopen it after signing in. The
 guide asks for **User → Read** without generation or write permissions and
 validates the real request because ElevenLabs does not formally document the
 exact endpoint-to-scope mapping. Once connected, ElevenLabs refreshes in the
-background without opening tabs. Settings let the user turn automatic refresh
+background without opening tabs. New API onboarding accepts a homepage,
+dashboard, `/v1`, `/v1/messages`, or usage-endpoint URL, removes known suffixes,
+and requests only the exact normalized instance origin. Settings let the user turn automatic refresh
 off, disconnect one provider and remove its saved usage and credential, or
 delete all saved usage and credentials while attempting to revoke every
 provider permission.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor,
-ElevenLabs, or their affiliates. Browser-session provider endpoints are private
-and unsupported. ElevenLabs uses a documented endpoint, but provider response
+ElevenLabs, the New API project, or their affiliates. Browser-session provider endpoints are private
+and unsupported. ElevenLabs and New API use documented endpoints, but provider response
 and authorization behavior can still change without notice.
 
 ## Permission justifications
@@ -111,7 +117,7 @@ and authorization behavior can still change without notice.
   sanitized refresh status in `chrome.storage.local`. It also holds temporary
   Kimi tab-cleanup lease metadata in `chrome.storage.session`. Browser-session
   cookies and access credentials are not persisted. After validation, the
-  user-created ElevenLabs API key is persisted in a separate
+  user-created ElevenLabs or New API key is persisted in a separate
   `chrome.storage.local` credential record whose Chrome storage access level is
   restricted to trusted extension contexts. It is not OS-keychain encrypted
   and may be inspectable from an unlocked Chrome profile, extension DevTools,
@@ -138,6 +144,13 @@ These origins are requested one provider at a time after the user clicks
   normalizes monthly credits and supported voice limits. The extension does
   not request `https://elevenlabs.io/*`; the setup page opens as a normal page
   without extension host access.
+- `https://*/*`: optional dynamic host capability for self-hosted New API
+  instances. The extension never requests this wildcard at runtime; after URL
+  normalization, Chrome is asked only for that instance's exact HTTPS origin.
+- `http://localhost/*` and `http://127.0.0.1/*`: optional dynamic capability
+  for local New API development. Runtime permission remains limited to the
+  exact localhost origin and port entered by the user. Public HTTP origins are
+  rejected.
 
 ### Optional API permissions
 
@@ -155,12 +168,12 @@ does not create or activate provider tabs.
 
 ## Data-disclosure answers
 
-- **Authentication information:** Yes. This includes the ElevenLabs API key
+- **Authentication information:** Yes. This includes the ElevenLabs and New API keys
   that the user creates and AI Limits saves locally after successful
   validation. Browser-session JSON, cookies, and access credentials for the
   other providers are handled only for the selected collection sequence and
-  are not persisted. The ElevenLabs key is stored in the separate
-  trusted-context credential record, sent only to `https://api.elevenlabs.io`,
+  are not persisted. API keys are stored in the separate
+  trusted-context credential record, sent only to the selected provider API,
   and never sent to the developer.
 - **Website content:** Yes. AI Limits handles private provider session, usage,
   subscription, and organization-response JSON plus Kimi's exact
@@ -194,7 +207,7 @@ does not create or activate provider tabs.
   provider's history; **Delete all local data** removes every provider's history
   even if a permission cannot be revoked. Extension uninstall or browser-storage
   clearing also removes the local record. Users can disable automatic refresh
-  at any time. A rejected ElevenLabs key stops scheduled ElevenLabs requests
+  at any time. A rejected API key stops that provider's scheduled requests
   while stale normalized usage and History remain until replacement or
   deletion. Disconnect, external permission removal, **Delete all local
   data**, uninstall, or clearing extension storage deletes the key. Local
@@ -209,7 +222,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.2.1-chrome.zip` upload artifact.
+- The validated `ai-limits-0.2.3-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
   provider sites in the same Chrome profile. ElevenLabs review additionally
   requires the reviewer to create a temporary **User → Read** API key in their
@@ -221,11 +234,11 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Five-provider test flow
+## Six-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm the side panel opens with five permission-required cards.
+   confirm the side panel opens with six permission-required cards.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -250,7 +263,15 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    available voice limits. Close all ElevenLabs tabs and refresh again; no tab
    should open. If possible, revoke the key at ElevenLabs and confirm AI Limits
    stops scheduled attempts, preserves stale data, and offers **Replace key**.
-7. Use the header refresh and confirm connected providers retain their previous
+7. **New API:** click **Connect New API**, enter a reviewer-controlled New API
+   site URL or a `/v1/messages` URL, and paste one temporary relay key. Confirm
+   the onboarding normalizes the URL, Chrome asks only for that exact instance
+   origin, and the extension displays the key-specific capped quota or
+   unlimited-key absolute usage. Confirm no provider tab opens. Revoke the key
+   if practical and verify AI Limits preserves stale normalized data while
+   offering replacement. Account wallet, subscriptions, admin data, and
+   multiple instances are intentionally out of scope.
+8. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history without adding credit history. In Settings, turn automatic

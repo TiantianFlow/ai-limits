@@ -23,6 +23,7 @@ export type ApiKeyConnectionStatus =
   | "connected"
   | "invalid_key"
   | "insufficient_scope"
+  | "invalid_site"
   | "temporary_error";
 
 export interface ApiKeyConnectionResult {
@@ -38,6 +39,7 @@ export interface ApiKeyConnectionLifecycle {
     context: Omit<CollectionContext, "credential" | "signal">,
     clock?: () => number,
     isAllowed?: () => boolean,
+    baseUrl?: string,
   ): Promise<ApiKeyConnectionResult>;
   invalidateProvider(providerId: ApiKeyProviderId): void;
   invalidateAll(): void;
@@ -66,6 +68,7 @@ export function createApiKeyConnectionLifecycle(): ApiKeyConnectionLifecycle {
       context,
       clock = Date.now,
       isAllowed = () => true,
+      baseUrl,
     ) {
       invalidateProvider(providerId);
       const generation = generations.get(providerId) ?? 0;
@@ -83,6 +86,7 @@ export function createApiKeyConnectionLifecycle(): ApiKeyConnectionLifecycle {
           { ...context, signal: controller.signal },
           isCurrent,
           clock,
+          baseUrl,
         );
       } finally {
         if (isCurrent()) {
@@ -100,6 +104,7 @@ export function createApiKeyConnectionLifecycle(): ApiKeyConnectionLifecycle {
 }
 
 function connectionStatus(
+  providerId: ApiKeyProviderId,
   outcome: ProviderRefreshOutcome,
 ): ApiKeyConnectionStatus {
   if (outcome.kind === "success") {
@@ -113,6 +118,9 @@ function connectionStatus(
     if (outcome.category === "credential_scope_required") {
       return "insufficient_scope";
     }
+    if (providerId === "newapi" && outcome.category === "provider_changed") {
+      return "invalid_site";
+    }
   }
 
   return "temporary_error";
@@ -124,6 +132,7 @@ export async function connectApiKeyProvider(
   context: Omit<CollectionContext, "credential">,
   shouldCommit: () => boolean = () => true,
   clock: () => number = Date.now,
+  baseUrl?: string,
 ): Promise<ApiKeyConnectionResult> {
   try {
     const normalizedApiKey = apiKey.trim();
@@ -139,7 +148,11 @@ export async function connectApiKeyProvider(
       adapter,
       {
         ...context,
-        credential: { kind: "api-key", value: normalizedApiKey },
+        credential: {
+          kind: "api-key",
+          value: normalizedApiKey,
+          ...(baseUrl ? { baseUrl } : {}),
+        },
       },
       "connect",
       clock,
@@ -153,6 +166,8 @@ export async function connectApiKeyProvider(
         providerId,
         normalizedApiKey,
         shouldCommit,
+        "active",
+        baseUrl,
       );
       if (!saveResult.saved) {
         outcome = { kind: "skipped", reason: "superseded" };
@@ -196,7 +211,7 @@ export async function connectApiKeyProvider(
         finishedAt: collected.finishedAt,
         providers: { [providerId]: outcome },
       },
-      result: connectionStatus(outcome),
+      result: connectionStatus(providerId, outcome),
     };
   } catch {
     throw new Error("API key connection failed.");

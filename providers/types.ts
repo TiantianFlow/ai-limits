@@ -9,6 +9,7 @@ import type {
 export interface ProviderCredential {
   kind: "api-key";
   value: string;
+  baseUrl?: string;
 }
 
 export interface KimiSessionResolver {

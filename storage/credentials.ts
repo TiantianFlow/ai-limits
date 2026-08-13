@@ -3,6 +3,7 @@ import {
   type ApiKeyProviderId,
   type ProviderId,
 } from "../providers/catalog";
+import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
 
 const CREDENTIAL_STORAGE_KEY = "aiLimitsCredentials";
 const MAX_API_KEY_LENGTH = 4_096;
@@ -12,6 +13,7 @@ export type CredentialStatus = "active" | "rejected";
 export interface StoredApiKeyCredential {
   kind: "api-key";
   value: string;
+  baseUrl?: string;
   status: CredentialStatus;
 }
 
@@ -73,9 +75,16 @@ function normalizeCredential(
   const apiKey = normalizeApiKey((value as { value?: unknown }).value);
   if (!apiKey) return undefined;
 
+  const baseUrl =
+    providerId === "newapi"
+      ? normalizeNewApiBaseUrl((value as { baseUrl?: unknown }).baseUrl)
+      : undefined;
+  if (providerId === "newapi" && !baseUrl) return undefined;
+
   return {
     kind: "api-key",
     value: apiKey,
+    ...(baseUrl ? { baseUrl } : {}),
     status: (value as { status: CredentialStatus }).status,
     revision:
       typeof (value as { revision?: unknown }).revision === "string" &&
@@ -149,12 +158,14 @@ export function saveProviderApiKey(
   providerId: ApiKeyProviderId,
   value: string,
   status: CredentialStatus = "active",
+  baseUrl?: string,
 ): Promise<void> {
   return saveProviderApiKeyIfCurrent(
     providerId,
     value,
     () => true,
     status,
+    baseUrl,
   ).then(() => undefined);
 }
 
@@ -163,9 +174,16 @@ export function saveProviderApiKeyIfCurrent(
   value: string,
   isCurrent: () => boolean,
   status: CredentialStatus = "active",
+  baseUrl?: string,
 ): Promise<ConditionalCredentialSaveResult> {
   const apiKey = normalizeApiKey(value);
-  if (!canUseCredentialStorage() || !apiKey) {
+  const normalizedBaseUrl =
+    providerId === "newapi" ? normalizeNewApiBaseUrl(baseUrl) : undefined;
+  if (
+    !canUseCredentialStorage() ||
+    !apiKey ||
+    (providerId === "newapi" && !normalizedBaseUrl)
+  ) {
     return Promise.resolve({ saved: false });
   }
 
@@ -183,6 +201,7 @@ export function saveProviderApiKeyIfCurrent(
         [providerId]: {
           kind: "api-key",
           value: apiKey,
+          ...(normalizedBaseUrl ? { baseUrl: normalizedBaseUrl } : {}),
           status,
           revision,
         },

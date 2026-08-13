@@ -1,5 +1,5 @@
 export const EXPECTED_DESCRIPTION =
-  "Track ChatGPT, Claude, Kimi, Cursor, and ElevenLabs usage, resets, pace, and local history in one Chrome side panel.";
+  "Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
 
 export const EXPECTED_REQUIRED_PERMISSIONS = ["alarms", "sidePanel", "storage"];
 export const EXPECTED_OPTIONAL_PERMISSIONS = ["cookies", "scripting"];
@@ -9,6 +9,9 @@ export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://claude.ai/*",
   "https://cursor.com/*",
   "https://www.kimi.com/*",
+  "https://*/*",
+  "http://localhost/*",
+  "http://127.0.0.1/*",
 ];
 
 export const FORBIDDEN_RELEASE_LITERALS = [
@@ -50,8 +53,8 @@ export function validateBuildManifest(manifest, packageVersion) {
   if (manifest.manifest_version !== 3) {
     errors.push("Expected manifest_version to be 3.");
   }
-  if (manifest.version !== packageVersion || manifest.version !== "0.2.1") {
-    errors.push("Expected manifest version 0.2.1 derived from package.json.");
+  if (manifest.version !== packageVersion || manifest.version !== "0.2.3") {
+    errors.push("Expected manifest version 0.2.3 derived from package.json.");
   }
   if (manifest.name !== "AI Limits") {
     errors.push('Expected manifest name to be "AI Limits".');
@@ -76,7 +79,7 @@ export function validateBuildManifest(manifest, packageVersion) {
       EXPECTED_OPTIONAL_ORIGINS,
     )
   ) {
-    errors.push("Expected the five exact optional provider origins.");
+    errors.push("Expected the exact static and dynamic optional provider origins.");
   }
   if (manifest.host_permissions !== undefined) {
     errors.push("Expected no required host_permissions.");

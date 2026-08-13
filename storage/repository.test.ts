@@ -82,6 +82,7 @@ describe("fixture state", () => {
       "kimi",
       "cursor",
       "elevenlabs",
+      "newapi",
     ]);
   });
 
@@ -90,7 +91,7 @@ describe("fixture state", () => {
       createFixtureState(now).providers.flatMap(({ snapshot }) =>
         snapshot ? [snapshot.source] : [],
       ),
-    ).toEqual(["fixture", "fixture", "fixture", "fixture", "fixture"]);
+    ).toEqual(["fixture", "fixture", "fixture", "fixture", "fixture", "fixture"]);
   });
 
   test("uses exact rolling and UTC calendar boundaries", () => {
@@ -172,6 +173,17 @@ describe("fixture state", () => {
               "professional-voice-slots",
               "voice-add-edits",
             ],
+            creditIds: [],
+          },
+        ],
+      },
+      {
+        providerId: "newapi",
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: ["relay-key-quota"],
             creditIds: [],
           },
         ],
@@ -274,6 +286,7 @@ describe("state repository", () => {
       { providerId: "kimi", access: "required", history: [] },
       { providerId: "cursor", access: "required", history: [] },
       { providerId: "elevenlabs", access: "required", history: [] },
+      { providerId: "newapi", access: "required", history: [] },
     ]);
   });
 

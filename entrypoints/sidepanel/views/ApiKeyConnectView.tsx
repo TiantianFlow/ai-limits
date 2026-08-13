@@ -7,6 +7,7 @@ export type ApiKeyConnectAttemptResult =
   | "connected"
   | "invalid_key"
   | "insufficient_scope"
+  | "invalid_site"
   | "temporary_error"
   | "permission_declined";
 
@@ -23,6 +24,8 @@ const feedbackByResult: Record<ApiKeyConnectAttemptResult, string> = {
   invalid_key: "Enter a valid ElevenLabs API key.",
   insufficient_scope:
     "Allow User → Read and check any IP restrictions, then try again.",
+  invalid_site:
+    "The provider site could not be validated. Check its address and try again.",
   temporary_error:
     "ElevenLabs could not be validated right now. Your existing data and key are unchanged.",
   permission_declined:

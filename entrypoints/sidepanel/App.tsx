@@ -183,6 +183,7 @@ const apiKeyConnectionStatuses = new Set<ApiKeyConnectionStatus>([
   "connected",
   "invalid_key",
   "insufficient_scope",
+  "invalid_site",
   "temporary_error",
 ]);
 
@@ -371,6 +372,7 @@ export function App() {
 
   const handleOpenApiKeySetup = (providerId: ApiKeyProviderId) => {
     const connection = providerCatalog[providerId].connection;
+    if (connection.origin !== "static") return;
     void browser.tabs.create({ url: connection.setupUrl }).catch(() => {
       announce("Couldn’t open the ElevenLabs API keys page. Try the link again.");
     });
@@ -379,6 +381,7 @@ export function App() {
   const handleSubmitApiKey = async (
     providerId: ApiKeyProviderId,
     apiKey: string,
+    baseUrl?: string,
   ): Promise<ApiKeyConnectAttemptResult> => {
     const connectionIntent =
       state?.providers.find((provider) => provider.providerId === providerId)
@@ -389,15 +392,15 @@ export function App() {
     setProviderOperation(providerId, "requesting_permission");
     let granted: boolean;
     try {
-      granted = await requestProviderPermission(providerId);
+      granted = await requestProviderPermission(providerId, { baseUrl });
     } catch {
-      announce("ElevenLabs could not be validated right now. Try again later.");
+      announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
       setProviderOperation(providerId);
       return "temporary_error";
     }
 
     if (!granted) {
-      announce("ElevenLabs access was not changed.");
+      announce(`${providerNames[providerId]} access was not changed.`);
       setProviderOperation(providerId);
       return "permission_declined";
     }
@@ -409,29 +412,35 @@ export function App() {
           type: "CONNECT_API_KEY_PROVIDER",
           providerId,
           apiKey,
+          ...(baseUrl ? { baseUrl } : {}),
           connectionIntent,
         } satisfies RuntimeCommand),
       );
       setState(response.state);
       switch (response.result) {
         case "connected":
-          announce("Connected ElevenLabs.");
+          announce(`Connected ${providerNames[providerId]}.`);
           break;
         case "invalid_key":
-          announce("Enter a valid ElevenLabs API key.");
+          announce(`Enter a valid ${providerNames[providerId]} API key.`);
           break;
         case "insufficient_scope":
           announce(
-            "Allow User → Read and check any IP restrictions, then try again.",
+            providerId === "elevenlabs"
+              ? "Allow User → Read and check any IP restrictions, then try again."
+              : "This relay key could not read its usage. Check the key and any IP restrictions.",
           );
           break;
+        case "invalid_site":
+          announce("This site did not return compatible New API status and usage data.");
+          break;
         case "temporary_error":
-          announce("ElevenLabs could not be validated right now. Try again later.");
+          announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
           break;
       }
       return response.result;
     } catch {
-      announce("ElevenLabs could not be validated right now. Try again later.");
+      announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
       return "temporary_error";
     } finally {
       setProviderOperation(providerId);

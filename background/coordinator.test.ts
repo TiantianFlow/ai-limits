@@ -586,7 +586,7 @@ describe("provider refresh coordinator", () => {
     });
     expect(
       (await loadState())?.providers.slice(1).map(({ access }) => access),
-    ).toEqual(["granted", "granted", "granted", "granted"]);
+    ).toEqual(["granted", "granted", "granted", "granted", "granted"]);
   });
 
   test("invalidates an exact permission removal before authoritative cleanup", async () => {

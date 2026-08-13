@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { providerCatalog } from "../providers/catalog";
 import {
   hasProviderPermission,
+  permissionChangeAffectsProvider,
   removeAllProviderPermissions,
   removeProviderPermission,
   requestProviderPermission,
@@ -45,6 +46,59 @@ describe("provider permissions", () => {
       origins: ["https://www.kimi.com/*"],
       permissions: ["cookies", "scripting"],
     });
+  });
+
+  test("requests and checks only the configured New API instance origin", async () => {
+    const request = vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    const contains = vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
+
+    await requestProviderPermission("newapi", {
+      baseUrl: "https://api.example.com/new-api/v1/messages",
+    });
+    await hasProviderPermission("newapi", {
+      baseUrl: "https://api.example.com/new-api",
+    });
+
+    expect(request).toHaveBeenCalledWith({ origins: ["https://api.example.com/*"] });
+    expect(contains).toHaveBeenCalledWith({ origins: ["https://api.example.com/*"] });
+  });
+
+  test("fails closed when dynamic New API permission has no safe base URL", async () => {
+    const request = vi.spyOn(browser.permissions, "request");
+
+    await expect(requestProviderPermission("newapi")).resolves.toBe(false);
+    await expect(
+      requestProviderPermission("newapi", { baseUrl: "http://public.example.com" }),
+    ).resolves.toBe(false);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  test("maps only supported exact dynamic origins to New API permission changes", () => {
+    expect(
+      permissionChangeAffectsProvider("newapi", {
+        origins: ["https://api.example.com/*"],
+      }),
+    ).toBe(true);
+    expect(
+      permissionChangeAffectsProvider("newapi", {
+        origins: ["http://localhost:3000/*"],
+      }),
+    ).toBe(true);
+    expect(
+      permissionChangeAffectsProvider("newapi", {
+        origins: ["http://public.example.com/*"],
+      }),
+    ).toBe(false);
+    expect(
+      permissionChangeAffectsProvider("newapi", {
+        origins: ["https://chatgpt.com/*"],
+      }),
+    ).toBe(false);
+    expect(
+      permissionChangeAffectsProvider("chatgpt", {
+        origins: ["https://api.example.com/*"],
+      }),
+    ).toBe(false);
   });
 
   test("removes only the disconnected provider's exact optional access", async () => {
@@ -103,6 +157,19 @@ describe("provider permissions", () => {
     });
   });
 
+  test("removes only the stored New API instance permission", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
+    const remove = vi.spyOn(browser.permissions, "remove").mockResolvedValue(true as never);
+
+    await expect(
+      removeProviderPermission("newapi", [], providerCatalog, {
+        baseUrl: "https://api.example.com/new-api",
+      }),
+    ).resolves.toBe(true);
+
+    expect(remove).toHaveBeenCalledWith({ origins: ["https://api.example.com/*"] });
+  });
+
   test("uses the absent postcondition when Chrome returns false from removal", async () => {
     vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
     vi.spyOn(browser.permissions, "remove").mockResolvedValue(false as never);
@@ -159,6 +226,19 @@ describe("provider permissions", () => {
     });
     expect(remove).toHaveBeenNthCalledWith(2, {
       origins: ["https://claude.ai/*"],
+    });
+  });
+
+  test("removes an orphaned exact New API origin during delete-all", async () => {
+    vi.spyOn(browser.permissions, "getAll").mockResolvedValue({
+      origins: ["https://self-hosted.example.com/*"],
+      permissions: [],
+    } as never);
+    const remove = vi.spyOn(browser.permissions, "remove").mockResolvedValue(true as never);
+
+    await expect(removeAllProviderPermissions(["newapi"])).resolves.toBe(true);
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://self-hosted.example.com/*"],
     });
   });
 });

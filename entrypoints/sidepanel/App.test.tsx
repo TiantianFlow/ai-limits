@@ -69,6 +69,58 @@ function successfulOutcomes(state: AppState): RefreshReport["providers"] {
 }
 
 describe("side-panel App", () => {
+  test("requests only the normalized New API instance and sends one candidate command", async () => {
+    const initial = createInitialState();
+    const commands: Record<string, unknown>[] = [];
+    const requestPermission = vi
+      .spyOn(browser.permissions, "request")
+      .mockResolvedValue(true as never);
+    const createTab = vi.spyOn(browser.tabs, "create");
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(
+        message.type === "CONNECT_API_KEY_PROVIDER"
+          ? {
+              state: initial,
+              report: report({
+                newapi: { kind: "failure", category: "credential_invalid" },
+              }, "connect"),
+              result: "invalid_key",
+            }
+          : initial,
+      );
+    });
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect New API" }),
+    );
+    expect(createTab).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("New API site URL"), {
+      target: { value: "https://API.example.com/gateway/v1/messages" },
+    });
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "sk-candidate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    await waitFor(() =>
+      expect(commands).toContainEqual({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "newapi",
+        apiKey: "sk-candidate",
+        baseUrl: "https://api.example.com/gateway",
+        connectionIntent: "permission-grant",
+      }),
+    );
+    expect(requestPermission).toHaveBeenCalledWith({
+      origins: ["https://api.example.com/*"],
+    });
+    expect(requestPermission).not.toHaveBeenCalledWith({
+      origins: ["https://*/*"],
+    });
+  });
+
   test("opens the ElevenLabs setup page without requesting API access", async () => {
     const state = createInitialState();
     const sendMessage = vi
@@ -411,7 +463,7 @@ describe("side-panel App", () => {
       name: "all attempted providers succeed",
       state: createFixtureState(NOW),
       outcomes: successfulOutcomes(createFixtureState(NOW)),
-      expected: "Updated 5 providers.",
+      expected: "Updated 6 providers.",
     },
     {
       name: "Kimi is the only provider needing a session",
@@ -420,7 +472,7 @@ describe("side-panel App", () => {
         ...successfulOutcomes(createFixtureState(NOW)),
         kimi: { kind: "deferred", reason: "session_required" } as const,
       },
-      expected: "Updated 4 of 5. Kimi needs a browser session.",
+      expected: "Updated 5 of 6. Kimi needs a browser session.",
     },
     {
       name: "mixed non-success outcomes need attention",

@@ -4,6 +4,7 @@ import type { ProviderId } from "./catalog";
 import { cursorAdapter } from "./cursor/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { kimiAdapter } from "./kimi/adapter";
+import { newApiAdapter } from "./newapi/adapter";
 import type { ProviderAdapter } from "./types";
 
 export type ConnectableProviderId = ProviderId;
@@ -16,4 +17,5 @@ export const providerRegistry = {
   kimi: kimiAdapter,
   cursor: cursorAdapter,
   elevenlabs: elevenLabsAdapter,
+  newapi: newApiAdapter,
 } satisfies { [Id in ProviderId]: ProviderAdapter<Id> };

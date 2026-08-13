@@ -25,7 +25,8 @@ panel, it reads the latest data from local extension storage.
   no providers are connected.
 - Chrome must still have that provider's optional permission.
 - For ChatGPT, Claude, Kimi, and Cursor, the signed-in browser session must
-  still be usable. ElevenLabs instead needs a saved active API key.
+  still be usable. ElevenLabs and New API instead need a saved active API key;
+  New API also needs its exact instance permission.
 - Chrome must be running and able to run background extensions.
 
 The alarm runs approximately every 15 minutes. Chrome scheduling, device sleep,
@@ -42,7 +43,8 @@ does not reconstruct observations for intervals that were missed.
 ## If manual refresh works, should automatic refresh also work?
 
 Usually for ChatGPT, Claude, and Cursor, as long as their permission and browser
-session remain valid, and for ElevenLabs while its saved key remains active.
+session remain valid, and for ElevenLabs or New API while the saved key and
+host permission remain active.
 However, manual refresh bypasses scheduled backoff, while automatic refresh
 respects it. Kimi manual refresh may additionally perform interactive session
 recovery. A manual success therefore cannot guarantee every later scheduled
@@ -99,12 +101,33 @@ unchanged. Disconnecting ElevenLabs, removing its host permission, choosing
 **Delete all local data**, uninstalling the extension, or clearing extension
 storage deletes the saved key.
 
+## What does New API support, and what URL should I enter?
+
+AI Limits currently supports one New API instance and one relay key. It reads
+only that key's `/api/usage/token/` response: capped keys show granted, used,
+and remaining quota, while unlimited keys show absolute usage without an
+invented percentage. It does not yet read account wallet, subscriptions,
+admin data, or multiple instances.
+
+You can paste the site homepage, a dashboard URL, `/v1`, `/v1/messages`, or
+`/api/usage/token/`. AI Limits removes those known suffixes, preserves any
+deployment subpath, and validates the result through `/api/status`. HTTPS is
+required except for localhost development.
+
+The usage request is read-only, but a relay key is not necessarily a
+usage-only credential: the same key may still be able to call models. Use a
+dedicated key and apply quota, model, IP, or other restrictions in your New API
+instance where appropriate. The validated URL and key are saved locally for
+background refresh. See [Supported providers](SUPPORTED_PROVIDERS.md) for the
+full boundary.
+
 ## Does automatic refresh open provider tabs?
 
 No. Scheduled refresh is non-interactive and never creates provider tabs. Only
 an interactive Kimi **Connect** or **Refresh** may briefly create an inactive
 Kimi tab for session recovery. ElevenLabs opens its normal API-keys page only
 when you explicitly start setup or choose **Open API keys page**.
+New API setup and refresh do not open provider tabs.
 
 ## What does History store, and for how long?
 

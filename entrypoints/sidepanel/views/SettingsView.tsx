@@ -160,12 +160,12 @@ export function SettingsView({
                       ) : null}
                     </div>
                     <div className="settings-provider-actions">
-                      {provider.providerId === "elevenlabs" ? (
+                      {providerCatalog[provider.providerId].connection.kind === "api-key" ? (
                         <button
                           type="button"
-                          aria-label="Replace ElevenLabs API key"
-                          data-focus-key="settings-replace-api-key-elevenlabs"
-                          onClick={() => onReplaceApiKey("elevenlabs")}
+                          aria-label={`Replace ${name} API key`}
+                          data-focus-key={`settings-replace-api-key-${provider.providerId}`}
+                          onClick={() => onReplaceApiKey(provider.providerId as ApiKeyProviderId)}
                         >
                           Replace key
                         </button>

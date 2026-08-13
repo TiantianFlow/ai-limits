@@ -276,7 +276,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       description: "ChatGPT · Claude · Kimi · Cursor",
     },
     chromeSidePanelLabel: "Chrome side panel",
-    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
+    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
       "Provider access is opt-in",
@@ -326,7 +326,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       description: "ChatGPT · Claude · Kimi · Cursor",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
-    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
+    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
       "服务访问需主动授权",

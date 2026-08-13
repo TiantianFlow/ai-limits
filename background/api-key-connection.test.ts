@@ -76,6 +76,61 @@ beforeEach(async () => {
 });
 
 describe("API-key connection transaction", () => {
+  test("validates and stores a New API key with its normalized instance", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response({ success: true, data: { system_name: "Acme AI" } }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          code: true,
+          data: {
+            name: "AI Limits",
+            total_granted: 100,
+            total_used: 25,
+            total_available: 75,
+            unlimited_quota: false,
+            expires_at: 0,
+          },
+        }),
+      );
+
+    const result = await connectApiKeyProvider(
+      "newapi",
+      "sk-candidate",
+      context(fetch),
+      () => true,
+      () => NOW,
+      "https://NEW-API.example.com/gateway/v1/messages",
+    );
+
+    expect(result.result).toBe("connected");
+    await expect(readProviderCredential("newapi")).resolves.toEqual({
+      kind: "api-key",
+      value: "sk-candidate",
+      baseUrl: "https://new-api.example.com/gateway",
+      status: "active",
+    });
+  });
+
+  test("reports an invalid New API site separately from key failures", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(response({ product: "not-new-api" }));
+
+    const result = await connectApiKeyProvider(
+      "newapi",
+      "sk-candidate",
+      context(fetch),
+      () => true,
+      () => NOW,
+      "https://wrong.example.com",
+    );
+
+    expect(result.result).toBe("invalid_site");
+    await expect(readProviderCredential("newapi")).resolves.toBeUndefined();
+  });
   test("a newer connection supersedes a late response and only the latest key wins", async () => {
     const firstResponse = deferred<Response>();
     const firstFetch = vi

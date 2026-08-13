@@ -82,6 +82,14 @@ describe("provider catalog", () => {
           "Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.",
         capabilities: ["Monthly credits", "Voice limits"],
       },
+      {
+        providerId: "newapi",
+        markPath: "/provider-marks/fallback.svg",
+        connectionLabel: "Connect New API",
+        connectionDisclosure:
+          "Uses one relay key and one New API instance URL you provide, stores both locally, and refreshes key-specific usage about every 15 minutes.",
+        capabilities: ["API key quota", "Unlimited-key usage"],
+      },
     ]);
   });
 
@@ -92,6 +100,7 @@ describe("provider catalog", () => {
       "kimi",
       "cursor",
       "elevenlabs",
+      "newapi",
     ]);
     expect(
       providerIds.map((providerId) => ({
@@ -142,8 +151,21 @@ describe("provider catalog", () => {
         permissions: [],
         connection: {
           kind: "api-key",
+          origin: "static",
           setupUrl: "https://elevenlabs.io/app/developers/api-keys",
         },
+        scheduledRefresh: true,
+      },
+      {
+        providerId: "newapi",
+        name: "New API",
+        origins: [
+          "https://*/*",
+          "http://localhost/*",
+          "http://127.0.0.1/*",
+        ],
+        permissions: [],
+        connection: { kind: "api-key", origin: "dynamic" },
         scheduledRefresh: true,
       },
     ]);
@@ -173,6 +195,7 @@ describe("provider catalog", () => {
 
   test("derives API-key provider identities from the catalog", () => {
     expect(isApiKeyProviderId("elevenlabs")).toBe(true);
+    expect(isApiKeyProviderId("newapi")).toBe(true);
     expect(isApiKeyProviderId("chatgpt")).toBe(false);
     expect(isApiKeyProviderId("unknown")).toBe(false);
     expect(isApiKeyProviderId(undefined)).toBe(false);

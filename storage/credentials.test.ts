@@ -64,6 +64,55 @@ describe("credential storage", () => {
     });
   });
 
+  test("stores one normalized New API instance with its relay key", async () => {
+    await credentials.initializeCredentialStorage();
+
+    await credentials.saveProviderApiKey(
+      "newapi",
+      "  sk-relay-key  ",
+      "active",
+      "https://API.example.com/new-api/v1/messages",
+    );
+
+    await expect(credentials.readProviderCredential("newapi")).resolves.toEqual({
+      kind: "api-key",
+      value: "sk-relay-key",
+      baseUrl: "https://api.example.com/new-api",
+      status: "active",
+    });
+  });
+
+  test("rejects a New API credential without a safe instance URL", async () => {
+    await credentials.initializeCredentialStorage();
+
+    await credentials.saveProviderApiKey("newapi", "sk-relay-key");
+    await credentials.saveProviderApiKey(
+      "newapi",
+      "sk-relay-key",
+      "active",
+      "http://public.example.com",
+    );
+
+    await expect(credentials.readProviderCredential("newapi")).resolves.toBeUndefined();
+  });
+
+  test("does not attach a base URL to a fixed-origin ElevenLabs credential", async () => {
+    await credentials.initializeCredentialStorage();
+
+    await credentials.saveProviderApiKey(
+      "elevenlabs",
+      "api-key",
+      "active",
+      "https://unrelated.example.com",
+    );
+
+    await expect(credentials.readProviderCredential("elevenlabs")).resolves.toEqual({
+      kind: "api-key",
+      value: "api-key",
+      status: "active",
+    });
+  });
+
   test("stores rejected credentials and replaces them with a new active key", async () => {
     await credentials.initializeCredentialStorage();
     await credentials.saveProviderApiKey("elevenlabs", "first", "rejected");

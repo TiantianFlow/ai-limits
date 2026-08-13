@@ -9,7 +9,8 @@ export async function isProviderConnected(
   if (await isProviderConnectionSuppressed(providerId)) {
     return false;
   }
-  if (!(await hasProviderPermission(providerId))) {
+  const credential = await readProviderCredential(providerId);
+  if (!(await hasProviderPermission(providerId, { baseUrl: credential?.baseUrl }))) {
     return false;
   }
 
@@ -17,7 +18,7 @@ export async function isProviderConnected(
     return true;
   }
 
-  return (await readProviderCredential(providerId)) !== undefined;
+  return credential !== undefined;
 }
 
 export async function isProviderRefreshEligible(
@@ -26,7 +27,8 @@ export async function isProviderRefreshEligible(
   if (await isProviderConnectionSuppressed(providerId)) {
     return false;
   }
-  if (!(await hasProviderPermission(providerId))) {
+  const credential = await readProviderCredential(providerId);
+  if (!(await hasProviderPermission(providerId, { baseUrl: credential?.baseUrl }))) {
     return false;
   }
 
@@ -34,5 +36,5 @@ export async function isProviderRefreshEligible(
     return true;
   }
 
-  return (await readProviderCredential(providerId))?.status === "active";
+  return credential?.status === "active";
 }

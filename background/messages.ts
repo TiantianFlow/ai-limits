@@ -5,6 +5,7 @@ import {
   isProviderId,
   type ApiKeyProviderId,
 } from "../providers/catalog";
+import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
 
 const MAX_API_KEY_LENGTH = 4_096;
 
@@ -16,6 +17,7 @@ export type RuntimeCommand =
       type: "CONNECT_API_KEY_PROVIDER";
       providerId: ApiKeyProviderId;
       apiKey: string;
+      baseUrl?: string;
       connectionIntent: ApiKeyConnectionIntent;
     }
   | { type: "COLLECT_PROVIDER"; providerId: ConnectableProviderId }
@@ -56,17 +58,18 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
 
   const command = value as Record<string, unknown>;
   if (command.type === "CONNECT_API_KEY_PROVIDER") {
+    const expectedKeys =
+      command.providerId === "newapi"
+        ? ["type", "providerId", "apiKey", "baseUrl", "connectionIntent"]
+        : ["type", "providerId", "apiKey", "connectionIntent"];
     return (
-      hasExactKeys(command, [
-        "type",
-        "providerId",
-        "apiKey",
-        "connectionIntent",
-      ]) &&
+      hasExactKeys(command, expectedKeys) &&
       isApiKeyProviderId(command.providerId) &&
       typeof command.apiKey === "string" &&
       command.apiKey.trim().length > 0 &&
       command.apiKey.length <= MAX_API_KEY_LENGTH &&
+      (command.providerId !== "newapi" ||
+        normalizeNewApiBaseUrl(command.baseUrl) !== undefined) &&
       (command.connectionIntent === "permission-grant" ||
         command.connectionIntent === "replacement")
     );
@@ -127,6 +130,7 @@ export interface RuntimeCommandHandlers {
     providerId: ApiKeyProviderId,
     apiKey: string,
     connectionIntent: ApiKeyConnectionIntent,
+    baseUrl?: string,
   ): unknown;
   collectProvider(providerId: ConnectableProviderId): unknown;
   refreshProvider(providerId: ConnectableProviderId): unknown;
@@ -177,6 +181,7 @@ export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
           value.providerId,
           value.apiKey,
           value.connectionIntent,
+          value.baseUrl,
         );
       case "COLLECT_PROVIDER":
         return handlers.collectProvider(value.providerId);

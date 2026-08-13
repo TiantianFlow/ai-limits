@@ -52,6 +52,23 @@ describe("provider-aware access", () => {
     await expect(isProviderRefreshEligible("elevenlabs")).resolves.toBe(true);
   });
 
+  test("checks the exact stored New API instance before scheduling refresh", async () => {
+    const contains = vi
+      .spyOn(browser.permissions, "contains")
+      .mockResolvedValue(true as never);
+    await saveProviderApiKey(
+      "newapi",
+      "sk-active-test-key",
+      "active",
+      "https://api.example.com/gateway/v1",
+    );
+
+    await expect(isProviderRefreshEligible("newapi")).resolves.toBe(true);
+    expect(contains).toHaveBeenCalledWith({
+      origins: ["https://api.example.com/*"],
+    });
+  });
+
   test("keeps a rejected-key provider connected while stopping requests", async () => {
     vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
     await saveProviderApiKey("elevenlabs", "rejected-test-key");

@@ -50,6 +50,19 @@ describe("runtime command router", () => {
       result: "connected",
     });
     await expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "newapi",
+        apiKey: "sk-synthetic-key",
+        baseUrl: "https://new-api.example.com/v1",
+        connectionIntent: "permission-grant",
+      }),
+    ).resolves.toEqual({
+      state: { version: 4 },
+      report: { trigger: "connect" },
+      result: "connected",
+    });
+    await expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "chatgpt" }),
     ).resolves.toMatchObject({ report: { trigger: "connect" } });
     await expect(
@@ -89,6 +102,13 @@ describe("runtime command router", () => {
       "elevenlabs",
       "synthetic-candidate-key",
       "permission-grant",
+      undefined,
+    );
+    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
+      "newapi",
+      "sk-synthetic-key",
+      "permission-grant",
+      "https://new-api.example.com/v1",
     );
 
     expect(handle({ type: "FETCH", url: "https://attacker.invalid" })).toBeUndefined();
@@ -166,12 +186,31 @@ describe("runtime command router", () => {
       handle({ type: "DELETE_LOCAL_DATA", providerId: "chatgpt" }),
     ).toBeUndefined();
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
-    expect(handlers.connectApiKeyProvider).toHaveBeenCalledOnce();
+    expect(handlers.connectApiKeyProvider).toHaveBeenCalledTimes(2);
     expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
       "elevenlabs",
       "synthetic-candidate-key",
       "permission-grant",
+      undefined,
     );
+
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "newapi",
+        apiKey: "sk-synthetic-key",
+        connectionIntent: "permission-grant",
+      }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: "synthetic-candidate-key",
+        baseUrl: "https://attacker.invalid",
+        connectionIntent: "permission-grant",
+      }),
+    ).toBeUndefined();
     expect(handlers.collectProvider).toHaveBeenCalledTimes(4);
     expect(handlers.refreshProvider).toHaveBeenCalledTimes(1);
     expect(handlers.refreshProvider).toHaveBeenCalledWith("kimi");

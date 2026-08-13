@@ -70,6 +70,180 @@ beforeEach(async () => {
 });
 
 describe("credential-aware background lifecycle", () => {
+  test("replacing a New API instance revokes the prior exact host after validation", async () => {
+    await credentials.initializeCredentialStorage();
+    await credentials.saveProviderApiKey(
+      "newapi",
+      "sk-old-key",
+      "active",
+      "https://old.example.com/v1",
+    );
+    await saveState(createFixtureState(NOW), NOW);
+    const grantedOrigins = new Set(["https://old.example.com/*"]);
+    vi.spyOn(browser.permissions, "contains").mockImplementation(
+      async (request) =>
+        Boolean(request.origins?.every((origin) => grantedOrigins.has(origin))) as never,
+    );
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async (request) => {
+        request.origins?.forEach((origin) => grantedOrigins.delete(origin));
+        return true as never;
+      },
+    );
+    let permissionAdded:
+      | ((permissions: Browser.permissions.Permissions) => void)
+      | undefined;
+    vi.spyOn(browser.permissions.onAdded, "addListener").mockImplementation(
+      (listener) => {
+        permissionAdded = listener as typeof permissionAdded;
+      },
+    );
+    let permissionRemoved:
+      | ((permissions: Browser.permissions.Permissions) => void)
+      | undefined;
+    vi.spyOn(browser.permissions.onRemoved, "addListener").mockImplementation(
+      (listener) => {
+        permissionRemoved = listener as typeof permissionRemoved;
+      },
+    );
+    remove.mockImplementation(async (request) => {
+      request.origins?.forEach((origin) => grantedOrigins.delete(origin));
+      permissionRemoved?.(request);
+      return true as never;
+    });
+    let runtimeListener: RuntimeListener | undefined;
+    vi.spyOn(browser.runtime.onMessage, "addListener").mockImplementation(
+      (listener) => {
+        runtimeListener = listener as RuntimeListener;
+      },
+    );
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        response({ success: true, data: { system_name: "New instance" } }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          code: true,
+          data: {
+            name: "AI Limits",
+            total_granted: 100,
+            total_used: 25,
+            total_available: 75,
+            unlimited_quota: false,
+            expires_at: 0,
+          },
+        }),
+      );
+
+    backgroundMain?.();
+    await vi.waitFor(() => expect(runtimeListener).toBeTypeOf("function"));
+    await invokeRuntimeCommand(runtimeListener!, { type: "GET_STATE" });
+    grantedOrigins.add("https://new.example.com/*");
+    permissionAdded?.({ origins: ["https://new.example.com/*"] });
+    const result = await invokeRuntimeCommand(runtimeListener!, {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerId: "newapi",
+      apiKey: "sk-new-key",
+      baseUrl: "https://new.example.com/v1/messages",
+      connectionIntent: "replacement",
+    });
+
+    expect(result).toMatchObject({ result: "connected" });
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://old.example.com/*"],
+    });
+    await expect(credentials.readProviderCredential("newapi")).resolves.toMatchObject({
+      value: "sk-new-key",
+      baseUrl: "https://new.example.com",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(credentials.readProviderCredential("newapi")).resolves.toMatchObject({
+      value: "sk-new-key",
+      baseUrl: "https://new.example.com",
+    });
+  });
+
+  test("failed New API replacement revokes only the candidate host and preserves the active connection", async () => {
+    await credentials.initializeCredentialStorage();
+    await credentials.saveProviderApiKey(
+      "newapi",
+      "sk-old-key",
+      "active",
+      "https://old.example.com",
+    );
+    await saveState(createFixtureState(NOW), NOW);
+    const previousProvider = (await loadState(NOW))?.providers.find(
+      (provider) => provider.providerId === "newapi",
+    );
+    const grantedOrigins = new Set(["https://old.example.com/*"]);
+    vi.spyOn(browser.permissions, "contains").mockImplementation(
+      async (request) =>
+        Boolean(request.origins?.every((origin) => grantedOrigins.has(origin))) as never,
+    );
+    let permissionAdded:
+      | ((permissions: Browser.permissions.Permissions) => void)
+      | undefined;
+    let permissionRemoved:
+      | ((permissions: Browser.permissions.Permissions) => void)
+      | undefined;
+    vi.spyOn(browser.permissions.onAdded, "addListener").mockImplementation(
+      (listener) => {
+        permissionAdded = listener as typeof permissionAdded;
+      },
+    );
+    vi.spyOn(browser.permissions.onRemoved, "addListener").mockImplementation(
+      (listener) => {
+        permissionRemoved = listener as typeof permissionRemoved;
+      },
+    );
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async (request) => {
+        request.origins?.forEach((origin) => grantedOrigins.delete(origin));
+        permissionRemoved?.(request);
+        return true as never;
+      },
+    );
+    let runtimeListener: RuntimeListener | undefined;
+    vi.spyOn(browser.runtime.onMessage, "addListener").mockImplementation(
+      (listener) => {
+        runtimeListener = listener as RuntimeListener;
+      },
+    );
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        response({ success: true, data: { system_name: "Candidate" } }),
+      )
+      .mockResolvedValueOnce(response({}, 401));
+
+    backgroundMain?.();
+    await vi.waitFor(() => expect(runtimeListener).toBeTypeOf("function"));
+    await invokeRuntimeCommand(runtimeListener!, { type: "GET_STATE" });
+    grantedOrigins.add("https://candidate.example.com/*");
+    permissionAdded?.({ origins: ["https://candidate.example.com/*"] });
+
+    await expect(
+      invokeRuntimeCommand(runtimeListener!, {
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "newapi",
+        apiKey: "sk-invalid-candidate",
+        baseUrl: "https://candidate.example.com/v1/messages",
+        connectionIntent: "replacement",
+      }),
+    ).resolves.toMatchObject({ result: "invalid_key" });
+
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://candidate.example.com/*"],
+    });
+    expect(grantedOrigins).toEqual(new Set(["https://old.example.com/*"]));
+    await expect(credentials.readProviderCredential("newapi")).resolves.toMatchObject({
+      value: "sk-old-key",
+      baseUrl: "https://old.example.com",
+    });
+    expect((await loadState(NOW))?.providers.find(
+      (provider) => provider.providerId === "newapi",
+    )).toEqual(previousProvider);
+  });
+
   test("initializes trusted credential storage when the background starts", async () => {
     expect(backgroundMain).toBeTypeOf("function");
     vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);

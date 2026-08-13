@@ -3,11 +3,11 @@
 Last updated: August 12, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
-describes version 0.2.1.
+describes version 0.2.3.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
-or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, ElevenLabs, or their
-affiliates.
+or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, ElevenLabs, the New
+API project, or their affiliates.
 
 ## Data AI Limits accesses
 
@@ -36,6 +36,12 @@ monthly credit and voice-capacity fields from the subscription response; it
 does not retain invoices, payment attempts, coupons, payment identifiers, or
 currency overage fields. It does not read prompts, conversations, generated
 responses, or rendered provider page content.
+
+For New API, the extension retains the normalized instance URL, relay-key
+name, instance display name, and key-specific granted, used, and remaining
+quota. Unlimited keys retain absolute used quota without an invented limit or
+ratio. It does not retain model-limit maps or key expiry as a quota reset and
+does not read account wallet, subscriptions, usage logs, or admin data.
 
 ## Provider authentication and requests
 
@@ -80,15 +86,25 @@ the developer or any other provider. Only the user's explicit setup or reopen
 action opens the ElevenLabs API-keys page; manual and scheduled refresh do not
 open or inspect provider tabs.
 
+New API uses a user-provided instance URL and relay key rather than a browser
+session. AI Limits removes recognized console and API suffixes, validates the
+normalized instance with its public `/api/status` response, then sends the key
+as an Authorization Bearer header only to that same instance's read-only
+`/api/usage/token/` endpoint. The request AI Limits makes is read-only, but the
+relay key itself may still authorize model calls; AI Limits cannot reduce the
+key's server-side authority. Current support is limited to one instance and
+one relay key and does not use management PAT or admin APIs.
+
 ## Local storage and retention
 
 AI Limits stores one application-state record in `chrome.storage.local`. It
 contains display and automatic-refresh preferences, provider permission state,
 the normalized usage fields listed above, and sanitized refresh-attempt
 metadata. It does not contain provider cookies, browser-session credentials,
-or the ElevenLabs API key.
+or the ElevenLabs or New API key. The normalized New API instance URL is stored
+with its key in the separate credential record.
 
-ElevenLabs API keys are stored separately in chrome.storage.local, which AI
+ElevenLabs and New API keys are stored separately in chrome.storage.local, which AI
 Limits restricts to trusted extension contexts through Chrome's storage access
 level. Ordinary websites, other extensions, and this extension's content
 scripts cannot read that record through Chrome extension APIs. The saved key
@@ -113,7 +129,7 @@ The local records remain in the current Chrome profile until you disconnect a
 provider, choose **Delete all local data**, uninstall the extension, or clear
 the extension's browser storage. Disconnect, external permission removal,
 Delete all local data, uninstall, or clearing extension storage deletes the
-saved ElevenLabs key. A successful **Replace key** overwrites the prior key
+saved API key. A successful **Replace key** overwrites the prior key
 only after the new key validates; a failed replacement leaves the prior key
 unchanged.
 
@@ -135,7 +151,7 @@ unchanged.
   quota history, and refresh-attempt history. Only then does AI Limits sample
   authoritative permission state to set the final access flag. A rapid regrant
   can therefore restore browser-session access, but it cannot restore deleted
-  usage history or an ElevenLabs key.
+  usage history or a saved API key.
   If permission is revoked while the background worker is asleep, the next
   reconciliation clears data when a stored grant is authoritatively absent; it
   also clears any legacy permission-required record that still contains a
@@ -147,11 +163,12 @@ unchanged.
 Automatic refresh is enabled in the default settings. A repeating Chrome alarm
 is created only when automatic refresh is enabled and at least one provider is
 connected. About every 15 minutes, AI Limits checks browser-session providers
-whose optional permission is still granted and ElevenLabs only when both its
-exact API permission and an active saved key remain. A rejected ElevenLabs key
-stops scheduled ElevenLabs requests while stale normalized usage and history
-remain until replacement or deletion. You can turn automatic refresh off in
-Settings at any time.
+whose optional permission is still granted. ElevenLabs additionally requires
+its exact API permission and an active saved key. New API requires an active
+saved key, normalized instance URL, and the exact runtime host permission for
+that instance. A rejected API key stops that provider's scheduled requests
+while stale normalized usage and history remain until replacement or deletion.
+You can turn automatic refresh off in Settings at any time.
 
 ## Data transfer, sale, and sharing
 
@@ -183,14 +200,14 @@ user may separately choose to disclose information in a support issue.
 ## Security and limitations
 
 Optional access lets the extension interact with sensitive signed-in provider
-sessions and with the ElevenLabs API key you provide. AI Limits minimizes that
+sessions and with the ElevenLabs or New API key you provide. AI Limits minimizes that
 access and stores normalized results locally, but no browser extension or local
 profile is risk-free. Anyone who can access your unlocked Chrome profile may
 be able to access extension data, including the separately saved API key.
 
 Browser-session provider endpoints are private, unsupported interfaces and may
-change or stop working without notice. ElevenLabs uses a documented endpoint,
-but its response and authorization behavior can also change. Provider security
+change or stop working without notice. ElevenLabs and New API use documented
+endpoints, but their response and authorization behavior can also change. Provider security
 controls, account rules, and policies still apply. See
 [SECURITY.md](SECURITY.md) for reporting guidance.
 

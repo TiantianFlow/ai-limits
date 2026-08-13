@@ -1,20 +1,72 @@
 import { providerCatalog } from "../providers/catalog";
+import { newApiPermissionOrigin } from "../providers/newapi/url";
 import type { ConnectableProviderId } from "../providers/registry";
 
 interface PermissionDefinition {
   readonly optionalOrigins: readonly string[];
   readonly optionalPermissions: readonly string[];
+  readonly connection?:
+    | { readonly kind: "browser-session" }
+    | { readonly kind: "api-key"; readonly origin: "static" | "dynamic" };
 }
 
 type PermissionCatalog = Record<ConnectableProviderId, PermissionDefinition>;
 
+export interface ProviderPermissionContext {
+  readonly baseUrl?: string;
+}
+
+function isSupportedNewApiGrantedOrigin(origin: string): boolean {
+  if (!origin.endsWith("/*")) return false;
+  const rawOrigin = origin.slice(0, -2);
+  try {
+    const parsed = new URL(rawOrigin);
+    return (
+      origin === `${parsed.origin}/*` &&
+      (parsed.protocol === "https:" ||
+        (parsed.protocol === "http:" &&
+          (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isStaticProviderOrigin(
+  origin: string,
+  catalog: PermissionCatalog,
+): boolean {
+  return Object.values(catalog).some(
+    (provider) =>
+      !(
+        provider.connection?.kind === "api-key" &&
+        provider.connection.origin === "dynamic"
+      ) && provider.optionalOrigins.includes(origin),
+  );
+}
+
 function permissionsFor(
   providerId: ConnectableProviderId,
   catalog: PermissionCatalog = providerCatalog,
-): Browser.permissions.Permissions {
+  context: ProviderPermissionContext = {},
+): Browser.permissions.Permissions | undefined {
   const provider = catalog[providerId];
+  const origins =
+    provider.connection?.kind === "api-key" &&
+    provider.connection.origin === "dynamic"
+      ? [newApiPermissionOrigin(context.baseUrl)].filter(
+          (origin): origin is string => origin !== undefined,
+        )
+      : [...provider.optionalOrigins];
+  if (
+    provider.connection?.kind === "api-key" &&
+    provider.connection.origin === "dynamic" &&
+    origins.length === 0
+  ) {
+    return undefined;
+  }
   return {
-    origins: [...provider.optionalOrigins],
+    origins,
     ...(provider.optionalPermissions.length > 0
       ? { permissions: [...provider.optionalPermissions] }
       : {}),
@@ -23,20 +75,49 @@ function permissionsFor(
 
 export async function hasProviderPermission(
   providerId: ConnectableProviderId,
+  context: ProviderPermissionContext = {},
 ): Promise<boolean> {
-  return Boolean(await browser.permissions.contains(permissionsFor(providerId)));
+  const permissions = permissionsFor(providerId, providerCatalog, context);
+  return permissions
+    ? Boolean(await browser.permissions.contains(permissions))
+    : false;
 }
 
 export async function requestProviderPermission(
   providerId: ConnectableProviderId,
+  context: ProviderPermissionContext = {},
 ): Promise<boolean> {
-  return browser.permissions.request(permissionsFor(providerId));
+  const permissions = permissionsFor(providerId, providerCatalog, context);
+  return permissions ? browser.permissions.request(permissions) : false;
+}
+
+export function permissionChangeAffectsProvider(
+  providerId: ConnectableProviderId,
+  changed: Browser.permissions.Permissions | undefined,
+  catalog: PermissionCatalog = providerCatalog,
+): boolean {
+  const provider = catalog[providerId];
+  const dynamic =
+    provider.connection?.kind === "api-key" &&
+    provider.connection.origin === "dynamic";
+  return (
+    provider.optionalPermissions.some((permission) =>
+      (changed?.permissions as readonly string[] | undefined)?.includes(permission),
+    ) ||
+    (changed?.origins ?? []).some((origin) =>
+      dynamic
+        ? isSupportedNewApiGrantedOrigin(origin) &&
+          !isStaticProviderOrigin(origin, catalog)
+        : provider.optionalOrigins.includes(origin),
+    )
+  );
 }
 
 export async function removeProviderPermission(
   providerId: ConnectableProviderId,
   remainingConnectedProviderIds: readonly ConnectableProviderId[],
   catalog: PermissionCatalog = providerCatalog,
+  context: ProviderPermissionContext = {},
 ): Promise<boolean> {
   const remainingOrigins = new Set(
     remainingConnectedProviderIds.flatMap((remainingProviderId) =>
@@ -50,7 +131,21 @@ export async function removeProviderPermission(
     ),
   );
   const provider = catalog[providerId];
-  const origins = provider.optionalOrigins.filter(
+  const requestedOrigins =
+    provider.connection?.kind === "api-key" &&
+    provider.connection.origin === "dynamic"
+      ? [newApiPermissionOrigin(context.baseUrl)].filter(
+          (origin): origin is string => origin !== undefined,
+        )
+      : provider.optionalOrigins;
+  if (
+    provider.connection?.kind === "api-key" &&
+    provider.connection.origin === "dynamic" &&
+    requestedOrigins.length === 0
+  ) {
+    return false;
+  }
+  const origins = requestedOrigins.filter(
     (origin) => !remainingOrigins.has(origin),
   );
   const permissions = provider.optionalPermissions.filter(
@@ -92,9 +187,17 @@ export async function removeAllProviderPermissions(
   const claimedPermissions = new Set<string>();
   const requests = providerIds.map((providerId) => {
     const provider = catalog[providerId];
-    const origins = provider.optionalOrigins.filter(
-      (origin) => grantedOrigins.has(origin) && !claimedOrigins.has(origin),
-    );
+    const dynamic =
+      provider.connection?.kind === "api-key" &&
+      provider.connection.origin === "dynamic";
+    const origins = dynamic
+      ? [...grantedOrigins].filter(
+          (origin) =>
+            isSupportedNewApiGrantedOrigin(origin) && !claimedOrigins.has(origin),
+        )
+      : provider.optionalOrigins.filter(
+          (origin) => grantedOrigins.has(origin) && !claimedOrigins.has(origin),
+        );
     const permissions = provider.optionalPermissions.filter(
       (permission) =>
         grantedPermissions.has(permission) &&

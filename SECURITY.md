@@ -22,14 +22,14 @@ behavior, and a minimal reproduction that contains no real credentials.
 ## Security boundary
 
 AI Limits runs inside the user's Chrome profile and uses optional access to
-signed-in provider origins or, for ElevenLabs, its exact API origin. It stores
-normalized usage locally and does not operate a remote backend. Browser-session
-credentials are request-local. A successfully validated ElevenLabs API key is
-stored separately in chrome.storage.local after that storage area is restricted
-to trusted extension contexts; it is sent only to the ElevenLabs subscription
-API. Background command responses and application state never include the
-ElevenLabs key, and AI Limits does not render it or copy it into reports, logs,
-or History.
+signed-in provider origins or, for API-key providers, the selected API origin.
+It stores normalized usage locally and does not operate a remote backend.
+Browser-session credentials are request-local. Successfully validated
+ElevenLabs and New API keys are stored separately in chrome.storage.local after
+that storage area is restricted to trusted extension contexts. Each key is sent
+only to its selected provider API. Background command responses and application
+state never include saved API keys, and AI Limits does not render them or copy
+them into reports, logs, or History.
 
 Chrome's trusted extension contexts include the background worker and the side
 panel. The side-panel code does not request or read the credential record, but

@@ -11,7 +11,12 @@ export type ProviderConnection =
   | { readonly kind: "browser-session" }
   | {
       readonly kind: "api-key";
+      readonly origin: "static";
       readonly setupUrl: "https://elevenlabs.io/app/developers/api-keys";
+    }
+  | {
+      readonly kind: "api-key";
+      readonly origin: "dynamic";
     };
 
 const browserSessionDisclosure =
@@ -81,6 +86,7 @@ export const providerCatalog = {
     optionalPermissions: [],
     connection: {
       kind: "api-key",
+      origin: "static",
       setupUrl: "https://elevenlabs.io/app/developers/api-keys",
     },
     scheduledRefresh: true,
@@ -92,10 +98,29 @@ export const providerCatalog = {
       capabilities: ["Monthly credits", "Voice limits"],
     },
   },
+  newapi: {
+    displayName: "New API",
+    optionalOrigins: [
+      "https://*/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+    ],
+    optionalPermissions: [],
+    connection: { kind: "api-key", origin: "dynamic" },
+    scheduledRefresh: true,
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      connectionLabel: "Connect New API",
+      connectionDisclosure:
+        "Uses one relay key and one New API instance URL you provide, stores both locally, and refreshes key-specific usage about every 15 minutes.",
+      capabilities: ["API key quota", "Unlimited-key usage"],
+    },
+  },
 } as const;
 
 interface ProviderPermissionDefinition {
   readonly optionalOrigins: readonly string[];
+  readonly connection?: ProviderConnection;
 }
 
 export function assertProviderCatalogPermissionSafety(
@@ -103,6 +128,14 @@ export function assertProviderCatalogPermissionSafety(
 ): void {
   for (const [providerId, provider] of Object.entries(catalog)) {
     for (const origin of provider.optionalOrigins) {
+      const dynamicNewApiOrigin =
+        provider.connection?.kind === "api-key" &&
+        provider.connection.origin === "dynamic" &&
+        (origin === "https://*/*" ||
+          origin === "http://localhost/*" ||
+          origin === "http://127.0.0.1/*");
+      if (dynamicNewApiOrigin) continue;
+
       let parsedOrigin: URL | undefined;
       try {
         parsedOrigin = new URL(origin.endsWith("/*") ? origin.slice(0, -2) : "");

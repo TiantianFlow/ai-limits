@@ -33,7 +33,9 @@ import {
 import { launchScheduledRefresh } from "../background/scheduled-refresh";
 import {
   hasProviderPermission,
+  permissionChangeAffectsProvider,
   removeAllProviderPermissions,
+  removeProviderPermission,
 } from "../background/permissions";
 import { isProviderRefreshEligible } from "../background/provider-access";
 import {
@@ -46,6 +48,7 @@ import {
   providerRegistry,
   type ConnectableProviderId,
 } from "../providers/registry";
+import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
 import {
   deleteAllLocalData,
   disconnectProviderData,
@@ -126,6 +129,9 @@ export async function collectProvider(
             credential: {
               kind: "api-key" as const,
               value: storedCredential.value,
+              ...(storedCredential.baseUrl
+                ? { baseUrl: storedCredential.baseUrl }
+                : {}),
             },
           }
         : {}),
@@ -194,17 +200,7 @@ function providersAffectedByPermissionChange(
   changed: Browser.permissions.Permissions | undefined,
 ): ConnectableProviderId[] {
   return providerIds.filter((providerId) => {
-    const provider = providerCatalog[providerId];
-    return (
-      provider.optionalOrigins.some((origin) =>
-        changed?.origins?.includes(origin),
-      ) ||
-      provider.optionalPermissions.some((permission) =>
-        (changed?.permissions as readonly string[] | undefined)?.includes(
-          permission,
-        ),
-      )
-    );
+    return permissionChangeAffectsProvider(providerId, changed);
   });
 }
 
@@ -375,16 +371,38 @@ export default defineBackground(() => {
       }),
     );
   };
+  const auditAddedApiKeyPermission = async (
+    providerId: ApiKeyProviderId,
+  ): Promise<void> => {
+    await credentialStorageReady;
+    if (providerId === "newapi") {
+      const storedCredential = await readProviderCredentialWithRevision(
+        providerId,
+      );
+      if (
+        storedCredential?.baseUrl &&
+        (await hasProviderPermission(providerId, {
+          baseUrl: storedCredential.baseUrl,
+        }))
+      ) {
+        return;
+      }
+    }
+    await completeApiKeyProviderCleanups(
+      beginApiKeyProviderCleanups([providerId]),
+    );
+  };
   const finalizeDisconnectedApiKeyProviders = async (
     candidates: readonly (typeof apiKeyProviderIds)[number][] =
       apiKeyProviderIds,
   ): Promise<Map<ApiKeyProviderId, boolean>> => {
     const authority = await Promise.all(
       candidates.map(async (providerId) => {
+        const credential = await readProviderCredentialWithRevision(providerId);
         const [suppressionAuthority, permissionAuthority] =
           await Promise.allSettled([
             isProviderConnectionSuppressed(providerId),
-            hasProviderPermission(providerId),
+            hasProviderPermission(providerId, { baseUrl: credential?.baseUrl }),
           ]);
         const suppressed =
           suppressionAuthority.status === "fulfilled"
@@ -396,6 +414,7 @@ export default defineBackground(() => {
             : undefined;
         return {
           providerId,
+          credentialPresent: credential !== undefined,
           permissionPresent: permissionPresent === true,
           preserveData: suppressed === false && permissionPresent === true,
         };
@@ -403,7 +422,10 @@ export default defineBackground(() => {
     );
     const cleanups = beginApiKeyProviderCleanups(
       authority
-        .filter(({ preserveData }) => !preserveData)
+        .filter(
+          ({ providerId, preserveData, credentialPresent }) =>
+            !preserveData && (providerId !== "newapi" || credentialPresent),
+        )
         .map(({ providerId }) => providerId),
     );
     await completeApiKeyProviderCleanups(cleanups);
@@ -446,7 +468,12 @@ export default defineBackground(() => {
       await syncRefreshAlarm(state);
       return { state, report };
     },
-    async connectApiKeyProvider(providerId, apiKey, connectionIntent) {
+    async connectApiKeyProvider(providerId, apiKey, connectionIntent, baseUrl) {
+      const connectionBaseUrl =
+        providerId === "newapi" ? normalizeNewApiBaseUrl(baseUrl) : baseUrl;
+      if (providerId === "newapi" && !connectionBaseUrl) {
+        throw new Error("invalid_newapi_base_url");
+      }
       let permissionIntent: PermissionConnectIntent | undefined;
       let pendingPermissionAudit: Promise<void> | undefined;
       if (connectionIntent === "permission-grant") {
@@ -482,7 +509,9 @@ export default defineBackground(() => {
         );
         const permissionWasKnownPresent =
           knownApiKeyPermissionPresence.get(providerId);
-        const permissionPresent = await hasProviderPermission(providerId);
+        const permissionPresent = await hasProviderPermission(providerId, {
+          baseUrl: connectionBaseUrl,
+        });
         if (!providerOperationLane.isCurrent(operation)) {
           throw new Error("provider_cleanup_in_progress");
         }
@@ -534,7 +563,31 @@ export default defineBackground(() => {
           },
           Date.now,
           () => providerOperationLane.isCurrent(admittedOperation),
+          connectionBaseUrl,
         );
+        if (providerId === "newapi" && connectionBaseUrl) {
+          const permissionBaseUrl =
+            result.result === "connected"
+              ? storedCredential?.baseUrl !== connectionBaseUrl
+                ? storedCredential?.baseUrl
+                : undefined
+              : storedCredential?.baseUrl !== connectionBaseUrl
+                ? connectionBaseUrl
+                : undefined;
+          try {
+            if (permissionBaseUrl) {
+              await removeProviderPermission(
+                providerId,
+                providerIds.filter((candidate) => candidate !== providerId),
+                providerCatalog,
+                { baseUrl: permissionBaseUrl },
+              );
+            }
+          } catch {
+            // Credential and usage state remain authoritative. A later
+            // disconnect or delete-all can retry optional-origin cleanup.
+          }
+        }
         const state = await credentialAwareCurrentState();
         await syncRefreshAlarm(state);
         return { ...result, state };
@@ -607,6 +660,9 @@ export default defineBackground(() => {
       });
     },
     async disconnectProvider(providerId) {
+      const storedCredential = isApiKeyProviderId(providerId)
+        ? await readProviderCredentialWithRevision(providerId)
+        : undefined;
       if (isApiKeyProviderId(providerId)) {
         permissionConnectIntents.delete(providerId);
         permissionAudits.delete(providerId);
@@ -634,6 +690,7 @@ export default defineBackground(() => {
         const result = await disconnectAndCleanupProvider(
           providerId,
           connected,
+          { baseUrl: storedCredential?.baseUrl },
         );
         if (result.ok && hasDurableSuppression) {
           await setProviderConnectionSuppressed(
@@ -714,14 +771,12 @@ export default defineBackground(() => {
         return false;
       },
     );
-    const cleanups = beginApiKeyProviderCleanups(providersRequiringAudit);
     if (providersRequiringAudit.length === 0) {
       return;
     }
-    const audit = credentialStorageReady
-      .then(async () => {
-        await completeApiKeyProviderCleanups(cleanups);
-      });
+    const audit = Promise.all(
+      providersRequiringAudit.map(auditAddedApiKeyPermission),
+    ).then(() => undefined);
     providersRequiringAudit.forEach((providerId) => {
       permissionAudits.set(providerId, audit);
     });
@@ -732,44 +787,65 @@ export default defineBackground(() => {
   });
 
   browser.permissions.onRemoved.addListener((permissions) => {
-    const affectedProviderIds = providersAffectedByPermissionChange(
-      permissions,
-    );
-    affectedProviderIds.filter(isApiKeyProviderId).forEach((providerId) => {
-      permissionConnectIntents.delete(providerId);
-      permissionAudits.delete(providerId);
-      replaceApiKeyPermissionAuthority(providerId, false);
-    });
-    const cleanups = affectedProviderIds.map((providerId) =>
-      providerOperationLane.beginCleanup(providerId),
-    );
-    affectedProviderIds.forEach((providerId) => {
-      refreshOrchestrator.invalidateProvider(providerId);
-      if (isApiKeyProviderId(providerId)) {
-        apiKeyConnectionLifecycle.invalidateProvider(providerId);
-      }
-    });
-
     void credentialStorageReady
       .then(async (credentialStorageAvailable) => {
-        await clearProviderConnectionSuppressions(affectedProviderIds);
-        return reconcileRemovedProviderPermissions(
+        let affectedProviderIds = providersAffectedByPermissionChange(
           permissions,
-          credentialStorageAvailable
-            ? providerIds
-            : [
-                ...browserSessionProviderIds,
-                ...affectedProviderIds.filter(isApiKeyProviderId),
-              ],
-          () => undefined,
         );
-      })
-      .then(credentialAwareCurrentState)
-      .then(syncRefreshAlarm)
-      .finally(() => {
-        cleanups.forEach((cleanup) =>
-          providerOperationLane.endCleanup(cleanup),
+        if (
+          credentialStorageAvailable &&
+          affectedProviderIds.includes("newapi")
+        ) {
+          const credential = await readProviderCredentialWithRevision(
+            "newapi",
+          );
+          if (
+            credential?.baseUrl &&
+            (await hasProviderPermission("newapi", {
+              baseUrl: credential.baseUrl,
+            }))
+          ) {
+            affectedProviderIds = affectedProviderIds.filter(
+              (providerId) => providerId !== "newapi",
+            );
+          }
+        }
+        affectedProviderIds.filter(isApiKeyProviderId).forEach((providerId) => {
+          permissionConnectIntents.delete(providerId);
+          permissionAudits.delete(providerId);
+          replaceApiKeyPermissionAuthority(providerId, false);
+        });
+        const cleanups = affectedProviderIds.map((providerId) =>
+          providerOperationLane.beginCleanup(providerId),
         );
+        affectedProviderIds.forEach((providerId) => {
+          refreshOrchestrator.invalidateProvider(providerId);
+          if (isApiKeyProviderId(providerId)) {
+            apiKeyConnectionLifecycle.invalidateProvider(providerId);
+          }
+        });
+        try {
+          await clearProviderConnectionSuppressions(affectedProviderIds);
+          await reconcileRemovedProviderPermissions(
+            permissions,
+            credentialStorageAvailable
+              ? providerIds.filter(
+                  (providerId) =>
+                    providerId !== "newapi" ||
+                    affectedProviderIds.includes(providerId),
+                )
+              : [
+                  ...browserSessionProviderIds,
+                  ...affectedProviderIds.filter(isApiKeyProviderId),
+                ],
+            () => undefined,
+          );
+          await credentialAwareCurrentState().then(syncRefreshAlarm);
+        } finally {
+          cleanups.forEach((cleanup) => {
+            providerOperationLane.endCleanup(cleanup);
+          });
+        }
       })
       .catch(() => undefined);
   });

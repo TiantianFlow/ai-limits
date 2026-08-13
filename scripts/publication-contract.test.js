@@ -22,13 +22,13 @@ const securityCondition =
 const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
 const credentialBoundaryStatement =
-  "Background command responses and application state never include the ElevenLabs key, and AI Limits does not render it or copy it into reports, logs, or History.";
+  "Background command responses and application state never include saved API keys, and AI Limits does not render them or copy them into reports, logs, or History.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
 const paceAvailabilityStatement =
   "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
 const storeShortDescription =
-  "Track ChatGPT, Claude, Kimi, Cursor, and ElevenLabs usage, resets, pace, and local history in one Chrome side panel.";
+  "Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
 const kimiAutoRefreshStatement =
   "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.";
 const kimiAutoRefreshStatementZh =
@@ -37,15 +37,15 @@ const elevenLabsPublicationStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports five providers: ChatGPT, Claude, Kimi, Cursor, and ElevenLabs.",
-    error: "README is missing the rendered five-provider statement.",
+      "AI Limits supports six providers: ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API.",
+    error: "README is missing the rendered six-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持五个服务：ChatGPT、Claude、Kimi、Cursor 和 ElevenLabs。",
+      "AI Limits 支持六个服务：ChatGPT、Claude、Kimi、Cursor、ElevenLabs 和 New API。",
     error:
-      "Simplified Chinese README is missing the rendered five-provider statement.",
+      "Simplified Chinese README is missing the rendered six-provider statement.",
   },
   {
     key: "faq",
@@ -64,7 +64,7 @@ const elevenLabsPublicationStatements = [
   {
     key: "privacy",
     statement:
-      "ElevenLabs API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
+      "ElevenLabs and New API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
     error:
       "Privacy policy is missing the trusted-context ElevenLabs key-storage disclosure.",
   },
@@ -92,14 +92,14 @@ const elevenLabsPublicationStatements = [
   {
     key: "privacy",
     statement:
-      "A rejected ElevenLabs key stops scheduled ElevenLabs requests while stale normalized usage and history remain until replacement or deletion.",
+      "A rejected API key stops that provider's scheduled requests while stale normalized usage and history remain until replacement or deletion.",
     error:
       "Privacy policy is missing the rejected ElevenLabs key behavior.",
   },
   {
     key: "privacy",
     statement:
-      "Disconnect, external permission removal, Delete all local data, uninstall, or clearing extension storage deletes the saved ElevenLabs key.",
+      "Disconnect, external permission removal, Delete all local data, uninstall, or clearing extension storage deletes the saved API key.",
     error:
       "Privacy policy is missing the complete ElevenLabs key-deletion lifecycle.",
   },
@@ -162,9 +162,16 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "Authentication information: Yes. This includes the ElevenLabs API key that the user creates and AI Limits saves locally after successful validation.",
+      "Authentication information: Yes. This includes the ElevenLabs and New API keys that the user creates and AI Limits saves locally after successful validation.",
     error:
       "Store listing is missing the saved ElevenLabs key authentication disclosure.",
+  },
+  {
+    key: "listing",
+    statement:
+      "confirm the side panel opens with six permission-required cards.",
+    error:
+      "Store listing reviewer flow must expect six permission-required cards.",
   },
 ];
 const listingLinks = [
@@ -252,7 +259,9 @@ const valid = {
     paceAvailabilityStatement,
     storeShortDescription,
     publicRouteGate,
-    elevenLabsPublicationStatements.find(({ key }) => key === "listing").statement,
+    ...elevenLabsPublicationStatements
+      .filter(({ key }) => key === "listing")
+      .map(({ statement }) => statement),
   ].join("\n"),
   license: "MIT License\n\nCopyright (c) 2026 TiantianFlow",
 };

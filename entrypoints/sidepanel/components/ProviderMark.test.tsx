@@ -22,13 +22,14 @@ describe("ProviderMark", () => {
     );
 
     const marks = Array.from(document.querySelectorAll("img"));
-    expect(marks).toHaveLength(6);
+    expect(marks).toHaveLength(7);
     expect(marks.map((mark) => mark.getAttribute("src"))).toEqual([
       "/provider-marks/chatgpt.svg",
       "/provider-marks/claude.svg",
       "/provider-marks/kimi.svg",
       "/provider-marks/cursor.svg",
       "/provider-marks/elevenlabs.svg",
+      "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
     ]);
     expect(
@@ -39,9 +40,9 @@ describe("ProviderMark", () => {
       "/provider-marks/kimi-dark.svg",
       "/provider-marks/cursor-dark.svg",
     ]);
-    expect(new Set(marks.slice(0, 5).map((mark) => mark.src))).toHaveProperty(
+    expect(new Set(marks.slice(0, 6).map((mark) => mark.src))).toHaveProperty(
       "size",
-      5,
+      6,
     );
     expect(marks.every((mark) => mark.getAttribute("aria-hidden") === "true")).toBe(
       true,
@@ -51,7 +52,7 @@ describe("ProviderMark", () => {
       true,
     );
     expect(
-      marks.slice(0, 5).map((mark) =>
+      marks.slice(0, 6).map((mark) =>
         [...mark.classList].find((className) =>
           className.startsWith("provider-mark--provider-"),
         ),
@@ -62,6 +63,7 @@ describe("ProviderMark", () => {
       "provider-mark--provider-kimi",
       "provider-mark--provider-cursor",
       "provider-mark--provider-elevenlabs",
+      "provider-mark--provider-newapi",
     ]);
     expect(
       marks.some((mark) => mark.classList.contains("local-mark-tile")),

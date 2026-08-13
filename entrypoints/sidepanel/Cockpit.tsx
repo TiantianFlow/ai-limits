@@ -48,6 +48,7 @@ import {
   ApiKeyConnectView,
   type ApiKeyConnectAttemptResult,
 } from "./views/ApiKeyConnectView";
+import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
 
 export interface CockpitProps {
@@ -65,6 +66,7 @@ export interface CockpitProps {
   onSubmitApiKey?: (
     providerId: ApiKeyProviderId,
     apiKey: string,
+    baseUrl?: string,
   ) => Promise<ApiKeyConnectAttemptResult>;
   onRefreshProvider?: (providerId: ProviderId) => void;
   onAutoRefreshChange?: (enabled: boolean) => void;
@@ -177,9 +179,13 @@ function creditView(credit: CreditBalance, mode: DisplayMode): CreditView {
     credit.used === undefined &&
     credit.limit === undefined &&
     credit.remaining !== undefined;
+  const isAbsoluteUsage =
+    credit.used !== undefined &&
+    credit.limit === undefined &&
+    credit.remaining === undefined;
   let current = isAbsoluteBalance ? credit.remaining : credit.used;
 
-  if (!isAbsoluteBalance && mode === "left") {
+  if (!isAbsoluteBalance && !isAbsoluteUsage && mode === "left") {
     current =
       credit.remaining ??
       (credit.limit !== undefined && credit.used !== undefined
@@ -202,7 +208,9 @@ function creditView(credit: CreditBalance, mode: DisplayMode): CreditView {
   return {
     id: credit.id,
     label: credit.label,
-    value: `${value}${limit ? ` / ${limit}` : ""}${isAbsoluteBalance ? " remaining" : ` ${mode}`}`,
+    value: `${value}${limit ? ` / ${limit}` : ""}${
+      isAbsoluteBalance ? " remaining" : isAbsoluteUsage ? " used" : ` ${mode}`
+    }`,
   };
 }
 
@@ -423,7 +431,9 @@ export function Cockpit({
           ? `overview-replace-api-key-${providerId}`
           : `connect-provider-${providerId}`;
     pushScreen({ name: "api-key-connect", providerId, mode }, focusKey);
-    onOpenApiKeySetup(providerId);
+    if (providerCatalog[providerId].connection.origin === "static") {
+      onOpenApiKeySetup(providerId);
+    }
   };
 
   const connectProvider = (providerId: ProviderId) => {
@@ -566,19 +576,30 @@ export function Cockpit({
       ) : null}
 
       {view.name === "api-key-connect" ? (
-        <ApiKeyConnectView
-          mode={view.mode}
-          backLabel={apiKeyBackLabel}
-          onBack={popScreen}
-          onOpenSetup={() => onOpenApiKeySetup(view.providerId)}
-          onSubmit={async (apiKey) => {
-            const result = await onSubmitApiKey(view.providerId, apiKey);
-            if (result === "connected") {
-              goHome();
-            }
-            return result;
-          }}
-        />
+        view.providerId === "newapi" ? (
+          <NewApiConnectView
+            mode={view.mode}
+            backLabel={apiKeyBackLabel}
+            onBack={popScreen}
+            onSubmit={async (baseUrl, apiKey) => {
+              const result = await onSubmitApiKey(view.providerId, apiKey, baseUrl);
+              if (result === "connected") goHome();
+              return result;
+            }}
+          />
+        ) : (
+          <ApiKeyConnectView
+            mode={view.mode}
+            backLabel={apiKeyBackLabel}
+            onBack={popScreen}
+            onOpenSetup={() => onOpenApiKeySetup(view.providerId)}
+            onSubmit={async (apiKey) => {
+              const result = await onSubmitApiKey(view.providerId, apiKey);
+              if (result === "connected") goHome();
+              return result;
+            }}
+          />
+        )
       ) : view.name === "settings" ? (
         <SettingsView
           autoRefresh={state.preferences.autoRefresh}

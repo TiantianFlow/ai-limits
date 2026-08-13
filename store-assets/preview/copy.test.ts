@@ -189,12 +189,12 @@ describe("store artwork copy", () => {
     ]);
   });
 
-  it("names all five supported providers in the overview artwork", () => {
+  it("names all six supported providers in the overview artwork", () => {
     expect(previewContent.en.providerLine).toBe(
-      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
+      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
     );
     expect(previewContent.zh_CN.providerLine).toBe(
-      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
+      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
     );
   });
 

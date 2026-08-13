@@ -12,6 +12,7 @@ describe("provider registry", () => {
       "kimi",
       "cursor",
       "elevenlabs",
+      "newapi",
     ]);
     expect(
       providerIds.map((providerId) => [
@@ -25,6 +26,11 @@ describe("provider registry", () => {
       ["kimi", ["https://www.kimi.com/*"], ["cookies", "scripting"]],
       ["cursor", ["https://cursor.com/*"], []],
       ["elevenlabs", ["https://api.elevenlabs.io/*"], []],
+      [
+        "newapi",
+        ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+        [],
+      ],
     ]);
     expect(
       providerIds.map((providerId) => providerRegistry[providerId].id),

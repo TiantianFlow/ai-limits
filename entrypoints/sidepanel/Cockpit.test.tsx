@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import React from "react";
@@ -266,7 +267,7 @@ describe("Cockpit", () => {
       screen.getByRole("heading", { level: 1, name: "AI Limits" }),
     ).toBeVisible();
     expect(screen.getByText(/One panel for every AI subscription quota/)).toBeVisible();
-    expect(screen.getByText("Supported providers · 5")).toBeVisible();
+    expect(screen.getByText("Supported providers · 6")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Refresh usage" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
   });
@@ -692,7 +693,7 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
-    expect(screen.getAllByText(/^Can show:/)).toHaveLength(4);
+    expect(screen.getAllByText(/^Can show:/)).toHaveLength(5);
     expect(screen.getByText(/Connect asks for permission for that provider only/)).toBeVisible();
   });
 
@@ -799,6 +800,45 @@ describe("Cockpit", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
 
+    expect(
+      await screen.findByRole("heading", { name: "Connect your providers" }),
+    ).toBeVisible();
+  });
+
+  it("opens New API onboarding without opening a tab and submits the normalized instance", async () => {
+    const onOpenApiKeySetup = vi.fn();
+    const onSubmitApiKey = vi.fn(async () => "connected" as const);
+    render(
+      <Cockpit
+        state={createInitialState()}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onOpenApiKeySetup={onOpenApiKeySetup}
+        onSubmitApiKey={onSubmitApiKey}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect New API" }));
+    expect(onOpenApiKeySetup).not.toHaveBeenCalledWith("newapi");
+    expect(screen.getByRole("heading", { name: "Connect New API" })).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText("New API site URL"), {
+      target: { value: "https://api.example.com/gateway/v1/messages" },
+    });
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "sk-test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    await waitFor(() =>
+      expect(onSubmitApiKey).toHaveBeenCalledWith(
+        "newapi",
+        "sk-test",
+        "https://api.example.com/gateway",
+      ),
+    );
     expect(
       await screen.findByRole("heading", { name: "Connect your providers" }),
     ).toBeVisible();
@@ -984,7 +1024,7 @@ describe("Cockpit", () => {
     ).toBeVisible();
     expect(
       within(appHeader as HTMLElement).getByText(
-        "Last refresh just now · 5 providers",
+        "Last refresh just now · 6 providers",
       ),
     ).toBeVisible();
     expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
@@ -1074,7 +1114,7 @@ describe("Cockpit", () => {
     renderCockpit(state);
 
     expect(
-      screen.getByText("Last refresh 3 minutes ago · 5 providers"),
+      screen.getByText("Last refresh 3 minutes ago · 6 providers"),
     ).toBeVisible();
   });
 
@@ -1467,7 +1507,7 @@ describe("Cockpit", () => {
 
     expect(
       screen.getAllByRole("button", { name: /^Open .* history for / }),
-    ).toHaveLength(10);
+    ).toHaveLength(11);
     const chatGpt = screen.getByRole("article", { name: "ChatGPT" });
     const historyButton = within(chatGpt).getByRole("button", {
       name: "Open ChatGPT history for 5-hour messages",
@@ -1785,7 +1825,7 @@ describe("Cockpit", () => {
     const localMarks = Array.from(
       document.querySelectorAll<HTMLImageElement>("img.provider-mark"),
     );
-    expect(localMarks).toHaveLength(5);
+    expect(localMarks).toHaveLength(6);
     expect(
       localMarks.every((mark) => mark.classList.contains("provider-mark")),
     ).toBe(true);

@@ -17,12 +17,17 @@ import {
   type ConnectableProviderId,
 } from "../providers/registry";
 import { providerCatalog } from "../providers/catalog";
+import { readProviderCredential } from "../storage/credentials";
 import {
   disconnectProviderData,
   mutateState,
   reconcileProviderAccess,
 } from "../storage/repository";
-import { removeProviderPermission } from "./permissions";
+import {
+  permissionChangeAffectsProvider,
+  removeProviderPermission,
+  type ProviderPermissionContext,
+} from "./permissions";
 import { isProviderConnected } from "./provider-access";
 
 let permissionReconciliationGeneration = 0;
@@ -322,17 +327,7 @@ export async function reconcileRemovedProviderPermissions(
   invalidateProvider: (providerId: ConnectableProviderId) => void,
 ): Promise<void> {
   const affectedProviderIds = providerIds.filter((providerId) => {
-    const provider = providerCatalog[providerId];
-    return (
-      provider.optionalOrigins.some((origin) =>
-        removed.origins?.includes(origin),
-      ) ||
-      provider.optionalPermissions.some((permission) =>
-        (removed.permissions as readonly string[] | undefined)?.includes(
-          permission,
-        ),
-      )
-    );
+    return permissionChangeAffectsProvider(providerId, removed);
   });
   affectedProviderIds.forEach(invalidateProvider);
   await Promise.all(
@@ -354,7 +349,11 @@ export type DisconnectProviderResult =
 export async function disconnectProvider(
   providerId: ConnectableProviderId,
   remainingConnectedProviderIds: readonly ConnectableProviderId[],
+  permissionContext?: ProviderPermissionContext,
 ): Promise<DisconnectProviderResult> {
+  const storedCredential = permissionContext
+    ? undefined
+    : await readProviderCredential(providerId);
   await disconnectProviderData(providerId);
 
   let removed = false;
@@ -364,6 +363,8 @@ export async function disconnectProvider(
       remainingConnectedProviderIds.filter(
         (remainingProviderId) => remainingProviderId !== providerId,
       ),
+      providerCatalog,
+      permissionContext ?? { baseUrl: storedCredential?.baseUrl },
     );
   } catch {
     // Local deletion above is authoritative even if Chrome permission cleanup fails.
