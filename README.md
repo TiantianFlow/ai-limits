@@ -2,6 +2,17 @@
 
 English | [简体中文](README.zh-CN.md)
 
+[![Chrome Web Store version](https://img.shields.io/chrome-web-store/v/hcfdchpajckemcdflcjhigngpipdkdeo.svg?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)
+[![CI](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml?query=branch%3Amain)
+[![GitHub release](https://img.shields.io/github/v/release/wjcjttl/ai-limits.svg?display_name=release&sort=semver)](https://github.com/wjcjttl/ai-limits/releases/latest)
+[![MIT license](https://img.shields.io/github/license/wjcjttl/ai-limits.svg)](LICENSE)
+
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)**
+
+Chrome Web Store releases can lag while review or publishing is pending; the
+Store badge shows the currently published version. GitHub Releases preserve
+the corresponding source and validated upload archive.
+
 AI Limits is a Chrome side-panel extension that shows current subscription
 usage and local quota-history graphs for ChatGPT, Claude, Kimi, and Cursor in
 one compact view. It normalizes provider-specific reporting into one **Used**

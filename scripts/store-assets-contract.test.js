@@ -292,6 +292,18 @@ describe("store assets", () => {
     ).toBe(true);
   });
 
+  it("adds one deterministic GitHub social preview to the marketing captures", () => {
+    expect(storeAssetContract.MARKETING_ASSET_CAPTURES).toHaveLength(10);
+    expect(storeAssetContract.MARKETING_ASSET_CAPTURES).toContainEqual({
+      locale: "en",
+      view: "social",
+      relativePath: "github/social-preview-1280x640.png",
+      viewport: { width: 1280, height: 640 },
+      dataSource: "fixture",
+      fixedClock: FIDELITY_FIXED_CLOCK,
+    });
+  });
+
   it("builds the complete responsive fidelity screen and state matrix", () => {
     const matrix = createFidelityCaptureMatrix();
     const baseScreens = [
@@ -999,29 +1011,62 @@ describe("store assets", () => {
 
   it("rejects a wrong screenshot size", () => {
     const errors = validateStoreAssetDimensions({
-      "screenshot-overview-1280x800.png": { width: 640, height: 400 },
+      "chrome-web-store/screenshot-overview-1280x800.png": {
+        width: 640,
+        height: 400,
+      },
     });
     expect(errors).toContain(
-      "screenshot-overview-1280x800.png must be 1280x800.",
+      "chrome-web-store/screenshot-overview-1280x800.png must be 1280x800.",
+    );
+  });
+
+  it("requires a 1280x640 GitHub social preview below one megabyte", () => {
+    const dimensions = { width: 1280, height: 800 };
+    const errors = validateStoreAssetDimensions({
+      "chrome-web-store/screenshot-overview-1280x800.png": dimensions,
+      "chrome-web-store/screenshot-pacing-1280x800.png": dimensions,
+      "chrome-web-store/screenshot-history-1280x800.png": dimensions,
+      "chrome-web-store/screenshot-privacy-1280x800.png": dimensions,
+      "chrome-web-store/small-promo-440x280.png": { width: 440, height: 280 },
+      "chrome-web-store/zh_CN/screenshot-overview-1280x800.png": dimensions,
+      "chrome-web-store/zh_CN/screenshot-pacing-1280x800.png": dimensions,
+      "chrome-web-store/zh_CN/screenshot-history-1280x800.png": dimensions,
+      "chrome-web-store/zh_CN/screenshot-privacy-1280x800.png": dimensions,
+      "github/social-preview-1280x640.png": { width: 1280, height: 641 },
+    });
+
+    expect(errors).toContain(
+      "github/social-preview-1280x640.png must be 1280x640.",
+    );
+    expect(
+      storeAssetContract.validateMarketingAssetFileSizes({
+        "github/social-preview-1280x640.png": 1_000_001,
+      }),
+    ).toContain(
+      "github/social-preview-1280x640.png must be smaller than 1000000 bytes.",
     );
   });
 
   it("requires four Simplified Chinese screenshots without localizing the promo tile", () => {
     const dimensions = { width: 1280, height: 800 };
     const errors = validateStoreAssetDimensions({
-      "screenshot-overview-1280x800.png": dimensions,
-      "screenshot-pacing-1280x800.png": dimensions,
-      "screenshot-history-1280x800.png": dimensions,
-      "screenshot-privacy-1280x800.png": dimensions,
-      "small-promo-440x280.png": { width: 440, height: 280 },
+      "chrome-web-store/screenshot-overview-1280x800.png": dimensions,
+      "chrome-web-store/screenshot-pacing-1280x800.png": dimensions,
+      "chrome-web-store/screenshot-history-1280x800.png": dimensions,
+      "chrome-web-store/screenshot-privacy-1280x800.png": dimensions,
+      "chrome-web-store/small-promo-440x280.png": { width: 440, height: 280 },
+      "github/social-preview-1280x640.png": { width: 1280, height: 640 },
     });
 
     expect(errors).toEqual([
-      "zh_CN/screenshot-overview-1280x800.png is missing.",
-      "zh_CN/screenshot-pacing-1280x800.png is missing.",
-      "zh_CN/screenshot-history-1280x800.png is missing.",
-      "zh_CN/screenshot-privacy-1280x800.png is missing.",
+      "chrome-web-store/zh_CN/screenshot-overview-1280x800.png is missing.",
+      "chrome-web-store/zh_CN/screenshot-pacing-1280x800.png is missing.",
+      "chrome-web-store/zh_CN/screenshot-history-1280x800.png is missing.",
+      "chrome-web-store/zh_CN/screenshot-privacy-1280x800.png is missing.",
     ]);
-    expect(errors).not.toContain("zh_CN/small-promo-440x280.png is missing.");
+    expect(errors).not.toContain(
+      "chrome-web-store/zh_CN/small-promo-440x280.png is missing.",
+    );
   });
 });

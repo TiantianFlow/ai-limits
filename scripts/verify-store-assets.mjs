@@ -5,25 +5,30 @@ import { fileURLToPath } from "node:url";
 import {
   readPngDimensions,
   REQUIRED_STORE_ASSET_DIMENSIONS,
+  validateMarketingAssetFileSizes,
   validateStoreAssetDimensions,
 } from "./store-assets-contract.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const assetDirectory = path.join(repositoryRoot, "store-assets", "chrome-web-store");
+const assetDirectory = path.join(repositoryRoot, "store-assets");
 const dimensions = {};
+const fileSizes = {};
 const errors = [];
 
 for (const name of Object.keys(REQUIRED_STORE_ASSET_DIMENSIONS)) {
   const assetPath = path.join(assetDirectory, name);
 
   try {
-    dimensions[name] = readPngDimensions(await readFile(assetPath));
+    const buffer = await readFile(assetPath);
+    dimensions[name] = readPngDimensions(buffer);
+    fileSizes[name] = buffer.byteLength;
   } catch (error) {
     errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 errors.push(...validateStoreAssetDimensions(dimensions));
+errors.push(...validateMarketingAssetFileSizes(fileSizes));
 
 if (errors.length > 0) {
   for (const error of errors) {

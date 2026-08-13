@@ -2,6 +2,16 @@
 
 [English](README.md) | 简体中文
 
+[![Chrome 应用商店版本](https://img.shields.io/chrome-web-store/v/hcfdchpajckemcdflcjhigngpipdkdeo.svg?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)
+[![CI](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wjcjttl/ai-limits/actions/workflows/ci.yml?query=branch%3Amain)
+[![GitHub 发布版](https://img.shields.io/github/v/release/wjcjttl/ai-limits.svg?display_name=release&sort=semver)](https://github.com/wjcjttl/ai-limits/releases/latest)
+[![MIT 许可证](https://img.shields.io/github/license/wjcjttl/ai-limits.svg)](LICENSE)
+
+**[从 Chrome 应用商店安装](https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo)**
+
+Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。
+GitHub Releases 会保留对应的源代码和已验证上传包。
+
 AI Limits 是一款 Chrome 侧边栏扩展，可在一个紧凑的界面中查看 ChatGPT、
 Claude、Kimi 和 Cursor 的当前订阅用量及本地配额历史图表。它会将不同服务商
 的用量统一为“已用”或“剩余”视图；当服务商提供完整的重置周期信息时，还会将

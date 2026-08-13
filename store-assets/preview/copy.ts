@@ -3,7 +3,8 @@ export type PreviewView =
   | "pacing"
   | "history"
   | "privacy"
-  | "promo";
+  | "promo"
+  | "social";
 export type PreviewLanguage = "en" | "zh_CN";
 
 export const FIDELITY_FIXED_CLOCK = "2026-08-09T14:00:00.000Z";
@@ -218,6 +219,7 @@ interface PreviewContent extends Record<PreviewView, ViewCopy> {
   privacyNotes: [string, string, string];
   productPreviewLabel: string;
   representativeLabel: string;
+  socialNotes: [string, string];
 }
 
 export const previewContent: Record<PreviewLanguage, PreviewContent> = {
@@ -251,6 +253,11 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       title: "AI limits, at a glance.",
       description: "Used or Left, reset timing, pace, and local history.",
     },
+    social: {
+      eyebrow: "Chrome side panel",
+      title: "Usage limits, in one view.",
+      description: "ChatGPT · Claude · Kimi · Cursor",
+    },
     chromeSidePanelLabel: "Chrome side panel",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
@@ -260,6 +267,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     ],
     productPreviewLabel: "AI Limits product preview",
     representativeLabel: "Representative data",
+    socialNotes: [
+      "Used or Left · Reset timing · Pace · Local history",
+      "Local history. No remote backend.",
+    ],
   },
   zh_CN: {
     overview: {
@@ -291,6 +302,11 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       title: "AI 用量，一目了然。",
       description: "查看已用或剩余、重置时间、用量节奏和本地历史。",
     },
+    social: {
+      eyebrow: "Chrome 侧边栏",
+      title: "AI 用量限制，一目了然。",
+      description: "ChatGPT · Claude · Kimi · Cursor",
+    },
     chromeSidePanelLabel: "Chrome 侧边栏",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
@@ -300,6 +316,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     ],
     productPreviewLabel: "AI Limits 产品预览",
     representativeLabel: "示例数据 · 扩展界面暂为英文",
+    socialNotes: [
+      "已用或剩余 · 重置时间 · 用量节奏 · 本地历史",
+      "历史仅存本地，无远程后端。",
+    ],
   },
 };
 

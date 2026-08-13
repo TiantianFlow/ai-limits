@@ -3,7 +3,16 @@ import { validatePublicationDocuments } from "./publication-contract.mjs";
 
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
 const issuesLink = `[GitHub Issues](${issuesUrl})`;
+const storeUrl =
+  "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
+const storeLink = `[Chrome Web Store](${storeUrl})`;
+const releaseUrl = "https://github.com/wjcjttl/ai-limits/releases/latest";
+const releaseLink = `[GitHub release](${releaseUrl})`;
 const faqLink = "[FAQ](FAQ.md)";
+const releaseChannelStatement =
+  "Chrome Web Store releases can lag while review or publishing is pending; the Store badge shows the currently published version.";
+const releaseChannelStatementZh =
+  "Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。";
 const historyRetentionStatement =
   "Successful normalized quota observations are stored locally for up to 30 days, subject to a 1,024-observation per-provider safety cap.";
 const uncappedHistoryRetentionStatement =
@@ -75,8 +84,8 @@ const listingDefaults = [
 ];
 
 const valid = {
-  readme: `${issuesLink}\n${faqLink}`,
-  readmeZh: "[常见问题](FAQ.zh-CN.md)",
+  readme: `${issuesLink}\n${faqLink}\n${storeLink}\n${releaseLink}\n${releaseChannelStatement}`,
+  readmeZh: `[常见问题](FAQ.zh-CN.md)\n${storeLink}\n${releaseLink}\n${releaseChannelStatementZh}`,
   faq: `English | [简体中文](FAQ.zh-CN.md)\n${kimiAutoRefreshStatement}`,
   faqZh: `[English](FAQ.md) | 简体中文\n${kimiAutoRefreshStatementZh}`,
   privacy: [
@@ -221,6 +230,48 @@ const nonRenderedHistoryDisclosures = [
 ];
 
 describe("publication content", () => {
+  it.each([
+    { key: "readme", statement: releaseChannelStatement },
+    { key: "readmeZh", statement: releaseChannelStatementZh },
+  ])("requires truthful release-channel guidance in $key", ({ key, statement }) => {
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        [key]: valid[key].replace(statement, ""),
+      }),
+    ).toContain(
+      key === "readme"
+        ? "README is missing the Chrome Web Store release-lag guidance."
+        : "Simplified Chinese README is missing the Chrome Web Store release-lag guidance.",
+    );
+  });
+
+  it.each(["readme", "readmeZh"])(
+    "requires the canonical Store and GitHub release links in %s",
+    (key) => {
+      expect(
+        validatePublicationDocuments({
+          ...valid,
+          [key]: valid[key].replace(storeLink, "Chrome Web Store"),
+        }),
+      ).toContain(
+        key === "readme"
+          ? "README is missing the canonical Chrome Web Store Markdown link."
+          : "Simplified Chinese README is missing the canonical Chrome Web Store Markdown link.",
+      );
+      expect(
+        validatePublicationDocuments({
+          ...valid,
+          [key]: valid[key].replace(releaseLink, "GitHub release"),
+        }),
+      ).toContain(
+        key === "readme"
+          ? "README is missing the canonical GitHub release Markdown link."
+          : "Simplified Chinese README is missing the canonical GitHub release Markdown link.",
+      );
+    },
+  );
+
   it("requires the store listing to describe the actual pace inputs", () => {
     const errors = validatePublicationDocuments({
       ...valid,
@@ -354,7 +405,10 @@ describe("publication content", () => {
     expect(
       validatePublicationDocuments({
         ...valid,
-        readme: `[Report a problem](${issuesUrl})\n${faqLink}`,
+        readme: valid.readme.replace(
+          issuesLink,
+          `[Report a problem](${issuesUrl})`,
+        ),
       }),
     ).toEqual([]);
   });
@@ -363,7 +417,10 @@ describe("publication content", () => {
     expect(
       validatePublicationDocuments({
         ...valid,
-        readme: `[Report [a bug]](<${issuesUrl}> "Issue tracker")\n${faqLink}`,
+        readme: valid.readme.replace(
+          issuesLink,
+          `[Report [a bug]](<${issuesUrl}> "Issue tracker")`,
+        ),
       }),
     ).toEqual([]);
   });
@@ -383,7 +440,7 @@ describe("publication content", () => {
       expect(
         validatePublicationDocuments({
           ...valid,
-          readme: `${document}\n${faqLink}`,
+          readme: valid.readme.replace(issuesLink, document),
         }),
       ).toEqual([]);
     },

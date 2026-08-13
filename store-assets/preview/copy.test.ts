@@ -158,6 +158,18 @@ describe("store artwork copy", () => {
     expect(previewContent.en.history.description).toMatch(/refresh/i);
   });
 
+  it("gives GitHub sharing a concise product and trust story", () => {
+    expect(previewContent.en.social).toEqual({
+      eyebrow: "Chrome side panel",
+      title: "Usage limits, in one view.",
+      description: "ChatGPT · Claude · Kimi · Cursor",
+    });
+    expect(previewContent.en.socialNotes).toEqual([
+      "Used or Left · Reset timing · Pace · Local history",
+      "Local history. No remote backend.",
+    ]);
+  });
+
   it("keeps promotional descriptions concise at half-size", () => {
     expect(previewContent.en.promo.description.length).toBeLessThanOrEqual(60);
     expect([...previewContent.zh_CN.promo.description].length).toBeLessThanOrEqual(
