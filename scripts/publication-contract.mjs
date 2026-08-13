@@ -1,6 +1,13 @@
 import MarkdownIt from "markdown-it";
 
 const issuesUrl = "https://github.com/wjcjttl/ai-limits/issues";
+const storeUrl =
+  "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
+const releaseUrl = "https://github.com/wjcjttl/ai-limits/releases/latest";
+const releaseChannelStatement =
+  "Chrome Web Store releases can lag while review or publishing is pending; the Store badge shows the currently published version.";
+const releaseChannelStatementZh =
+  "Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。";
 const limitedUseStatement =
   "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
 const historyRetentionStatement =
@@ -199,6 +206,33 @@ export function validatePublicationDocuments(documents) {
   for (const { key, statement, error } of requiredVisibleFaqStatements) {
     if (!extractVisibleRenderedProse(documents[key] ?? "").includes(statement)) {
       errors.push(error);
+    }
+  }
+
+  for (const {
+    key,
+    label,
+    statement,
+  } of [
+    { key: "readme", label: "README", statement: releaseChannelStatement },
+    {
+      key: "readmeZh",
+      label: "Simplified Chinese README",
+      statement: releaseChannelStatementZh,
+    },
+  ]) {
+    const source = documents[key] ?? "";
+    const destinations = extractInlineMarkdownLinkDestinations(source);
+    if (!destinations.includes(storeUrl)) {
+      errors.push(
+        `${label} is missing the canonical Chrome Web Store Markdown link.`,
+      );
+    }
+    if (!destinations.includes(releaseUrl)) {
+      errors.push(`${label} is missing the canonical GitHub release Markdown link.`);
+    }
+    if (!extractVisibleRenderedProse(source).includes(statement)) {
+      errors.push(`${label} is missing the Chrome Web Store release-lag guidance.`);
     }
   }
 

@@ -516,6 +516,21 @@ export const STORE_ASSET_CAPTURES = [
   fixedClock: FIDELITY_FIXED_CLOCK,
 }));
 
+export const MARKETING_ASSET_CAPTURES = [
+  ...STORE_ASSET_CAPTURES.map((capture) => ({
+    ...capture,
+    relativePath: `chrome-web-store/${capture.relativePath}`,
+  })),
+  {
+    locale: "en",
+    view: "social",
+    relativePath: "github/social-preview-1280x640.png",
+    viewport: { width: 1280, height: 640 },
+    dataSource: "fixture",
+    fixedClock: FIDELITY_FIXED_CLOCK,
+  },
+];
+
 const FIDELITY_WIDTHS = [340, 400, 460];
 const FIDELITY_THEMES = ["light", "dark"];
 const FIDELITY_SCENARIOS = [
@@ -1028,15 +1043,20 @@ export function validateFidelityProductionManifest(manifest) {
 }
 
 export const REQUIRED_STORE_ASSET_DIMENSIONS = {
-  "screenshot-overview-1280x800.png": [1280, 800],
-  "screenshot-pacing-1280x800.png": [1280, 800],
-  "screenshot-history-1280x800.png": [1280, 800],
-  "screenshot-privacy-1280x800.png": [1280, 800],
-  "small-promo-440x280.png": [440, 280],
-  "zh_CN/screenshot-overview-1280x800.png": [1280, 800],
-  "zh_CN/screenshot-pacing-1280x800.png": [1280, 800],
-  "zh_CN/screenshot-history-1280x800.png": [1280, 800],
-  "zh_CN/screenshot-privacy-1280x800.png": [1280, 800],
+  "chrome-web-store/screenshot-overview-1280x800.png": [1280, 800],
+  "chrome-web-store/screenshot-pacing-1280x800.png": [1280, 800],
+  "chrome-web-store/screenshot-history-1280x800.png": [1280, 800],
+  "chrome-web-store/screenshot-privacy-1280x800.png": [1280, 800],
+  "chrome-web-store/small-promo-440x280.png": [440, 280],
+  "chrome-web-store/zh_CN/screenshot-overview-1280x800.png": [1280, 800],
+  "chrome-web-store/zh_CN/screenshot-pacing-1280x800.png": [1280, 800],
+  "chrome-web-store/zh_CN/screenshot-history-1280x800.png": [1280, 800],
+  "chrome-web-store/zh_CN/screenshot-privacy-1280x800.png": [1280, 800],
+  "github/social-preview-1280x640.png": [1280, 640],
+};
+
+const MAX_MARKETING_ASSET_BYTES = {
+  "github/social-preview-1280x640.png": 1_000_000,
 };
 
 export async function waitForDocumentFonts(page) {
@@ -1070,6 +1090,21 @@ export function validateStoreAssetDimensions(assets) {
       dimensions.height !== requiredHeight
     ) {
       errors.push(`${name} must be ${requiredWidth}x${requiredHeight}.`);
+    }
+  }
+
+  return errors;
+}
+
+export function validateMarketingAssetFileSizes(assets) {
+  const errors = [];
+
+  for (const [name, maximumBytes] of Object.entries(
+    MAX_MARKETING_ASSET_BYTES,
+  )) {
+    const bytes = assets[name];
+    if (typeof bytes === "number" && bytes >= maximumBytes) {
+      errors.push(`${name} must be smaller than ${maximumBytes} bytes.`);
     }
   }
 

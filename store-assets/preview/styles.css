@@ -255,6 +255,52 @@ body {
   height: 630px;
 }
 
+.capture-page--social {
+  grid-template-columns: minmax(0, 1fr) 500px;
+  gap: 56px;
+  padding: 40px 76px;
+}
+
+.capture-page--social .brand-lockup {
+  margin-bottom: 54px;
+}
+
+.capture-page--social .marketing-copy h1 {
+  max-width: 560px;
+  font-size: 54px;
+}
+
+.capture-page--social .marketing-description {
+  margin-top: 22px;
+  color: var(--art-purple-deep);
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.capture-page--social .extension-frame {
+  width: 500px;
+  height: 536px;
+}
+
+.social-notes {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.social-notes p {
+  margin: 0;
+  color: var(--art-muted);
+  font-size: 15px;
+  font-weight: 690;
+  line-height: 1.4;
+}
+
+.social-notes p:last-child {
+  color: var(--art-ink);
+  font-size: 14px;
+}
+
 .capture-page--promo {
   grid-template-columns: 188px 1fr;
   gap: 15px;

@@ -9,7 +9,7 @@ import { createServer } from "vite";
 
 import {
   FIDELITY_FIXED_CLOCK,
-  STORE_ASSET_CAPTURES,
+  MARKETING_ASSET_CAPTURES,
   buildFidelityPreviewQuery,
   createFidelityCaptureMatrix,
   fidelityScreenHasModeControl,
@@ -22,11 +22,7 @@ const repositoryRoot = path.resolve(
   "..",
 );
 const previewRoot = path.join(repositoryRoot, "store-assets", "preview");
-const storeOutputDirectory = path.join(
-  repositoryRoot,
-  "store-assets",
-  "chrome-web-store",
-);
+const storeOutputDirectory = path.join(repositoryRoot, "store-assets");
 const fidelityOutputDirectory = path.join(
   repositoryRoot,
   ".superpowers",
@@ -43,7 +39,7 @@ const assets = fidelityMode
       ...capture,
       relativePath: `${capture.id}.png`,
     }))
-  : STORE_ASSET_CAPTURES;
+  : MARKETING_ASSET_CAPTURES;
 const outputDirectory = fidelityMode
   ? fidelityOutputDirectory
   : storeOutputDirectory;

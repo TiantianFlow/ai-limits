@@ -53,7 +53,8 @@ function parseView(parameters: URLSearchParams): PreviewView {
   return candidate === "pacing" ||
     candidate === "history" ||
     candidate === "privacy" ||
-    candidate === "promo"
+    candidate === "promo" ||
+    candidate === "social"
     ? candidate
     : "overview";
 }
@@ -69,10 +70,12 @@ function FeatureNotes({
   view,
   pacingNotes,
   privacyNotes,
+  socialNotes,
 }: {
   view: PreviewView;
   pacingNotes: [string, string, string];
   privacyNotes: [string, string, string];
+  socialNotes: [string, string];
 }) {
   if (view === "pacing") {
     return (
@@ -97,6 +100,15 @@ function FeatureNotes({
   if (view === "overview") {
     return (
       <p className="provider-line">ChatGPT · Claude · Kimi · Cursor</p>
+    );
+  }
+
+  if (view === "social") {
+    return (
+      <div className="social-notes">
+        <p>{socialNotes[0]}</p>
+        <p>{socialNotes[1]}</p>
+      </div>
     );
   }
 
@@ -171,6 +183,7 @@ function Preview() {
           view={view}
           pacingNotes={content.pacingNotes}
           privacyNotes={content.privacyNotes}
+          socialNotes={content.socialNotes}
         />
       </section>
 
