@@ -4,27 +4,27 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const releaseVersion = "0.2.0";
+const releaseVersion = "0.2.1";
 
 function read(relativePath) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
 describe("release version", () => {
-  it("uses 0.2.0 as the package and verified manifest version", () => {
+  it("uses 0.2.1 as the package and verified manifest version", () => {
     const packageJson = JSON.parse(read("package.json"));
-    const buildVerifier = read("scripts/verify-build.mjs");
+    const artifactContract = read("scripts/artifact-contract.mjs");
 
     expect(packageJson.version).toBe(releaseVersion);
-    expect(buildVerifier).toContain(
-      `manifest.version === packageJson.version && manifest.version === "${releaseVersion}"`,
+    expect(artifactContract).toContain(
+      `manifest.version !== packageVersion || manifest.version !== "${releaseVersion}"`,
     );
-    expect(buildVerifier).toContain(
+    expect(artifactContract).toContain(
       `Expected manifest version ${releaseVersion} derived from package.json.`,
     );
   });
 
-  it("names the 0.2.0 archive consistently in release documentation", () => {
+  it("names the 0.2.1 archive consistently in release documentation", () => {
     for (const relativePath of [
       "README.md",
       "README.zh-CN.md",

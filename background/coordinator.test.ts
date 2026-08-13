@@ -9,6 +9,11 @@ import { createFixtureState } from "../providers/fixtures";
 import type { CollectionResult, ProviderAdapter } from "../providers/types";
 import { loadState, saveState, setDisplayMode } from "../storage/repository";
 import {
+  initializeCredentialStorage,
+  readProviderCredential,
+  saveProviderApiKey,
+} from "../storage/credentials";
+import {
   disconnectProvider,
   reconcileRemovedProviderPermissions,
   reconcileProviderPermissions,
@@ -99,6 +104,10 @@ function refresh(
 beforeEach(async () => {
   await browser.storage.local.clear();
   vi.restoreAllMocks();
+  Object.assign(browser.storage.local, {
+    setAccessLevel: vi.fn(async () => undefined),
+  });
+  await initializeCredentialStorage();
 });
 
 describe("provider refresh coordinator", () => {
@@ -577,7 +586,7 @@ describe("provider refresh coordinator", () => {
     });
     expect(
       (await loadState())?.providers.slice(1).map(({ access }) => access),
-    ).toEqual(["granted", "granted", "granted"]);
+    ).toEqual(["granted", "granted", "granted", "granted"]);
   });
 
   test("invalidates an exact permission removal before authoritative cleanup", async () => {
@@ -613,6 +622,26 @@ describe("provider refresh coordinator", () => {
       history: [],
     });
     expect((await loadState())?.providers[1]).toEqual(initial.providers[1]);
+  });
+
+  test("external permission removal deletes API-key credentials and provider data", async () => {
+    const initial = liveState(NOW);
+    await saveState(initial, NOW);
+    await saveProviderApiKey("elevenlabs", "synthetic-removed-key");
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
+
+    await reconcileRemovedProviderPermissions(
+      { origins: ["https://api.elevenlabs.io/*"] },
+      ["elevenlabs"],
+      () => undefined,
+    );
+
+    expect(await readProviderCredential("elevenlabs")).toBeUndefined();
+    expect((await loadState())?.providers[4]).toEqual({
+      providerId: "elevenlabs",
+      access: "required",
+      history: [],
+    });
   });
 
   test("clears removal-event data across a rapid regrant and blocks stale work", async () => {
@@ -676,42 +705,64 @@ describe("provider refresh coordinator", () => {
     });
   });
 
-  test("disconnect removes permission before deleting provider data", async () => {
+  test("disconnect deletes local credential and provider data before awaited permission removal", async () => {
     const initial = liveState(NOW);
-    initial.providers[0]!.lastAttempt = {
+    initial.providers[4]!.lastAttempt = {
       trigger: "manual_provider",
       startedAt: NOW - 1_000,
       finishedAt: NOW,
       outcome: { kind: "success" },
     };
     await saveState(initial, NOW);
-    vi.spyOn(browser.permissions, "remove").mockImplementation(
-      async () => true as never,
+    await saveProviderApiKey("elevenlabs", "synthetic-disconnect-key");
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
+    const permissionRemoval = deferred<boolean>();
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      () => permissionRemoval.promise as never,
     );
 
-    await expect(disconnectProvider("chatgpt", ["claude"])).resolves.toEqual({
-      ok: true,
-    });
+    const disconnecting = disconnectProvider("elevenlabs", []);
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
 
-    expect((await loadState())?.providers[0]).toEqual({
-      providerId: "chatgpt",
+    expect(await readProviderCredential("elevenlabs")).toBeUndefined();
+    expect((await loadState())?.providers[4]).toEqual({
+      providerId: "elevenlabs",
       access: "required",
       history: [],
     });
+
+    permissionRemoval.resolve(true);
+    await expect(disconnecting).resolves.toEqual({
+      ok: true,
+      localDataDeleted: true,
+    });
   });
 
-  test("keeps stored data unchanged when Chrome refuses disconnect", async () => {
+  test.each(["returns false", "rejects"] as const)(
+    "deletes local data and credentials when permission cleanup %s",
+    async (failureMode) => {
     const initial = liveState(NOW);
     await saveState(initial, NOW);
-    vi.spyOn(browser.permissions, "remove").mockImplementation(
-      async () => false as never,
-    );
+      await saveProviderApiKey("elevenlabs", "synthetic-disconnect-key");
+      const remove = vi.spyOn(browser.permissions, "remove");
+      if (failureMode === "returns false") {
+        remove.mockImplementation(async () => false as never);
+      } else {
+        remove.mockRejectedValue(new Error("Chrome permission failure"));
+      }
 
-    await expect(disconnectProvider("chatgpt", ["claude"])).resolves.toEqual({
-      ok: false,
-      error: "permission_removal_failed",
-    });
+      await expect(disconnectProvider("elevenlabs", [])).resolves.toEqual({
+        ok: false,
+        error: "permission_removal_failed",
+        localDataDeleted: true,
+      });
 
-    expect(await loadState()).toEqual(initial);
-  });
+      expect(await readProviderCredential("elevenlabs")).toBeUndefined();
+      expect((await loadState())?.providers[4]).toEqual({
+        providerId: "elevenlabs",
+        access: "required",
+        history: [],
+      });
+    },
+  );
 });

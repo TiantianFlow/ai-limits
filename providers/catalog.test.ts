@@ -4,6 +4,7 @@ import { isRuntimeCommand } from "../background/messages";
 import * as catalog from "./catalog";
 import {
   assertProviderCatalogPermissionSafety,
+  isApiKeyProviderId,
   isProviderId,
   providerCatalog,
   providerIds,
@@ -73,17 +74,33 @@ describe("provider catalog", () => {
           "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
         capabilities: ["Monthly usage", "On-demand spend"],
       },
+      {
+        providerId: "elevenlabs",
+        markPath: "/provider-marks/elevenlabs.svg",
+        connectionLabel: "Connect ElevenLabs",
+        connectionDisclosure:
+          "Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.",
+        capabilities: ["Monthly credits", "Voice limits"],
+      },
     ]);
   });
 
-  test("is the ordered source of provider identity, names, and permissions", () => {
-    expect(providerIds).toEqual(["chatgpt", "claude", "kimi", "cursor"]);
+  test("is the ordered source of provider identity, connection, refresh, names, and permissions", () => {
+    expect(providerIds).toEqual([
+      "chatgpt",
+      "claude",
+      "kimi",
+      "cursor",
+      "elevenlabs",
+    ]);
     expect(
       providerIds.map((providerId) => ({
         providerId,
         name: providerNames[providerId],
         origins: providerCatalog[providerId].optionalOrigins,
         permissions: providerCatalog[providerId].optionalPermissions,
+        connection: providerCatalog[providerId].connection,
+        scheduledRefresh: providerCatalog[providerId].scheduledRefresh,
       })),
     ).toEqual([
       {
@@ -91,24 +108,43 @@ describe("provider catalog", () => {
         name: "ChatGPT",
         origins: ["https://chatgpt.com/*"],
         permissions: [],
+        connection: { kind: "browser-session" },
+        scheduledRefresh: true,
       },
       {
         providerId: "claude",
         name: "Claude",
         origins: ["https://claude.ai/*"],
         permissions: [],
+        connection: { kind: "browser-session" },
+        scheduledRefresh: true,
       },
       {
         providerId: "kimi",
         name: "Kimi",
         origins: ["https://www.kimi.com/*"],
         permissions: ["cookies", "scripting"],
+        connection: { kind: "browser-session" },
+        scheduledRefresh: true,
       },
       {
         providerId: "cursor",
         name: "Cursor",
         origins: ["https://cursor.com/*"],
         permissions: [],
+        connection: { kind: "browser-session" },
+        scheduledRefresh: true,
+      },
+      {
+        providerId: "elevenlabs",
+        name: "ElevenLabs",
+        origins: ["https://api.elevenlabs.io/*"],
+        permissions: [],
+        connection: {
+          kind: "api-key",
+          setupUrl: "https://elevenlabs.io/app/developers/api-keys",
+        },
+        scheduledRefresh: true,
       },
     ]);
   });
@@ -133,6 +169,13 @@ describe("provider catalog", () => {
     expect(isProviderId("antigravity")).toBe(false);
     expect(isProviderId(undefined)).toBe(false);
     expect(isProviderId({ providerId: "chatgpt" })).toBe(false);
+  });
+
+  test("derives API-key provider identities from the catalog", () => {
+    expect(isApiKeyProviderId("elevenlabs")).toBe(true);
+    expect(isApiKeyProviderId("chatgpt")).toBe(false);
+    expect(isApiKeyProviderId("unknown")).toBe(false);
+    expect(isApiKeyProviderId(undefined)).toBe(false);
   });
 
   test("keeps optional origins exact so shared access can be revoked safely", () => {

@@ -5,6 +5,7 @@ import type {
   RefreshTrigger,
 } from "../domain/model";
 import type { ConnectableProviderId } from "../providers/registry";
+import { providerCatalog } from "../providers/catalog";
 
 const PROVIDER_DEADLINE_MS = 20_000;
 
@@ -34,7 +35,10 @@ export interface ProviderRunControl {
 export interface RefreshOrchestratorDependencies {
   providerIds: readonly ConnectableProviderId[];
   isAutoRefreshEnabled(): Promise<boolean>;
-  hasPermission(providerId: ConnectableProviderId): Promise<boolean>;
+  isProviderRefreshEligible(
+    providerId: ConnectableProviderId,
+  ): Promise<boolean>;
+  isScheduledRefreshEnabled?(providerId: ConnectableProviderId): boolean;
   getBackoffRetryAt(
     providerId: ConnectableProviderId,
   ): Promise<number | undefined>;
@@ -177,12 +181,13 @@ export function createRefreshOrchestrator(
           }
         }
 
-        const hasPermission = await dependencies.hasPermission(providerId);
+        const isRefreshEligible =
+          await dependencies.isProviderRefreshEligible(providerId);
         if (control.signal.aborted || !control.isCurrentGeneration()) {
           return { kind: "skipped", reason: "superseded" } as const;
         }
 
-        if (!hasPermission) {
+        if (!isRefreshEligible) {
           return { kind: "skipped", reason: "permission_required" } as const;
         }
 
@@ -281,7 +286,15 @@ export function createRefreshOrchestrator(
 
   return {
     refreshAll(trigger) {
-      return refresh(dependencies.providerIds, trigger);
+      const providerIds =
+        trigger === "scheduled"
+          ? dependencies.providerIds.filter((providerId) =>
+              (dependencies.isScheduledRefreshEnabled ??
+                ((id: ConnectableProviderId) =>
+                  providerCatalog[id].scheduledRefresh))(providerId),
+            )
+          : dependencies.providerIds;
+      return refresh(providerIds, trigger);
     },
     refreshProvider(providerId, trigger) {
       return refresh([providerId], trigger);

@@ -7,6 +7,13 @@ export interface ProviderPresentation {
   readonly manualRefreshDisclosure?: string;
 }
 
+export type ProviderConnection =
+  | { readonly kind: "browser-session" }
+  | {
+      readonly kind: "api-key";
+      readonly setupUrl: "https://elevenlabs.io/app/developers/api-keys";
+    };
+
 const browserSessionDisclosure =
   "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.";
 
@@ -15,6 +22,8 @@ export const providerCatalog = {
     displayName: "ChatGPT",
     optionalOrigins: ["https://chatgpt.com/*"],
     optionalPermissions: [],
+    connection: { kind: "browser-session" },
+    scheduledRefresh: true,
     presentation: {
       markPath: "/provider-marks/chatgpt.svg",
       connectionLabel: "Connect ChatGPT",
@@ -26,6 +35,8 @@ export const providerCatalog = {
     displayName: "Claude",
     optionalOrigins: ["https://claude.ai/*"],
     optionalPermissions: [],
+    connection: { kind: "browser-session" },
+    scheduledRefresh: true,
     presentation: {
       markPath: "/provider-marks/claude.svg",
       connectionLabel: "Connect Claude",
@@ -37,6 +48,8 @@ export const providerCatalog = {
     displayName: "Kimi",
     optionalOrigins: ["https://www.kimi.com/*"],
     optionalPermissions: ["cookies", "scripting"],
+    connection: { kind: "browser-session" },
+    scheduledRefresh: true,
     presentation: {
       markPath: "/provider-marks/kimi.svg",
       darkMarkPath: "/provider-marks/kimi-dark.svg",
@@ -52,12 +65,31 @@ export const providerCatalog = {
     displayName: "Cursor",
     optionalOrigins: ["https://cursor.com/*"],
     optionalPermissions: [],
+    connection: { kind: "browser-session" },
+    scheduledRefresh: true,
     presentation: {
       markPath: "/provider-marks/cursor.svg",
       darkMarkPath: "/provider-marks/cursor-dark.svg",
       connectionLabel: "Connect Cursor",
       connectionDisclosure: browserSessionDisclosure,
       capabilities: ["Monthly usage", "On-demand spend"],
+    },
+  },
+  elevenlabs: {
+    displayName: "ElevenLabs",
+    optionalOrigins: ["https://api.elevenlabs.io/*"],
+    optionalPermissions: [],
+    connection: {
+      kind: "api-key",
+      setupUrl: "https://elevenlabs.io/app/developers/api-keys",
+    },
+    scheduledRefresh: true,
+    presentation: {
+      markPath: "/provider-marks/elevenlabs.svg",
+      connectionLabel: "Connect ElevenLabs",
+      connectionDisclosure:
+        "Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.",
+      capabilities: ["Monthly credits", "Voice limits"],
     },
   },
 } as const;
@@ -96,6 +128,12 @@ assertProviderCatalogPermissionSafety(providerCatalog);
 
 export type ProviderId = keyof typeof providerCatalog;
 
+export type ApiKeyProviderId = {
+  [Id in ProviderId]: (typeof providerCatalog)[Id]["connection"]["kind"] extends "api-key"
+    ? Id
+    : never;
+}[ProviderId];
+
 export const providerIds = Object.keys(providerCatalog) as ProviderId[];
 
 export const providerNames = Object.fromEntries(
@@ -111,4 +149,8 @@ export function providerPresentation(providerId: ProviderId): ProviderPresentati
 
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && Object.hasOwn(providerCatalog, value);
+}
+
+export function isApiKeyProviderId(value: unknown): value is ApiKeyProviderId {
+  return isProviderId(value) && providerCatalog[value].connection.kind === "api-key";
 }

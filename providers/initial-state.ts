@@ -226,7 +226,9 @@ export function normalizeProviderSnapshot(
   if (
     !isRecord(value) ||
     value.providerId !== providerId ||
-    (value.source !== "web-session" && value.source !== "oauth") ||
+    (value.source !== "web-session" &&
+      value.source !== "oauth" &&
+      value.source !== "api-key") ||
     !isFiniteNumber(value.fetchedAt) ||
     value.fetchedAt < 0 ||
     !isOptionalString(value.accountLabel) ||
@@ -365,6 +367,8 @@ function normalizeAttemptOutcome(
     value.kind === "failure" &&
     [
       "signed_out",
+      "credential_invalid",
+      "credential_scope_required",
       "challenge_blocked",
       "provider_changed",
       "temporary_error",

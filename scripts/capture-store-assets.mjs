@@ -228,7 +228,44 @@ async function prepareStoreAsset(page, asset) {
     await page.getByRole("button", { name: "Settings" }).click();
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await page.locator("[data-panel-frame]").evaluate((frame) => {
-      frame.scrollTop = 0;
+      const elevenLabs = [...document.querySelectorAll("strong")].find(
+        (element) => element.textContent === "ElevenLabs",
+      )?.closest("li");
+      const deleteButton = [...document.querySelectorAll("button")].find(
+        (element) => element.textContent === "Delete all local data",
+      );
+      if (
+        !(frame instanceof HTMLElement) ||
+        !(elevenLabs instanceof HTMLElement) ||
+        !(deleteButton instanceof HTMLElement)
+      ) {
+        throw new Error(
+          "Privacy capture could not find the ElevenLabs row and local-data action.",
+        );
+      }
+
+      const frameBounds = frame.getBoundingClientRect();
+      const deleteBounds = deleteButton.getBoundingClientRect();
+      frame.scrollTop = Math.min(
+        frame.scrollTop + deleteBounds.bottom - frameBounds.bottom + 12,
+        frame.scrollHeight - frame.clientHeight,
+      );
+
+      const visibleFrameBounds = frame.getBoundingClientRect();
+      for (const [label, element] of [
+        ["ElevenLabs", elevenLabs],
+        ["Delete all local data", deleteButton],
+      ]) {
+        const bounds = element.getBoundingClientRect();
+        if (
+          bounds.top < visibleFrameBounds.top ||
+          bounds.bottom > visibleFrameBounds.bottom
+        ) {
+          throw new Error(
+            `Privacy capture requires ${label} inside the panel frame.`,
+          );
+        }
+      }
     });
   }
 }
@@ -322,6 +359,7 @@ async function fidelityMeasurements(page, asset) {
       history: '[aria-label="Kimi history"]',
       "add-provider": '[aria-label="Add provider"]',
       settings: '[aria-label="Provider settings"]',
+      "api-key-connect": '[aria-label="Replace ElevenLabs API key"]',
     }[expected.screen];
     const exactScreen =
       Boolean(expectedSelector && root.querySelector(expectedSelector)) &&
@@ -511,6 +549,7 @@ async function fidelityMeasurements(page, asset) {
 
       const quotaMetadata = [...root.querySelectorAll(".quota-bars__meta")];
       let resetCount = 0;
+      let untimedCount = 0;
       for (const metadata of quotaMetadata) {
         const primary = metadata.querySelector(".quota-bars__meta-primary");
         const reset = metadata.querySelector(".quota-bars__reset");
@@ -519,7 +558,12 @@ async function fidelityMeasurements(page, asset) {
           continue;
         }
         if (!(reset instanceof HTMLElement)) {
-          violations.push("quota metadata is missing its reset row");
+          const timing = primary.querySelector(".quota-bars__timing");
+          if (timing?.textContent?.trim() !== "No reset timing") {
+            violations.push("quota metadata has neither a reset row nor an untimed label");
+          } else {
+            untimedCount += 1;
+          }
           continue;
         }
         resetCount += 1;
@@ -549,8 +593,70 @@ async function fidelityMeasurements(page, asset) {
         narrowMarkAlignmentVerified,
         quotaCount: quotaMetadata.length,
         resetCount,
+        untimedCount,
         wideIdentityCount,
         wideIdentityVerified,
+        violations,
+      };
+    })();
+
+    const apiKeyGuide = (() => {
+      if (expected.screen !== "api-key-connect") {
+        return null;
+      }
+
+      const violations = [];
+      const input = root.querySelector("#elevenlabs-api-key");
+      const primary = root.querySelector(".api-key-guide .button--primary");
+      const mark = root.querySelector(
+        '.api-key-guide .provider-mark--provider-elevenlabs',
+      );
+      const parseRgb = (color) =>
+        (color.match(/[\d.]+/gu) ?? []).slice(0, 3).map(Number);
+      const luminance = (color) => {
+        const channels = parseRgb(color).map((value) => {
+          const normalized = value / 255;
+          return normalized <= 0.04045
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return (
+          0.2126 * channels[0] +
+          0.7152 * channels[1] +
+          0.0722 * channels[2]
+        );
+      };
+      let contrastRatio = 0;
+      if (!(input instanceof HTMLInputElement) || input.value.length === 0) {
+        violations.push("fixture API-key input is not populated");
+      }
+      if (!(primary instanceof HTMLButtonElement) || primary.disabled) {
+        violations.push("primary action is not enabled");
+      } else {
+        const style = getComputedStyle(primary);
+        const foreground = luminance(style.color);
+        const background = luminance(style.backgroundColor);
+        contrastRatio =
+          (Math.max(foreground, background) + 0.05) /
+          (Math.min(foreground, background) + 0.05);
+        if (contrastRatio < 4.5) {
+          violations.push(
+            `primary action contrast is ${contrastRatio.toFixed(2)}:1`,
+          );
+        }
+      }
+      const markPath = mark?.getAttribute("src") ?? "";
+      if (markPath !== "/provider-marks/elevenlabs.svg") {
+        violations.push("ElevenLabs setup is missing its official local symbol");
+      }
+      return {
+        verified: violations.length === 0,
+        inputPopulated:
+          input instanceof HTMLInputElement && input.value.length > 0,
+        primaryEnabled:
+          primary instanceof HTMLButtonElement && !primary.disabled,
+        contrastRatio: Number(contrastRatio.toFixed(3)),
+        markPath,
         violations,
       };
     })();
@@ -589,6 +695,7 @@ async function fidelityMeasurements(page, asset) {
       liveRegions,
       selectedMode,
       compactOverview,
+      apiKeyGuide,
       reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
       darkMode: matchMedia("(prefers-color-scheme: dark)").matches,
       backgroundToken: rootStyle.getPropertyValue("--bg").trim(),
@@ -667,6 +774,9 @@ async function prepareFidelityKeyboardRoute(page, asset) {
       visible: focus.visible,
       replaced,
     });
+  }
+  if (asset.screen === "api-key-connect") {
+    await page.locator("#elevenlabs-api-key").fill("fixture-only-api-key");
   }
   return results;
 }
@@ -840,6 +950,8 @@ async function assertFocusReturn(page, asset) {
     history: 'button[aria-label="Open Kimi history for 5-hour usage"]',
     "add-provider": ".add-provider-action",
     settings: 'button[aria-label="Settings"]',
+    "api-key-connect":
+      'button[aria-label="Replace ElevenLabs API key"]',
   }[asset.screen];
   if (!expectedTarget) {
     return null;
@@ -887,6 +999,7 @@ async function assertLongCopyGeometry(page, asset) {
       [".history-surface__heading h2", "Rolling subscription allowance with a long localized window name"],
       [".history-surface__heading > span", "Recurring provider-defined rolling window"],
       [".settings-provider-copy p", "Provider name with an extended localized subscription plan"],
+      [".api-key-guide__steps h3", "Paste a provider credential and validate the read only subscription connection"],
       [".provider-connect-row h3", "Provider name translated into a substantially longer localized label"],
     ];
     const mutations = [];
@@ -1053,6 +1166,12 @@ async function captureFidelityAsset(page, asset, assetPath) {
     assert(
       measurements.liveRegions.some((text) => /needs attention/i.test(text)),
       `${asset.id} did not expose the partial refresh announcement.`,
+    );
+  }
+  if (asset.screen === "api-key-connect") {
+    assert(
+      measurements.apiKeyGuide?.verified === true,
+      `${asset.id} failed the API-key setup visual contract: ${measurements.apiKeyGuide?.violations?.join("; ")}.`,
     );
   }
 

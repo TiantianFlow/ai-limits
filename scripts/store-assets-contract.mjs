@@ -540,6 +540,7 @@ const FIDELITY_SCENARIOS = [
   { screen: "history", state: "default", mode: "used" },
   { screen: "add-provider", state: "default", mode: "used" },
   { screen: "settings", state: "default", mode: "used" },
+  { screen: "api-key-connect", state: "default", mode: "used" },
   { screen: "overview", state: "default", mode: "left" },
   { screen: "overview", state: "refresh-pending", mode: "used" },
   { screen: "overview", state: "partial-refresh", mode: "used" },
@@ -581,6 +582,18 @@ function keyboardNavigationFor({ screen, state }) {
         selector: 'button[aria-label="Settings"]',
         readySelector: '[aria-label="Provider settings"]',
         key: "Space",
+      },
+    ],
+    "api-key-connect": [
+      {
+        selector: 'button[aria-label="Settings"]',
+        readySelector: '[aria-label="Provider settings"]',
+        key: "Space",
+      },
+      {
+        selector: 'button[aria-label="Replace ElevenLabs API key"]',
+        readySelector: '[aria-label="Replace ElevenLabs API key"]',
+        key: "Enter",
       },
     ],
   };
@@ -638,6 +651,7 @@ const FIDELITY_SCREENS = new Set([
   "history",
   "add-provider",
   "settings",
+  "api-key-connect",
 ]);
 const FIDELITY_STATES = new Set([
   "default",
@@ -972,6 +986,8 @@ export function validateFidelityProductionManifest(manifest) {
       history: 'button[aria-label="Open Kimi history for 5-hour usage"]',
       "add-provider": ".add-provider-action",
       settings: 'button[aria-label="Settings"]',
+      "api-key-connect":
+        'button[aria-label="Replace ElevenLabs API key"]',
     }[capture.screen];
     const expectedFocusReturn =
       capture.state === "delete-confirmation"
@@ -1021,21 +1037,33 @@ export function validateFidelityProductionManifest(manifest) {
       contract.screen === "overview" &&
       (capture.compactOverview?.verified !== true ||
         capture.compactOverview?.targetCount !== 4 ||
-        capture.compactOverview?.statusCount !== 4 ||
-        capture.compactOverview?.freshStatusCount !== 4 ||
-        capture.compactOverview?.markCount !== 4 ||
-        capture.compactOverview?.markGeometryCount !== 4 ||
+        capture.compactOverview?.statusCount !== 5 ||
+        capture.compactOverview?.freshStatusCount !== 5 ||
+        capture.compactOverview?.markCount !== 5 ||
+        capture.compactOverview?.markGeometryCount !== 5 ||
         capture.compactOverview?.narrowMarkAlignmentVerified !== true ||
         capture.compactOverview?.narrowMarkAlignmentCount !==
-          (contract.viewport.width <= 380 ? 4 : 0) ||
-        capture.compactOverview?.quotaCount !== 6 ||
-        capture.compactOverview?.resetCount !== 6 ||
+          (contract.viewport.width <= 380 ? 5 : 0) ||
+        capture.compactOverview?.quotaCount !== 10 ||
+        capture.compactOverview?.resetCount !== 7 ||
+        capture.compactOverview?.untimedCount !== 3 ||
         capture.compactOverview?.wideIdentityVerified !== true ||
         capture.compactOverview?.wideIdentityCount !==
           (contract.viewport.width > 380 ? 1 : 0) ||
         (capture.compactOverview?.violations ?? []).length > 0)
     ) {
       errors.push(`${capture.id} failed the compact Overview visual contract.`);
+    }
+    if (
+      contract.screen === "api-key-connect" &&
+      (capture.apiKeyGuide?.verified !== true ||
+        capture.apiKeyGuide?.inputPopulated !== true ||
+        capture.apiKeyGuide?.primaryEnabled !== true ||
+        !(capture.apiKeyGuide?.contrastRatio >= 4.5) ||
+        capture.apiKeyGuide?.markPath !== "/provider-marks/elevenlabs.svg" ||
+        (capture.apiKeyGuide?.violations ?? []).length > 0)
+    ) {
+      errors.push(`${capture.id} failed the API-key setup visual contract.`);
     }
   }
 

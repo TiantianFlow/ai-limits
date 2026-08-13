@@ -47,7 +47,7 @@ export interface ProviderSnapshot {
   providerId: ProviderId;
   accountLabel?: string;
   planLabel?: string;
-  source: "web-session" | "oauth" | "fixture";
+  source: "web-session" | "oauth" | "api-key" | "fixture";
   fetchedAt: number;
   windows: QuotaWindow[];
   credits: CreditBalance[];
@@ -77,6 +77,8 @@ export type DeferredReason = "session_required" | "backoff";
 
 export type FailureCategory =
   | "signed_out"
+  | "credential_invalid"
+  | "credential_scope_required"
   | "challenge_blocked"
   | "provider_changed"
   | "temporary_error";
@@ -112,6 +114,10 @@ export function sanitizedFailureMessage(
   switch (category) {
     case "signed_out":
       return "Sign in to the provider and try again.";
+    case "credential_invalid":
+      return "The API key is invalid. Enter a valid key and try again.";
+    case "credential_scope_required":
+      return "The API key cannot read usage. Update its permissions and try again.";
     case "challenge_blocked":
       return "Open the provider and complete its security check before trying again.";
     case "provider_changed":
@@ -148,6 +154,8 @@ export type ProviderHealth =
   | { kind: "connecting" }
   | { kind: "connected" }
   | { kind: "signed_out"; message?: string }
+  | { kind: "credential_invalid"; message?: string }
+  | { kind: "credential_scope_required"; message?: string }
   | { kind: "challenge_blocked"; message?: string }
   | { kind: "provider_changed"; message?: string }
   | { kind: "temporary_error"; message?: string; retryAt?: number };

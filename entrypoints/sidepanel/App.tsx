@@ -5,7 +5,12 @@ import {
   type ProviderOperation,
   type RuntimeCommand,
 } from "../../background/messages";
+import type {
+  ApiKeyConnectionResult,
+  ApiKeyConnectionStatus,
+} from "../../background/api-key-connection";
 import { requestProviderPermission } from "../../background/permissions";
+import type { DisconnectProviderResult } from "../../background/coordinator";
 import type {
   AppState,
   DisplayMode,
@@ -13,9 +18,14 @@ import type {
   RefreshReport,
 } from "../../domain/model";
 import type { ConnectableProviderId } from "../../providers/registry";
-import { providerNames } from "../../providers/catalog";
+import {
+  type ApiKeyProviderId,
+  providerCatalog,
+  providerNames,
+} from "../../providers/catalog";
 import { loadState } from "../../storage/repository";
 import { Cockpit } from "./Cockpit";
+import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface RefreshResponse {
   state: AppState;
@@ -25,6 +35,11 @@ interface RefreshResponse {
 interface DeleteResponse {
   state: AppState;
   result: "deleted" | "deleted_with_permission_errors";
+}
+
+interface DisconnectResponse {
+  state: AppState;
+  result: DisconnectProviderResult;
 }
 
 interface Announcement {
@@ -136,6 +151,58 @@ function asDeleteResponse(value: unknown): DeleteResponse {
   return {
     state: asAppState(value.state),
     result: value.result,
+  };
+}
+
+function asDisconnectResponse(value: unknown): DisconnectResponse {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("state" in value) ||
+    !("result" in value) ||
+    !value.result ||
+    typeof value.result !== "object" ||
+    !("ok" in value.result) ||
+    !("localDataDeleted" in value.result) ||
+    value.result.localDataDeleted !== true ||
+    (value.result.ok !== true &&
+      (value.result.ok !== false ||
+        !("error" in value.result) ||
+        value.result.error !== "permission_removal_failed"))
+  ) {
+    throw new Error("Missing disconnect response");
+  }
+
+  return {
+    state: asAppState(value.state),
+    result: value.result as DisconnectProviderResult,
+  };
+}
+
+const apiKeyConnectionStatuses = new Set<ApiKeyConnectionStatus>([
+  "connected",
+  "invalid_key",
+  "insufficient_scope",
+  "temporary_error",
+]);
+
+function asApiKeyConnectionResponse(value: unknown): ApiKeyConnectionResult {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("state" in value) ||
+    !("report" in value) ||
+    !("result" in value) ||
+    typeof value.result !== "string" ||
+    !apiKeyConnectionStatuses.has(value.result as ApiKeyConnectionStatus)
+  ) {
+    throw new Error("Missing API key connection response");
+  }
+
+  return {
+    state: asAppState(value.state),
+    report: value.report as RefreshReport,
+    result: value.result as ApiKeyConnectionStatus,
   };
 }
 
@@ -302,6 +369,75 @@ export function App() {
     }
   };
 
+  const handleOpenApiKeySetup = (providerId: ApiKeyProviderId) => {
+    const connection = providerCatalog[providerId].connection;
+    void browser.tabs.create({ url: connection.setupUrl }).catch(() => {
+      announce("Couldn’t open the ElevenLabs API keys page. Try the link again.");
+    });
+  };
+
+  const handleSubmitApiKey = async (
+    providerId: ApiKeyProviderId,
+    apiKey: string,
+  ): Promise<ApiKeyConnectAttemptResult> => {
+    const connectionIntent =
+      state?.providers.find((provider) => provider.providerId === providerId)
+        ?.access === "granted"
+        ? "replacement"
+        : "permission-grant";
+    clearAnnouncement();
+    setProviderOperation(providerId, "requesting_permission");
+    let granted: boolean;
+    try {
+      granted = await requestProviderPermission(providerId);
+    } catch {
+      announce("ElevenLabs could not be validated right now. Try again later.");
+      setProviderOperation(providerId);
+      return "temporary_error";
+    }
+
+    if (!granted) {
+      announce("ElevenLabs access was not changed.");
+      setProviderOperation(providerId);
+      return "permission_declined";
+    }
+
+    try {
+      setProviderOperation(providerId, "fetching");
+      const response = asApiKeyConnectionResponse(
+        await browser.runtime.sendMessage({
+          type: "CONNECT_API_KEY_PROVIDER",
+          providerId,
+          apiKey,
+          connectionIntent,
+        } satisfies RuntimeCommand),
+      );
+      setState(response.state);
+      switch (response.result) {
+        case "connected":
+          announce("Connected ElevenLabs.");
+          break;
+        case "invalid_key":
+          announce("Enter a valid ElevenLabs API key.");
+          break;
+        case "insufficient_scope":
+          announce(
+            "Allow User → Read and check any IP restrictions, then try again.",
+          );
+          break;
+        case "temporary_error":
+          announce("ElevenLabs could not be validated right now. Try again later.");
+          break;
+      }
+      return response.result;
+    } catch {
+      announce("ElevenLabs could not be validated right now. Try again later.");
+      return "temporary_error";
+    } finally {
+      setProviderOperation(providerId);
+    }
+  };
+
   const handleRefreshProvider = async (providerId: ConnectableProviderId) => {
     clearAnnouncement();
     setProviderOperation(providerId, "fetching");
@@ -389,13 +525,17 @@ export function App() {
   const handleDisconnectProvider = async (providerId: ConnectableProviderId) => {
     clearAnnouncement();
     try {
-      const nextState = await browser.runtime.sendMessage({
-        type: "DISCONNECT_PROVIDER",
-        providerId,
-      } satisfies RuntimeCommand);
-      setState(asAppState(nextState));
+      const response = asDisconnectResponse(
+        await browser.runtime.sendMessage({
+          type: "DISCONNECT_PROVIDER",
+          providerId,
+        } satisfies RuntimeCommand),
+      );
+      setState(response.state);
       announce(
-        `Disconnected ${providerNames[providerId]} and deleted its stored usage.`,
+        response.result.ok
+          ? `Disconnected ${providerNames[providerId]} and deleted its stored usage.`
+          : `Deleted ${providerNames[providerId]}’s local usage. Browser access could not be removed.`,
       );
     } catch {
       announce(`Couldn’t disconnect ${providerNames[providerId]}.`);
@@ -457,6 +597,8 @@ export function App() {
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => void handleRefresh()}
       onConnectProvider={(providerId) => void handleConnectProvider(providerId)}
+      onOpenApiKeySetup={handleOpenApiKeySetup}
+      onSubmitApiKey={handleSubmitApiKey}
       onRefreshProvider={(providerId) => void handleRefreshProvider(providerId)}
       onAutoRefreshChange={(enabled) => void handleAutoRefreshChange(enabled)}
       onDisconnectProvider={(providerId) =>

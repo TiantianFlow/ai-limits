@@ -69,6 +69,279 @@ function successfulOutcomes(state: AppState): RefreshReport["providers"] {
 }
 
 describe("side-panel App", () => {
+  test("opens the ElevenLabs setup page without requesting API access", async () => {
+    const state = createInitialState();
+    const sendMessage = vi
+      .spyOn(browser.runtime, "sendMessage")
+      .mockResolvedValue(state as never);
+    const requestPermission = vi.spyOn(browser.permissions, "request");
+    const createTab = vi
+      .spyOn(browser.tabs, "create")
+      .mockResolvedValue({ id: 7 } as never);
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ElevenLabs" }),
+    );
+
+    expect(createTab).toHaveBeenCalledTimes(1);
+    expect(createTab).toHaveBeenCalledWith({
+      url: "https://elevenlabs.io/app/developers/api-keys",
+    });
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open API keys page" }));
+    expect(createTab).toHaveBeenCalledTimes(2);
+  });
+
+  test("requests exact access from Validate and sends exactly one candidate command", async () => {
+    const initial = createInitialState();
+    const secret = "not-a-real-elevenlabs-key";
+    const commands: unknown[] = [];
+    const requestPermission = vi
+      .spyOn(browser.permissions, "request")
+      .mockResolvedValue(true as never);
+    vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(
+        message.type === "CONNECT_API_KEY_PROVIDER"
+          ? {
+              state: initial,
+              report: report(
+                {
+                  elevenlabs: {
+                    kind: "failure",
+                    category: "credential_invalid",
+                  },
+                },
+                "connect",
+              ),
+              result: "invalid_key",
+            }
+          : initial,
+      );
+    });
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ElevenLabs" }),
+    );
+    const input = screen.getByLabelText("ElevenLabs API key");
+    fireEvent.change(input, { target: { value: secret } });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    expect(requestPermission).toHaveBeenCalledWith({
+      origins: ["https://api.elevenlabs.io/*"],
+    });
+    const guide = screen
+      .getByRole("heading", { name: "Connect ElevenLabs" })
+      .closest("section")!;
+    expect(
+      await within(guide).findByText("Enter a valid ElevenLabs API key."),
+    ).toBeVisible();
+    await waitFor(() => expect(input).toHaveValue(""));
+    expect(commands).toEqual([
+      { type: "GET_STATE" },
+      {
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: secret,
+        connectionIntent: "permission-grant",
+      },
+    ]);
+    expect(document.body).not.toHaveTextContent(secret);
+  });
+
+  test("does not send the API key command when optional access is declined", async () => {
+    const state = createInitialState();
+    const commands: unknown[] = [];
+    vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(false as never);
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(state);
+    });
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ElevenLabs" }),
+    );
+    const input = screen.getByLabelText("ElevenLabs API key");
+    fireEvent.change(input, { target: { value: "candidate" } });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    const guide = screen
+      .getByRole("heading", { name: "Connect ElevenLabs" })
+      .closest("section")!;
+    expect(
+      await within(guide).findByText(/ElevenLabs access was not changed/i),
+    ).toBeVisible();
+    expect(input).toHaveValue("");
+    expect(commands).toEqual([{ type: "GET_STATE" }]);
+  });
+
+  test.each([
+    [
+      "insufficient_scope",
+      "Allow User → Read and check any IP restrictions, then try again.",
+    ],
+    [
+      "temporary_error",
+      "ElevenLabs could not be validated right now. Your existing data and key are unchanged.",
+    ],
+  ] as const)(
+    "keeps the guide open after %s",
+    async (result, expected) => {
+      const state = createInitialState();
+      vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
+      vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+      installMessageHandler((message, respond) => {
+        respond(
+          message.type === "CONNECT_API_KEY_PROVIDER"
+            ? { state, report: report({}, "connect"), result }
+            : state,
+        );
+      });
+
+      render(<App />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Connect ElevenLabs" }),
+      );
+      fireEvent.change(screen.getByLabelText("ElevenLabs API key"), {
+        target: { value: "candidate" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+      const guide = screen
+        .getByRole("heading", { name: "Connect ElevenLabs" })
+        .closest("section")!;
+      expect(await within(guide).findByText(expected)).toBeVisible();
+      expect(
+        screen.getByRole("heading", { name: "Connect ElevenLabs" }),
+      ).toBeVisible();
+    },
+  );
+
+  test("treats the fixed command-failure envelope as temporary", async () => {
+    const state = createInitialState();
+    vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    installMessageHandler((message, respond) => {
+      respond(
+        message.type === "CONNECT_API_KEY_PROVIDER"
+          ? { ok: false, error: "command_failed" }
+          : state,
+      );
+    });
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ElevenLabs" }),
+    );
+    fireEvent.change(screen.getByLabelText("ElevenLabs API key"), {
+      target: { value: "candidate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    expect(
+      await screen.findByText(
+        "ElevenLabs could not be validated right now. Your existing data and key are unchanged.",
+      ),
+    ).toBeVisible();
+  });
+
+  test("commits the authoritative state and returns to Overview only on connected", async () => {
+    const initial = createInitialState();
+    const connected = createFixtureState(NOW);
+    vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    installMessageHandler((message, respond) => {
+      respond(
+        message.type === "CONNECT_API_KEY_PROVIDER"
+          ? {
+              state: connected,
+              report: report(successfulOutcomes(connected), "connect"),
+              result: "connected",
+            }
+          : initial,
+      );
+    });
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect ElevenLabs" }),
+    );
+    fireEvent.change(screen.getByLabelText("ElevenLabs API key"), {
+      target: { value: "candidate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Connected ElevenLabs.",
+    );
+    expect(
+      screen.getByRole("article", { name: "ElevenLabs" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Connect ElevenLabs" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("keeps existing ElevenLabs usage visible after a failed replacement", async () => {
+    const state = createFixtureState(NOW);
+    state.providers.find(
+      (provider) => provider.providerId === "elevenlabs",
+    )!.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: { kind: "failure", category: "credential_invalid" },
+    };
+    vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    const commands: unknown[] = [];
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(
+        message.type === "CONNECT_API_KEY_PROVIDER"
+          ? {
+              state,
+              report: report({}, "connect"),
+              result: "invalid_key",
+            }
+          : state,
+      );
+    });
+
+    render(<App />);
+    const card = await screen.findByRole("article", { name: "ElevenLabs" });
+    fireEvent.click(
+      within(card).getByRole("button", { name: "Replace ElevenLabs API key" }),
+    );
+    fireEvent.change(screen.getByLabelText("ElevenLabs API key"), {
+      target: { value: "replacement" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & replace" }));
+
+    const guide = screen
+      .getByRole("heading", { name: "Replace ElevenLabs API key" })
+      .closest("section")!;
+    expect(
+      await within(guide).findByText("Enter a valid ElevenLabs API key."),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.getByRole("article", { name: "ElevenLabs" })).toHaveTextContent(
+      "25% used",
+    );
+    expect(commands).toContainEqual({
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerId: "elevenlabs",
+      apiKey: "replacement",
+      connectionIntent: "replacement",
+    });
+  });
   test("offers a retry when the initial state load fails", async () => {
     const state = createFixtureState(NOW);
     const sendMessage = vi
@@ -138,7 +411,7 @@ describe("side-panel App", () => {
       name: "all attempted providers succeed",
       state: createFixtureState(NOW),
       outcomes: successfulOutcomes(createFixtureState(NOW)),
-      expected: "Updated 4 providers.",
+      expected: "Updated 5 providers.",
     },
     {
       name: "Kimi is the only provider needing a session",
@@ -147,7 +420,7 @@ describe("side-panel App", () => {
         ...successfulOutcomes(createFixtureState(NOW)),
         kimi: { kind: "deferred", reason: "session_required" } as const,
       },
-      expected: "Updated 3 of 4. Kimi needs a browser session.",
+      expected: "Updated 4 of 5. Kimi needs a browser session.",
     },
     {
       name: "mixed non-success outcomes need attention",
@@ -510,7 +783,14 @@ describe("side-panel App", () => {
       history: [],
     };
     installMessageHandler((message, respond) => {
-      respond(message.type === "DISCONNECT_PROVIDER" ? disconnected : state);
+      respond(
+        message.type === "DISCONNECT_PROVIDER"
+          ? {
+              state: disconnected,
+              result: { ok: true, localDataDeleted: true },
+            }
+          : state,
+      );
     });
 
     render(<App />);
@@ -523,6 +803,42 @@ describe("side-panel App", () => {
     );
   });
 
+  test("announces local disconnect success when browser permission cleanup fails", async () => {
+    const state = createFixtureState(NOW);
+    const disconnected = structuredClone(state);
+    disconnected.providers[0] = {
+      providerId: "chatgpt",
+      access: "required",
+      history: [],
+    };
+    installMessageHandler((message, respond) => {
+      respond(
+        message.type === "DISCONNECT_PROVIDER"
+          ? {
+              state: disconnected,
+              result: {
+                ok: false,
+                error: "permission_removal_failed",
+                localDataDeleted: true,
+              },
+            }
+          : state,
+      );
+    });
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Deleted ChatGPT’s local usage. Browser access could not be removed.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Disconnect ChatGPT" }),
+    ).not.toBeInTheDocument();
+  });
+
   test("routes settings mutations through service-worker commands", async () => {
     const state = createFixtureState(NOW);
     const commands: unknown[] = [];
@@ -531,7 +847,12 @@ describe("side-panel App", () => {
       respond(
         message.type === "DELETE_LOCAL_DATA"
           ? { state: createInitialState(), result: "deleted" }
-          : state,
+          : message.type === "DISCONNECT_PROVIDER"
+            ? {
+                state,
+                result: { ok: true, localDataDeleted: true },
+              }
+            : state,
       );
     });
 

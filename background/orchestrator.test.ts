@@ -112,7 +112,7 @@ describe("refresh orchestrator", () => {
     let control: ProviderRunControl | undefined;
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["kimi"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (_providerId, _policy, nextControl) => {
         control = nextControl;
         await readKimiPageAccessToken(42, () => injection.promise);
@@ -143,7 +143,7 @@ describe("refresh orchestrator", () => {
     const policies: RefreshPolicy[] = [];
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["kimi"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (_providerId, policy) => {
         policies.push(policy);
         return policy.interaction === "forbidden"
@@ -178,7 +178,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(async () => success("chatgpt"));
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       getBackoffRetryAt: async () => NOW + 60_000,
       runProvider,
       clock: () => NOW,
@@ -200,7 +200,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(async () => success("chatgpt"));
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       getBackoffRetryAt: async () => NOW + 60_000,
       runProvider,
       clock: () => NOW,
@@ -247,7 +247,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(async () => passive.promise);
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider,
       clock: () => NOW,
     });
@@ -272,7 +272,7 @@ describe("refresh orchestrator", () => {
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
       isAutoRefreshEnabled,
-      hasPermission,
+      isProviderRefreshEligible: hasPermission,
       runProvider,
       clock: () => NOW,
     });
@@ -295,7 +295,7 @@ describe("refresh orchestrator", () => {
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
       isAutoRefreshEnabled: async () => false,
-      hasPermission,
+      isProviderRefreshEligible: hasPermission,
       runProvider,
       clock: () => NOW,
     });
@@ -309,6 +309,30 @@ describe("refresh orchestrator", () => {
     expect(runProvider).not.toHaveBeenCalled();
   });
 
+  test("omits providers whose catalog disables scheduled refresh", async () => {
+    const isProviderRefreshEligible = vi.fn(async () => true);
+    const runProvider = vi.fn(async (providerId: ProviderId) =>
+      success(providerId),
+    );
+    const orchestrator = createRefreshOrchestrator({
+      providerIds: ["chatgpt", "elevenlabs"],
+      isScheduledRefreshEnabled: (providerId) => providerId !== "elevenlabs",
+      isProviderRefreshEligible,
+      runProvider,
+      clock: () => NOW,
+    });
+
+    await expect(orchestrator.refreshAll("scheduled")).resolves.toEqual({
+      trigger: "scheduled",
+      startedAt: NOW,
+      finishedAt: NOW,
+      providers: { chatgpt: success("chatgpt") },
+    });
+    expect(isProviderRefreshEligible).toHaveBeenCalledOnce();
+    expect(isProviderRefreshEligible).toHaveBeenCalledWith("chatgpt");
+    expect(runProvider).toHaveBeenCalledOnce();
+  });
+
   test("lets a manual request follow a disabled scheduled ingress", async () => {
     const autoRefresh = deferred<boolean>();
     const policies: RefreshPolicy[] = [];
@@ -316,7 +340,7 @@ describe("refresh orchestrator", () => {
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
       isAutoRefreshEnabled: () => autoRefresh.promise,
-      hasPermission,
+      isProviderRefreshEligible: hasPermission,
       runProvider: async (_providerId, policy) => {
         policies.push(policy);
         return success("chatgpt");
@@ -346,7 +370,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(async () => success("chatgpt"));
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission,
+      isProviderRefreshEligible: hasPermission,
       runProvider,
       clock: () => NOW,
     });
@@ -378,7 +402,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(async () => success("chatgpt"));
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission,
+      isProviderRefreshEligible: hasPermission,
       runProvider,
       clock: () => NOW,
     });
@@ -405,7 +429,7 @@ describe("refresh orchestrator", () => {
     );
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider,
       clock: () => NOW,
     });
@@ -432,7 +456,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(async () => passive.promise);
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["kimi"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider,
       clock: () => NOW,
     });
@@ -456,7 +480,7 @@ describe("refresh orchestrator", () => {
     const controls = new Map<string, ProviderRunControl>();
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt", "kimi"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (providerId, _policy, control) => {
         controls.set(providerId, control);
         return providerId === "chatgpt" ? chatgpt.promise : kimi.promise;
@@ -481,7 +505,7 @@ describe("refresh orchestrator", () => {
     const runProvider = vi.fn(() => pending.promise);
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider,
       clock: () => NOW,
     });
@@ -513,7 +537,7 @@ describe("refresh orchestrator", () => {
     const policies: RefreshPolicy[] = [];
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (_providerId, policy) => {
         policies.push(policy);
         return pending.promise;
@@ -536,7 +560,7 @@ describe("refresh orchestrator", () => {
     const policies: RefreshPolicy[] = [];
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["chatgpt"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (_providerId, policy) => {
         policies.push(policy);
         return pending.promise;
@@ -578,7 +602,7 @@ describe("refresh orchestrator", () => {
     const policies: RefreshPolicy[] = [];
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["kimi"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (_providerId, policy) => {
         policies.push(policy);
         return policy.interaction === "forbidden"
@@ -616,7 +640,7 @@ describe("refresh orchestrator", () => {
     const controls: ProviderRunControl[] = [];
     const orchestrator = createRefreshOrchestrator({
       providerIds: ["kimi"],
-      hasPermission: async () => true,
+      isProviderRefreshEligible: async () => true,
       runProvider: async (_providerId, policy, control) => {
         controls.push(control);
         return policy.interaction === "forbidden"

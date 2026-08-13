@@ -21,14 +21,152 @@ const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
+const credentialBoundaryStatement =
+  "Background command responses and application state never include the ElevenLabs key, and AI Limits does not render it or copy it into reports, logs, or History.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
 const paceAvailabilityStatement =
   "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
+const storeShortDescription =
+  "Track ChatGPT, Claude, Kimi, Cursor, and ElevenLabs usage, resets, pace, and local history in one Chrome side panel.";
 const kimiAutoRefreshStatement =
   "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.";
 const kimiAutoRefreshStatementZh =
   "Kimi 自动刷新属于尽力而为，并不保证每次都能成功；手动 Connect 或 Refresh 可能会在后台短暂打开一个非活动 Kimi 标签页以恢复会话。";
+const elevenLabsPublicationStatements = [
+  {
+    key: "readme",
+    statement:
+      "AI Limits supports five providers: ChatGPT, Claude, Kimi, Cursor, and ElevenLabs.",
+    error: "README is missing the rendered five-provider statement.",
+  },
+  {
+    key: "readmeZh",
+    statement:
+      "AI Limits 支持五个服务：ChatGPT、Claude、Kimi、Cursor 和 ElevenLabs。",
+    error:
+      "Simplified Chinese README is missing the rendered five-provider statement.",
+  },
+  {
+    key: "faq",
+    statement:
+      "ElevenLabs uses a user-created API key; after a successful check, AI Limits stores it locally and scheduled refresh does not open an ElevenLabs tab.",
+    error:
+      "English FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "ElevenLabs 使用由用户创建的 API 密钥；验证成功后，AI Limits 会将其保存在本地，定时刷新不会打开 ElevenLabs 标签页。",
+    error:
+      "Simplified Chinese FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "ElevenLabs API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
+    error:
+      "Privacy policy is missing the trusted-context ElevenLabs key-storage disclosure.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "AI Limits sends the saved key only to https://api.elevenlabs.io as the xi-api-key header for the read-only subscription request.",
+    error:
+      "Privacy policy is missing the exact ElevenLabs key destination disclosure.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "The saved key is not OS-keychain encrypted and may be inspectable by someone with access to the unlocked Chrome profile, extension DevTools, or profile files.",
+    error:
+      "Privacy policy is missing the local API-key inspection limitation.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "The saved key is never included in usage state, quota history, screenshots, reports, logs, analytics, or a developer backend.",
+    error:
+      "Privacy policy is missing the ElevenLabs key exclusion boundaries.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "A rejected ElevenLabs key stops scheduled ElevenLabs requests while stale normalized usage and history remain until replacement or deletion.",
+    error:
+      "Privacy policy is missing the rejected ElevenLabs key behavior.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Disconnect, external permission removal, Delete all local data, uninstall, or clearing extension storage deletes the saved ElevenLabs key.",
+    error:
+      "Privacy policy is missing the complete ElevenLabs key-deletion lifecycle.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "If Chrome cannot revoke the host permission, local key and usage deletion remains authoritative; the provider stays locally suppressed until explicit reconnect or later successful permission removal.",
+    error:
+      "Privacy policy is missing the permission-cleanup failure boundary.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "保存的密钥只会作为 xi-api-key 请求头发送到 https://api.elevenlabs.io，用于只读订阅请求。",
+    error:
+      "Simplified Chinese FAQ is missing the exact ElevenLabs key destination disclosure.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "AI Limits 会将密钥单独保存在 chrome.storage.local，并通过 Chrome 存储访问级别限制为仅受信任的扩展上下文可读。",
+    error:
+      "Simplified Chinese FAQ is missing the trusted-context key-storage disclosure.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "该密钥不受操作系统钥匙串加密保护；能够访问未锁定 Chrome 配置文件、扩展 DevTools 或本地配置文件的人仍可能检查到它。",
+    error:
+      "Simplified Chinese FAQ is missing the local API-key inspection limitation.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "该密钥绝不会写入应用用量状态、History、截图、报告、日志、分析系统或开发者后端。",
+    error:
+      "Simplified Chinese FAQ is missing the ElevenLabs key exclusion boundaries.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "如果保存的 ElevenLabs 密钥被拒绝，AI Limits 会停止定时 ElevenLabs 请求，并保留过期的标准化用量和 History，直到替换或删除密钥。",
+    error:
+      "Simplified Chinese FAQ is missing the rejected ElevenLabs key behavior.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "断开 ElevenLabs、外部移除主机权限、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
+    error:
+      "Simplified Chinese FAQ is missing the complete ElevenLabs key-deletion lifecycle.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "即使 Chrome 无法撤销主机权限，本地密钥和用量删除仍然有效；除非用户明确重新连接或之后成功移除权限，该服务会保持本地抑制状态。",
+    error:
+      "Simplified Chinese FAQ is missing the permission-cleanup failure boundary.",
+  },
+  {
+    key: "listing",
+    statement:
+      "Authentication information: Yes. This includes the ElevenLabs API key that the user creates and AI Limits saves locally after successful validation.",
+    error:
+      "Store listing is missing the saved ElevenLabs key authentication disclosure.",
+  },
+];
 const listingLinks = [
   {
     markdown: "[Artwork instructions](store-assets/README.md)",
@@ -84,21 +222,37 @@ const listingDefaults = [
 ];
 
 const valid = {
-  readme: `${issuesLink}\n${faqLink}\n${storeLink}\n${releaseLink}\n${releaseChannelStatement}`,
-  readmeZh: `[常见问题](FAQ.zh-CN.md)\n${storeLink}\n${releaseLink}\n${releaseChannelStatementZh}`,
-  faq: `English | [简体中文](FAQ.zh-CN.md)\n${kimiAutoRefreshStatement}`,
-  faqZh: `[English](FAQ.md) | 简体中文\n${kimiAutoRefreshStatementZh}`,
+  readme: `${issuesLink}\n${faqLink}\n${storeLink}\n${releaseLink}\n${releaseChannelStatement}\n${elevenLabsPublicationStatements[0].statement}`,
+  readmeZh: `[常见问题](FAQ.zh-CN.md)\n${storeLink}\n${releaseLink}\n${releaseChannelStatementZh}\n${elevenLabsPublicationStatements[1].statement}`,
+  faq: `English | [简体中文](FAQ.zh-CN.md)\n${kimiAutoRefreshStatement}\n${elevenLabsPublicationStatements[2].statement}`,
+  faqZh: [
+    "[English](FAQ.md) | 简体中文",
+    kimiAutoRefreshStatementZh,
+    ...elevenLabsPublicationStatements
+      .filter(({ key }) => key === "faqZh")
+      .map(({ statement }) => statement),
+  ].join("\n"),
   privacy: [
     issuesLink,
     "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.",
     historyRetentionStatement,
+    ...elevenLabsPublicationStatements
+      .filter(({ key }) => key === "privacy")
+      .map(({ statement }) => statement),
   ].join("\n"),
-  security: [issuesLink, securityCondition, securityFallback].join("\n"),
+  security: [
+    issuesLink,
+    securityCondition,
+    securityFallback,
+    credentialBoundaryStatement,
+  ].join("\n"),
   listing: [
     ...listingDefaults.map(({ value }) => value),
     ...listingLinks.map(({ markdown }) => markdown),
     paceAvailabilityStatement,
+    storeShortDescription,
     publicRouteGate,
+    elevenLabsPublicationStatements.find(({ key }) => key === "listing").statement,
   ].join("\n"),
   license: "MIT License\n\nCopyright (c) 2026 TiantianFlow",
 };
@@ -271,6 +425,184 @@ describe("publication content", () => {
       );
     },
   );
+
+  it("requires the practical background-response and rendered-UI credential boundary", () => {
+    const errors = validatePublicationDocuments({
+      ...valid,
+      security: valid.security.replace(credentialBoundaryStatement, ""),
+    });
+    expect(errors).toContain(
+      "Security policy is missing the practical side-panel credential boundary.",
+    );
+  });
+
+  it("rejects the inaccurate claim that the key can never reach the side-panel context", () => {
+    const errors = validatePublicationDocuments({
+      ...valid,
+      security: `${valid.security}\nThe key is never returned to the side panel.`,
+    });
+    expect(errors).toContain(
+      "Security policy overstates isolation from the trusted side-panel context.",
+    );
+  });
+
+  it("requires the exact manifest-matched short description as visible listing prose", () => {
+    const errors = validatePublicationDocuments({
+      ...valid,
+      listing: valid.listing.replace(storeShortDescription, ""),
+    });
+    expect(errors).toContain(
+      "Store listing short description must exactly match the manifest description.",
+    );
+  });
+
+  it.each(elevenLabsPublicationStatements)(
+    "requires visible ElevenLabs disclosure in $key: $error",
+    ({ key, statement, error }) => {
+      const errors = validatePublicationDocuments({
+        ...valid,
+        [key]: valid[key].replace(statement, ""),
+      });
+      expect(errors).toContain(error);
+    },
+  );
+
+  it.each([
+    {
+      context: "an HTML comment",
+      wrap: (statement) => `<!-- ${statement} -->`,
+    },
+    {
+      context: "a fenced code block",
+      wrap: (statement) => ["```text", statement, "```"].join("\n"),
+    },
+    {
+      context: "inline code",
+      wrap: (statement) => `\`${statement}\``,
+    },
+    {
+      context: "a plain raw HTML wrapper",
+      wrap: (statement) => `<span>${statement}</span>`,
+    },
+    {
+      context: "an opacity-zero raw HTML wrapper",
+      wrap: (statement) =>
+        `<span style="opacity: 0">${statement}</span>`,
+    },
+    {
+      context: "nested visible raw HTML wrappers",
+      wrap: (statement) => `<section><span>${statement}</span></section>`,
+    },
+    {
+      context: "a raw HTML block containing Markdown-shaped prose",
+      wrap: (statement) =>
+        [
+          "<div>",
+          "",
+          `**${statement}** [reference](https://example.com)`,
+          "",
+          "</div>",
+        ].join("\n"),
+    },
+    {
+      context: "an unclosed raw HTML wrapper",
+      wrap: (statement) => `<span>${statement}`,
+    },
+    {
+      context: "slash-ended non-void inline HTML",
+      wrap: (statement) => `<span hidden/>${statement}`,
+    },
+    {
+      context: "slash-ended non-void block HTML",
+      wrap: (statement) => ["<div hidden/>", "", statement].join("\n"),
+    },
+    {
+      context: "a slash-ended custom element",
+      wrap: (statement) => `<x-secret hidden/>${statement}`,
+    },
+    {
+      context: "a same-line hidden raw HTML wrapper",
+      wrap: (statement) => `<span hidden>${statement}</span>`,
+    },
+    {
+      context: "a multiline hidden raw HTML block",
+      wrap: (statement) =>
+        ["<div hidden>", "", statement, "", "</div>"].join("\n"),
+    },
+    {
+      context: "nested raw HTML with a hidden inner wrapper",
+      wrap: (statement) =>
+        `<section><span hidden>${statement}</span></section>`,
+    },
+    {
+      context: "a closed details disclosure",
+      wrap: (statement) =>
+        ["<details>", "<summary>More</summary>", "", statement, "", "</details>"].join("\n"),
+    },
+  ])(
+    "rejects the ElevenLabs key-storage disclosure when it appears only in $context",
+    ({ wrap }) => {
+      const requirement = elevenLabsPublicationStatements.find(
+        ({ error }) => error.includes("trusted-context"),
+      );
+      const errors = validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(
+          requirement.statement,
+          wrap(requirement.statement),
+        ),
+      });
+      expect(errors).toContain(requirement.error);
+    },
+  );
+
+  it("accepts the ElevenLabs key-storage disclosure as ordinary visible Markdown", () => {
+    const requirement = elevenLabsPublicationStatements.find(
+      ({ error }) => error.includes("trusted-context ElevenLabs"),
+    );
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(
+          requirement.statement,
+          `**${requirement.statement}**`,
+        ),
+      }),
+    ).toEqual([]);
+  });
+
+  it("keeps ordinary visible Markdown adjacent to raw HTML eligible", () => {
+    const requirement = elevenLabsPublicationStatements.find(
+      ({ error }) => error.includes("trusted-context ElevenLabs"),
+    );
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(
+          requirement.statement,
+          `<span>Decorative source HTML</span> ${requirement.statement}`,
+        ),
+      }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["br", (statement) => `<br/>${statement}`],
+    ["img", (statement) => `<img alt="Decorative"/> ${statement}`],
+  ])("keeps ordinary Markdown after the void %s element eligible", (_tag, wrap) => {
+    const requirement = elevenLabsPublicationStatements.find(
+      ({ error }) => error.includes("trusted-context ElevenLabs"),
+    );
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        privacy: valid.privacy.replace(
+          requirement.statement,
+          wrap(requirement.statement),
+        ),
+      }),
+    ).toEqual([]);
+  });
 
   it("requires the store listing to describe the actual pace inputs", () => {
     const errors = validatePublicationDocuments({

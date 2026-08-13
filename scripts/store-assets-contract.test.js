@@ -313,10 +313,11 @@ describe("store assets", () => {
       "history",
       "add-provider",
       "settings",
+      "api-key-connect",
     ];
 
-    expect(matrix).toHaveLength(66);
-    expect(new Set(matrix.map((capture) => capture.id)).size).toBe(66);
+    expect(matrix).toHaveLength(72);
+    expect(new Set(matrix.map((capture) => capture.id)).size).toBe(72);
     for (const width of [340, 400, 460]) {
       for (const theme of ["light", "dark"]) {
         for (const screen of baseScreens) {
@@ -381,6 +382,18 @@ describe("store assets", () => {
         key: "Space",
       },
     ]);
+    expect(capture("api-key-connect").keyboardNavigation).toEqual([
+      {
+        selector: 'button[aria-label="Settings"]',
+        readySelector: '[aria-label="Provider settings"]',
+        key: "Space",
+      },
+      {
+        selector: 'button[aria-label="Replace ElevenLabs API key"]',
+        readySelector: '[aria-label="Replace ElevenLabs API key"]',
+        key: "Enter",
+      },
+    ]);
     expect(capture("settings", "delete-confirmation").keyboardNavigation).toEqual([
       {
         selector: 'button[aria-label="Settings"]',
@@ -403,6 +416,7 @@ describe("store assets", () => {
       "provider-detail",
       "add-provider",
       "settings",
+      "api-key-connect",
     ]) {
       expect(fidelityScreenHasModeControl(screen)).toBe(false);
     }
@@ -736,6 +750,8 @@ describe("store assets", () => {
                   'button[aria-label="Open Kimi history for 5-hour usage"]',
                 "add-provider": ".add-provider-action",
                 settings: 'button[aria-label="Settings"]',
+                "api-key-connect":
+                  'button[aria-label="Replace ElevenLabs API key"]',
               }[capture.screen]
             ? {
                 control: "back",
@@ -747,6 +763,8 @@ describe("store assets", () => {
                     'button[aria-label="Open Kimi history for 5-hour usage"]',
                   "add-provider": ".add-provider-action",
                   settings: 'button[aria-label="Settings"]',
+                  "api-key-connect":
+                    'button[aria-label="Replace ElevenLabs API key"]',
                 }[capture.screen],
                 restored: true,
               }
@@ -765,16 +783,28 @@ describe("store assets", () => {
           ? {
               verified: true,
               targetCount: 4,
-              statusCount: 4,
-              freshStatusCount: 4,
-              markCount: 4,
-              markGeometryCount: 4,
-              narrowMarkAlignmentCount: capture.viewport.width <= 380 ? 4 : 0,
+              statusCount: 5,
+              freshStatusCount: 5,
+              markCount: 5,
+              markGeometryCount: 5,
+              narrowMarkAlignmentCount: capture.viewport.width <= 380 ? 5 : 0,
               narrowMarkAlignmentVerified: true,
-              quotaCount: 6,
-              resetCount: 6,
+              quotaCount: 10,
+              resetCount: 7,
+              untimedCount: 3,
               wideIdentityCount: capture.viewport.width > 380 ? 1 : 0,
               wideIdentityVerified: true,
+              violations: [],
+            }
+          : null,
+      apiKeyGuide:
+        capture.screen === "api-key-connect"
+          ? {
+              verified: true,
+              inputPopulated: true,
+              primaryEnabled: true,
+              contrastRatio: 7.02,
+              markPath: "/provider-marks/elevenlabs.svg",
               violations: [],
             }
           : null,
@@ -882,6 +912,29 @@ describe("store assets", () => {
       }),
     ).toEqual(
       expect.arrayContaining([expect.stringMatching(/compact overview/i)]),
+    );
+
+    expect(
+      validateFidelityProductionManifest({
+        ...valid,
+        captures: captures.map((capture) =>
+          capture.screen === "api-key-connect"
+            ? {
+                ...capture,
+                apiKeyGuide: {
+                  verified: false,
+                  inputPopulated: true,
+                  primaryEnabled: true,
+                  contrastRatio: 2.72,
+                  markPath: "/provider-marks/elevenlabs.svg",
+                  violations: ["primary action contrast is 2.72:1"],
+                },
+              }
+            : capture,
+        ),
+      }),
+    ).toEqual(
+      expect.arrayContaining([expect.stringMatching(/API-key setup/i)]),
     );
 
     for (const compactOverview of [

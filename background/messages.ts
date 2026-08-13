@@ -1,9 +1,23 @@
 import type { ConnectableProviderId } from "../providers/registry";
 import type { DisplayMode } from "../domain/model";
-import { isProviderId } from "../providers/catalog";
+import {
+  isApiKeyProviderId,
+  isProviderId,
+  type ApiKeyProviderId,
+} from "../providers/catalog";
+
+const MAX_API_KEY_LENGTH = 4_096;
+
+export type ApiKeyConnectionIntent = "permission-grant" | "replacement";
 
 export type RuntimeCommand =
   | { type: "REFRESH_ALL" }
+  | {
+      type: "CONNECT_API_KEY_PROVIDER";
+      providerId: ApiKeyProviderId;
+      apiKey: string;
+      connectionIntent: ApiKeyConnectionIntent;
+    }
   | { type: "COLLECT_PROVIDER"; providerId: ConnectableProviderId }
   | { type: "REFRESH_PROVIDER"; providerId: ConnectableProviderId }
   | { type: "GET_STATE" }
@@ -41,6 +55,23 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   }
 
   const command = value as Record<string, unknown>;
+  if (command.type === "CONNECT_API_KEY_PROVIDER") {
+    return (
+      hasExactKeys(command, [
+        "type",
+        "providerId",
+        "apiKey",
+        "connectionIntent",
+      ]) &&
+      isApiKeyProviderId(command.providerId) &&
+      typeof command.apiKey === "string" &&
+      command.apiKey.trim().length > 0 &&
+      command.apiKey.length <= MAX_API_KEY_LENGTH &&
+      (command.connectionIntent === "permission-grant" ||
+        command.connectionIntent === "replacement")
+    );
+  }
+
   if (
     command.type === "COLLECT_PROVIDER" ||
     command.type === "REFRESH_PROVIDER" ||
@@ -92,6 +123,11 @@ export function isProviderOperationEvent(
 
 export interface RuntimeCommandHandlers {
   refreshAll(): unknown;
+  connectApiKeyProvider(
+    providerId: ApiKeyProviderId,
+    apiKey: string,
+    connectionIntent: ApiKeyConnectionIntent,
+  ): unknown;
   collectProvider(providerId: ConnectableProviderId): unknown;
   refreshProvider(providerId: ConnectableProviderId): unknown;
   getState(): unknown;
@@ -136,6 +172,12 @@ export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
     switch (value.type) {
       case "REFRESH_ALL":
         return handlers.refreshAll();
+      case "CONNECT_API_KEY_PROVIDER":
+        return handlers.connectApiKeyProvider(
+          value.providerId,
+          value.apiKey,
+          value.connectionIntent,
+        );
       case "COLLECT_PROVIDER":
         return handlers.collectProvider(value.providerId);
       case "REFRESH_PROVIDER":

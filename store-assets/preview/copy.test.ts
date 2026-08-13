@@ -93,6 +93,25 @@ describe("store artwork copy", () => {
       }),
     );
     expect(
+      createFidelityScenario({ ...base, screen: "api-key-connect" }),
+    ).toEqual(
+      expect.objectContaining({
+        fixtureVariant: "full",
+        readySelector: '[aria-label="Replace ElevenLabs API key"]',
+        navigationSteps: [
+          {
+            actionSelector: 'button[aria-label="Settings"]',
+            readySelector: '[aria-label="Provider settings"]',
+          },
+          {
+            actionSelector:
+              'button[aria-label="Replace ElevenLabs API key"]',
+            readySelector: '[aria-label="Replace ElevenLabs API key"]',
+          },
+        ],
+      }),
+    );
+    expect(
       createFidelityScenario({
         ...base,
         screen: "provider-detail",
@@ -168,6 +187,15 @@ describe("store artwork copy", () => {
       "Used or Left · Reset timing · Pace · Local history",
       "Local history. No remote backend.",
     ]);
+  });
+
+  it("names all five supported providers in the overview artwork", () => {
+    expect(previewContent.en.providerLine).toBe(
+      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
+    );
+    expect(previewContent.zh_CN.providerLine).toBe(
+      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
+    );
   });
 
   it("keeps promotional descriptions concise at half-size", () => {

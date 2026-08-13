@@ -20,7 +20,8 @@ must use synthetic data.
 ## Changes
 
 - Keep provider access optional and scoped to the provider the user selects.
-- Preserve the local-only data model and never persist session credentials.
+- Preserve the local-only data model and never persist browser-session
+  credentials.
 - Add or update behavior-based tests before changing runtime behavior.
 - Update `PRIVACY.md` and `STORE_LISTING.md` when data access,
   permissions, retention, or provider behavior changes.
@@ -44,9 +45,12 @@ must use synthetic data.
 - Emit point-in-time absolute or currency-denominated balances as
   `CreditBalance`. Credit balances are intentionally excluded from local
   History; do not invent a denominator merely to create a percentage graph.
-- Do not persist access credentials, request-local account identifiers, or raw
-  provider responses. A provider with API-key onboarding, OAuth interaction,
-  multiple account/workspace scopes, or a second custom recovery flow requires
+- Do not persist browser-session credentials, request-local account
+  identifiers, or raw provider responses. A reviewed API-key provider must keep
+  its key in the dedicated trusted-context credential store, outside
+  application state and History, and must add cleanup, bundle-boundary,
+  release-scan, privacy, and guided-onboarding tests. OAuth interaction,
+  multiple account/workspace scopes, or another custom recovery flow requires
   an explicit architecture and privacy review before implementation.
 - Resolve historical-series identity before supporting account or workspace
   switching. A plan label is presentation text, not a stable account boundary.

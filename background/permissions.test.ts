@@ -48,6 +48,7 @@ describe("provider permissions", () => {
   });
 
   test("removes only the disconnected provider's exact optional access", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
     const remove = vi
       .spyOn(browser.permissions, "remove")
       .mockImplementation(async () => true as never);
@@ -61,6 +62,7 @@ describe("provider permissions", () => {
   });
 
   test("preserves optional API permissions required by a remaining connected provider", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
     const remove = vi
       .spyOn(browser.permissions, "remove")
       .mockImplementation(async () => true as never);
@@ -81,11 +83,47 @@ describe("provider permissions", () => {
   });
 
   test("returns false when Chrome refuses exact permission removal", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
     vi.spyOn(browser.permissions, "remove").mockImplementation(
       async () => false as never,
     );
 
     await expect(removeProviderPermission("chatgpt", [])).resolves.toBe(false);
+  });
+
+  test("attempts idempotent removal and treats an absent exact postcondition as success", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockResolvedValue(false as never);
+
+    await expect(removeProviderPermission("elevenlabs", [])).resolves.toBe(true);
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://api.elevenlabs.io/*"],
+    });
+  });
+
+  test("uses the absent postcondition when Chrome returns false from removal", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
+    vi.spyOn(browser.permissions, "remove").mockResolvedValue(false as never);
+
+    await expect(removeProviderPermission("elevenlabs", [])).resolves.toBe(true);
+  });
+
+  test("uses the absent postcondition when Chrome rejects removal", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(false as never);
+    vi.spyOn(browser.permissions, "remove").mockRejectedValue(
+      new Error("permission service unavailable"),
+    );
+
+    await expect(removeProviderPermission("elevenlabs", [])).resolves.toBe(true);
+  });
+
+  test("reports failure when exact permission remains after Chrome returns true", async () => {
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
+    vi.spyOn(browser.permissions, "remove").mockResolvedValue(true as never);
+
+    await expect(removeProviderPermission("elevenlabs", [])).resolves.toBe(false);
   });
 
   test("removes partial provider permissions that do not satisfy the full grant", async () => {

@@ -18,6 +18,11 @@ describe("runtime command router", () => {
     };
     const handlers = {
       refreshAll: vi.fn(async () => refreshResult),
+      connectApiKeyProvider: vi.fn(async () => ({
+        state: { version: 4 },
+        report: { trigger: "connect" },
+        result: "connected",
+      })),
       collectProvider: vi.fn(async () => ({
         state: { version: 2 },
         report: { trigger: "connect" },
@@ -32,6 +37,18 @@ describe("runtime command router", () => {
     const handle = createRuntimeCommandHandler(handlers);
 
     await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe(refreshResult);
+    await expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: "synthetic-candidate-key",
+        connectionIntent: "permission-grant",
+      }),
+    ).resolves.toEqual({
+      state: { version: 4 },
+      report: { trigger: "connect" },
+      result: "connected",
+    });
     await expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "chatgpt" }),
     ).resolves.toMatchObject({ report: { trigger: "connect" } });
@@ -68,6 +85,11 @@ describe("runtime command router", () => {
     ).resolves.toBe("disconnected");
     await expect(handle({ type: "DELETE_LOCAL_DATA" })).resolves.toBe("deleted");
     expect(handlers.collectProvider).toHaveBeenNthCalledWith(1, "chatgpt");
+    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
+      "elevenlabs",
+      "synthetic-candidate-key",
+      "permission-grant",
+    );
 
     expect(handle({ type: "FETCH", url: "https://attacker.invalid" })).toBeUndefined();
     expect(
@@ -78,6 +100,42 @@ describe("runtime command router", () => {
     ).toBeUndefined();
     expect(
       handle({ type: "COLLECT_PROVIDER", providerId: "antigravity" }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "chatgpt",
+        apiKey: "synthetic-candidate-key",
+      }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: "   ",
+      }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: "x".repeat(4_097),
+      }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: `${" ".repeat(4_096)}x`,
+      }),
+    ).toBeUndefined();
+    expect(
+      handle({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerId: "elevenlabs",
+        apiKey: "synthetic-candidate-key",
+        extra: true,
+      }),
     ).toBeUndefined();
     expect(
       handle({ type: "REFRESH_PROVIDER", providerId: "antigravity" }),
@@ -108,6 +166,12 @@ describe("runtime command router", () => {
       handle({ type: "DELETE_LOCAL_DATA", providerId: "chatgpt" }),
     ).toBeUndefined();
     expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
+    expect(handlers.connectApiKeyProvider).toHaveBeenCalledOnce();
+    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
+      "elevenlabs",
+      "synthetic-candidate-key",
+      "permission-grant",
+    );
     expect(handlers.collectProvider).toHaveBeenCalledTimes(4);
     expect(handlers.refreshProvider).toHaveBeenCalledTimes(1);
     expect(handlers.refreshProvider).toHaveBeenCalledWith("kimi");
@@ -160,7 +224,12 @@ describe("runtime command router", () => {
 
     expect(
       listener(
-        { type: "GET_STATE" },
+        {
+          type: "CONNECT_API_KEY_PROVIDER",
+          providerId: "elevenlabs",
+          apiKey: "must-never-escape",
+          connectionIntent: "permission-grant",
+        },
         {} as Browser.runtime.MessageSender,
         sendResponse,
       ),
@@ -173,6 +242,9 @@ describe("runtime command router", () => {
     );
     expect(JSON.stringify(sendResponse.mock.calls)).not.toContain(
       "secret-bearing",
+    );
+    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain(
+      "must-never-escape",
     );
   });
 

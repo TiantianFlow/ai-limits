@@ -15,7 +15,8 @@ export type FidelityScreen =
   | "provider-detail"
   | "history"
   | "add-provider"
-  | "settings";
+  | "settings"
+  | "api-key-connect";
 export type FidelityState =
   | "default"
   | "refresh-pending"
@@ -60,6 +61,7 @@ const FIDELITY_SCREENS = new Set<FidelityScreen>([
   "history",
   "add-provider",
   "settings",
+  "api-key-connect",
 ]);
 const FIDELITY_STATES = new Set<FidelityState>([
   "default",
@@ -180,6 +182,20 @@ export function createFidelityScenario(
         },
       ],
     },
+    "api-key-connect": {
+      fixtureVariant: "full",
+      readySelector: '[aria-label="Replace ElevenLabs API key"]',
+      navigationSteps: [
+        {
+          actionSelector: 'button[aria-label="Settings"]',
+          readySelector: '[aria-label="Provider settings"]',
+        },
+        {
+          actionSelector: 'button[aria-label="Replace ElevenLabs API key"]',
+          readySelector: '[aria-label="Replace ElevenLabs API key"]',
+        },
+      ],
+    },
   };
   const navigation = screenNavigation[request.screen];
   const navigationSteps = [...navigation.navigationSteps];
@@ -215,6 +231,7 @@ interface ViewCopy {
 
 interface PreviewContent extends Record<PreviewView, ViewCopy> {
   chromeSidePanelLabel: string;
+  providerLine: string;
   pacingNotes: [string, string, string];
   privacyNotes: [string, string, string];
   productPreviewLabel: string;
@@ -259,6 +276,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       description: "ChatGPT · Claude · Kimi · Cursor",
     },
     chromeSidePanelLabel: "Chrome side panel",
+    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
       "Provider access is opt-in",
@@ -308,6 +326,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       description: "ChatGPT · Claude · Kimi · Cursor",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
+    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
       "服务访问需主动授权",

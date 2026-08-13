@@ -22,8 +22,28 @@ behavior, and a minimal reproduction that contains no real credentials.
 ## Security boundary
 
 AI Limits runs inside the user's Chrome profile and uses optional access to
-signed-in provider origins. It stores normalized usage locally and does not
-operate a remote backend. Provider endpoints are private and unsupported, so a
-provider response or security flow can change without notice. Reports about a
-provider's own service should be sent to that provider rather than this
-project.
+signed-in provider origins or, for ElevenLabs, its exact API origin. It stores
+normalized usage locally and does not operate a remote backend. Browser-session
+credentials are request-local. A successfully validated ElevenLabs API key is
+stored separately in chrome.storage.local after that storage area is restricted
+to trusted extension contexts; it is sent only to the ElevenLabs subscription
+API. Background command responses and application state never include the
+ElevenLabs key, and AI Limits does not render it or copy it into reports, logs,
+or History.
+
+Chrome's trusted extension contexts include the background worker and the side
+panel. The side-panel code does not request or read the credential record, but
+Chrome storage change events can expose local change objects to trusted
+extension contexts even when the current listener ignores that record. The
+release check verifies that built side-panel assets do not contain the
+credential-storage record name, trusted-context setup constant, request header,
+or subscription endpoint. This is a code-ownership check, not cryptographic
+isolation.
+
+This local boundary is not OS-keychain encryption. Someone with access to the
+unlocked Chrome profile, extension DevTools, or local profile files may be able
+to inspect the saved key. Browser-session provider endpoints are private and
+unsupported; ElevenLabs uses a documented endpoint, but provider responses,
+authorization behavior, and security flows can still change without notice.
+Reports about a provider's own service should be sent to that provider rather
+than this project.

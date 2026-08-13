@@ -5,10 +5,18 @@ const providers = Object.values(providerCatalog);
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  hooks: {
+    "entrypoints:found": (_wxt, entrypoints) => {
+      const productionEntrypoints = entrypoints.filter(
+        ({ inputPath }) => !inputPath.includes(".test."),
+      );
+      entrypoints.splice(0, entrypoints.length, ...productionEntrypoints);
+    },
+  },
   manifest: {
     name: "AI Limits",
     description:
-      "See ChatGPT, Claude, Kimi, and Cursor usage as Used or Left, reset timing, pace, and local quota history in one Chrome side panel.",
+      "Track ChatGPT, Claude, Kimi, Cursor, and ElevenLabs usage, resets, pace, and local history in one Chrome side panel.",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
     optional_host_permissions: providers.flatMap(

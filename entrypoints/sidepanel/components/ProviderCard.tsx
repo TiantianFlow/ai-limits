@@ -67,6 +67,7 @@ export interface ProviderCardProps {
   action?: {
     label: string;
     accessibleLabel: string;
+    focusKey?: string;
     onClick: () => void;
   };
   headingLevel?: 2 | 3;
@@ -161,6 +162,7 @@ export function ProviderCard({
             className="provider-card__refresh"
             type="button"
             aria-label={action.accessibleLabel}
+            data-focus-key={action.focusKey}
             disabled={operation !== undefined}
             onClick={action.onClick}
           >

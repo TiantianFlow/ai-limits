@@ -68,11 +68,13 @@ function parsePanelWidth(parameters: URLSearchParams): 340 | 400 | 460 | undefin
 
 function FeatureNotes({
   view,
+  providerLine,
   pacingNotes,
   privacyNotes,
   socialNotes,
 }: {
   view: PreviewView;
+  providerLine: string;
   pacingNotes: [string, string, string];
   privacyNotes: [string, string, string];
   socialNotes: [string, string];
@@ -98,9 +100,7 @@ function FeatureNotes({
   }
 
   if (view === "overview") {
-    return (
-      <p className="provider-line">ChatGPT · Claude · Kimi · Cursor</p>
-    );
+    return <p className="provider-line">{providerLine}</p>;
   }
 
   if (view === "social") {
@@ -181,6 +181,7 @@ function Preview() {
         <p className="marketing-description">{copy.description}</p>
         <FeatureNotes
           view={view}
+          providerLine={content.providerLine}
           pacingNotes={content.pacingNotes}
           privacyNotes={content.privacyNotes}
           socialNotes={content.socialNotes}

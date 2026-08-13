@@ -1,5 +1,9 @@
 import type { AppState, DisplayMode, ProviderId, ProviderRecord } from "../domain/model";
 import { migrateState } from "../providers/initial-state";
+import {
+  deleteAllProviderCredentials,
+  deleteProviderCredential,
+} from "./credentials";
 
 const STATE_KEY = "aiLimitsState";
 let stateMutationQueue: Promise<void> = Promise.resolve();
@@ -100,8 +104,22 @@ export function reconcileProviderAccess(
   }));
 }
 
-export function disconnectProviderData(providerId: ProviderId): Promise<void> {
+export function markProviderAccessRequired(
+  providerIds: readonly ProviderId[],
+): Promise<void> {
+  const required = new Set(providerIds);
   return mutateState(Date.now(), (state) => ({
+    ...state,
+    providers: state.providers.map((provider) =>
+      required.has(provider.providerId)
+        ? { ...provider, access: "required" }
+        : provider,
+    ),
+  }));
+}
+
+async function resetProviderData(providerId: ProviderId): Promise<void> {
+  await mutateState(Date.now(), (state) => ({
     ...state,
     providers: state.providers.map((provider) => {
       if (provider.providerId !== providerId) {
@@ -113,7 +131,13 @@ export function disconnectProviderData(providerId: ProviderId): Promise<void> {
   }));
 }
 
-export function deleteAllLocalData(): Promise<AppState> {
+export async function disconnectProviderData(providerId: ProviderId): Promise<void> {
+  await deleteProviderCredential(providerId);
+  await resetProviderData(providerId);
+}
+
+export async function deleteAllLocalData(): Promise<AppState> {
+  await deleteAllProviderCredentials();
   return enqueueStateMutation(async () => {
     const now = Date.now();
     await browser.storage.local.remove(STATE_KEY);

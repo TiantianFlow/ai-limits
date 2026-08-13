@@ -3,6 +3,7 @@ import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
 import type { ProviderId } from "../../../domain/model";
+import type { ApiKeyProviderId } from "../../../providers/catalog";
 import { providerNames } from "../../../providers/catalog";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import {
@@ -13,6 +14,7 @@ import {
 export interface OverviewProvider {
   providerId: ProviderId;
   card: Omit<ProviderCardProps, "providerId" | "operation" | "action">;
+  needsApiKeyReplacement?: boolean;
 }
 
 export interface OverviewViewProps {
@@ -23,6 +25,7 @@ export interface OverviewViewProps {
   onRefreshProvider: (providerId: ProviderId) => void;
   onOpenProvider: (providerId: ProviderId) => void;
   onOpenHistory: (providerId: ProviderId, windowId: string) => void;
+  onReplaceApiKey: (providerId: ApiKeyProviderId) => void;
 }
 
 export function OverviewView({
@@ -33,6 +36,7 @@ export function OverviewView({
   onRefreshProvider,
   onOpenProvider,
   onOpenHistory,
+  onReplaceApiKey,
 }: OverviewViewProps) {
   return (
     <section aria-labelledby="overview-title">
@@ -40,7 +44,7 @@ export function OverviewView({
         Overview
       </h2>
       <div className="provider-list">
-        {providers.map(({ providerId, card }) => {
+        {providers.map(({ providerId, card, needsApiKeyReplacement }) => {
           const operation = providerOperations[providerId];
           return (
             <ProviderCard
@@ -58,6 +62,13 @@ export function OverviewView({
               action={
                 operation
                   ? undefined
+                  : needsApiKeyReplacement && providerId === "elevenlabs"
+                    ? {
+                        label: "Replace key",
+                        accessibleLabel: "Replace ElevenLabs API key",
+                        focusKey: "overview-replace-api-key-elevenlabs",
+                        onClick: () => onReplaceApiKey("elevenlabs"),
+                      }
                   : {
                       label: "Refresh",
                       accessibleLabel: `Refresh ${providerNames[providerId]}`,

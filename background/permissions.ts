@@ -61,10 +61,16 @@ export async function removeProviderPermission(
     return true;
   }
 
-  return browser.permissions.remove({
+  const removablePermissions = {
     ...(origins.length > 0 ? { origins: [...origins] } : {}),
     ...(permissions.length > 0 ? { permissions: [...permissions] } : {}),
-  } as Browser.permissions.Permissions);
+  } as Browser.permissions.Permissions;
+  try {
+    await browser.permissions.remove(removablePermissions);
+  } catch {
+    // The exact permission postcondition below is authoritative.
+  }
+  return !(await browser.permissions.contains(removablePermissions));
 }
 
 export async function removeAllProviderPermissions(

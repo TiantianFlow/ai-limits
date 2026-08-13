@@ -9,8 +9,24 @@ const expectedKimiFrames = {
   "kimi.svg": "43eff2012c78452ead821b55defc7beaeae8265e79be30c7790254c7a8a1d650",
   "kimi-dark.svg": "5e5af92ba01ee2d26e89fdb11ac789cc4af1e0dcbb2408d705aaa360ea41bb09",
 };
+const expectedElevenLabsHash =
+  "84041b5ee800dd3cf5a4f731cda268bdaf5804577c2eba0f60e3aebd18edefb9";
 
 describe("provider mark assets", () => {
+  it("keeps the exact official ElevenLabs symbol", () => {
+    const svg = readFileSync(
+      path.join(
+        process.cwd(),
+        "public",
+        "provider-marks",
+        "elevenlabs.svg",
+      ),
+    );
+    expect(createHash("sha256").update(svg).digest("hex")).toBe(
+      expectedElevenLabsHash,
+    );
+  });
+
   it.each(Object.entries(expectedKimiFrames))(
     "keeps the official 48px Kimi pixels in %s",
     (fileName, expectedPixelHash) => {

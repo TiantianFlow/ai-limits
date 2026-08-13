@@ -256,6 +256,9 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Connect ElevenLabs" }),
+    ).toBeVisible();
     expect(screen.queryByText("Permission required")).not.toBeInTheDocument();
     expect(screen.queryByText("Connected")).not.toBeInTheDocument();
     expect(screen.queryByText("Antigravity")).not.toBeInTheDocument();
@@ -263,7 +266,7 @@ describe("Cockpit", () => {
       screen.getByRole("heading", { level: 1, name: "AI Limits" }),
     ).toBeVisible();
     expect(screen.getByText(/One panel for every AI subscription quota/)).toBeVisible();
-    expect(screen.getByText("Supported providers · 4")).toBeVisible();
+    expect(screen.getByText("Supported providers · 5")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Refresh usage" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
   });
@@ -689,7 +692,7 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
-    expect(screen.getAllByText(/^Can show:/)).toHaveLength(3);
+    expect(screen.getAllByText(/^Can show:/)).toHaveLength(4);
     expect(screen.getByText(/Connect asks for permission for that provider only/)).toBeVisible();
   });
 
@@ -723,6 +726,152 @@ describe("Cockpit", () => {
     fireEvent.click(claudeConnect);
     expect(onConnectProvider).toHaveBeenCalledWith("claude");
     expect(onConnectProvider).not.toHaveBeenCalledWith("chatgpt");
+  });
+
+  it("opens the ElevenLabs guide while preserving browser-session connect behavior", () => {
+    const onConnectProvider = vi.fn();
+    const onOpenApiKeySetup = vi.fn();
+    render(
+      <Cockpit
+        state={createInitialState()}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={onConnectProvider}
+        onOpenApiKeySetup={onOpenApiKeySetup}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect ChatGPT" }));
+    expect(onConnectProvider).toHaveBeenCalledWith("chatgpt");
+
+    const chatgptRow = screen
+      .getByRole("button", { name: "Connect ChatGPT" })
+      .closest("article")!;
+    expect(within(chatgptRow).getByText("Browser session")).toBeVisible();
+
+    const elevenLabsRow = screen
+      .getByRole("button", { name: "Connect ElevenLabs" })
+      .closest("article")!;
+    expect(within(elevenLabsRow).getByText("API key")).toBeVisible();
+    expect(
+      within(elevenLabsRow).queryByText("Browser session"),
+    ).not.toBeInTheDocument();
+
+    const connectElevenLabs = screen.getByRole("button", {
+      name: "Connect ElevenLabs",
+    });
+    connectElevenLabs.focus();
+    fireEvent.click(connectElevenLabs);
+
+    expect(onOpenApiKeySetup).toHaveBeenCalledWith("elevenlabs");
+    expect(onConnectProvider).not.toHaveBeenCalledWith("elevenlabs");
+    expect(
+      screen.getByRole("heading", { name: "Connect ElevenLabs" }),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Overview" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Connect ElevenLabs" }),
+    ).toHaveFocus();
+  });
+
+  it("returns to Overview after a successful API-key connection", async () => {
+    render(
+      <Cockpit
+        state={createInitialState()}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onOpenApiKeySetup={vi.fn()}
+        onSubmitApiKey={vi.fn(async () => "connected" as const)}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Connect ElevenLabs" }),
+    );
+    fireEvent.change(screen.getByLabelText("ElevenLabs API key"), {
+      target: { value: "not-a-real-key" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Connect your providers" }),
+    ).toBeVisible();
+  });
+
+  it("offers credential recovery from the provider card", () => {
+    const state = createFixtureState(NOW);
+    const elevenLabs = state.providers.find(
+      (provider) => provider.providerId === "elevenlabs",
+    )!;
+    elevenLabs.lastAttempt = {
+      trigger: "scheduled",
+      startedAt: NOW - 1_000,
+      finishedAt: NOW,
+      outcome: { kind: "failure", category: "credential_invalid" },
+    };
+    const onOpenApiKeySetup = vi.fn();
+
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onOpenApiKeySetup={onOpenApiKeySetup}
+      />,
+    );
+
+    const card = screen.getByRole("article", { name: "ElevenLabs" });
+    expect(
+      within(card).queryByRole("button", { name: "Refresh ElevenLabs" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(card).getByRole("button", { name: "Replace ElevenLabs API key" }),
+    );
+
+    expect(onOpenApiKeySetup).toHaveBeenCalledWith("elevenlabs");
+    expect(
+      screen.getByRole("heading", { name: "Replace ElevenLabs API key" }),
+    ).toBeVisible();
+  });
+
+  it("shows only saved-key status and replacement in ElevenLabs settings", () => {
+    const onOpenApiKeySetup = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onOpenApiKeySetup={onOpenApiKeySetup}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const row = screen.getByText("ElevenLabs").closest("li")!;
+    expect(row).toHaveTextContent(/Updated just now · API key · read-only/);
+    expect(row).not.toHaveTextContent("Browser session");
+    expect(within(row).getByText("API key saved")).toBeVisible();
+    expect(row).not.toHaveTextContent(/\*|last|ending/i);
+    expect(
+      within(row).getByRole("button", { name: "Disconnect ElevenLabs" }),
+    ).toBeVisible();
+    fireEvent.click(
+      within(row).getByRole("button", { name: "Replace ElevenLabs API key" }),
+    );
+
+    expect(onOpenApiKeySetup).toHaveBeenCalledWith("elevenlabs");
+    expect(
+      screen.getByRole("heading", { name: "Replace ElevenLabs API key" }),
+    ).toBeVisible();
   });
 
   it("restores focus to the invoker after Back from Add Provider", () => {
@@ -835,7 +984,7 @@ describe("Cockpit", () => {
     ).toBeVisible();
     expect(
       within(appHeader as HTMLElement).getByText(
-        "Last refresh just now · 4 providers",
+        "Last refresh just now · 5 providers",
       ),
     ).toBeVisible();
     expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
@@ -925,7 +1074,7 @@ describe("Cockpit", () => {
     renderCockpit(state);
 
     expect(
-      screen.getByText("Last refresh 3 minutes ago · 4 providers"),
+      screen.getByText("Last refresh 3 minutes ago · 5 providers"),
     ).toBeVisible();
   });
 
@@ -1318,7 +1467,7 @@ describe("Cockpit", () => {
 
     expect(
       screen.getAllByRole("button", { name: /^Open .* history for / }),
-    ).toHaveLength(6);
+    ).toHaveLength(10);
     const chatGpt = screen.getByRole("article", { name: "ChatGPT" });
     const historyButton = within(chatGpt).getByRole("button", {
       name: "Open ChatGPT history for 5-hour messages",
@@ -1636,7 +1785,7 @@ describe("Cockpit", () => {
     const localMarks = Array.from(
       document.querySelectorAll<HTMLImageElement>("img.provider-mark"),
     );
-    expect(localMarks).toHaveLength(4);
+    expect(localMarks).toHaveLength(5);
     expect(
       localMarks.every((mark) => mark.classList.contains("provider-mark")),
     ).toBe(true);

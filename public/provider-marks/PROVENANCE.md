@@ -92,6 +92,19 @@ are used only to identify the corresponding provider beside its visible name.
   Cursor accurately. They are used unmodified as secondary provider identifiers
   and never as AI Limits' own identity.
 
+## `elevenlabs.svg`
+
+- Upstream source: [ElevenLabs brand guidelines](https://elevenlabs.io/brand)
+  and the official
+  [ElevenLabs Symbol SVG](https://11labs-nonprd-15f22c1d.s3.eu-west-3.amazonaws.com/a2ea339b-8b5e-41bb-b706-24eda8a4c9e3/elevenlabs-symbol.svg).
+- Retrieved: 2026-08-12.
+- Modified: no; SHA-256 `84041b5ee800dd3cf5a4f731cda268bdaf5804577c2eba0f60e3aebd18edefb9`.
+- Ownership: ElevenLabs, Inc.; the ElevenLabs name and 11 symbol remain its
+  property.
+- Conditions: ElevenLabs describes the 11 symbol as its preferred shorthand in
+  space-constrained app interfaces. It is used unmodified and only as a
+  secondary provider identifier beside the ElevenLabs name.
+
 All proprietary provider and GitHub marks above are excluded from this
 repository's MIT license. They remain subject to their owners' trademark,
 copyright, and brand-use terms. AI Limits is an independent project and is not

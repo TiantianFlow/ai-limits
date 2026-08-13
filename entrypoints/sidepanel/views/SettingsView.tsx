@@ -3,6 +3,8 @@ import React, { useEffect, useRef } from "react";
 
 import type { ProviderId, ProviderRecord } from "../../../domain/model";
 import {
+  type ApiKeyProviderId,
+  providerCatalog,
   providerNames,
   providerPresentation,
 } from "../../../providers/catalog";
@@ -22,6 +24,7 @@ export interface SettingsViewProps {
   onAddProvider: () => void;
   onAutoRefreshChange: (enabled: boolean) => void;
   onDisconnectProvider: (providerId: ProviderId) => void;
+  onReplaceApiKey: (providerId: ApiKeyProviderId) => void;
   onDeleteLocalData: () => void;
   onConfirmDeleteChange: (confirm: boolean) => void;
 }
@@ -52,6 +55,7 @@ export function SettingsView({
   onAddProvider,
   onAutoRefreshChange,
   onDisconnectProvider,
+  onReplaceApiKey,
   onDeleteLocalData,
   onConfirmDeleteChange,
 }: SettingsViewProps) {
@@ -129,6 +133,10 @@ export function SettingsView({
               {connectedProviders.map((provider) => {
                 const name = providerNames[provider.providerId];
                 const presentation = providerPresentation(provider.providerId);
+                const connectionMethod =
+                  providerCatalog[provider.providerId].connection.kind === "api-key"
+                    ? "API key"
+                    : "Browser session";
                 return (
                   <li key={provider.providerId} aria-label={`${name} settings`}>
                     <ProviderMark providerId={provider.providerId} size="sm" />
@@ -139,19 +147,37 @@ export function SettingsView({
                           <span>{provider.snapshot.planLabel}</span>
                         ) : null}
                       </p>
-                      <small>{freshness(provider, now)} · Browser session · read-only</small>
+                      <small>
+                        {freshness(provider, now)} · {connectionMethod} · read-only
+                      </small>
+                      {providerCatalog[provider.providerId].connection.kind ===
+                      "api-key" ? (
+                        <small>API key saved</small>
+                      ) : null}
                       <small>{presentation.connectionDisclosure}</small>
                       {presentation.manualRefreshDisclosure ? (
                         <small>{presentation.manualRefreshDisclosure}</small>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      aria-label={`Disconnect ${name}`}
-                      onClick={() => onDisconnectProvider(provider.providerId)}
-                    >
-                      Disconnect
-                    </button>
+                    <div className="settings-provider-actions">
+                      {provider.providerId === "elevenlabs" ? (
+                        <button
+                          type="button"
+                          aria-label="Replace ElevenLabs API key"
+                          data-focus-key="settings-replace-api-key-elevenlabs"
+                          onClick={() => onReplaceApiKey("elevenlabs")}
+                        >
+                          Replace key
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        aria-label={`Disconnect ${name}`}
+                        onClick={() => onDisconnectProvider(provider.providerId)}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
                   </li>
                 );
               })}

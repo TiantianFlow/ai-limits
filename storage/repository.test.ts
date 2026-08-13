@@ -6,6 +6,11 @@ import { observationFromSnapshot } from "../domain/history";
 import { createFixtureState } from "../providers/fixtures";
 import { createInitialState, migrateState } from "../providers/initial-state";
 import {
+  initializeCredentialStorage,
+  readProviderCredential,
+  saveProviderApiKey,
+} from "./credentials";
+import {
   deleteAllLocalData,
   disconnectProviderData,
   ensureState,
@@ -76,6 +81,7 @@ describe("fixture state", () => {
       "claude",
       "kimi",
       "cursor",
+      "elevenlabs",
     ]);
   });
 
@@ -84,7 +90,7 @@ describe("fixture state", () => {
       createFixtureState(now).providers.flatMap(({ snapshot }) =>
         snapshot ? [snapshot.source] : [],
       ),
-    ).toEqual(["fixture", "fixture", "fixture", "fixture"]);
+    ).toEqual(["fixture", "fixture", "fixture", "fixture", "fixture"]);
   });
 
   test("uses exact rolling and UTC calendar boundaries", () => {
@@ -154,11 +160,64 @@ describe("fixture state", () => {
           },
         ],
       },
+      {
+        providerId: "elevenlabs",
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            windowIds: [
+              "monthly-credits",
+              "voice-slots",
+              "professional-voice-slots",
+              "voice-add-edits",
+            ],
+            creditIds: [],
+          },
+        ],
+      },
     ]);
   });
 });
 
 describe("state repository", () => {
+  test.each([
+    [
+      "credential_invalid",
+      "The API key is invalid. Enter a valid key and try again.",
+    ],
+    [
+      "credential_scope_required",
+      "The API key cannot read usage. Update its permissions and try again.",
+    ],
+  ] as const)("persists %s without provider response details", async (category, message) => {
+    const state = createInitialState();
+    state.providers[4] = {
+      ...state.providers[4]!,
+      access: "granted",
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: now - 1_000,
+        finishedAt: now,
+        outcome: {
+          kind: "failure",
+          category,
+          message: "raw provider body and synthetic-secret",
+        },
+      },
+    };
+
+    await saveState(state, now);
+
+    const stored = await loadState(now);
+    expect(stored?.providers[4]?.lastAttempt?.outcome).toEqual({
+      kind: "failure",
+      category,
+      message,
+    });
+    expect(JSON.stringify(stored)).not.toMatch(/raw provider body|synthetic-secret/);
+  });
+
   test("preserves the allowlisted Kimi recovery guidance across persistence", async () => {
     const state = createInitialState();
     const kimi = state.providers.find(
@@ -194,6 +253,10 @@ describe("state repository", () => {
   beforeEach(async () => {
     await browser.storage.local.clear();
     vi.restoreAllMocks();
+    Object.assign(browser.storage.local, {
+      setAccessLevel: vi.fn(async () => undefined),
+    });
+    await initializeCredentialStorage();
   });
 
   test("creates a clean version 4 state with automatic refresh enabled", async () => {
@@ -210,6 +273,7 @@ describe("state repository", () => {
       { providerId: "claude", access: "required", history: [] },
       { providerId: "kimi", access: "required", history: [] },
       { providerId: "cursor", access: "required", history: [] },
+      { providerId: "elevenlabs", access: "required", history: [] },
     ]);
   });
 
@@ -971,13 +1035,32 @@ describe("state repository", () => {
     expect((await loadState(now))?.providers[1]).toEqual(claudeBefore);
   });
 
+  test("explicit disconnect also deletes only the selected provider credential", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const state = liveFixtureState();
+    await saveState(state, now);
+    await saveProviderApiKey("elevenlabs", "synthetic-delete-key");
+
+    await disconnectProviderData("elevenlabs");
+
+    expect(await readProviderCredential("elevenlabs")).toBeUndefined();
+    expect((await loadState(now))?.providers[4]).toEqual({
+      providerId: "elevenlabs",
+      access: "required",
+      history: [],
+    });
+    expect((await loadState(now))?.providers[0]).toEqual(state.providers[0]);
+  });
+
   test("delete-all recreates clean v4 state without clearing unrelated local keys", async () => {
     await browser.storage.local.set({ unrelated: "keep" });
     await saveState(liveFixtureState(), now);
+    await saveProviderApiKey("elevenlabs", "synthetic-delete-all-key");
 
     const state = await deleteAllLocalData();
 
     expect(state).toEqual(createInitialState());
+    expect(await readProviderCredential("elevenlabs")).toBeUndefined();
     expect(await loadState(now)).toEqual(createInitialState());
     expect(await browser.storage.local.get("unrelated")).toEqual({ unrelated: "keep" });
   });

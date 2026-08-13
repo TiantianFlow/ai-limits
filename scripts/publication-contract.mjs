@@ -1,5 +1,7 @@
 import MarkdownIt from "markdown-it";
 
+import { EXPECTED_DESCRIPTION } from "./artifact-contract.mjs";
+
 const issuesUrl = "https://github.com/TiantianFlow/ai-limits/issues";
 const storeUrl =
   "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
@@ -21,6 +23,8 @@ const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
   "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
+const credentialBoundaryStatement =
+  "Background command responses and application state never include the ElevenLabs key, and AI Limits does not render it or copy it into reports, logs, or History.";
 const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
 const paceAvailabilityStatement =
@@ -39,6 +43,140 @@ const requiredVisibleFaqStatements = [
       "Kimi 自动刷新属于尽力而为，并不保证每次都能成功；手动 Connect 或 Refresh 可能会在后台短暂打开一个非活动 Kimi 标签页以恢复会话。",
     error:
       "Simplified Chinese FAQ is missing the rendered Kimi automatic-refresh limitation.",
+  },
+];
+const requiredVisibleElevenLabsStatements = [
+  {
+    key: "readme",
+    statement:
+      "AI Limits supports five providers: ChatGPT, Claude, Kimi, Cursor, and ElevenLabs.",
+    error: "README is missing the rendered five-provider statement.",
+  },
+  {
+    key: "readmeZh",
+    statement:
+      "AI Limits 支持五个服务：ChatGPT、Claude、Kimi、Cursor 和 ElevenLabs。",
+    error:
+      "Simplified Chinese README is missing the rendered five-provider statement.",
+  },
+  {
+    key: "faq",
+    statement:
+      "ElevenLabs uses a user-created API key; after a successful check, AI Limits stores it locally and scheduled refresh does not open an ElevenLabs tab.",
+    error:
+      "English FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "ElevenLabs 使用由用户创建的 API 密钥；验证成功后，AI Limits 会将其保存在本地，定时刷新不会打开 ElevenLabs 标签页。",
+    error:
+      "Simplified Chinese FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "ElevenLabs API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
+    error:
+      "Privacy policy is missing the trusted-context ElevenLabs key-storage disclosure.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "AI Limits sends the saved key only to https://api.elevenlabs.io as the xi-api-key header for the read-only subscription request.",
+    error:
+      "Privacy policy is missing the exact ElevenLabs key destination disclosure.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "The saved key is not OS-keychain encrypted and may be inspectable by someone with access to the unlocked Chrome profile, extension DevTools, or profile files.",
+    error:
+      "Privacy policy is missing the local API-key inspection limitation.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "The saved key is never included in usage state, quota history, screenshots, reports, logs, analytics, or a developer backend.",
+    error:
+      "Privacy policy is missing the ElevenLabs key exclusion boundaries.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "A rejected ElevenLabs key stops scheduled ElevenLabs requests while stale normalized usage and history remain until replacement or deletion.",
+    error:
+      "Privacy policy is missing the rejected ElevenLabs key behavior.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Disconnect, external permission removal, Delete all local data, uninstall, or clearing extension storage deletes the saved ElevenLabs key.",
+    error:
+      "Privacy policy is missing the complete ElevenLabs key-deletion lifecycle.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "If Chrome cannot revoke the host permission, local key and usage deletion remains authoritative; the provider stays locally suppressed until explicit reconnect or later successful permission removal.",
+    error:
+      "Privacy policy is missing the permission-cleanup failure boundary.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "保存的密钥只会作为 xi-api-key 请求头发送到 https://api.elevenlabs.io，用于只读订阅请求。",
+    error:
+      "Simplified Chinese FAQ is missing the exact ElevenLabs key destination disclosure.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "AI Limits 会将密钥单独保存在 chrome.storage.local，并通过 Chrome 存储访问级别限制为仅受信任的扩展上下文可读。",
+    error:
+      "Simplified Chinese FAQ is missing the trusted-context key-storage disclosure.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "该密钥不受操作系统钥匙串加密保护；能够访问未锁定 Chrome 配置文件、扩展 DevTools 或本地配置文件的人仍可能检查到它。",
+    error:
+      "Simplified Chinese FAQ is missing the local API-key inspection limitation.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "该密钥绝不会写入应用用量状态、History、截图、报告、日志、分析系统或开发者后端。",
+    error:
+      "Simplified Chinese FAQ is missing the ElevenLabs key exclusion boundaries.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "如果保存的 ElevenLabs 密钥被拒绝，AI Limits 会停止定时 ElevenLabs 请求，并保留过期的标准化用量和 History，直到替换或删除密钥。",
+    error:
+      "Simplified Chinese FAQ is missing the rejected ElevenLabs key behavior.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "断开 ElevenLabs、外部移除主机权限、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
+    error:
+      "Simplified Chinese FAQ is missing the complete ElevenLabs key-deletion lifecycle.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "即使 Chrome 无法撤销主机权限，本地密钥和用量删除仍然有效；除非用户明确重新连接或之后成功移除权限，该服务会保持本地抑制状态。",
+    error:
+      "Simplified Chinese FAQ is missing the permission-cleanup failure boundary.",
+  },
+  {
+    key: "listing",
+    statement:
+      "Authentication information: Yes. This includes the ElevenLabs API key that the user creates and AI Limits saves locally after successful validation.",
+    error:
+      "Store listing is missing the saved ElevenLabs key authentication disclosure.",
   },
 ];
 
@@ -89,6 +227,22 @@ const requiredFaqNavigationLinks = [
   },
 ];
 const markdown = new MarkdownIt({ html: true, linkify: false });
+const voidHtmlElements = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
 
 function normalizeWhitespace(document) {
   return (document ?? "").replace(/\s+/g, " ");
@@ -148,32 +302,120 @@ function extractInlineMarkdownLinkDestinations(document) {
   return destinations;
 }
 
-function extractVisibleRenderedProse(document) {
-  const visible = [];
-  let commentOpen = false;
+function isHtmlTagNameCharacter(character) {
+  if (!character) return false;
+  const code = character.charCodeAt(0);
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    character === "-" ||
+    character === ":" ||
+    character === "_"
+  );
+}
 
-  for (const blockToken of markdown.parse(document ?? "", {})) {
-    if (blockToken.type !== "inline") {
+function findRawHtmlTagEnd(source, start) {
+  let quote;
+
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (character === quote) quote = undefined;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === ">") {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function updateRawHtmlElementStack(source, elementStack) {
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const tagStart = source.indexOf("<", cursor);
+    if (tagStart === -1) return;
+
+    if (source.startsWith("<!--", tagStart)) {
+      const commentEnd = source.indexOf("-->", tagStart + 4);
+      if (commentEnd === -1) return;
+      cursor = commentEnd + 3;
       continue;
     }
 
+    if (source.startsWith("<![CDATA[", tagStart)) {
+      const cdataEnd = source.indexOf("]]>", tagStart + 9);
+      if (cdataEnd === -1) return;
+      cursor = cdataEnd + 3;
+      continue;
+    }
+
+    let nameStart = tagStart + 1;
+    let closing = false;
+    if (source[nameStart] === "/") {
+      closing = true;
+      nameStart += 1;
+    }
+
+    if (!isHtmlTagNameCharacter(source[nameStart])) {
+      const declarationEnd = findRawHtmlTagEnd(source, nameStart);
+      if (declarationEnd === -1) return;
+      cursor = declarationEnd + 1;
+      continue;
+    }
+
+    let nameEnd = nameStart + 1;
+    while (isHtmlTagNameCharacter(source[nameEnd])) nameEnd += 1;
+
+    const tagEnd = findRawHtmlTagEnd(source, nameEnd);
+    if (tagEnd === -1) return;
+
+    const tagName = source.slice(nameStart, nameEnd).toLowerCase();
+    if (closing) {
+      const matchingIndex = elementStack.lastIndexOf(tagName);
+      if (matchingIndex !== -1) elementStack.splice(matchingIndex);
+    } else if (!voidHtmlElements.has(tagName)) {
+      // In HTML, a trailing slash does not self-close non-void or custom
+      // elements, so every non-void start tag keeps suppressing nested prose.
+      elementStack.push(tagName);
+    }
+
+    cursor = tagEnd + 1;
+  }
+}
+
+function extractQualifyingMarkdownProse(document) {
+  // Publication disclosures must be ordinary Markdown prose. markdown-it gives
+  // us source-authored HTML boundaries; tracking those elements keeps all of
+  // their contents ineligible without trying to emulate browser CSS.
+  const visible = [];
+  const rawHtmlElementStack = [];
+
+  for (const blockToken of markdown.parse(document ?? "", {})) {
+    if (blockToken.type === "html_block") {
+      updateRawHtmlElementStack(blockToken.content, rawHtmlElementStack);
+      continue;
+    }
+
+    if (blockToken.type !== "inline") continue;
+
     for (const token of blockToken.children ?? []) {
       if (token.type === "html_inline") {
-        commentOpen = updateHtmlCommentState(token.content, commentOpen);
-        continue;
-      }
-
-      if (commentOpen) {
-        commentOpen = updateHtmlCommentState(token.content, commentOpen);
-        continue;
-      }
-
-      if (token.type === "text") {
+        updateRawHtmlElementStack(token.content, rawHtmlElementStack);
+      } else if (token.type === "text" && rawHtmlElementStack.length === 0) {
         visible.push(token.content);
-      } else if (token.type === "softbreak" || token.type === "hardbreak") {
+      } else if (
+        (token.type === "softbreak" || token.type === "hardbreak") &&
+        rawHtmlElementStack.length === 0
+      ) {
         visible.push(" ");
       }
     }
+
+    if (rawHtmlElementStack.length === 0) visible.push(" ");
   }
 
   return normalizeWhitespace(visible.join(" "));
@@ -221,7 +463,13 @@ export function validatePublicationDocuments(documents) {
   }
 
   for (const { key, statement, error } of requiredVisibleFaqStatements) {
-    if (!extractVisibleRenderedProse(documents[key] ?? "").includes(statement)) {
+    if (!extractQualifyingMarkdownProse(documents[key] ?? "").includes(statement)) {
+      errors.push(error);
+    }
+  }
+
+  for (const { key, statement, error } of requiredVisibleElevenLabsStatements) {
+    if (!extractQualifyingMarkdownProse(documents[key] ?? "").includes(statement)) {
       errors.push(error);
     }
   }
@@ -248,17 +496,18 @@ export function validatePublicationDocuments(documents) {
     if (!destinations.includes(releaseUrl)) {
       errors.push(`${label} is missing the canonical GitHub release Markdown link.`);
     }
-    if (!extractVisibleRenderedProse(source).includes(statement)) {
+    if (!extractQualifyingMarkdownProse(source).includes(statement)) {
       errors.push(`${label} is missing the Chrome Web Store release-lag guidance.`);
     }
   }
 
   const privacy = normalizeWhitespace(documents.privacy);
-  const visiblePrivacy = extractVisibleRenderedProse(documents.privacy);
+  const visiblePrivacy = extractQualifyingMarkdownProse(documents.privacy);
   const security = normalizeWhitespace(documents.security);
+  const visibleSecurity = extractQualifyingMarkdownProse(documents.security);
   const listingSource = documents.listing ?? "";
   const listing = normalizeWhitespace(listingSource);
-  const visibleListing = extractVisibleRenderedProse(listingSource);
+  const visibleListing = extractQualifyingMarkdownProse(listingSource);
   const listingDestinations = extractInlineMarkdownLinkDestinations(listingSource);
 
   if (!privacy.includes(limitedUseStatement)) {
@@ -281,6 +530,18 @@ export function validatePublicationDocuments(documents) {
     errors.push("Security policy is missing the non-disclosing private-contact fallback.");
   }
 
+  if (!visibleSecurity.includes(credentialBoundaryStatement)) {
+    errors.push(
+      "Security policy is missing the practical side-panel credential boundary.",
+    );
+  }
+
+  if (security.toLowerCase().includes("never returned to the side panel")) {
+    errors.push(
+      "Security policy overstates isolation from the trusted side-panel context.",
+    );
+  }
+
   for (const defaultValue of requiredListingDefaults) {
     if (!listing.includes(defaultValue)) {
       errors.push(`Store listing is missing required default: ${defaultValue}.`);
@@ -296,6 +557,12 @@ export function validatePublicationDocuments(documents) {
   if (!visibleListing.includes(paceAvailabilityStatement)) {
     errors.push(
       "Store listing is missing the reset-time-or-duration pace qualification.",
+    );
+  }
+
+  if (!visibleListing.includes(EXPECTED_DESCRIPTION)) {
+    errors.push(
+      "Store listing short description must exactly match the manifest description.",
     );
   }
 

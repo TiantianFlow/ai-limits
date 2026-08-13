@@ -24,7 +24,8 @@ panel, it reads the latest data from local extension storage.
 - At least one provider must remain connected. AI Limits removes the alarm when
   no providers are connected.
 - Chrome must still have that provider's optional permission.
-- The provider's signed-in browser session must still be usable.
+- For ChatGPT, Claude, Kimi, and Cursor, the signed-in browser session must
+  still be usable. ElevenLabs instead needs a saved active API key.
 - Chrome must be running and able to run background extensions.
 
 The alarm runs approximately every 15 minutes. Chrome scheduling, device sleep,
@@ -41,10 +42,11 @@ does not reconstruct observations for intervals that were missed.
 ## If manual refresh works, should automatic refresh also work?
 
 Usually for ChatGPT, Claude, and Cursor, as long as their permission and browser
-session remain valid. However, manual refresh bypasses scheduled backoff, while
-automatic refresh respects it. Kimi manual refresh may additionally perform
-interactive session recovery. A manual success therefore cannot guarantee every
-later scheduled refresh.
+session remain valid, and for ElevenLabs while its saved key remains active.
+However, manual refresh bypasses scheduled backoff, while automatic refresh
+respects it. Kimi manual refresh may additionally perform interactive session
+recovery. A manual success therefore cannot guarantee every later scheduled
+refresh.
 
 Kimi has an additional limitation described below.
 
@@ -63,11 +65,46 @@ A manual **Connect** or **Refresh** is interactive and may use that inactive
 homepage tab to let Kimi refresh its own session. This difference means manual
 Kimi refresh can work when scheduled refresh cannot.
 
+## Why does ElevenLabs need an API key, and can I reopen the setup page after signing in?
+
+ElevenLabs uses a user-created API key; after a successful check, AI Limits
+stores it locally and scheduled refresh does not open an ElevenLabs tab.
+
+Clicking **Connect ElevenLabs** opens both the in-panel guide and ElevenLabs'
+official API-keys page. If the page asks you to sign in, finish signing in and
+use **Open API keys page** in the guide to reopen it. Create a key named
+**AI Limits**, select **User → Read**, and avoid generation or write
+permissions. ElevenLabs does not formally publish the exact mapping between
+that scope control and the subscription endpoint, so **Validate & connect**
+trims the candidate and checks the real read-only request; only a successful
+validation is saved, and AI Limits never enables broader scopes for you.
+
+Only your explicit setup or reopen action opens the normal ElevenLabs page.
+After connection, manual and scheduled usage refreshes call the API in the
+background and do not open or inspect an ElevenLabs tab.
+
+## How is the ElevenLabs key stored, and what happens if it is rejected?
+
+After validation, AI Limits keeps the key in a separate local credential record
+whose Chrome storage access is restricted to trusted extension contexts. It is
+not copied into usage state or History and is sent only to the ElevenLabs API
+for the read-only subscription request. This is extension-origin isolation,
+not OS-keychain encryption: someone with access to your unlocked Chrome profile,
+extension DevTools, or profile files may be able to inspect it.
+
+If ElevenLabs later rejects the saved key, AI Limits stops scheduled
+ElevenLabs requests and shows **Replace key** while preserving the last good
+normalized usage and History. A failed replacement leaves the prior key
+unchanged. Disconnecting ElevenLabs, removing its host permission, choosing
+**Delete all local data**, uninstalling the extension, or clearing extension
+storage deletes the saved key.
+
 ## Does automatic refresh open provider tabs?
 
 No. Scheduled refresh is non-interactive and never creates provider tabs. Only
 an interactive Kimi **Connect** or **Refresh** may briefly create an inactive
-Kimi tab for session recovery.
+Kimi tab for session recovery. ElevenLabs opens its normal API-keys page only
+when you explicitly start setup or choose **Open API keys page**.
 
 ## What does History store, and for how long?
 

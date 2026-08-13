@@ -13,25 +13,32 @@ Chrome Web Store releases can lag while review or publishing is pending; the
 Store badge shows the currently published version. GitHub Releases preserve
 the corresponding source and validated upload archive.
 
-AI Limits is a Chrome side-panel extension that shows current subscription
-usage and local quota-history graphs for ChatGPT, Claude, Kimi, and Cursor in
-one compact view. It normalizes provider-specific reporting into one **Used**
-or **Left** display and, when a provider exposes a complete reset window,
-compares quota consumption with elapsed time to show a pace signal. It starts
-empty and reads usage only after you connect an individual provider and approve
-that provider's optional access.
+AI Limits supports five providers: ChatGPT, Claude, Kimi, Cursor, and
+ElevenLabs. It is a Chrome side-panel extension that shows their current
+subscription usage and local quota-history graphs in one compact view. It
+normalizes provider-specific reporting into one **Used** or **Left** display
+and, when a provider exposes a complete reset window, compares quota
+consumption with elapsed time to show a pace signal. It starts empty and reads
+usage only after you connect an individual provider and approve that
+provider's optional access.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
-endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, or their
-affiliates.
+endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor,
+ElevenLabs, or their affiliates.
 
 ![AI Limits Chrome side panel showing representative subscription usage in Used mode, reset timing, pace indicators, and provider navigation](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
 
 ## How it works
 
-- Each provider is opt-in. Chrome asks for only that provider's site access.
-- The extension sends low-frequency, read-only requests to the provider's own
-  web-session usage services. It does not scrape rendered page content.
+- Each provider is opt-in. Chrome asks for only that provider's exact host
+  access.
+- ChatGPT, Claude, Kimi, and Cursor use the signed-in browser session. The
+  extension sends low-frequency, read-only requests to their own web-session
+  usage services and does not scrape rendered page content.
+- ElevenLabs uses a user-created API key because its documented public API does
+  not offer the same zero-setup web-session route used by the other providers.
+  The extension sends that key only to the ElevenLabs API for its read-only
+  subscription request.
 - The latest normalized quota, credit, plan, refresh-status, and preference data
   is stored in Chrome extension storage on the local browser profile.
 - After each successful normalized refresh, quota observations are stored
@@ -42,8 +49,11 @@ affiliates.
   snapshot can become the first observation at its original fetch time; the
   extension does not reconstruct earlier provider history and does not store
   credit-balance history.
-- Session cookies and access credentials are used only for the current provider
-  collection attempt and are not saved in persistent extension storage.
+- Browser-session cookies and access credentials are used only for the current
+  provider collection attempt and are not saved in persistent extension
+  storage. A successfully validated ElevenLabs API key is stored separately in
+  local extension storage so manual and scheduled refresh can run without
+  reopening the setup page.
 - Automatic refresh is enabled by default and runs about every 15 minutes only
   while at least one connected provider remains. It can be disabled in
   Settings.
@@ -56,6 +66,16 @@ Recovery stops waiting for a credential after 10 seconds and then attempts
 best-effort cleanup of the tab it owns; browser shutdown or API errors can
 delay or prevent that cleanup. Scheduled refresh never creates a Kimi tab.
 
+ElevenLabs setup opens its official API-keys page in a normal tab. If you need
+to sign in first, the guide remains open and lets you reopen that page. It asks
+you to create a key with **User → Read** and no generation or write permissions,
+then validates the read-only subscription request before saving the key. The
+exact endpoint-to-scope mapping is not formally documented by ElevenLabs, so
+the connection check is the authority; AI Limits does not silently broaden
+permissions. Once connected, ElevenLabs manual and scheduled refreshes run in
+the background without opening tabs. See [Privacy](PRIVACY.md) for the saved
+key's local-storage boundary and limitations.
+
 See the [FAQ](FAQ.md) for refresh and History behavior,
 [Privacy](PRIVACY.md) for the complete data lifecycle, and
 [Security](SECURITY.md) for security reporting and limitations.
@@ -64,10 +84,12 @@ See the [FAQ](FAQ.md) for refresh and History behavior,
 
 AI Limits requires `storage`, `alarms`, and `sidePanel` for local state,
 scheduled refresh, and its interface. Provider origins are optional and are
-requested one at a time when you click **Connect**. The optional `cookies` and
-`scripting` permissions are requested only for Kimi session access and
-interactive recovery. The extension does not request the broad `tabs`
-permission.
+requested one at a time when you click **Connect** or, for ElevenLabs,
+**Validate & connect**. The optional `cookies` and `scripting` permissions are
+requested only for Kimi session access and interactive recovery. ElevenLabs
+receives only optional access to `https://api.elevenlabs.io/*`; the public
+setup page is opened normally and does not receive extension host access. The
+extension does not request the broad `tabs` permission.
 
 For exact permission justifications and reviewer steps, see the
 [store-listing draft](STORE_LISTING.md).
@@ -111,16 +133,16 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.2.0-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.2.1-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility
 
-Provider session and usage endpoints are private, unsupported interfaces.
-Response shapes, security challenges, or availability can change without
-notice. AI Limits converts malformed or unavailable responses into bounded
-health states, but cannot guarantee continuous compatibility. Prefer a stable,
-documented provider API if one becomes available.
+The browser-session providers use private, unsupported session and usage
+interfaces. ElevenLabs uses its documented subscription API, but response
+shapes, authorization scopes, security challenges, or availability can still
+change without notice. AI Limits converts malformed or unavailable responses
+into bounded health states, but cannot guarantee continuous compatibility.
 
 ## Contributing
 

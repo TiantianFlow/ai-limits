@@ -222,6 +222,78 @@ export function createFixtureState(now: number): AppState {
         now,
       ),
     },
+    {
+      providerId: "elevenlabs",
+      access: "granted",
+      history: [],
+      snapshot: fixtureSnapshot(
+        {
+          providerId: "elevenlabs",
+          accountLabel: "ElevenLabs Starter",
+          planLabel: "Starter",
+          windows: [
+            {
+              id: "monthly-credits",
+              label: "Monthly credits",
+              kind: "calendar",
+              usedRatio: 0.25,
+              used: 2_500,
+              limit: 10_000,
+              unit: "credits",
+              startedAt: calendarMonthStartedAt,
+              resetsAt: calendarMonthResetsAt,
+              durationMs: calendarMonthResetsAt - calendarMonthStartedAt,
+              sourceSemantics: "used",
+            },
+            {
+              id: "voice-slots",
+              label: "Voice slots",
+              kind: "feature",
+              usedRatio: 0.2,
+              used: 2,
+              limit: 10,
+              unit: "voices",
+              sourceSemantics: "used",
+            },
+            {
+              id: "professional-voice-slots",
+              label: "Professional voice slots",
+              kind: "feature",
+              usedRatio: 1 / 3,
+              used: 1,
+              limit: 3,
+              unit: "voices",
+              sourceSemantics: "used",
+            },
+            {
+              id: "voice-add-edits",
+              label: "Voice add/edits",
+              kind: "feature",
+              usedRatio: 0.2,
+              used: 4,
+              limit: 20,
+              unit: "actions",
+              sourceSemantics: "used",
+            },
+          ],
+          credits: [],
+          usageGroups: [
+            {
+              id: "usage",
+              label: "Usage",
+              windowIds: [
+                "monthly-credits",
+                "voice-slots",
+                "professional-voice-slots",
+                "voice-add-edits",
+              ],
+              creditIds: [],
+            },
+          ],
+        },
+        now,
+      ),
+    },
   ];
 
   for (const provider of providers) {

@@ -69,6 +69,29 @@ describe("navigateCockpit", () => {
     expect(navigateCockpit(addProvider, { type: "pop" })).toEqual(settings);
   });
 
+  it("pushes the ElevenLabs API-key guide and returns to its exact origin", () => {
+    const addProvider: CockpitNavigationState = {
+      current: { name: "add-provider" },
+      backStack: [overview],
+    };
+
+    const apiKeyGuide = navigateCockpit(addProvider, {
+      type: "push",
+      screen: {
+        name: "api-key-connect",
+        providerId: "elevenlabs",
+        mode: "connect",
+      },
+    });
+
+    expect(apiKeyGuide.current).toEqual({
+      name: "api-key-connect",
+      providerId: "elevenlabs",
+      mode: "connect",
+    });
+    expect(navigateCockpit(apiKeyGuide, { type: "pop" })).toEqual(addProvider);
+  });
+
   it("does not add the current screen to the stack twice", () => {
     const provider: CockpitNavigationState = {
       current: { name: "provider", providerId: chatGpt },

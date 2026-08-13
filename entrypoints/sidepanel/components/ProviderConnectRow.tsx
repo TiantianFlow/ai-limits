@@ -3,6 +3,7 @@ import React from "react";
 import type { ProviderOperation } from "../../../background/messages";
 import type { ProviderId } from "../../../domain/model";
 import {
+  providerCatalog,
   providerNames,
   providerPresentation,
 } from "../../../providers/catalog";
@@ -27,6 +28,10 @@ export function ProviderConnectRow({
 }: ProviderConnectRowProps) {
   const name = providerNames[providerId];
   const presentation = providerPresentation(providerId);
+  const connectionMethod =
+    providerCatalog[providerId].connection.kind === "api-key"
+      ? "API key"
+      : "Browser session";
   const headingId = `connect-${providerId}`;
 
   return (
@@ -43,6 +48,7 @@ export function ProviderConnectRow({
           className="provider-connect-row__action"
           type="button"
           aria-label={presentation.connectionLabel}
+          data-focus-key={`connect-provider-${providerId}`}
           aria-busy={operation !== undefined}
           disabled={operation !== undefined}
           onClick={() => onConnect(providerId)}
@@ -58,7 +64,7 @@ export function ProviderConnectRow({
         </button>
       </div>
       <p className="provider-connect-row__disclosure">
-        <strong>Browser session</strong> —{" "}
+        <strong>{connectionMethod}</strong> —{" "}
         <span>{presentation.connectionDisclosure}</span>
       </p>
       {presentation.manualRefreshDisclosure ? (

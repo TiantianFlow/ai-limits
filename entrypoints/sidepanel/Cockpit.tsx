@@ -16,7 +16,13 @@ import {
   paceStatus,
   type PaceStatus,
 } from "../../domain/quota";
-import { providerNames, providerPresentation } from "../../providers/catalog";
+import {
+  type ApiKeyProviderId,
+  isApiKeyProviderId,
+  providerCatalog,
+  providerNames,
+  providerPresentation,
+} from "../../providers/catalog";
 import {
   type CreditView,
   type ProviderCardProps,
@@ -38,6 +44,10 @@ import { HistoryView } from "./views/HistoryView";
 import { OverviewView } from "./views/OverviewView";
 import { ProviderDetailView } from "./views/ProviderDetailView";
 import { SettingsView } from "./views/SettingsView";
+import {
+  ApiKeyConnectView,
+  type ApiKeyConnectAttemptResult,
+} from "./views/ApiKeyConnectView";
 import { usageGroupViews } from "./usage-groups";
 
 export interface CockpitProps {
@@ -51,6 +61,11 @@ export interface CockpitProps {
   onDisplayModeChange: (mode: DisplayMode) => void;
   onRefresh: () => void;
   onConnectProvider: (providerId: ProviderId) => void;
+  onOpenApiKeySetup?: (providerId: ApiKeyProviderId) => void;
+  onSubmitApiKey?: (
+    providerId: ApiKeyProviderId,
+    apiKey: string,
+  ) => Promise<ApiKeyConnectAttemptResult>;
   onRefreshProvider?: (providerId: ProviderId) => void;
   onAutoRefreshChange?: (enabled: boolean) => void;
   onDisconnectProvider?: (providerId: ProviderId) => void;
@@ -321,6 +336,8 @@ export function Cockpit({
   onDisplayModeChange,
   onRefresh,
   onConnectProvider,
+  onOpenApiKeySetup = () => undefined,
+  onSubmitApiKey = async () => "temporary_error",
   onRefreshProvider = () => undefined,
   onAutoRefreshChange = () => undefined,
   onDisconnectProvider = () => undefined,
@@ -395,6 +412,29 @@ export function Cockpit({
     setNavigation((current) => navigateCockpit(current, { type: "home" }));
   };
 
+  const openApiKeyConnect = (
+    providerId: ApiKeyProviderId,
+    mode: "connect" | "replace",
+  ) => {
+    const focusKey =
+      view.name === "settings"
+        ? `settings-replace-api-key-${providerId}`
+        : mode === "replace"
+          ? `overview-replace-api-key-${providerId}`
+          : `connect-provider-${providerId}`;
+    pushScreen({ name: "api-key-connect", providerId, mode }, focusKey);
+    onOpenApiKeySetup(providerId);
+  };
+
+  const connectProvider = (providerId: ProviderId) => {
+    if (isApiKeyProviderId(providerId)) {
+      openApiKeyConnect(providerId, "connect");
+      return;
+    }
+
+    onConnectProvider(providerId);
+  };
+
   const connectedProviders = state.providers.filter(
     (provider) => provider.access === "granted",
   );
@@ -403,7 +443,18 @@ export function Cockpit({
   );
   const overviewProviders = connectedProviders.map((provider) => {
     const { providerId: _providerId, ...card } = providerView(provider, mode, now);
-    return { providerId: provider.providerId, card };
+    const failureCategory =
+      provider.lastAttempt?.outcome.kind === "failure"
+        ? provider.lastAttempt.outcome.category
+        : undefined;
+    return {
+      providerId: provider.providerId,
+      card,
+      needsApiKeyReplacement:
+        providerCatalog[provider.providerId].connection.kind === "api-key" &&
+        (failureCategory === "credential_invalid" ||
+          failureCategory === "credential_scope_required"),
+    };
   });
   const isFirstRun = view.name === "overview" && connectedProviders.length === 0;
   const previousScreen = navigation.backStack.at(-1);
@@ -415,6 +466,14 @@ export function Cockpit({
         : previousScreen?.name === "settings"
           ? "Settings"
           : "Back";
+  const apiKeyBackLabel =
+    previousScreen?.name === "provider"
+      ? providerNames[previousScreen.providerId]
+      : previousScreen?.name === "add-provider"
+        ? "Add provider"
+        : previousScreen?.name === "settings"
+          ? "Settings"
+          : "Overview";
   const detailRecord =
     view.name === "provider"
       ? state.providers.find(
@@ -506,7 +565,21 @@ export function Cockpit({
         />
       ) : null}
 
-      {view.name === "settings" ? (
+      {view.name === "api-key-connect" ? (
+        <ApiKeyConnectView
+          mode={view.mode}
+          backLabel={apiKeyBackLabel}
+          onBack={popScreen}
+          onOpenSetup={() => onOpenApiKeySetup(view.providerId)}
+          onSubmit={async (apiKey) => {
+            const result = await onSubmitApiKey(view.providerId, apiKey);
+            if (result === "connected") {
+              goHome();
+            }
+            return result;
+          }}
+        />
+      ) : view.name === "settings" ? (
         <SettingsView
           autoRefresh={state.preferences.autoRefresh}
           autoRefreshPending={autoRefreshPending}
@@ -525,6 +598,9 @@ export function Cockpit({
           }
           onAutoRefreshChange={onAutoRefreshChange}
           onDisconnectProvider={onDisconnectProvider}
+          onReplaceApiKey={(providerId) =>
+            openApiKeyConnect(providerId, "replace")
+          }
           onDeleteLocalData={onDeleteLocalData}
           onConfirmDeleteChange={setConfirmDelete}
         />
@@ -534,7 +610,7 @@ export function Cockpit({
           providerOperations={providerOperations}
           origin={previousScreen?.name === "settings" ? "settings" : "overview"}
           onBack={popScreen}
-          onConnectProvider={onConnectProvider}
+          onConnectProvider={connectProvider}
         />
       ) : view.name === "provider" ? (
         <ProviderDetailView
@@ -580,7 +656,7 @@ export function Cockpit({
         <FirstRunView
           providers={disconnectedProviders}
           providerOperations={providerOperations}
-          onConnectProvider={onConnectProvider}
+          onConnectProvider={connectProvider}
         />
       ) : (
         <OverviewView
@@ -603,6 +679,9 @@ export function Cockpit({
               `provider-history-${providerId}-${windowId}`,
               windowId,
             )
+          }
+          onReplaceApiKey={(providerId) =>
+            openApiKeyConnect(providerId, "replace")
           }
         />
       )}

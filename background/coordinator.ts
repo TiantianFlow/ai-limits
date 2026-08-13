@@ -22,10 +22,8 @@ import {
   mutateState,
   reconcileProviderAccess,
 } from "../storage/repository";
-import {
-  hasProviderPermission,
-  removeProviderPermission,
-} from "./permissions";
+import { removeProviderPermission } from "./permissions";
+import { isProviderConnected } from "./provider-access";
 
 let permissionReconciliationGeneration = 0;
 const DEFAULT_SCHEDULED_BACKOFF_MS = 15 * 60 * 1_000;
@@ -220,13 +218,17 @@ function applyOutcome(
   return { ...state, providers };
 }
 
-export async function refreshProvider(
+export interface CollectedProviderOutcome {
+  outcome: ProviderRefreshOutcome;
+  finishedAt: number;
+}
+
+export async function collectProviderOutcome(
   adapter: ProviderAdapter,
   context: CollectionContext,
   trigger: RefreshTrigger,
-  shouldCommit: () => boolean,
   clock: () => number = Date.now,
-): Promise<ProviderRefreshOutcome> {
+): Promise<CollectedProviderOutcome> {
   let result: CollectionResult;
 
   try {
@@ -236,14 +238,27 @@ export async function refreshProvider(
   }
 
   const finishedAt = Math.max(context.now, clock());
-  const outcome = withScheduledBackoff(
-    refreshOutcome(normalizeResult(adapter, result, finishedAt)),
-    trigger,
+  return {
+    outcome: withScheduledBackoff(
+      refreshOutcome(normalizeResult(adapter, result, finishedAt)),
+      trigger,
+      finishedAt,
+    ),
     finishedAt,
-  );
+  };
+}
+
+export async function commitProviderOutcome(
+  adapter: ProviderAdapter,
+  outcome: ProviderRefreshOutcome,
+  trigger: RefreshTrigger,
+  startedAt: number,
+  finishedAt: number,
+  shouldCommit: () => boolean,
+): Promise<ProviderRefreshOutcome> {
   let committed = false;
 
-  await mutateState(context.now, (state) => {
+  await mutateState(startedAt, (state) => {
     if (!shouldCommit()) {
       return state;
     }
@@ -254,11 +269,34 @@ export async function refreshProvider(
       adapter,
       outcome,
       trigger,
-      context.now,
+      startedAt,
       finishedAt,
     );
   });
   return committed ? outcome : { kind: "skipped", reason: "superseded" };
+}
+
+export async function refreshProvider(
+  adapter: ProviderAdapter,
+  context: CollectionContext,
+  trigger: RefreshTrigger,
+  shouldCommit: () => boolean,
+  clock: () => number = Date.now,
+): Promise<ProviderRefreshOutcome> {
+  const { outcome, finishedAt } = await collectProviderOutcome(
+    adapter,
+    context,
+    trigger,
+    clock,
+  );
+  return commitProviderOutcome(
+    adapter,
+    outcome,
+    trigger,
+    context.now,
+    finishedAt,
+    shouldCommit,
+  );
 }
 
 export async function reconcileProviderPermissions(
@@ -268,7 +306,7 @@ export async function reconcileProviderPermissions(
   const access = await Promise.all(
     providerIds.map(async (providerId) => [
       providerId,
-      await hasProviderPermission(providerId),
+      await isProviderConnected(providerId),
     ] as const),
   );
 
@@ -306,13 +344,19 @@ export async function reconcileRemovedProviderPermissions(
 }
 
 export type DisconnectProviderResult =
-  | { ok: true }
-  | { ok: false; error: "permission_removal_failed" };
+  | { ok: true; localDataDeleted: true }
+  | {
+      ok: false;
+      error: "permission_removal_failed";
+      localDataDeleted: true;
+    };
 
 export async function disconnectProvider(
   providerId: ConnectableProviderId,
   remainingConnectedProviderIds: readonly ConnectableProviderId[],
 ): Promise<DisconnectProviderResult> {
+  await disconnectProviderData(providerId);
+
   let removed = false;
   try {
     removed = await removeProviderPermission(
@@ -322,13 +366,16 @@ export async function disconnectProvider(
       ),
     );
   } catch {
-    return { ok: false, error: "permission_removal_failed" };
+    // Local deletion above is authoritative even if Chrome permission cleanup fails.
   }
 
   if (!removed) {
-    return { ok: false, error: "permission_removal_failed" };
+    return {
+      ok: false,
+      error: "permission_removal_failed",
+      localDataDeleted: true,
+    };
   }
 
-  await disconnectProviderData(providerId);
-  return { ok: true };
+  return { ok: true, localDataDeleted: true };
 }
