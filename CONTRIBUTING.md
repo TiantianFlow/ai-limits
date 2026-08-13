@@ -67,7 +67,5 @@ pnpm verify:zip
 The pull request should explain the user-visible change, privacy or permission
 impact, test evidence, and any provider compatibility risk.
 
-No public contributor route is active during pre-publication acceptance. Before
-publication, the repository owner must enable and verify the planned
-`https://github.com/TiantianFlow/ai-limits/issues` route. Once verified, use it for
-contributor questions, and never post secrets or private account data.
+Use [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) for
+contributor questions. Never post secrets or private account data.
