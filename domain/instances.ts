@@ -17,11 +17,22 @@ export interface ProviderInstanceRecord {
   providerKind: ProviderKind;
   userLabel?: string;
   config: ProviderInstanceConfig;
+  connectionRevision?: string;
   access: "required" | "granted";
   createdAt: number;
   history: UsageHistoryObservation[];
   snapshot?: UsageSnapshot;
   lastAttempt?: ProviderAttempt;
+}
+
+export function isConnectionRevision(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 128 &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 export interface InstanceAppState {

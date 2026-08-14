@@ -21,6 +21,7 @@ describe("public app view state", () => {
           access: "granted",
           createdAt: 1,
           history: [],
+          connectionRevision: "connection-revision-secret",
           credentialRevision: "revision-secret",
           lease: { token: "lease-secret" },
           rawMigrationState: { credential: "migration-secret" },
@@ -49,6 +50,7 @@ describe("public app view state", () => {
     const serialized = JSON.stringify(view);
     for (const secret of [
       "must-not-escape",
+      "connection-revision-secret",
       "revision-secret",
       "lease-secret",
       "migration-secret",

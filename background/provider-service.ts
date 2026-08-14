@@ -57,6 +57,7 @@ import { createKeyedSerialExecutor } from "./keyed-serial";
 import {
   createPermissionIntentStore,
   type PermissionIntentCandidate,
+  type StoredPermissionIntent,
 } from "./permission-intents";
 
 export type ProviderPackageRegistry = {
@@ -222,6 +223,16 @@ export function createProviderService(
       packages,
     );
 
+  const completePermissionCleanup = async (
+    evidence: StoredPermissionIntent,
+  ): Promise<boolean> => {
+    const removed = await cleanupPermissionOwner(
+      ownerFromStoredCandidate(evidence.candidate),
+    );
+    if (removed) await permissionIntents.completeCleanup(evidence.id);
+    return removed;
+  };
+
   async function buildPermissionCandidate(
     request: PrepareProviderPermissionRequest,
   ): Promise<ProviderInstanceRecord> {
@@ -300,8 +311,10 @@ export function createProviderService(
       if (!resolved) throw new Error("Provider permission intent failed.");
       const candidate = ownerFromStoredCandidate(resolved.candidate);
       if (granted && (await hasInstancePermission(candidate, packages))) return;
-      if (granted) await permissionIntents.abandon(permissionIntentId);
-      await cleanupPermissionOwner(candidate);
+      const cleanup = granted
+        ? await permissionIntents.abandon(permissionIntentId)
+        : resolved;
+      if (cleanup) await completePermissionCleanup(cleanup);
       if (granted) throw new Error("Provider permission is required.");
     });
   }
@@ -310,15 +323,17 @@ export function createProviderService(
     permissionIntentId: string,
   ): Promise<void> {
     await withPermissionOwnershipLock("permissions", async () => {
-      const removed = await permissionIntents.abandon(permissionIntentId);
-      if (removed) await cleanupPermissionOwner(removed);
+      const cleanup = await permissionIntents.abandon(permissionIntentId);
+      if (cleanup) await completePermissionCleanup(cleanup);
     });
   }
 
   async function sweepPermissionIntents(): Promise<void> {
     await withPermissionOwnershipLock("permissions", async () => {
-      const expired = await permissionIntents.sweepExpired();
-      for (const candidate of expired) await cleanupPermissionOwner(candidate);
+      const cleanup = await permissionIntents.sweepExpired();
+      for (const evidence of cleanup) {
+        await completePermissionCleanup(evidence);
+      }
     });
   }
 
@@ -353,6 +368,10 @@ export function createProviderService(
           providerPackage.credentialKind === "api-key"
             ? await readCredentialWithRevision(instanceId)
             : undefined;
+        const boundCredential =
+          storedCredential?.revision === instance.connectionRevision
+            ? storedCredential
+            : undefined;
         if (!lanes.isCurrent(operation) || !control.isCurrentGeneration()) {
           return { kind: "skipped", reason: "superseded" };
         }
@@ -367,15 +386,15 @@ export function createProviderService(
           },
           policy.trigger,
           () => lanes.isCurrent(operation) && control.isCurrentGeneration(),
-          storedCredential?.status === "active"
-            ? { kind: "api-key", value: storedCredential.value }
+          boundCredential?.status === "active"
+            ? { kind: "api-key", value: boundCredential.value }
             : undefined,
           clock,
         );
-        if (storedCredential) {
+        if (boundCredential) {
           await markCredentialRejectedIfRevisionForOutcome(
             instanceId,
-            storedCredential.revision,
+            boundCredential.revision,
             outcome,
           );
         }
@@ -491,11 +510,18 @@ export function createProviderService(
         });
       });
     } finally {
-      await withPermissionOwnershipLock("permissions", async () => {
-        await permissionIntents.finish(permissionIntentId);
-        await cleanupPermissionOwner(candidate);
-      });
-      lanes.finish(operation);
+      try {
+        await withPermissionOwnershipLock("permissions", async () => {
+          if (committed) {
+            await permissionIntents.finish(permissionIntentId);
+          } else {
+            const cleanup = await permissionIntents.abandon(permissionIntentId);
+            if (cleanup) await completePermissionCleanup(cleanup);
+          }
+        });
+      } finally {
+        lanes.finish(operation);
+      }
     }
     if (!committed || !operationWasCurrent) {
       return connectReport(candidate.id, startedAt, clock(), {
@@ -574,6 +600,8 @@ export function createProviderService(
       lanes.isCurrent(operation) && isConnectionGenerationCurrent(lifecycle);
     orchestrator.invalidateInstance(instanceId);
     const startedAt = clock();
+    let connectionCommitted = false;
+    let replacementCleanup: StoredPermissionIntent | undefined;
     try {
       if (!(await hasInstancePermission(candidate, packages)) || !isCurrent()) {
         throw new Error("Provider permission is required.");
@@ -607,6 +635,32 @@ export function createProviderService(
             outcome = { kind: "skipped", reason: "superseded" };
             return;
           }
+          const authoritativePrior = await connectionRepository.get(instanceId);
+          if (
+            authoritativePrior &&
+            authoritativePrior.providerKind !== request.providerKind
+          ) {
+            throw new Error("API key connection failed.");
+          }
+          const authoritativeCandidate: ProviderInstanceRecord =
+            authoritativePrior
+              ? {
+                  ...authoritativePrior,
+                  config,
+                  access: "granted",
+                  ...(intent.candidate.userLabel
+                    ? { userLabel: intent.candidate.userLabel }
+                    : { userLabel: undefined }),
+                }
+              : {
+                  ...ownerFromStoredCandidate(intent.candidate),
+                  access: "granted",
+                };
+          if (authoritativePrior) {
+            replacementCleanup = await permissionIntents.queueCleanup(
+              authoritativePrior,
+            );
+          }
           const saved = await saveApiKeyIfCurrent(
             instanceId,
             request.apiKey,
@@ -617,13 +671,16 @@ export function createProviderService(
           } else {
             try {
               const next = applyCollectedOutcome(
-                candidate,
+                {
+                  ...authoritativeCandidate,
+                  connectionRevision: saved.revision,
+                },
                 outcome,
                 "connect",
                 startedAt,
                 validation.finishedAt,
               );
-              const committed = existing
+              const committed = authoritativePrior
                 ? await connectionRepository.replace(instanceId, (current) =>
                     isCurrent() ? next : current,
                   )
@@ -636,8 +693,11 @@ export function createProviderService(
                 );
                 outcome = { kind: "skipped", reason: "superseded" };
               } else if (!(await hasInstancePermission(candidate, packages))) {
+                connectionCommitted = true;
                 await connectionRepository.setAccess(instanceId, "required");
                 outcome = { kind: "failure", category: "temporary_error" };
+              } else {
+                connectionCommitted = true;
               }
             } catch (error) {
               await restoreCredentialIfRevision(
@@ -650,9 +710,9 @@ export function createProviderService(
           }
         });
       });
-      if (existing && outcome.kind === "success") {
+      if (replacementCleanup) {
         await withPermissionOwnershipLock("permissions", () =>
-          cleanupPermissionOwner(existing),
+          completePermissionCleanup(replacementCleanup!),
         );
       }
       return {
@@ -667,13 +727,18 @@ export function createProviderService(
     } finally {
       try {
         await withPermissionOwnershipLock("permissions", async () => {
-          await permissionIntents.finish(request.permissionIntentId);
-          await cleanupPermissionOwner(candidate);
+          if (connectionCommitted) {
+            await permissionIntents.finish(request.permissionIntentId);
+          } else {
+            const cleanup = await permissionIntents.abandon(
+              request.permissionIntentId,
+            );
+            if (cleanup) await completePermissionCleanup(cleanup);
+          }
         });
-      } catch {
-        // Candidate cleanup is best effort; command results remain sanitized.
+      } finally {
+        lanes.finish(operation);
       }
-      lanes.finish(operation);
     }
   }
 

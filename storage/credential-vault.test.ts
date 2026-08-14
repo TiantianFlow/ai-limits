@@ -316,4 +316,32 @@ describe("instance credential vault V2", () => {
     ).rejects.not.toThrow(/candidate-secret|relay\.example/);
     storageSet.mockRestore();
   });
+
+  test("rejects malformed durable revisions used to bind credentials to connections", async () => {
+    await vault.initializeCredentialVault();
+    await browser.storage.local.set({
+      aiLimitsCredentials: {
+        version: 2,
+        credentials: {
+          "newapi:default": {
+            kind: "api-key",
+            value: "stored-secret",
+            status: "active",
+            revision: " revision with spaces ",
+          },
+          "elevenlabs:default": {
+            kind: "api-key",
+            value: "another-secret",
+            status: "active",
+            revision: "x".repeat(129),
+          },
+        },
+      },
+    });
+
+    await expect(vault.readCredentialWithRevision("newapi:default"))
+      .resolves.toBeUndefined();
+    await expect(vault.readCredentialWithRevision("elevenlabs:default"))
+      .resolves.toBeUndefined();
+  });
 });

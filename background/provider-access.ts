@@ -1,7 +1,7 @@
 import type { ProviderInstanceRecord } from "../domain/instances";
 import { providerRegistry } from "../providers/registry";
 import type { ProviderPackage } from "../providers/types";
-import { readCredential } from "../storage/credential-vault";
+import { readCredentialWithRevision } from "../storage/credential-vault";
 import { hasInstancePermission } from "./permissions";
 
 type ProviderPackageCatalog = Record<
@@ -16,7 +16,10 @@ export async function isProviderConnected(
   const providerPackage = packages[instance.providerKind];
   if (!(await hasInstancePermission(instance, packages))) return false;
   if (providerPackage.credentialKind === "none") return true;
-  return (await readCredential(instance.id)) !== undefined;
+  const credential = await readCredentialWithRevision(instance.id);
+  return Boolean(
+    credential && instance.connectionRevision === credential.revision,
+  );
 }
 
 export async function isProviderRefreshEligible(
@@ -26,5 +29,9 @@ export async function isProviderRefreshEligible(
   const providerPackage = packages[instance.providerKind];
   if (!(await hasInstancePermission(instance, packages))) return false;
   if (providerPackage.credentialKind === "none") return true;
-  return (await readCredential(instance.id))?.status === "active";
+  const credential = await readCredentialWithRevision(instance.id);
+  return (
+    credential?.status === "active" &&
+    instance.connectionRevision === credential.revision
+  );
 }

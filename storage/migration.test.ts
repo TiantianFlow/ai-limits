@@ -185,12 +185,15 @@ describe("published 0.2.3 storage migration", () => {
     expect(result.state.instances.find(({ id }) => id === "newapi:default"))
       .toMatchObject({
         providerKind: "newapi",
+        connectionRevision: "relay-revision",
         config: {
           kind: "dynamic-origin",
           baseUrl: "https://relay.example/gateway",
         },
         access: "granted",
       });
+    expect(result.state.instances.find(({ id }) => id === "elevenlabs:default"))
+      .toMatchObject({ connectionRevision: "eleven-revision" });
     expect(result.credentialState).toEqual({
       version: 2,
       credentials: {
@@ -428,6 +431,7 @@ describe("published 0.2.3 storage migration", () => {
           kind: "dynamic-origin",
           baseUrl: "https://relay.example",
         },
+        connectionRevision: "relay-revision",
         access: "granted",
         createdAt: now,
         history: [],
@@ -484,6 +488,7 @@ describe("published 0.2.3 storage migration", () => {
             kind: "dynamic-origin",
             baseUrl: normalizedBaseUrl,
           },
+          connectionRevision: "relay-revision",
           access: "granted",
           createdAt: now,
           history: [],
@@ -572,6 +577,66 @@ describe("published 0.2.3 storage migration", () => {
     );
 
     expect(result.credentialState).toEqual({ version: 2, credentials: {} });
+  });
+
+  test("adds a missing V5 binding but preserves an existing mismatch to fail closed", () => {
+    const result = migrateLegacyStorage(
+      {
+        aiLimitsState: {
+          version: 5,
+          preferences: { displayMode: "used", autoRefresh: true },
+          instances: [
+            {
+              id: "newapi:default",
+              providerKind: "newapi",
+              config: { kind: "dynamic-origin", baseUrl: "https://old.example" },
+              access: "granted",
+              createdAt: now,
+              history: [],
+              connectionRevision: "old-connection-revision",
+            },
+            {
+              id: "elevenlabs:default",
+              providerKind: "elevenlabs",
+              config: { kind: "fixed" },
+              access: "granted",
+              createdAt: now,
+              history: [],
+            },
+          ],
+        },
+        aiLimitsCredentials: {
+          version: 2,
+          credentials: {
+            "newapi:default": {
+              kind: "api-key",
+              value: "replacement-secret",
+              status: "active",
+              revision: "replacement-revision",
+            },
+            "elevenlabs:default": {
+              kind: "api-key",
+              value: "existing-secret",
+              status: "active",
+              revision: "existing-revision",
+            },
+          },
+        },
+      },
+      now,
+      {},
+    );
+
+    expect(result.state.instances).toEqual([
+      expect.objectContaining({
+        id: "newapi:default",
+        connectionRevision: "old-connection-revision",
+      }),
+      expect.objectContaining({
+        id: "elevenlabs:default",
+        connectionRevision: "existing-revision",
+      }),
+    ]);
   });
 });
 

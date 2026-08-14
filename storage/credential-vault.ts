@@ -1,4 +1,5 @@
 import {
+  isConnectionRevision,
   isProviderInstanceId,
   type ProviderInstanceId,
 } from "../domain/instances";
@@ -55,8 +56,7 @@ function normalizeCredential(
     !isRecord(value) ||
     value.kind !== "api-key" ||
     (value.status !== "active" && value.status !== "rejected") ||
-    typeof value.revision !== "string" ||
-    value.revision.length === 0
+    !isConnectionRevision(value.revision)
   ) {
     return undefined;
   }

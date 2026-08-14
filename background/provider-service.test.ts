@@ -15,6 +15,7 @@ import {
   connectionRepository,
   loadInstanceAppState,
 } from "../storage/instance-repository";
+import { migrateLegacyStorageInPlace } from "../storage/migration";
 import {
   createProviderService,
   type ConnectApiKeyProviderRequest,
@@ -71,6 +72,11 @@ async function seed(instance: ProviderInstanceRecord, apiKey?: string) {
   if (apiKey) {
     const result = await saveApiKeyIfCurrent(instance.id, apiKey, () => true);
     expect(result.saved).toBe(true);
+    if (!result.saved) throw new Error("fixture save failed");
+    await connectionRepository.replace(instance.id, (current) => ({
+      ...current,
+      connectionRevision: result.revision,
+    }));
   }
 }
 
@@ -136,7 +142,8 @@ describe("generic provider instance service", () => {
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440099",
       permissions: { origins: ["https://relay.example/*"] },
     });
-    expect(JSON.stringify(await browser.storage.session.get(null))).not.toMatch(
+    expect(await browser.storage.session.get(null)).toEqual({});
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toMatch(
       /apiKey|credential|secret|revision|lease/i,
     );
   });
@@ -223,6 +230,100 @@ describe("generic provider instance service", () => {
       origins: ["https://www.kimi.com/*"],
       permissions: ["cookies", "scripting"],
     });
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+      "kimi:default",
+    );
+  });
+
+  test.each(["returns false", "throws"])(
+    "retains failed permission cleanup when remove %s and retries it after browser restart",
+    async (failureMode) => {
+      let now = NOW;
+      let permissionPresent = true;
+      vi.mocked(browser.permissions.contains).mockImplementation(
+        async () => permissionPresent as never,
+      );
+      const remove = vi
+        .spyOn(browser.permissions, "remove")
+        .mockImplementationOnce(async () => {
+          if (failureMode === "throws") throw new Error("remove unavailable");
+          return false as never;
+        })
+        .mockImplementationOnce(async () => {
+          permissionPresent = false;
+          return true as never;
+        });
+      const service = createProviderService({
+        clock: () => now,
+        randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+        permissionIntentTtlMs: 100,
+      });
+      await service.prepareProviderPermission({
+        providerKind: "newapi",
+        config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      });
+
+      now += 101;
+      await service.sweepPermissionIntents();
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(await browser.storage.local.get(null))).toContain(
+        "aiLimitsPermissionIntents",
+      );
+
+      await browser.storage.session.clear();
+      const restarted = createProviderService({ clock: () => now + 1 });
+      await restarted.sweepPermissionIntents();
+      expect(remove).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+        "newapi:550e8400-e29b-41d4-a716-446655440099",
+      );
+    },
+  );
+
+  test("surfaces cleanup alarm failure after persisting restart-retry evidence", async () => {
+    let now = NOW;
+    const service = createProviderService({
+      clock: () => now,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+      permissionIntentTtlMs: 100,
+    });
+    await service.prepareProviderPermission({
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+    });
+    now += 101;
+    vi.spyOn(browser.alarms, "create").mockRejectedValueOnce(
+      new Error("alarm unavailable"),
+    );
+
+    await expect(service.sweepPermissionIntents()).rejects.toThrow(
+      "alarm unavailable",
+    );
+    const durable = JSON.stringify(await browser.storage.local.get(null));
+    expect(durable).toContain("aiLimitsPermissionIntents");
+    expect(durable).toContain("cleanup-pending");
+    expect(durable).not.toMatch(/apiKey|secret|credential/i);
+
+    vi.restoreAllMocks();
+    let permissionPresent = true;
+    vi.spyOn(browser.permissions, "contains").mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async () => {
+        permissionPresent = false;
+        return true as never;
+      },
+    );
+    await browser.storage.session.clear();
+    const restarted = createProviderService({ clock: () => now });
+    await restarted.sweepPermissionIntents();
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://relay.example/*"],
+    });
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+      "newapi:550e8400-e29b-41d4-a716-446655440099",
+    );
   });
 
   test("never leaves a committed API instance granted when authority disappears during its commit", async () => {
@@ -477,6 +578,237 @@ describe("generic provider instance service", () => {
       expect.anything(),
       { kind: "api-key", value: "first-secret" },
     );
+  });
+
+  test("cleans the authoritative prior origin after overlapping replacements read stale state", async () => {
+    await seed(newApiInstance(FIRST, "https://old.example/gateway"), "old-secret");
+    const oldInstance = await connectionRepository.get(FIRST);
+    if (!oldInstance) throw new Error("missing old fixture");
+    const grantedOrigins = new Set([
+      "https://old.example/*",
+      "https://first.example/*",
+      "https://second.example/*",
+    ]);
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async ({ origins }) =>
+        (origins ?? []).every((origin) => grantedOrigins.has(origin)) as never,
+    );
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async ({ origins }) => {
+        for (const origin of origins ?? []) grantedOrigins.delete(origin);
+        return true as never;
+      },
+    );
+    const service = createProviderService({
+      packages: registryWith({
+        newapi: {
+          ...providerRegistry.newapi,
+          collect: vi.fn(async () => success("newapi")),
+        },
+      }),
+      clock: () => NOW,
+    });
+    const firstRequest = await authorizedApiRequest(service, {
+      providerKind: "newapi",
+      instanceId: FIRST,
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://first.example/gateway",
+      },
+      apiKey: "first-secret",
+    });
+    const secondRequest = await authorizedApiRequest(service, {
+      providerKind: "newapi",
+      instanceId: FIRST,
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://second.example/gateway",
+      },
+      apiKey: "second-secret",
+    });
+
+    let staleReadEntered: (() => void) | undefined;
+    let releaseStaleRead: (() => void) | undefined;
+    const staleRead = new Promise<void>((resolve) => {
+      staleReadEntered = resolve;
+    });
+    const staleReadRelease = new Promise<void>((resolve) => {
+      releaseStaleRead = resolve;
+    });
+    vi.spyOn(connectionRepository, "get").mockImplementationOnce(async () => {
+      staleReadEntered?.();
+      await staleReadRelease;
+      return oldInstance;
+    });
+    const second = service.connectApiKeyProvider(secondRequest);
+    await staleRead;
+    const first = service.connectApiKeyProvider(firstRequest);
+    await expect(first).resolves.toMatchObject({ result: "connected" });
+    releaseStaleRead?.();
+    await expect(second).resolves.toMatchObject({ result: "connected" });
+
+    await expect(connectionRepository.get(FIRST)).resolves.toMatchObject({
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://second.example/gateway",
+      },
+    });
+    expect(grantedOrigins).toEqual(new Set(["https://second.example/*"]));
+    expect(remove).toHaveBeenCalledWith({ origins: ["https://old.example/*"] });
+    expect(remove).toHaveBeenCalledWith({ origins: ["https://first.example/*"] });
+  });
+
+  test("retries failed authoritative replacement cleanup after browser restart", async () => {
+    await seed(newApiInstance(FIRST, "https://old.example/gateway"), "old-secret");
+    const grantedOrigins = new Set([
+      "https://old.example/*",
+      "https://replacement.example/*",
+    ]);
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async ({ origins }) =>
+        (origins ?? []).every((origin) => grantedOrigins.has(origin)) as never,
+    );
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockResolvedValueOnce(false as never)
+      .mockImplementationOnce(async ({ origins }) => {
+        for (const origin of origins ?? []) grantedOrigins.delete(origin);
+        return true as never;
+      });
+    const service = createProviderService({
+      packages: registryWith({
+        newapi: {
+          ...providerRegistry.newapi,
+          collect: vi.fn(async () => success("newapi")),
+        },
+      }),
+      clock: () => NOW,
+    });
+
+    await expect(
+      service.connectApiKeyProvider(
+        await authorizedApiRequest(service, {
+          providerKind: "newapi",
+          instanceId: FIRST,
+          config: {
+            kind: "dynamic-origin",
+            baseUrl: "https://replacement.example/gateway",
+          },
+          apiKey: "replacement-secret",
+        }),
+      ),
+    ).resolves.toMatchObject({ result: "connected" });
+    expect(grantedOrigins).toContain("https://old.example/*");
+    expect(JSON.stringify(await browser.storage.local.get(null))).toContain(
+      "https://old.example/gateway",
+    );
+
+    await browser.storage.session.clear();
+    const restarted = createProviderService({ clock: () => NOW + 1 });
+    await restarted.sweepPermissionIntents();
+    expect(remove).toHaveBeenCalledTimes(2);
+    expect(grantedOrigins).toEqual(new Set(["https://replacement.example/*"]));
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+      "https://old.example/gateway",
+    );
+  });
+
+  test("fails closed after a crash between credential and config writes even when rollback also fails", async () => {
+    const oldRevision = "550e8400-e29b-41d4-a716-446655440090";
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 5,
+        preferences: { displayMode: "used", autoRefresh: true },
+        instances: [
+          {
+            ...newApiInstance(FIRST, "https://old.example/gateway"),
+            connectionRevision: oldRevision,
+          },
+        ],
+      },
+      aiLimitsCredentials: {
+        version: 2,
+        credentials: {
+          [FIRST]: {
+            kind: "api-key",
+            value: "old-secret",
+            status: "active",
+            revision: oldRevision,
+          },
+        },
+      },
+    });
+    const collect = vi.fn(async () => success("newapi"));
+    const service = createProviderService({
+      packages: registryWith({ newapi: { ...providerRegistry.newapi, collect } }),
+      clock: () => NOW,
+    });
+    const request = await authorizedApiRequest(service, {
+      providerKind: "newapi",
+      instanceId: FIRST,
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://replacement.example/gateway",
+      },
+      apiKey: "replacement-secret",
+    });
+    const originalSet = browser.storage.local.set.bind(browser.storage.local);
+    let stateWriteFailed = false;
+    vi.spyOn(browser.storage.local, "set").mockImplementation(async (items) => {
+      const record = items as Record<string, unknown>;
+      if (record.aiLimitsState && !stateWriteFailed) {
+        const state = record.aiLimitsState as { instances?: ProviderInstanceRecord[] };
+        if (
+          state.instances?.some(
+            ({ config }) =>
+              config.kind === "dynamic-origin" &&
+              config.baseUrl === "https://replacement.example/gateway",
+          )
+        ) {
+          stateWriteFailed = true;
+          throw new Error("simulated state crash");
+        }
+      }
+      if (stateWriteFailed && record.aiLimitsCredentials) {
+        const state = record.aiLimitsCredentials as {
+          credentials?: Record<string, { value?: string }>;
+        };
+        if (state.credentials?.[FIRST]?.value === "old-secret") {
+          throw new Error("simulated rollback crash");
+        }
+      }
+      return originalSet(items);
+    });
+
+    await expect(service.connectApiKeyProvider(request)).rejects.toThrow(
+      "simulated rollback crash",
+    );
+    vi.restoreAllMocks();
+    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
+    await migrateLegacyStorageInPlace(NOW, {
+      origins: ["https://old.example/*", "https://replacement.example/*"],
+    });
+
+    await expect(connectionRepository.get(FIRST)).resolves.toMatchObject({
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://old.example/gateway",
+      },
+      connectionRevision: oldRevision,
+    });
+    await expect(readCredentialWithRevision(FIRST)).resolves.toMatchObject({
+      value: "replacement-secret",
+      status: "active",
+      revision: expect.not.stringMatching(oldRevision),
+    });
+
+    collect.mockClear();
+    const restarted = createProviderService({
+      packages: registryWith({ newapi: { ...providerRegistry.newapi, collect } }),
+      clock: () => NOW,
+    });
+    await restarted.refreshInstance(FIRST, "manual_provider");
+    expect(collect).not.toHaveBeenCalled();
   });
 
   test("delete-all invalidates an uncommitted new instance before local state can reappear", async () => {

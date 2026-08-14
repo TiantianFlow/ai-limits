@@ -7,6 +7,7 @@ import {
   type UsageHistoryObservation,
 } from "../domain/model";
 import {
+  isConnectionRevision,
   isProviderInstanceId,
   type InstanceAppState,
   type ProviderInstanceRecord,
@@ -239,6 +240,9 @@ function normalizeInstance(
     providerKind: value.providerKind,
     ...(userLabel === undefined ? {} : { userLabel }),
     config,
+    ...(isConnectionRevision(value.connectionRevision)
+      ? { connectionRevision: value.connectionRevision }
+      : {}),
     access: value.access,
     createdAt: value.createdAt,
     history: normalizeHistory(value.history, now),

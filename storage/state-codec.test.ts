@@ -105,6 +105,34 @@ describe("V5 instance state codec", () => {
     });
   });
 
+  test("validates the internal connection revision without projecting malformed bindings", () => {
+    const valid = {
+      ...newApiInstance("newapi:default", "Gateway relay"),
+      connectionRevision: "550e8400-e29b-41d4-a716-446655440099",
+    };
+    const malformed = {
+      ...newApiInstance(
+        "newapi:0c5f2af7-21d4-4cd1-bcd8-09005c65e45f",
+        "Malformed relay",
+      ),
+      connectionRevision: " revision with spaces ",
+    };
+
+    const state = normalizeInstanceAppState(
+      {
+        version: 5,
+        preferences: { displayMode: "used", autoRefresh: true },
+        instances: [valid, malformed],
+      },
+      now,
+    );
+
+    expect(state.instances[0]).toMatchObject({
+      connectionRevision: "550e8400-e29b-41d4-a716-446655440099",
+    });
+    expect(state.instances[1]).not.toHaveProperty("connectionRevision");
+  });
+
   test("drops duplicate IDs, singleton siblings, and connection-mode mismatches independently", () => {
     const firstChatGpt: ProviderInstanceRecord = {
       id: "chatgpt:default",

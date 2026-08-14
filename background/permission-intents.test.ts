@@ -20,6 +20,7 @@ const candidate: ProviderInstanceRecord = {
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  await browser.storage.local.clear();
   await browser.storage.session.clear();
   vi.spyOn(browser.alarms, "create");
   vi.spyOn(browser.alarms, "clear");
@@ -38,7 +39,8 @@ describe("pending permission intent storage", () => {
       phase: "pending",
       candidate: expect.objectContaining({ id: INSTANCE }),
     });
-    expect(JSON.stringify(await browser.storage.session.get(null))).not.toMatch(
+    expect(await browser.storage.session.get(null)).toEqual({});
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toMatch(
       /apiKey|credential|secret|revision|lease/i,
     );
     expect(browser.alarms.create).toHaveBeenCalledWith(
@@ -46,6 +48,7 @@ describe("pending permission intent storage", () => {
       { when: expect.any(Number) },
     );
 
+    await browser.storage.session.clear();
     const restarted = createPermissionIntentStore({ clock: () => NOW + 1 });
     await expect(restarted.listActiveCandidates()).resolves.toEqual([
       expect.objectContaining({ id: INSTANCE }),
@@ -73,7 +76,7 @@ describe("pending permission intent storage", () => {
     );
   });
 
-  test("returns abandoned and expired candidates for exact permission cleanup", async () => {
+  test("retains abandoned and expired candidates until exact permission cleanup completes", async () => {
     let now = NOW;
     const store = createPermissionIntentStore({
       clock: () => now,
@@ -81,14 +84,50 @@ describe("pending permission intent storage", () => {
       ttlMs: 100,
     });
     const { id } = await store.create(candidate);
-    await expect(store.abandon(id)).resolves.toMatchObject({ id: INSTANCE });
+    const abandoned = await store.abandon(id);
+    expect(abandoned).toMatchObject({
+      candidate: expect.objectContaining({ id: INSTANCE }),
+    });
+    await expect(store.listActiveCandidates()).resolves.toEqual([]);
+    expect(JSON.stringify(await browser.storage.local.get(null))).toContain(INSTANCE);
+    if (!abandoned) throw new Error("missing cleanup evidence");
+    await store.completeCleanup(abandoned.id);
 
     await store.create(candidate);
     now += 101;
     await expect(store.sweepExpired()).resolves.toEqual([
-      expect.objectContaining({ id: INSTANCE }),
+      expect.objectContaining({
+        candidate: expect.objectContaining({ id: INSTANCE }),
+      }),
     ]);
     await expect(store.listActiveCandidates()).resolves.toEqual([]);
+    expect(JSON.stringify(await browser.storage.local.get(null))).toContain(
+      INSTANCE,
+    );
+  });
+
+  test("persists cleanup evidence before surfacing alarm scheduling failure", async () => {
+    vi.mocked(browser.alarms.create).mockRejectedValueOnce(
+      new Error("alarm unavailable"),
+    );
+    const store = createPermissionIntentStore({
+      clock: () => NOW,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+      ttlMs: 100,
+    });
+
+    await expect(store.create(candidate)).rejects.toThrow("alarm unavailable");
+    expect(JSON.stringify(await browser.storage.local.get(null))).toContain(
+      INSTANCE,
+    );
+
+    await browser.storage.session.clear();
+    const restarted = createPermissionIntentStore({ clock: () => NOW + 101 });
+    await expect(restarted.sweepExpired()).resolves.toEqual([
+      expect.objectContaining({
+        candidate: expect.objectContaining({ id: INSTANCE }),
+      }),
+    ]);
   });
 
   test("refuses a seventeenth active intent instead of evicting an owner", async () => {
@@ -106,5 +145,29 @@ describe("pending permission intent storage", () => {
       "Too many pending permission intents.",
     );
     await expect(store.listActiveCandidates()).resolves.toHaveLength(16);
+  });
+
+  test("rejects durable candidates whose exact config does not match their package", async () => {
+    await browser.storage.local.set({
+      aiLimitsPermissionIntents: {
+        version: 1,
+        intents: [
+          {
+            id: "550e8400-e29b-41d4-a716-446655440099",
+            phase: "pending",
+            candidate: {
+              id: INSTANCE,
+              providerKind: "newapi",
+              config: { kind: "fixed" },
+              createdAt: NOW,
+            },
+            expiresAt: NOW + 100,
+          },
+        ],
+      },
+    });
+
+    const store = createPermissionIntentStore({ clock: () => NOW });
+    await expect(store.listActiveCandidates()).resolves.toEqual([]);
   });
 });

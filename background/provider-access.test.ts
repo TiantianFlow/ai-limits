@@ -13,11 +13,15 @@ import { isProviderConnected, isProviderRefreshEligible } from "./provider-acces
 const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
 const SECOND = "newapi:550e8400-e29b-41d4-a716-446655440001";
 
-function newApi(id: ProviderInstanceId): ProviderInstanceRecord {
+function newApi(
+  id: ProviderInstanceId,
+  connectionRevision?: string,
+): ProviderInstanceRecord {
   return {
     id,
     providerKind: "newapi",
     config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+    ...(connectionRevision ? { connectionRevision } : {}),
     access: "granted",
     createdAt: 1,
     history: [],
@@ -69,15 +73,39 @@ describe("provider instance access", () => {
     );
     expect(saved.saved).toBe(true);
 
-    await expect(isProviderConnected(newApi(FIRST))).resolves.toBe(true);
-    await expect(isProviderRefreshEligible(newApi(FIRST))).resolves.toBe(false);
+    if (!saved.saved) throw new Error("fixture save failed");
+    await expect(isProviderConnected(newApi(FIRST, saved.revision)))
+      .resolves.toBe(true);
+    await expect(isProviderRefreshEligible(newApi(FIRST, saved.revision)))
+      .resolves.toBe(false);
   });
 
   test("keeps same-kind sibling credentials isolated", async () => {
-    await saveApiKeyIfCurrent(FIRST, "active-secret", () => true);
-    await saveApiKeyIfCurrent(SECOND, "rejected-secret", () => true, "rejected");
+    const first = await saveApiKeyIfCurrent(FIRST, "active-secret", () => true);
+    const second = await saveApiKeyIfCurrent(
+      SECOND,
+      "rejected-secret",
+      () => true,
+      "rejected",
+    );
+    if (!first.saved || !second.saved) throw new Error("fixture save failed");
 
-    await expect(isProviderRefreshEligible(newApi(FIRST))).resolves.toBe(true);
-    await expect(isProviderRefreshEligible(newApi(SECOND))).resolves.toBe(false);
+    await expect(isProviderRefreshEligible(newApi(FIRST, first.revision)))
+      .resolves.toBe(true);
+    await expect(isProviderRefreshEligible(newApi(SECOND, second.revision)))
+      .resolves.toBe(false);
+  });
+
+  test("fails closed when a stored credential belongs to another connection revision", async () => {
+    const saved = await saveApiKeyIfCurrent(
+      FIRST,
+      "replacement-secret",
+      () => true,
+    );
+    if (!saved.saved) throw new Error("fixture save failed");
+
+    const stale = newApi(FIRST, "550e8400-e29b-41d4-a716-446655440090");
+    await expect(isProviderConnected(stale)).resolves.toBe(false);
+    await expect(isProviderRefreshEligible(stale)).resolves.toBe(false);
   });
 });

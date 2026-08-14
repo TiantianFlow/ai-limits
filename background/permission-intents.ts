@@ -5,6 +5,7 @@ import {
   type ProviderInstanceRecord,
 } from "../domain/instances";
 import { isProviderId, type ProviderKind } from "../providers/catalog";
+import { providerRegistry } from "../providers/registry";
 
 export const PERMISSION_INTENT_SWEEP_ALARM =
   "permission-intent-sweep" as const;
@@ -22,7 +23,7 @@ export interface PermissionIntentCandidate {
 
 export interface StoredPermissionIntent {
   id: string;
-  phase: "pending" | "granted";
+  phase: "pending" | "granted" | "cleanup-pending";
   candidate: PermissionIntentCandidate;
   expiresAt: number;
 }
@@ -84,8 +85,13 @@ function decodeCandidate(value: unknown): PermissionIntentCandidate | undefined 
   ) {
     return undefined;
   }
-  const config = decodeConfig(value.config);
-  if (!config) return undefined;
+  const decodedConfig = decodeConfig(value.config);
+  const config = decodedConfig
+    ? providerRegistry[value.providerKind].normalizeConfig(decodedConfig)
+    : undefined;
+  if (!config || JSON.stringify(config) !== JSON.stringify(decodedConfig)) {
+    return undefined;
+  }
   return {
     id: value.id,
     providerKind: value.providerKind,
@@ -104,7 +110,9 @@ function decodeIntent(value: unknown): StoredPermissionIntent | undefined {
     typeof value.id !== "string" ||
     value.id.length === 0 ||
     value.id.length > 128 ||
-    (value.phase !== "pending" && value.phase !== "granted") ||
+    (value.phase !== "pending" &&
+      value.phase !== "granted" &&
+      value.phase !== "cleanup-pending") ||
     typeof value.expiresAt !== "number" ||
     !Number.isFinite(value.expiresAt)
   ) {
@@ -149,7 +157,7 @@ export function createPermissionIntentStore(
   const clock = options.clock ?? Date.now;
   const randomUUID = options.randomUUID ?? (() => globalThis.crypto.randomUUID());
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
-  const storage = options.storage ?? browser.storage.session;
+  const storage = options.storage ?? browser.storage.local;
   const claimed = new Set<string>();
   let mutationQueue: Promise<void> = Promise.resolve();
 
@@ -185,13 +193,11 @@ export function createPermissionIntentStore(
       undefined,
     );
     if (nextExpiry === undefined) {
-      await browser.alarms
-        .clear(PERMISSION_INTENT_SWEEP_ALARM)
-        .catch(() => undefined);
+      await browser.alarms.clear(PERMISSION_INTENT_SWEEP_ALARM);
     } else {
-      await browser.alarms
-        .create(PERMISSION_INTENT_SWEEP_ALARM, { when: nextExpiry })
-        .catch(() => undefined);
+      await browser.alarms.create(PERMISSION_INTENT_SWEEP_ALARM, {
+        when: nextExpiry,
+      });
     }
   };
 
@@ -199,8 +205,8 @@ export function createPermissionIntentStore(
     create(instance: ProviderInstanceRecord): Promise<StoredPermissionIntent> {
       return enqueue(async () => {
         const now = clock();
-        const active = (await read()).filter(({ expiresAt }) => expiresAt > now);
-        if (active.length >= MAX_INTENTS) {
+        const intents = await read();
+        if (intents.length >= MAX_INTENTS) {
           throw new Error("Too many pending permission intents.");
         }
         const intent: StoredPermissionIntent = {
@@ -209,7 +215,7 @@ export function createPermissionIntentStore(
           candidate: storedCandidate(instance),
           expiresAt: now + ttlMs,
         };
-        await write([...active, intent]);
+        await write([...intents, intent]);
         return intent;
       });
     },
@@ -226,8 +232,12 @@ export function createPermissionIntentStore(
         );
         if (!current) return undefined;
         if (!granted) {
-          await write(intents.filter((intent) => intent.id !== id));
-          return current;
+          const cleanup = { ...current, phase: "cleanup-pending" as const };
+          claimed.delete(id);
+          await write(
+            intents.map((intent) => (intent.id === id ? cleanup : intent)),
+          );
+          return cleanup;
         }
         const resolved = { ...current, phase: "granted" as const };
         await write(
@@ -260,33 +270,73 @@ export function createPermissionIntentStore(
       });
     },
 
-    abandon(id: string): Promise<ProviderInstanceRecord | undefined> {
+    abandon(id: string): Promise<StoredPermissionIntent | undefined> {
       return enqueue(async () => {
         claimed.delete(id);
         const intents = await read();
-        const removed = intents.find((intent) => intent.id === id);
-        if (!removed) return undefined;
-        await write(intents.filter((intent) => intent.id !== id));
-        return asPermissionOwner(removed.candidate);
+        const current = intents.find((intent) => intent.id === id);
+        if (!current) return undefined;
+        const cleanup = { ...current, phase: "cleanup-pending" as const };
+        await write(
+          intents.map((intent) => (intent.id === id ? cleanup : intent)),
+        );
+        return cleanup;
+      });
+    },
+
+    queueCleanup(
+      instance: ProviderInstanceRecord,
+    ): Promise<StoredPermissionIntent> {
+      return enqueue(async () => {
+        const intents = await read();
+        if (intents.length >= MAX_INTENTS) {
+          throw new Error("Too many pending permission intents.");
+        }
+        const now = clock();
+        const cleanup: StoredPermissionIntent = {
+          id: `cleanup:${randomUUID()}`,
+          phase: "cleanup-pending",
+          candidate: storedCandidate(instance),
+          expiresAt: now,
+        };
+        await write([...intents, cleanup]);
+        return cleanup;
+      });
+    },
+
+    completeCleanup(id: string): Promise<void> {
+      return enqueue(async () => {
+        claimed.delete(id);
+        await write((await read()).filter((intent) => intent.id !== id));
       });
     },
 
     listActiveCandidates(): Promise<ProviderInstanceRecord[]> {
       return read().then((intents) =>
         intents
-          .filter(({ expiresAt }) => expiresAt > clock())
+          .filter(
+            ({ expiresAt, phase }) =>
+              phase !== "cleanup-pending" && expiresAt > clock(),
+          )
           .map(({ candidate }) => asPermissionOwner(candidate)),
       );
     },
 
-    sweepExpired(): Promise<ProviderInstanceRecord[]> {
+    sweepExpired(): Promise<StoredPermissionIntent[]> {
       return enqueue(async () => {
         const now = clock();
         const intents = await read();
-        const expired = intents.filter(({ expiresAt }) => expiresAt <= now);
-        expired.forEach(({ id }) => claimed.delete(id));
-        await write(intents.filter(({ expiresAt }) => expiresAt > now));
-        return expired.map(({ candidate }) => asPermissionOwner(candidate));
+        const next = intents.map((intent) =>
+          intent.phase === "cleanup-pending" || intent.expiresAt > now
+            ? intent
+            : { ...intent, phase: "cleanup-pending" as const },
+        );
+        const cleanup = next.filter(
+          (intent) => intent.phase === "cleanup-pending",
+        );
+        cleanup.forEach(({ id }) => claimed.delete(id));
+        await write(next);
+        return cleanup;
       });
     },
 
