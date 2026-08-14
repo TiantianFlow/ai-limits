@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { InstanceAppState } from "../domain/instances";
-import type { ProviderService } from "../background/provider-service";
+import {
+  createProviderService,
+  type ProviderService,
+} from "../background/provider-service";
 import apiKeyConnectionSource from "../background/api-key-connection.ts?raw";
 import coordinatorSource from "../background/coordinator.ts?raw";
 import orchestratorSource from "../background/orchestrator.ts?raw";
@@ -105,6 +108,7 @@ function invoke(listener: RuntimeListener, message: unknown): Promise<unknown> {
 beforeEach(async () => {
   vi.restoreAllMocks();
   await browser.storage.local.clear();
+  await browser.storage.session.clear();
   vi.spyOn(browser.alarms, "get").mockResolvedValue(undefined);
   vi.spyOn(browser.alarms, "clear").mockResolvedValue(true as never);
   vi.spyOn(browser.alarms, "create").mockResolvedValue(undefined);
@@ -409,6 +413,60 @@ describe("service-worker activation barrier", () => {
       "vault", "grants", "migration", "startup", "sweep-intents", "reconcile",
     ]);
     expect(options.createService).toHaveBeenCalledTimes(2);
+  });
+
+  test("startup sweeps a durable intent after session storage is lost on browser restart", async () => {
+    const now = Date.parse("2030-04-15T12:00:00.000Z");
+    await browser.storage.local.set({
+      aiLimitsPermissionIntents: {
+        version: 1,
+        intents: [
+          {
+            id: "550e8400-e29b-41d4-a716-446655440099",
+            phase: "pending",
+            candidate: {
+              id: "newapi:550e8400-e29b-41d4-a716-446655440000",
+              providerKind: "newapi",
+              config: {
+                kind: "dynamic-origin",
+                baseUrl: "https://relay.example/gateway",
+              },
+              createdAt: now - 200,
+            },
+            expiresAt: now - 100,
+          },
+        ],
+      },
+    });
+    await browser.storage.session.clear();
+    let permissionPresent = true;
+    vi.spyOn(browser.permissions, "contains").mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async () => {
+        permissionPresent = false;
+        return true as never;
+      },
+    );
+
+    await initializeBackground({
+      initializeVault: async () => undefined,
+      grantedPermissions: async () => ({
+        origins: ["https://relay.example/*"],
+      }),
+      migrate: async () => undefined,
+      packages: [],
+      createService: () => createProviderService({ clock: () => now }),
+      now: () => now,
+    });
+
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://relay.example/*"],
+    });
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+      "newapi:550e8400-e29b-41d4-a716-446655440000",
+    );
   });
 });
 

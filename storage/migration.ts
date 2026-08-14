@@ -1,4 +1,8 @@
-import type { InstanceAppState, ProviderInstanceRecord } from "../domain/instances";
+import {
+  isConnectionRevision,
+  type InstanceAppState,
+  type ProviderInstanceRecord,
+} from "../domain/instances";
 import type { DisplayMode, UsageHistoryObservation } from "../domain/model";
 import type { ProviderKind, ApiKeyProviderKind } from "../providers/catalog";
 import { isApiKeyProviderId, isProviderId, providerCatalog, providerIds } from "../providers/catalog";
@@ -310,6 +314,9 @@ function migrateReleasedV4(
             id,
             providerKind,
             config,
+            ...(credential
+              ? { connectionRevision: credential.revision }
+              : {}),
             access: permissionGranted ? "granted" : "required",
             createdAt: now,
             history: released.history,
@@ -367,9 +374,31 @@ export function migrateLegacyStorage(
   grantedPermissions: Browser.permissions.Permissions,
 ): MigratedLegacyStorage {
   if (isRecord(input.aiLimitsState) && input.aiLimitsState.version === 5) {
-    const state = normalizeInstanceAppState(input.aiLimitsState, now);
     const normalizedCredentials = normalizeCredentialStateV2(
       input.aiLimitsCredentials,
+    );
+    const rawInstances = Array.isArray(input.aiLimitsState.instances)
+      ? input.aiLimitsState.instances
+      : [];
+    const state = normalizeInstanceAppState(
+      {
+        ...input.aiLimitsState,
+        instances: rawInstances.map((candidate) => {
+          if (
+            !isRecord(candidate) ||
+            typeof candidate.id !== "string" ||
+            !isApiKeyProviderId(candidate.providerKind) ||
+            isConnectionRevision(candidate.connectionRevision)
+          ) {
+            return candidate;
+          }
+          const credential = normalizedCredentials.credentials[candidate.id];
+          return credential
+            ? { ...candidate, connectionRevision: credential.revision }
+            : candidate;
+        }),
+      },
+      now,
     );
     const activeApiKeyInstances = new Set(
       state.instances
