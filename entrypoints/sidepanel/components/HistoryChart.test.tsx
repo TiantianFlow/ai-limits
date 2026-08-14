@@ -3,8 +3,8 @@ import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type {
-  QuotaHistoryObservation,
-  QuotaWindow,
+  UsageHistoryObservation,
+  QuotaMetric,
 } from "../../../domain/model";
 import { HistoryChart } from "./HistoryChart";
 
@@ -13,35 +13,29 @@ const NOW = Date.UTC(2026, 7, 10, 16);
 const FIRST_RESET = NOW - 2 * HOUR;
 const SECOND_RESET = NOW + 7 * 24 * HOUR;
 
-const windows: QuotaWindow[] = [
+const metrics: QuotaMetric[] = [
   {
+    type: "quota",
     id: "weekly",
     label: "Weekly messages",
-    kind: "rolling",
+    scope: "general",
     usedRatio: 0.42,
-    resetsAt: SECOND_RESET,
-    durationMs: 7 * 24 * HOUR,
-    sourceSemantics: "used",
+    cycle: { cadence: "rolling", resetsAt: SECOND_RESET, durationMs: 7 * 24 * HOUR },
   },
 ];
 
-const history: QuotaHistoryObservation[] = [
-  {
-    observedAt: NOW - 4 * HOUR,
-    windows: [{ windowId: "weekly", usedRatio: 0.76, resetsAt: FIRST_RESET }],
-  },
-  {
-    observedAt: NOW - 3 * HOUR,
-    windows: [{ windowId: "weekly", usedRatio: 0.91, resetsAt: FIRST_RESET }],
-  },
-  {
-    observedAt: NOW - HOUR,
-    windows: [{ windowId: "weekly", usedRatio: 0.18, resetsAt: SECOND_RESET }],
-  },
-  {
-    observedAt: NOW,
-    windows: [{ windowId: "weekly", usedRatio: 0.42, resetsAt: SECOND_RESET }],
-  },
+function observation(observedAt: number, usedRatio: number, resetsAt: number): UsageHistoryObservation {
+  return {
+    observedAt,
+    metrics: [{ type: "quota", metricId: "weekly", usedRatio, cycle: { cadence: "rolling", resetsAt } }],
+  };
+}
+
+const history: UsageHistoryObservation[] = [
+  observation(NOW - 4 * HOUR, 0.76, FIRST_RESET),
+  observation(NOW - 3 * HOUR, 0.91, FIRST_RESET),
+  observation(NOW - HOUR, 0.18, SECOND_RESET),
+  observation(NOW, 0.42, SECOND_RESET),
 ];
 
 afterEach(cleanup);
@@ -52,7 +46,7 @@ describe("HistoryChart", () => {
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={windows}
+        metrics={metrics}
         history={history}
         now={NOW}
         rangeHours={48}
@@ -89,25 +83,15 @@ describe("HistoryChart", () => {
   });
 
   it("renders visible markers without connecting reset-separated singleton segments", () => {
-    const singletonHistory: QuotaHistoryObservation[] = [
-      {
-        observedAt: NOW - HOUR,
-        windows: [
-          { windowId: "weekly", usedRatio: 0.91, resetsAt: FIRST_RESET },
-        ],
-      },
-      {
-        observedAt: NOW,
-        windows: [
-          { windowId: "weekly", usedRatio: 0.18, resetsAt: SECOND_RESET },
-        ],
-      },
+    const singletonHistory: UsageHistoryObservation[] = [
+      observation(NOW - HOUR, 0.91, FIRST_RESET),
+      observation(NOW, 0.18, SECOND_RESET),
     ];
     const { container } = render(
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={windows}
+        metrics={metrics}
         history={singletonHistory}
         now={NOW}
       />,
@@ -135,7 +119,7 @@ describe("HistoryChart", () => {
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={windows}
+        metrics={metrics}
         history={history}
         now={NOW}
         rangeHours={48}
@@ -149,7 +133,7 @@ describe("HistoryChart", () => {
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={windows}
+        metrics={metrics}
         history={history}
         now={NOW}
         rangeHours={7 * 24}
@@ -165,7 +149,7 @@ describe("HistoryChart", () => {
       <HistoryChart
         providerName="ChatGPT"
         mode="left"
-        windows={windows}
+        metrics={metrics}
         history={history}
         now={NOW}
       />,
@@ -179,39 +163,38 @@ describe("HistoryChart", () => {
     ).toHaveAccessibleDescription(/latest value is 58% left/i);
   });
 
-  it("keeps the valid fallback selected when a removed window later returns", () => {
-    const fiveHourWindow: QuotaWindow = {
+  it("keeps the valid fallback selected when a removed metric later returns", () => {
+    const fiveHourMetric: QuotaMetric = {
+      type: "quota",
       id: "five-hour",
       label: "5-hour messages",
-      kind: "rolling",
+      scope: "general",
       usedRatio: 0.2,
-      resetsAt: NOW + HOUR,
-      durationMs: 5 * HOUR,
-      sourceSemantics: "used",
+      cycle: { cadence: "rolling", resetsAt: NOW + HOUR, durationMs: 5 * HOUR },
     };
-    const currentWindows = [fiveHourWindow, windows[0]!];
+    const currentMetrics = [fiveHourMetric, metrics[0]!];
     const view = render(
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={currentWindows}
+        metrics={currentMetrics}
         history={history}
         now={NOW}
       />,
     );
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota window" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
       target: { value: "weekly" },
     });
     expect(
-      screen.getByRole("combobox", { name: "Quota window" }),
+      screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("weekly");
 
     view.rerender(
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={[fiveHourWindow]}
+        metrics={[fiveHourMetric]}
         history={history}
         now={NOW}
       />,
@@ -220,14 +203,14 @@ describe("HistoryChart", () => {
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={currentWindows}
+        metrics={currentMetrics}
         history={history}
         now={NOW}
       />,
     );
 
     expect(
-      screen.getByRole("combobox", { name: "Quota window" }),
+      screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("five-hour");
   });
 
@@ -236,7 +219,7 @@ describe("HistoryChart", () => {
       <HistoryChart
         providerName="ChatGPT"
         mode="used"
-        windows={windows}
+        metrics={metrics}
         history={history.slice(-1)}
         now={NOW}
       />,

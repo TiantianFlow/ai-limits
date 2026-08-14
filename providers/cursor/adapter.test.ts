@@ -56,38 +56,35 @@ describe("Cursor adapter", () => {
     expect(result).toEqual({
       ok: true,
       snapshot: {
-        providerId: "cursor",
+        providerKind: "cursor",
         planLabel: "pro",
         source: "web-session",
         fetchedAt: NOW,
-        windows: [
+        metrics: [
           {
+            type: "quota",
             id: "cursor-models-monthly",
             label: "Cursor models",
-            kind: "model",
+            scope: "model",
             usedRatio: 0.17,
-            startedAt: Date.parse(START),
-            resetsAt: Date.parse(END),
-            durationMs: Date.parse(END) - Date.parse(START),
-            sourceSemantics: "used",
+            cycle: { cadence: "calendar", startedAt: Date.parse(START), resetsAt: Date.parse(END), durationMs: Date.parse(END) - Date.parse(START) },
           },
           {
+            type: "quota",
             id: "other-models-monthly",
             label: "Other models",
-            kind: "model",
+            scope: "model",
             usedRatio: 1,
-            startedAt: Date.parse(START),
-            resetsAt: Date.parse(END),
-            durationMs: Date.parse(END) - Date.parse(START),
-            sourceSemantics: "used",
+            cycle: { cadence: "calendar", startedAt: Date.parse(START), resetsAt: Date.parse(END), durationMs: Date.parse(END) - Date.parse(START) },
           },
-        ],
-        credits: [
           {
+            type: "counter",
             id: "on-demand",
             label: "On-demand spend",
+            scope: "product",
+            semantic: "spent",
             unit: "USD",
-            used: 3.2,
+            value: 3.2,
             limit: 10,
           },
         ],
@@ -95,8 +92,7 @@ describe("Cursor adapter", () => {
           {
             id: "usage",
             label: "Usage",
-            windowIds: ["cursor-models-monthly", "other-models-monthly"],
-            creditIds: ["on-demand"],
+            metricIds: ["cursor-models-monthly", "other-models-monthly", "on-demand"],
           },
         ],
       },
@@ -133,7 +129,7 @@ describe("Cursor adapter", () => {
     await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
+        metrics: [
           { id: "other-models-monthly", label: "Other models", usedRatio: 0.6 },
         ],
       },
@@ -159,7 +155,7 @@ describe("Cursor adapter", () => {
     await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
+        metrics: [
           { id: "monthly", label: "Monthly usage", usedRatio: 0.4 },
         ],
       },
@@ -178,7 +174,7 @@ describe("Cursor adapter", () => {
 
     await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
-      snapshot: { windows: [{ usedRatio: 0.25 }] },
+      snapshot: { metrics: [{ usedRatio: 0.25 }] },
     });
   });
 
@@ -199,8 +195,7 @@ describe("Cursor adapter", () => {
       ok: true,
       snapshot: {
         planLabel: "enterprise",
-        windows: [{ usedRatio: 0.25 }],
-        credits: [],
+        metrics: [expect.objectContaining({ type: "quota", usedRatio: 0.25 })],
       },
     });
   });
@@ -222,8 +217,10 @@ describe("Cursor adapter", () => {
     await expect(cursorAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [{ usedRatio: 0.25 }],
-        credits: [{ used: 4.5, limit: 20 }],
+        metrics: [
+          expect.objectContaining({ type: "quota", usedRatio: 0.25 }),
+          expect.objectContaining({ type: "counter", semantic: "spent", value: 4.5, limit: 20 }),
+        ],
       },
     });
   });

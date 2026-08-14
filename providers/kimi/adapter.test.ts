@@ -113,45 +113,40 @@ describe("Kimi adapter", () => {
     expect(result).toEqual({
       ok: true,
       snapshot: {
-        providerId: "kimi",
+        providerKind: "kimi",
         source: "web-session",
         fetchedAt: NOW,
-        windows: [
+        metrics: [
           {
+            type: "quota",
             id: "monthly-total",
             label: "Monthly total",
-            kind: "calendar",
+            scope: "general",
             usedRatio: 0.019,
-            startedAt: Date.parse(MONTHLY_START),
-            resetsAt: Date.parse(MONTHLY_RESET),
-            sourceSemantics: "used",
+            cycle: { cadence: "calendar", startedAt: Date.parse(MONTHLY_START), resetsAt: Date.parse(MONTHLY_RESET) },
           },
           {
+            type: "quota",
             id: "five-hour-coding",
             label: "5-hour coding",
-            kind: "feature",
+            scope: "feature",
             usedRatio: 0.2476,
-            resetsAt: Date.parse(FIVE_HOUR_RESET),
-            durationMs: 5 * 60 * 60 * 1_000,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(FIVE_HOUR_RESET), durationMs: 5 * 60 * 60 * 1_000 },
           },
           {
+            type: "quota",
             id: "weekly-coding",
             label: "Weekly coding",
-            kind: "feature",
+            scope: "feature",
             usedRatio: 0.0495,
-            resetsAt: Date.parse(WEEKLY_RESET),
-            durationMs: 7 * 24 * 60 * 60 * 1_000,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(WEEKLY_RESET), durationMs: 7 * 24 * 60 * 60 * 1_000 },
           },
         ],
-        credits: [],
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: ["monthly-total", "five-hour-coding", "weekly-coding"],
-            creditIds: [],
+            metricIds: ["monthly-total", "five-hour-coding", "weekly-coding"],
           },
         ],
       },
@@ -178,6 +173,37 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("secret-cookie");
   });
 
+  test("preserves Kimi monthly code segments as quota segments", async () => {
+    const getCookie = vi.fn().mockResolvedValue({ value: "secret-cookie" });
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      response(statsFixture({
+        subscriptionBalance: {
+          amountUsedRatio: 0.25,
+          kimiCodeUsedRatio: 0.1,
+          expireTime: MONTHLY_RESET,
+        },
+      })),
+    );
+
+    const result = await kimiAdapter.collect(context(fetch, getCookie));
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({
+            type: "quota",
+            id: "monthly-total",
+            segments: [
+              { id: "work", label: "Work", usedRatio: 0.15 },
+              { id: "code", label: "Code", usedRatio: 0.1 },
+            ],
+          }),
+        ]),
+      },
+    });
+  });
+
   test("normalizes consistent Work and Code contributions for the monthly total", async () => {
     const result = await kimiAdapter.collect(
       context(
@@ -199,7 +225,7 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
       expect(
-        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+        result.snapshot.metrics.find((metric) => metric.id === "monthly-total"),
       ).toMatchObject({
         usedRatio: 0.1,
         segments: [
@@ -247,12 +273,12 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
       expect(
-        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+        result.snapshot.metrics.find((metric) => metric.id === "monthly-total"),
       ).toEqual(
         expect.objectContaining({ usedRatio: 0.1 }),
       );
       expect(
-        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+        result.snapshot.metrics.find((window) => window.id === "monthly-total"),
       ).not.toHaveProperty("segments");
     }
   });
@@ -277,15 +303,14 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: expect.arrayContaining([
+        metrics: expect.arrayContaining([
           {
+            type: "quota",
             id: "five-hour-coding",
             label: "5-hour coding",
-            kind: "feature",
+            scope: "feature",
             usedRatio: 0,
-            resetsAt: Date.parse(FIVE_HOUR_RESET),
-            durationMs: 5 * 60 * 60 * 1_000,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(FIVE_HOUR_RESET), durationMs: 5 * 60 * 60 * 1_000 },
           },
         ]),
       },
@@ -375,7 +400,7 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
       expect(
-        result.snapshot.windows.find((window) => window.id === "monthly-total"),
+        result.snapshot.metrics.find((metric) => metric.id === "monthly-total")?.cycle,
       ).toMatchObject({
         startedAt: Date.parse("2030-02-28T16:11:00.000Z"),
         resetsAt: Date.parse(resetAt),
@@ -396,7 +421,7 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        providerId: "kimi",
+        providerKind: "kimi",
         planLabel: "Kimi Coding Ultra",
       },
     });
@@ -421,8 +446,8 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        providerId: "kimi",
-        windows: expect.arrayContaining([
+        providerKind: "kimi",
+        metrics: expect.arrayContaining([
           expect.objectContaining({ id: "monthly-total" }),
         ]),
       },
@@ -444,7 +469,7 @@ describe("Kimi adapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      snapshot: { providerId: "kimi" },
+      snapshot: { providerKind: "kimi" },
     });
     expect(fetch).toHaveBeenCalledWith(
       "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats",
@@ -526,7 +551,7 @@ describe("Kimi adapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
+      snapshot: { providerKind: "kimi", planLabel: "Kimi Coding Ultra" },
     });
     expect(recoverAccessToken).toHaveBeenCalledOnce();
     expect(recoverAccessToken).toHaveBeenCalledWith(undefined);
@@ -590,7 +615,7 @@ describe("Kimi adapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
+      snapshot: { providerKind: "kimi", planLabel: "Kimi Coding Ultra" },
     });
     expect(findAvailableAccessToken).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenNthCalledWith(
@@ -640,7 +665,7 @@ describe("Kimi adapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      snapshot: { providerId: "kimi", planLabel: "Kimi Coding Ultra" },
+      snapshot: { providerKind: "kimi", planLabel: "Kimi Coding Ultra" },
     });
     expect(recoverAccessToken).toHaveBeenCalledOnce();
     expect(recoverAccessToken).toHaveBeenCalledWith("stale-page-token");
@@ -699,8 +724,8 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        providerId: "kimi",
-        windows: expect.arrayContaining([
+        providerKind: "kimi",
+        metrics: expect.arrayContaining([
           expect.objectContaining({ id: "monthly-total" }),
         ]),
       },
@@ -725,7 +750,7 @@ describe("Kimi adapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      snapshot: { providerId: "kimi", windows: expect.any(Array) },
+      snapshot: { providerKind: "kimi", metrics: expect.any(Array) },
     });
     expect(findAvailableAccessToken).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(3);
@@ -760,7 +785,7 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
+        metrics: [
           expect.objectContaining({ id: "weekly-coding", usedRatio: 0.25 }),
           expect.objectContaining({ id: "five-hour-coding", usedRatio: 0.25 }),
         ],
@@ -829,8 +854,8 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        providerId: "kimi",
-        windows: expect.arrayContaining([
+        providerKind: "kimi",
+        metrics: expect.arrayContaining([
           expect.objectContaining({ id: "weekly-coding" }),
         ]),
       },
@@ -850,7 +875,7 @@ describe("Kimi adapter", () => {
     expect(JSON.stringify(result)).not.toContain("fresh-token");
   });
 
-  test("keeps valid current windows when another stats section changes", async () => {
+  test("keeps valid current metrics when another stats section changes", async () => {
     const result = await kimiAdapter.collect(
       context(
         vi.fn<typeof globalThis.fetch>().mockResolvedValue(
@@ -867,7 +892,7 @@ describe("Kimi adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
+        metrics: [
           { id: "monthly-total" },
           { id: "weekly-coding" },
         ],

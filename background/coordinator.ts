@@ -1,5 +1,5 @@
 import { sanitizedFailureMessage } from "../domain/model";
-import { appendQuotaObservation } from "../domain/history";
+import { appendUsageObservation } from "../domain/history";
 import type {
   AppState,
   ProviderAttempt,
@@ -11,7 +11,7 @@ import type {
   CollectionResult,
   ProviderAdapter,
 } from "../providers/types";
-import { normalizeProviderSnapshot } from "../providers/initial-state";
+import { normalizeUsageSnapshot } from "../providers/initial-state";
 import {
   providerRegistry,
   type ConnectableProviderId,
@@ -42,10 +42,10 @@ function normalizeResult(
     return result;
   }
 
-  const snapshot = normalizeProviderSnapshot(
+  const snapshot = normalizeUsageSnapshot(
     {
       ...result.snapshot,
-      providerId: adapter.id,
+      providerKind: adapter.id,
       fetchedAt: finishedAt,
     },
     adapter.id,
@@ -206,14 +206,7 @@ function applyOutcome(
         ? {
             access: "granted" as const,
             snapshot: outcome.snapshot,
-            history: appendQuotaObservation(
-              provider.snapshot?.planLabel &&
-                outcome.snapshot.planLabel &&
-                provider.snapshot.planLabel !== outcome.snapshot.planLabel
-                ? []
-                : provider.history,
-              outcome.snapshot,
-            ),
+            history: appendUsageObservation(provider.history, outcome.snapshot),
           }
         : {}),
       lastAttempt,

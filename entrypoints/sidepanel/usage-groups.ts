@@ -1,23 +1,22 @@
-import type { LegacyUsageGroup } from "../../domain/model";
+import type { UsageGroup } from "../../domain/model";
 import type {
-  CreditView,
+  MetricValueView,
   QuotaView,
   UsageGroupView,
 } from "./components/ProviderCard";
 
 export function usageGroupViews(
-  groups: readonly LegacyUsageGroup[] | undefined,
+  groups: readonly UsageGroup[] | undefined,
   quotas: readonly QuotaView[],
-  credits: readonly CreditView[],
+  values: readonly MetricValueView[],
 ): UsageGroupView[] {
   const quotaById = new Map(quotas.map((quota) => [quota.id, quota]));
-  const creditById = new Map(credits.map((credit) => [credit.id, credit]));
+  const valueById = new Map(values.map((metric) => [metric.id, metric]));
   const authoredGroups = groups ?? [
     {
       id: "usage",
       label: "Usage",
-      windowIds: quotas.map((quota) => quota.id),
-      creditIds: credits.map((credit) => credit.id),
+      metricIds: [...quotas, ...values].map((metric) => metric.id),
     },
   ];
 
@@ -27,13 +26,13 @@ export function usageGroupViews(
     ...(group.description === undefined
       ? {}
       : { description: group.description }),
-    quotas: group.windowIds.flatMap((id) => {
+    quotas: group.metricIds.flatMap((id) => {
       const quota = quotaById.get(id);
       return quota === undefined ? [] : [quota];
     }),
-    credits: group.creditIds.flatMap((id) => {
-      const credit = creditById.get(id);
-      return credit === undefined ? [] : [credit];
+    values: group.metricIds.flatMap((id) => {
+      const metric = valueById.get(id);
+      return metric === undefined ? [] : [metric];
     }),
   }));
 }

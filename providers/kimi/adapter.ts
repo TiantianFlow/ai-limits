@@ -1,7 +1,7 @@
 import {
   KIMI_RECOVERY_GUIDANCE,
   type ProviderHealth,
-  type QuotaWindow,
+  type QuotaMetric,
 } from "../../domain/model";
 import type {
   CollectionContext,
@@ -105,9 +105,9 @@ function normalizedAmounts(
 
 function normalizeWindow(
   detail: KimiUsageDetail,
-  identity: Pick<QuotaWindow, "id" | "label">,
+  identity: Pick<QuotaMetric, "id" | "label">,
   duration: number,
-): QuotaWindow | undefined {
+): QuotaMetric | undefined {
   const amounts = normalizedAmounts(detail);
   const resetsAt = Date.parse(detail.resetTime);
   if (!amounts || duration === undefined || !Number.isFinite(resetsAt) || resetsAt <= 0) {
@@ -116,13 +116,12 @@ function normalizeWindow(
 
   return {
     ...identity,
-    kind: "feature",
+    type: "quota",
+    scope: "feature",
     usedRatio: amounts.used / amounts.limit,
     used: amounts.used,
     limit: amounts.limit,
-    resetsAt,
-    durationMs: duration,
-    sourceSemantics: "used",
+    cycle: { cadence: "rolling", resetsAt, durationMs: duration },
   };
 }
 
@@ -165,7 +164,7 @@ function previousCalendarMonth(timestamp: number): number | undefined {
 function monthlySegments(
   totalUsedRatio: number,
   codeUsedRatio: unknown,
-): QuotaWindow["segments"] | undefined {
+): QuotaMetric["segments"] | undefined {
   const code = kimiRatioSchema.safeParse(codeUsedRatio);
   if (!code.success || code.data > totalUsedRatio) {
     return undefined;
@@ -182,13 +181,13 @@ function monthlySegments(
     : undefined;
 }
 
-function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
+function normalizeCurrentStats(body: unknown): QuotaMetric[] | undefined {
   const envelope = kimiSubscriptionStatsSchema.safeParse(body);
   if (!envelope.success) {
     return undefined;
   }
 
-  const windows: QuotaWindow[] = [];
+  const metrics: QuotaMetric[] = [];
   const balance = kimiSubscriptionBalanceSchema.safeParse(
     envelope.data.subscriptionBalance,
   );
@@ -200,14 +199,21 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
       balance.data.amountUsedRatio,
       balance.data.kimiCodeUsedRatio,
     );
-    windows.push({
+    metrics.push({
+      type: "quota",
       id: "monthly-total",
       label: "Monthly total",
-      kind: "calendar",
+      scope: "general",
       usedRatio: balance.data.amountUsedRatio,
-      ...(startedAt === undefined ? {} : { startedAt }),
-      ...(resetsAt === undefined ? {} : { resetsAt }),
-      sourceSemantics: "used",
+      ...(startedAt === undefined && resetsAt === undefined
+        ? {}
+        : {
+            cycle: {
+              cadence: "calendar",
+              ...(startedAt === undefined ? {} : { startedAt }),
+              ...(resetsAt === undefined ? {} : { resetsAt }),
+            },
+          }),
       ...(segments === undefined ? {} : { segments }),
     });
   }
@@ -252,21 +258,24 @@ function normalizeCurrentStats(body: unknown): QuotaWindow[] | undefined {
       continue;
     }
 
-    windows.push({
+    metrics.push({
+      type: "quota",
       id: rateLimit.id,
       label: rateLimit.label,
-      kind: "feature",
+      scope: "feature",
       usedRatio,
-      resetsAt: optionalTimestamp(resetTime),
-      durationMs: rateLimit.durationMs,
-      sourceSemantics: "used",
+      cycle: {
+        cadence: "rolling",
+        resetsAt: optionalTimestamp(resetTime),
+        durationMs: rateLimit.durationMs,
+      },
     });
   }
 
-  return windows;
+  return metrics;
 }
 
-function normalizeLegacyUsage(body: unknown): QuotaWindow[] | undefined {
+function normalizeLegacyUsage(body: unknown): QuotaMetric[] | undefined {
   const envelope = kimiUsageResponseSchema.safeParse(body);
   if (!envelope.success) {
     return undefined;
@@ -500,10 +509,10 @@ async function collectKimi({
     }
 
     const body = await parseJson(response);
-    const windows = legacy
+    const metrics = legacy
       ? normalizeLegacyUsage(body)
       : normalizeCurrentStats(body);
-    if (!windows?.length) {
+    if (!metrics?.length) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
@@ -532,17 +541,15 @@ async function collectKimi({
     return {
       ok: true,
       snapshot: {
-        providerId: "kimi",
+        providerKind: "kimi",
         source: "web-session",
         fetchedAt: now,
-        windows,
-        credits: [],
+        metrics,
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: windows.map((window) => window.id),
-            creditIds: [],
+            metricIds: metrics.map((metric) => metric.id),
           },
         ],
         ...(planLabel === undefined ? {} : { planLabel }),

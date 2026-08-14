@@ -65,22 +65,21 @@ describe("New API adapter", () => {
     expect(result).toEqual({
       ok: true,
       snapshot: {
-        providerId: "newapi",
+        providerKind: "newapi",
         accountLabel: "Acme AI",
         planLabel: "AI Limits",
         source: "api-key",
         fetchedAt: NOW,
-        windows: [{
+        metrics: [{
+          type: "quota",
           id: "relay-key-quota",
           label: "API key quota",
-          kind: "feature",
+          scope: "feature",
           usedRatio: 0.25,
           used: 2_500,
           limit: 10_000,
           unit: "quota units",
-          sourceSemantics: "used",
         }],
-        credits: [],
       },
     });
     expect(JSON.stringify(result)).not.toContain(TEST_KEY);
@@ -109,12 +108,14 @@ describe("New API adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: [],
-        credits: [{
+        metrics: [{
+          type: "counter",
           id: "relay-key-usage",
           label: "API key usage",
+          scope: "feature",
+          semantic: "consumed",
           unit: "quota units",
-          used: 42_000,
+          value: 42_000,
         }],
       },
     });

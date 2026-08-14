@@ -1,21 +1,18 @@
 import { sanitizedFailureMessage } from "../domain/model";
-import {
-  observationFromSnapshot,
-  retainQuotaHistory,
-} from "../domain/history";
+import { observationFromUsage, retainUsageHistory } from "../domain/history";
 import type {
   AppState,
-  CreditBalance,
   DisplayMode,
-  LegacyUsageGroup,
+  MetricCycle,
+  MetricHistorySample,
+  MetricSegment,
   ProviderAttempt,
   ProviderId,
   ProviderRecord,
-  ProviderSnapshot,
-  QuotaHistoryObservation,
-  QuotaHistorySample,
-  QuotaSegment,
-  QuotaWindow,
+  UsageGroup,
+  UsageHistoryObservation,
+  UsageMetric,
+  UsageSnapshot,
 } from "../domain/model";
 import { providerIds } from "./catalog";
 
@@ -45,15 +42,41 @@ function isOptionalNumber(
   return value === undefined || (isFiniteNumber(value) && predicate(value));
 }
 
-function normalizeSegments(
-  value: unknown,
-  totalUsedRatio: number,
-): QuotaSegment[] | undefined {
-  if (value === undefined || !Array.isArray(value) || value.length === 0) {
+function normalizeCycle(value: unknown): MetricCycle | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !isRecord(value) ||
+    (value.cadence !== undefined && value.cadence !== "rolling" && value.cadence !== "calendar") ||
+    !isOptionalNumber(value.startedAt, (number) => number >= 0) ||
+    !isOptionalNumber(value.resetsAt, (number) => number >= 0) ||
+    !isOptionalNumber(value.durationMs, (number) => number > 0) ||
+    (isFiniteNumber(value.startedAt) &&
+      isFiniteNumber(value.resetsAt) &&
+      value.resetsAt <= value.startedAt)
+  ) {
     return undefined;
   }
 
-  const segments = value.map((segment): QuotaSegment | undefined => {
+  return {
+    ...(value.cadence === undefined ? {} : { cadence: value.cadence }),
+    ...(value.startedAt === undefined ? {} : { startedAt: value.startedAt }),
+    ...(value.resetsAt === undefined ? {} : { resetsAt: value.resetsAt }),
+    ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
+  };
+}
+
+function normalizeSegments(
+  value: unknown,
+  totalUsedRatio: number,
+): MetricSegment[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+
+  const segments = value.map((segment): MetricSegment | undefined => {
     if (
       !isRecord(segment) ||
       !isNonEmptyString(segment.id) ||
@@ -79,103 +102,107 @@ function normalizeSegments(
     return undefined;
   }
 
-  const sum = (segments as QuotaSegment[]).reduce(
+  const sum = (segments as MetricSegment[]).reduce(
     (total, segment) => total + segment.usedRatio,
     0,
   );
   return Math.abs(sum - totalUsedRatio) <= SEGMENT_SUM_TOLERANCE
-    ? (segments as QuotaSegment[])
+    ? (segments as MetricSegment[])
     : undefined;
 }
 
-function normalizeWindow(value: unknown): QuotaWindow | undefined {
+function normalizeMetric(value: unknown): UsageMetric | undefined {
   if (
     !isRecord(value) ||
     !isNonEmptyString(value.id) ||
     !isNonEmptyString(value.label) ||
-    !["rolling", "calendar", "model", "feature"].includes(
-      value.kind as string,
-    ) ||
-    !isFiniteNumber(value.usedRatio) ||
-    value.usedRatio < 0 ||
-    value.usedRatio > 1 ||
-    !isOptionalNumber(value.used, (number) => number >= 0) ||
-    !isOptionalNumber(value.limit, (number) => number > 0) ||
-    !isOptionalString(value.unit) ||
-    !isOptionalNumber(value.startedAt, (number) => number >= 0) ||
-    !isOptionalNumber(value.resetsAt, (number) => number >= 0) ||
-    !isOptionalNumber(value.durationMs, (number) => number > 0) ||
-    (value.sourceSemantics !== "used" && value.sourceSemantics !== "remaining") ||
-    (isFiniteNumber(value.startedAt) &&
-      isFiniteNumber(value.resetsAt) &&
-      value.resetsAt <= value.startedAt)
+    !["general", "model", "feature", "product"].includes(value.scope as string)
   ) {
     return undefined;
   }
 
-  const segments = normalizeSegments(value.segments, value.usedRatio);
-
-  return {
+  const cycle = normalizeCycle(value.cycle);
+  if (value.cycle !== undefined && cycle === undefined) return undefined;
+  const base = {
     id: value.id,
     label: value.label,
-    kind: value.kind as QuotaWindow["kind"],
-    usedRatio: value.usedRatio,
-    ...(value.used !== undefined ? { used: value.used } : {}),
-    ...(value.limit !== undefined ? { limit: value.limit } : {}),
-    ...(value.unit !== undefined ? { unit: value.unit } : {}),
-    ...(value.startedAt !== undefined ? { startedAt: value.startedAt } : {}),
-    ...(value.resetsAt !== undefined ? { resetsAt: value.resetsAt } : {}),
-    ...(value.durationMs !== undefined ? { durationMs: value.durationMs } : {}),
-    sourceSemantics: value.sourceSemantics,
-    ...(segments === undefined ? {} : { segments }),
+    scope: value.scope as UsageMetric["scope"],
+    ...(cycle === undefined ? {} : { cycle }),
   };
-}
 
-function normalizeCredit(value: unknown): CreditBalance | undefined {
+  if (value.type === "quota") {
+    if (
+      !isFiniteNumber(value.usedRatio) || value.usedRatio < 0 || value.usedRatio > 1 ||
+      !isOptionalNumber(value.used, (number) => number >= 0) ||
+      !isOptionalNumber(value.limit, (number) => number > 0) ||
+      !isOptionalString(value.unit) ||
+      (isFiniteNumber(value.used) && isFiniteNumber(value.limit) && value.used > value.limit)
+    ) return undefined;
+    const segments = normalizeSegments(value.segments, value.usedRatio);
+    if (value.segments !== undefined && segments === undefined) return undefined;
+    return {
+      ...base,
+      type: "quota",
+      usedRatio: value.usedRatio,
+      ...(value.used === undefined ? {} : { used: value.used }),
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+      ...(value.unit === undefined ? {} : { unit: value.unit }),
+      ...(segments === undefined ? {} : { segments }),
+    };
+  }
+
+  if (value.type === "counter") {
+    if (
+      (value.semantic !== "consumed" && value.semantic !== "spent") ||
+      !isFiniteNumber(value.value) || value.value < 0 ||
+      !isNonEmptyString(value.unit) ||
+      !isOptionalNumber(value.limit, (number) => number > 0)
+    ) return undefined;
+    return {
+      ...base,
+      type: "counter",
+      semantic: value.semantic,
+      value: value.value,
+      unit: value.unit,
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+    };
+  }
+
   if (
-    !isRecord(value) ||
-    !isNonEmptyString(value.id) ||
-    !isNonEmptyString(value.label) ||
-    !isNonEmptyString(value.unit) ||
-    !isOptionalNumber(value.used, (number) => number >= 0) ||
-    !isOptionalNumber(value.limit, (number) => number > 0) ||
-    !isOptionalNumber(value.remaining, (number) => number >= 0) ||
-    !isOptionalNumber(value.resetsAt, (number) => number >= 0)
+    value.type === "balance" &&
+    isFiniteNumber(value.value) && value.value >= 0 &&
+    isNonEmptyString(value.unit) &&
+    isOptionalNumber(value.initialLimit, (number) => number > 0)
   ) {
-    return undefined;
+    return {
+      ...base,
+      type: "balance",
+      value: value.value,
+      unit: value.unit,
+      ...(value.initialLimit === undefined ? {} : { initialLimit: value.initialLimit }),
+    };
   }
-
-  return {
-    id: value.id,
-    label: value.label,
-    unit: value.unit,
-    ...(value.used !== undefined ? { used: value.used } : {}),
-    ...(value.limit !== undefined ? { limit: value.limit } : {}),
-    ...(value.remaining !== undefined ? { remaining: value.remaining } : {}),
-    ...(value.resetsAt !== undefined ? { resetsAt: value.resetsAt } : {}),
-  };
+  return undefined;
 }
 
 function normalizeUsageGroups(
   value: unknown,
-  windows: readonly QuotaWindow[],
-  credits: readonly CreditBalance[],
-): LegacyUsageGroup[] | undefined {
-  if (value === undefined || !Array.isArray(value) || value.length === 0) {
+  metrics: readonly UsageMetric[],
+): UsageGroup[] | undefined {
+  if (value === undefined) {
     return undefined;
   }
+  if (!Array.isArray(value) || value.length === 0) return undefined;
 
-  const groups = value.map((group): LegacyUsageGroup | undefined => {
+  const groups = value.map((group): UsageGroup | undefined => {
     if (
       !isRecord(group) ||
       !isNonEmptyString(group.id) ||
       !isNonEmptyString(group.label) ||
       !isOptionalString(group.description) ||
-      !Array.isArray(group.windowIds) ||
-      !Array.isArray(group.creditIds) ||
-      !group.windowIds.every(isNonEmptyString) ||
-      !group.creditIds.every(isNonEmptyString) ||
-      (group.windowIds.length === 0 && group.creditIds.length === 0)
+      !Array.isArray(group.metricIds) ||
+      !group.metricIds.every(isNonEmptyString) ||
+      group.metricIds.length === 0
     ) {
       return undefined;
     }
@@ -184,8 +211,7 @@ function normalizeUsageGroups(
       id: group.id,
       label: group.label,
       ...(group.description === undefined ? {} : { description: group.description }),
-      windowIds: group.windowIds,
-      creditIds: group.creditIds,
+      metricIds: group.metricIds,
     };
   });
 
@@ -196,138 +222,144 @@ function normalizeUsageGroups(
     return undefined;
   }
 
-  const measureIds = new Set([
-    ...windows.map((window) => `window:${window.id}`),
-    ...credits.map((credit) => `credit:${credit.id}`),
-  ]);
-  const memberships = (groups as LegacyUsageGroup[]).flatMap((group) => [
-    ...group.windowIds.map((id) => `window:${id}`),
-    ...group.creditIds.map((id) => `credit:${id}`),
-  ]);
+  const metricIds = new Set(metrics.map((metric) => metric.id));
+  const memberships = (groups as UsageGroup[]).flatMap((group) => group.metricIds);
 
   if (
-    memberships.some((membership) => !measureIds.has(membership)) ||
-    new Set(memberships).size !== memberships.length
+    memberships.some((membership) => !metricIds.has(membership)) ||
+    new Set(memberships).size !== memberships.length ||
+    memberships.length !== metricIds.size
   ) {
     return undefined;
   }
 
-  return groups as LegacyUsageGroup[];
+  return groups as UsageGroup[];
 }
 
 function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-export function normalizeProviderSnapshot(
+export function normalizeUsageSnapshot(
   value: unknown,
   providerId: ProviderId,
-): ProviderSnapshot | undefined {
+): UsageSnapshot | undefined {
   if (
     !isRecord(value) ||
-    value.providerId !== providerId ||
+    value.providerKind !== providerId ||
     (value.source !== "web-session" &&
       value.source !== "oauth" &&
-      value.source !== "api-key") ||
+      value.source !== "api-key" &&
+      value.source !== "fixture") ||
     !isFiniteNumber(value.fetchedAt) ||
     value.fetchedAt < 0 ||
     !isOptionalString(value.accountLabel) ||
     !isOptionalString(value.planLabel) ||
-    !Array.isArray(value.windows) ||
-    !Array.isArray(value.credits)
+    !Array.isArray(value.metrics) ||
+    value.metrics.length === 0
   ) {
     return undefined;
   }
 
-  const windows = value.windows.map(normalizeWindow);
-  const credits = value.credits.map(normalizeCredit);
+  const metrics = value.metrics.map(normalizeMetric);
   if (
-    windows.some((window) => window === undefined) ||
-    credits.some((credit) => credit === undefined) ||
-    new Set(windows.map((window) => window?.id)).size !== windows.length ||
-    new Set(credits.map((credit) => credit?.id)).size !== credits.length
+    metrics.some((metric) => metric === undefined) ||
+    new Set(metrics.map((metric) => metric?.id)).size !== metrics.length
   ) {
     return undefined;
   }
 
   const usageGroups = normalizeUsageGroups(
     value.usageGroups,
-    windows as QuotaWindow[],
-    credits as CreditBalance[],
+    metrics as UsageMetric[],
   );
+  if (value.usageGroups !== undefined && usageGroups === undefined) return undefined;
 
   return {
-    providerId,
+    providerKind: providerId,
     ...(value.accountLabel !== undefined && !looksLikeEmail(value.accountLabel)
       ? { accountLabel: value.accountLabel }
       : {}),
     ...(value.planLabel !== undefined ? { planLabel: value.planLabel } : {}),
     source: value.source,
     fetchedAt: value.fetchedAt,
-    windows: windows as QuotaWindow[],
-    credits: credits as CreditBalance[],
+    metrics: metrics as UsageMetric[],
     ...(usageGroups === undefined ? {} : { usageGroups }),
   };
 }
 
-function normalizeHistorySample(value: unknown): QuotaHistorySample | undefined {
+function normalizeHistorySample(value: unknown): MetricHistorySample | undefined {
   if (
     !isRecord(value) ||
-    !isNonEmptyString(value.windowId) ||
-    !isFiniteNumber(value.usedRatio) ||
-    value.usedRatio < 0 ||
-    value.usedRatio > 1 ||
-    !isOptionalNumber(value.startedAt, (number) => number >= 0) ||
-    !isOptionalNumber(value.resetsAt, (number) => number >= 0) ||
-    !isOptionalNumber(value.durationMs, (number) => number > 0) ||
-    (isFiniteNumber(value.startedAt) &&
-      isFiniteNumber(value.resetsAt) &&
-      value.resetsAt <= value.startedAt)
+    !isNonEmptyString(value.metricId)
   ) {
     return undefined;
   }
-
-  return {
-    windowId: value.windowId,
-    usedRatio: value.usedRatio,
-    ...(value.startedAt === undefined ? {} : { startedAt: value.startedAt }),
-    ...(value.resetsAt === undefined ? {} : { resetsAt: value.resetsAt }),
-    ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
-  };
+  const cycle = normalizeCycle(value.cycle);
+  if (value.cycle !== undefined && cycle === undefined) return undefined;
+  if (value.type === "quota" && isFiniteNumber(value.usedRatio) && value.usedRatio >= 0 && value.usedRatio <= 1) {
+    return { type: "quota", metricId: value.metricId, usedRatio: value.usedRatio, ...(cycle ? { cycle } : {}) };
+  }
+  if (
+    value.type === "counter" &&
+    (value.semantic === "consumed" || value.semantic === "spent") &&
+    isFiniteNumber(value.value) && value.value >= 0 &&
+    isNonEmptyString(value.unit) &&
+    isOptionalNumber(value.limit, (number) => number > 0)
+  ) {
+    return {
+      type: "counter", metricId: value.metricId, semantic: value.semantic,
+      value: value.value, unit: value.unit,
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+      ...(cycle ? { cycle } : {}),
+    };
+  }
+  if (
+    value.type === "balance" && isFiniteNumber(value.value) && value.value >= 0 &&
+    isNonEmptyString(value.unit) &&
+    isOptionalNumber(value.initialLimit, (number) => number > 0)
+  ) {
+    return {
+      type: "balance", metricId: value.metricId, value: value.value, unit: value.unit,
+      ...(value.initialLimit === undefined ? {} : { initialLimit: value.initialLimit }),
+      ...(cycle ? { cycle } : {}),
+    };
+  }
+  return undefined;
 }
 
 function normalizeHistoryObservation(
   value: unknown,
-): QuotaHistoryObservation | undefined {
+): UsageHistoryObservation | undefined {
   if (
     !isRecord(value) ||
     !isFiniteNumber(value.observedAt) ||
     value.observedAt < 0 ||
-    !Array.isArray(value.windows)
+    !Array.isArray(value.metrics)
   ) {
     return undefined;
   }
 
-  const windows = value.windows.map(normalizeHistorySample);
+  const metrics = value.metrics.map(normalizeHistorySample);
   if (
-    windows.some((window) => window === undefined) ||
-    new Set(windows.map((window) => window?.windowId)).size !== windows.length
+    metrics.some((metric) => metric === undefined) ||
+    new Set(metrics.map((metric) => metric?.metricId)).size !== metrics.length
   ) {
     return undefined;
   }
 
   return {
     observedAt: value.observedAt,
-    windows: windows as QuotaHistorySample[],
+    metrics: metrics as MetricHistorySample[],
   };
 }
 
-function normalizeHistory(value: unknown): QuotaHistoryObservation[] {
+function normalizeHistory(value: unknown): UsageHistoryObservation[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  const byTimestamp = new Map<number, QuotaHistoryObservation>();
+  const byTimestamp = new Map<number, UsageHistoryObservation>();
   for (const candidate of value) {
     const observation = normalizeHistoryObservation(candidate);
     if (observation) {
@@ -490,13 +522,13 @@ export function migrateState(value: unknown, now: number): AppState {
       return { providerId, access: "required", history: [] };
     }
 
-    const snapshot = normalizeProviderSnapshot(stored.snapshot, providerId);
+    const snapshot = normalizeUsageSnapshot(stored.snapshot, providerId);
     const lastAttempt = normalizeAttempt(stored.lastAttempt);
     const history =
       isRecord(value) && value.version === CURRENT_STATE_VERSION
-        ? retainQuotaHistory(normalizeHistory(stored.history), now)
+        ? retainUsageHistory(normalizeHistory(stored.history), now)
         : isRecord(value) && value.version === 3 && snapshot
-          ? retainQuotaHistory([observationFromSnapshot(snapshot)], now)
+          ? retainUsageHistory([observationFromUsage(snapshot)], now)
           : [];
 
     return {

@@ -1,4 +1,4 @@
-import type { ProviderHealth, QuotaWindow } from "../../domain/model";
+import type { BalanceMetric, ProviderHealth, QuotaMetric } from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
@@ -35,7 +35,7 @@ function healthForResponse(response: Response, now: number): ProviderHealth {
   return { kind: "provider_changed" };
 }
 
-function windowIdentity(durationSeconds: number): Pick<QuotaWindow, "id" | "label"> {
+function windowIdentity(durationSeconds: number): Pick<QuotaMetric, "id" | "label"> {
   if (durationSeconds === 5 * HOUR_SECONDS) {
     return { id: "five-hour", label: "5-hour messages" };
   }
@@ -59,14 +59,17 @@ function windowIdentity(durationSeconds: number): Pick<QuotaWindow, "id" | "labe
   };
 }
 
-function normalizeWindow(window: ChatGptUsageWindow): QuotaWindow {
+function normalizeWindow(window: ChatGptUsageWindow): QuotaMetric {
   return {
     ...windowIdentity(window.limit_window_seconds),
-    kind: "rolling",
+    type: "quota",
+    scope: "general",
     usedRatio: window.used_percent / 100,
-    resetsAt: window.reset_at * 1_000,
-    durationMs: window.limit_window_seconds * 1_000,
-    sourceSemantics: "used",
+    cycle: {
+      cadence: "rolling",
+      resetsAt: window.reset_at * 1_000,
+      durationMs: window.limit_window_seconds * 1_000,
+    },
   };
 }
 
@@ -152,23 +155,25 @@ async function collectChatGpt({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const windows = [
+    const quotas = [
       usage.data.rate_limit.primary_window,
       usage.data.rate_limit.secondary_window,
     ].flatMap((window) => (window ? [normalizeWindow(window)] : []));
 
-    if (windows.length === 0) {
+    if (quotas.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const creditSection = chatGptCreditsSchema.safeParse(usage.data.credits);
-    const credits = creditSection.success
+    const creditSection = chatGptCreditsSchema.safeParse(usage.data["credits"]);
+    const balances: BalanceMetric[] = creditSection.success
       ? [
           {
+            type: "balance",
             id: "credits",
             label: "Credits",
+            scope: "product",
             unit: "credits",
-            remaining: creditSection.data.balance,
+            value: creditSection.data.balance,
           },
         ]
       : [];
@@ -176,18 +181,16 @@ async function collectChatGpt({
     return {
       ok: true,
       snapshot: {
-        providerId: "chatgpt",
+        providerKind: "chatgpt",
         planLabel: usage.data.plan_type,
         source: "web-session",
         fetchedAt: now,
-        windows,
-        credits,
+        metrics: [...quotas, ...balances],
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: windows.map((window) => window.id),
-            creditIds: credits.map((credit) => credit.id),
+            metricIds: [...quotas, ...balances].map((metric) => metric.id),
           },
         ],
       },

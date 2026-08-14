@@ -818,13 +818,13 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   font-weight: 700;
 }
 
-.credits {
+.metric-values {
   margin-top: 15px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
-.credits h3 {
+.metric-values h3 {
   margin-bottom: 8px;
   color: var(--text-muted);
   font-size: 11px;
@@ -1350,7 +1350,7 @@ section[aria-labelledby="overview-title"] .provider-list {
   border-radius: 2px;
 }
 
-.credits {
+.metric-values {
   margin: 0;
   padding: 8px 14px;
   border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);

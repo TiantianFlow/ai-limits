@@ -6,6 +6,7 @@ import type {
   UsageMetric,
   UsageSnapshot,
 } from "../../domain/model";
+import { normalizeUsageSnapshot } from "../../providers/initial-state";
 import {
   balanceMetrics,
   counterMetrics,
@@ -98,5 +99,12 @@ describe("usage metrics", () => {
     expect(balanceMetrics({ ...snapshot, metrics })[0]?.value).toBe(177.697);
   });
 
-  test.todo("rejects duplicate metric IDs through the Task 2 normalization seam");
+  test("rejects duplicate metric IDs through the Task 2 normalization seam", () => {
+    expect(
+      normalizeUsageSnapshot(
+        { ...snapshot, metrics: [metrics[0], { ...metrics[0] }] },
+        "chatgpt",
+      ),
+    ).toBeUndefined();
+  });
 });

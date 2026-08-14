@@ -46,16 +46,15 @@ describe("provider registry", () => {
       providerId: "elevenlabs",
       access: "granted",
       snapshot: {
-        providerId: "elevenlabs",
+        providerKind: "elevenlabs",
         planLabel: "Starter",
         source: "fixture",
-        windows: [
-          { id: "monthly-credits", used: 2_500, limit: 10_000 },
-          { id: "voice-slots", used: 2, limit: 10 },
-          { id: "professional-voice-slots", used: 1, limit: 3 },
-          { id: "voice-add-edits", used: 4, limit: 20 },
+        metrics: [
+          { type: "quota", id: "monthly-credits", used: 2_500, limit: 10_000 },
+          { type: "quota", id: "voice-slots", used: 2, limit: 10 },
+          { type: "quota", id: "professional-voice-slots", used: 1, limit: 3 },
+          { type: "quota", id: "voice-add-edits", used: 4, limit: 20 },
         ],
-        credits: [],
       },
     });
     expect(JSON.stringify(elevenlabs)).not.toMatch(/xi-api-key|sk-[a-z0-9_-]+/i);

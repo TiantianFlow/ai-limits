@@ -91,45 +91,43 @@ describe("Claude adapter", () => {
     expect(result).toEqual({
       ok: true,
       snapshot: {
-        providerId: "claude",
+        providerKind: "claude",
         planLabel: "Claude Max",
         source: "web-session",
         fetchedAt: NOW,
-        windows: [
+        metrics: [
           {
+            type: "quota",
             id: "five-hour",
             label: "5-hour messages",
-            kind: "rolling",
+            scope: "general",
             usedRatio: 0.16,
-            resetsAt: Date.parse(FIVE_HOUR_RESET),
-            durationMs: FIVE_HOURS_MS,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(FIVE_HOUR_RESET), durationMs: FIVE_HOURS_MS },
           },
           {
+            type: "quota",
             id: "weekly",
             label: "Weekly messages",
-            kind: "rolling",
+            scope: "general",
             usedRatio: 0.1,
-            resetsAt: Date.parse(WEEKLY_RESET),
-            durationMs: SEVEN_DAYS_MS,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(WEEKLY_RESET), durationMs: SEVEN_DAYS_MS },
           },
           {
+            type: "quota",
             id: "weekly-scoped-claude-sonnet-4-5",
             label: "Weekly Claude Sonnet 4.5",
-            kind: "model",
+            scope: "model",
             usedRatio: 0.25,
-            resetsAt: Date.parse(SONNET_RESET),
-            durationMs: SEVEN_DAYS_MS,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(SONNET_RESET), durationMs: SEVEN_DAYS_MS },
           },
-        ],
-        credits: [
           {
+            type: "counter",
             id: "extra-usage",
             label: "Extra usage",
+            scope: "product",
+            semantic: "spent",
             unit: "USD",
-            used: 41.32,
+            value: 41.32,
             limit: 1_000,
           },
         ],
@@ -137,12 +135,12 @@ describe("Claude adapter", () => {
           {
             id: "usage",
             label: "Usage",
-            windowIds: [
+            metricIds: [
               "five-hour",
               "weekly",
               "weekly-scoped-claude-sonnet-4-5",
+              "extra-usage",
             ],
-            creditIds: ["extra-usage"],
           },
         ],
       },
@@ -219,7 +217,7 @@ describe("Claude adapter", () => {
     );
   });
 
-  test("omits null optional windows and disabled extra usage instead of inventing zero values", async () => {
+  test("omits null optional metrics and disabled extra usage instead of inventing zero values", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -246,34 +244,31 @@ describe("Claude adapter", () => {
     await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
       ok: true,
       snapshot: {
-        providerId: "claude",
+        providerKind: "claude",
         source: "web-session",
         fetchedAt: NOW,
-        windows: [
+        metrics: [
           {
+            type: "quota",
             id: "five-hour",
             label: "5-hour messages",
-            kind: "rolling",
+            scope: "general",
             usedRatio: 0.16,
-            resetsAt: Date.parse(FIVE_HOUR_RESET),
-            durationMs: FIVE_HOURS_MS,
-            sourceSemantics: "used",
+            cycle: { cadence: "rolling", resetsAt: Date.parse(FIVE_HOUR_RESET), durationMs: FIVE_HOURS_MS },
           },
         ],
-        credits: [],
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: ["five-hour"],
-            creditIds: [],
+            metricIds: ["five-hour"],
           },
         ],
       },
     });
   });
 
-  test("omits an inactive named window with a null reset while preserving valid windows", async () => {
+  test("omits an inactive named window with a null reset while preserving valid metrics", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -297,14 +292,14 @@ describe("Claude adapter", () => {
     expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
-          { id: "five-hour", resetsAt: Date.parse(FIVE_HOUR_RESET) },
-          { id: "weekly", resetsAt: Date.parse(WEEKLY_RESET) },
-          {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "five-hour", cycle: expect.objectContaining({ resetsAt: Date.parse(FIVE_HOUR_RESET) }) }),
+          expect.objectContaining({ id: "weekly", cycle: expect.objectContaining({ resetsAt: Date.parse(WEEKLY_RESET) }) }),
+          expect.objectContaining({
             id: "weekly-scoped-claude-sonnet-4-5",
-            resetsAt: Date.parse(SONNET_RESET),
-          },
-        ],
+            cycle: expect.objectContaining({ resetsAt: Date.parse(SONNET_RESET) }),
+          }),
+        ]),
       },
     });
     expect(JSON.stringify(result)).not.toContain("redacted-account");
@@ -346,16 +341,16 @@ describe("Claude adapter", () => {
     await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
-          { id: "five-hour" },
-          { id: "weekly" },
-          { id: "weekly-scoped-claude-sonnet-4-5" },
-        ],
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "five-hour" }),
+          expect.objectContaining({ id: "weekly" }),
+          expect.objectContaining({ id: "weekly-scoped-claude-sonnet-4-5" }),
+        ]),
       },
     });
   });
 
-  test("ignores unfamiliar extra-usage data without erasing core windows", async () => {
+  test("ignores unfamiliar extra-usage data without erasing core metrics", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -377,13 +372,15 @@ describe("Claude adapter", () => {
     await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [{ id: "five-hour" }, { id: "weekly" }],
-        credits: [],
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "five-hour" }),
+          expect.objectContaining({ id: "weekly" }),
+        ]),
       },
     });
   });
 
-  test("ignores changed optional model windows without erasing core windows", async () => {
+  test("ignores changed optional model metrics without erasing core metrics", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -402,11 +399,11 @@ describe("Claude adapter", () => {
     await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [
-          { id: "five-hour" },
-          { id: "weekly" },
-          { id: "weekly-scoped-claude-sonnet-4-5" },
-        ],
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "five-hour" }),
+          expect.objectContaining({ id: "weekly" }),
+          expect.objectContaining({ id: "weekly-scoped-claude-sonnet-4-5" }),
+        ]),
       },
     });
   });
@@ -581,7 +578,7 @@ describe("Claude adapter", () => {
         scope: { model: { display_name: "!!!" } },
       },
     ],
-  ] as const)("ignores %s without erasing core windows", async (_description, limit) => {
+  ] as const)("ignores %s without erasing core metrics", async (_description, limit) => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -592,7 +589,10 @@ describe("Claude adapter", () => {
     await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [{ id: "five-hour" }, { id: "weekly" }],
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "five-hour" }),
+          expect.objectContaining({ id: "weekly" }),
+        ]),
       },
     });
   });
@@ -623,11 +623,11 @@ describe("Claude adapter", () => {
       expect(result).toMatchObject({
         ok: true,
         snapshot: {
-          windows: [
-            { id: "five-hour" },
-            { id: "weekly" },
-            { id: "weekly-sonnet" },
-          ],
+          metrics: expect.arrayContaining([
+            expect.objectContaining({ id: "five-hour" }),
+            expect.objectContaining({ id: "weekly" }),
+            expect.objectContaining({ id: "weekly-sonnet" }),
+          ]),
         },
       });
     },

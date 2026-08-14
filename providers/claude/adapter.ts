@@ -1,7 +1,7 @@
 import type {
-  CreditBalance,
+  CounterMetric,
   ProviderHealth,
-  QuotaWindow,
+  QuotaMetric,
 } from "../../domain/model";
 import type {
   CollectionContext,
@@ -89,19 +89,22 @@ function selectOrganization(value: unknown): ClaudeOrganization | undefined {
 
 function normalizeWindow(
   window: ClaudeUsageWindow,
-  identity: Pick<QuotaWindow, "id" | "label" | "kind">,
+  identity: Pick<QuotaMetric, "id" | "label" | "scope">,
   durationMs: number,
-): QuotaWindow {
+): QuotaMetric {
   if (window.resets_at === null) {
     throw new Error("Cannot normalize a window without a reset time");
   }
 
   return {
     ...identity,
+    type: "quota",
     usedRatio: window.utilization / 100,
-    resetsAt: Date.parse(window.resets_at),
-    durationMs,
-    sourceSemantics: "used",
+    cycle: {
+      cadence: "rolling",
+      resetsAt: Date.parse(window.resets_at),
+      durationMs,
+    },
   };
 }
 
@@ -116,32 +119,38 @@ function scopedWindowId(displayName: string): string {
   return `weekly-scoped-${sanitizedName}`;
 }
 
-function normalizeScopedWindow(limit: ClaudeScopedLimit): QuotaWindow {
+function normalizeScopedWindow(limit: ClaudeScopedLimit): QuotaMetric {
   const displayName = limit.scope.model.display_name;
   return {
     id: scopedWindowId(displayName),
     label: `Weekly ${displayName}`,
-    kind: "model",
+    type: "quota",
+    scope: "model",
     usedRatio: limit.percent / 100,
-    resetsAt: Date.parse(limit.resets_at),
-    durationMs: 7 * DAY_MS,
-    sourceSemantics: "used",
+    cycle: {
+      cadence: "rolling",
+      resetsAt: Date.parse(limit.resets_at),
+      durationMs: 7 * DAY_MS,
+    },
   };
 }
 
-function normalizeCredits(
+function normalizeExtraUsage(
   extraUsage: ClaudeExtraUsage,
-): CreditBalance[] {
+): CounterMetric[] {
   if (!extraUsage?.is_enabled) {
     return [];
   }
 
   return [
     {
+      type: "counter",
       id: "extra-usage",
       label: "Extra usage",
+      scope: "product",
+      semantic: "spent",
       unit: extraUsage.currency,
-      used: extraUsage.used_credits / 100,
+      value: extraUsage.used_credits / 100,
       limit: extraUsage.monthly_limit / 100,
     },
   ];
@@ -216,14 +225,14 @@ async function collectClaude({
       usage.data.five_hour?.resets_at
         ? normalizeWindow(
             usage.data.five_hour,
-            { id: "five-hour", label: "5-hour messages", kind: "rolling" },
+            { id: "five-hour", label: "5-hour messages", scope: "general" },
             5 * HOUR_MS,
           )
         : undefined,
       usage.data.seven_day?.resets_at
         ? normalizeWindow(
             usage.data.seven_day,
-            { id: "weekly", label: "Weekly messages", kind: "rolling" },
+            { id: "weekly", label: "Weekly messages", scope: "general" },
             7 * DAY_MS,
           )
         : undefined,
@@ -231,12 +240,12 @@ async function collectClaude({
         candidate.value.resets_at
           ? normalizeWindow(
               candidate.value,
-              { id: candidate.id, label: candidate.label, kind: "model" },
+              { id: candidate.id, label: candidate.label, scope: "model" },
               7 * DAY_MS,
             )
           : undefined,
       ),
-    ].filter((window): window is QuotaWindow => window !== undefined);
+    ].filter((metric): metric is QuotaMetric => metric !== undefined);
 
     const scopedWindows = (usage.data.limits ?? []).flatMap((candidate) => {
       const parsed = claudeScopedLimitSchema.safeParse(candidate);
@@ -249,29 +258,27 @@ async function collectClaude({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const windows = [...namedWindows, ...scopedWindows];
+    const quotas = [...namedWindows, ...scopedWindows];
 
-    if (windows.length === 0) {
+    if (quotas.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
     const extraUsage = claudeExtraUsageSchema.safeParse(usage.data.extra_usage);
-    const credits = extraUsage.success ? normalizeCredits(extraUsage.data) : [];
+    const counters = extraUsage.success ? normalizeExtraUsage(extraUsage.data) : [];
     return {
       ok: true,
       snapshot: {
-        providerId: "claude",
+        providerKind: "claude",
         ...(organization.name ? { planLabel: organization.name } : {}),
         source: "web-session",
         fetchedAt: now,
-        windows,
-        credits,
+        metrics: [...quotas, ...counters],
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: windows.map((window) => window.id),
-            creditIds: credits.map((credit) => credit.id),
+            metricIds: [...quotas, ...counters].map((metric) => metric.id),
           },
         ],
       },

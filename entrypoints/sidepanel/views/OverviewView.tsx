@@ -24,7 +24,7 @@ export interface OverviewViewProps {
   onAddProvider: (invoker: HTMLButtonElement) => void;
   onRefreshProvider: (providerId: ProviderId) => void;
   onOpenProvider: (providerId: ProviderId) => void;
-  onOpenHistory: (providerId: ProviderId, windowId: string) => void;
+  onOpenHistory: (providerId: ProviderId, metricId: string) => void;
   onReplaceApiKey: (providerId: ApiKeyProviderId) => void;
 }
 
@@ -56,7 +56,7 @@ export function OverviewView({
               onOpenDetails={() => onOpenProvider(providerId)}
               onOpenHistory={
                 card.hasSnapshot
-                  ? (windowId) => onOpenHistory(providerId, windowId)
+                  ? (metricId) => onOpenHistory(providerId, metricId)
                   : undefined
               }
               action={
