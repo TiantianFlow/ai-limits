@@ -4,6 +4,7 @@ import type {
   ProviderInstanceRecord,
 } from "../domain/model";
 import {
+  sanitizedFailureGuidance,
   sanitizedFailureMessage,
   type ProviderAttempt,
   type ProviderRefreshOutcome,
@@ -58,6 +59,7 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
   }
   const retryAt =
     result.health.kind === "temporary_error" ? result.health.retryAt : undefined;
+  const guidance = sanitizedFailureGuidance(result.health.guidance);
   return {
     kind: "failure",
     category: result.health.kind,
@@ -69,9 +71,7 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
             result.health.message,
           ),
         }),
-    ...(result.health.guidance === undefined
-      ? {}
-      : { guidance: result.health.guidance }),
+    ...(guidance === undefined ? {} : { guidance }),
     ...(retryAt === undefined ? {} : { retryAt }),
   };
 }
@@ -127,6 +127,7 @@ function attemptFor(
       kind: "failure",
       category: outcome.category,
       ...(outcome.message === undefined ? {} : { message: outcome.message }),
+      ...(outcome.guidance === undefined ? {} : { guidance: outcome.guidance }),
       ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
     },
   };

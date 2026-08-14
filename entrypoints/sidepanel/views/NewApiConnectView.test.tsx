@@ -56,7 +56,7 @@ describe("NewApiConnectView", () => {
     expect(screen.getByText(/request is read-only, but the relay key itself may still call models/i)).toBeVisible();
   });
 
-  it("explains and applies tolerant site URL normalization", async () => {
+  it("explains tolerant normalization while submitting the raw URL to package authority", async () => {
     const onSubmit = vi.fn(async () => "invalid_key" as const);
     renderView({ onSubmit });
 
@@ -75,18 +75,18 @@ describe("NewApiConnectView", () => {
 
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "https://api.example.com/new-api/v1/messages",
+        "https://API.example.com/new-api/v1/messages",
         " sk-test ",
       ),
     );
     expect(screen.getByLabelText("New API site URL")).toHaveValue(
-      "https://api.example.com/new-api/v1/messages",
+      "https://API.example.com/new-api/v1/messages",
     );
     expect(screen.getByLabelText("New API relay key")).toHaveValue("");
   });
 
-  it("rejects ambiguous and unsafe URLs before requesting access", () => {
-    const onSubmit = vi.fn();
+  it("forwards any nonblank raw URL to package validation", async () => {
+    const onSubmit = vi.fn(async () => "invalid_site" as const);
     renderView({ onSubmit });
     const site = screen.getByLabelText("New API site URL");
     const key = screen.getByLabelText("New API relay key");
@@ -94,12 +94,12 @@ describe("NewApiConnectView", () => {
 
     fireEvent.change(site, { target: { value: "api.example.com/v1" } });
     fireEvent.change(key, { target: { value: "sk-test" } });
-    expect(submit).toBeDisabled();
-    fireEvent.change(site, { target: { value: "http://public.example.com/v1" } });
-    expect(submit).toBeDisabled();
-    fireEvent.change(site, { target: { value: "http://localhost:3000/v1" } });
     expect(submit).toBeEnabled();
-    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.submit(submit);
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith("api.example.com/v1", "sk-test"),
+    );
   });
 
   it.each([

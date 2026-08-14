@@ -87,7 +87,7 @@ export interface PrepareProviderPermissionRequest {
 export interface PrepareProviderPermissionResult {
   permissionIntentId: string;
   instanceId: ProviderInstanceId;
-  config: ProviderInstanceConfig;
+  normalizedConfig: ProviderInstanceConfig;
   permissions: Browser.permissions.Permissions;
 }
 
@@ -235,7 +235,7 @@ export function createProviderService(
   ): Promise<ProviderInstanceRecord> {
     const providerPackage = packages[request.providerKind];
     const config = providerPackage.normalizeConfig(request.config);
-    if (!config) throw new Error("Provider permission intent failed.");
+    if (!config) throw new Error("Provider configuration is invalid.");
     const instances = await connectionRepository.list();
     const requested = request.instanceId
       ? instances.find(({ id }) => id === request.instanceId)
@@ -291,7 +291,7 @@ export function createProviderService(
       return {
         permissionIntentId: intent.id,
         instanceId: candidate.id,
-        config: candidate.config,
+        normalizedConfig: candidate.config,
         permissions: permissions ?? {},
       };
     });

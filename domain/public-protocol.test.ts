@@ -98,8 +98,8 @@ describe("public side-panel protocol", () => {
     expect(source.instances[0]!.snapshot.metrics[0]!.label).toBe("Relay quota");
   });
 
-  test("rejects a non-normalized public New API base URL", () => {
-    const baseUrl = "https://relay.example/gateway/";
+  test("rejects an unsafe public New API base URL", () => {
+    const baseUrl = "https://relay.example/gateway?token=synthetic-secret";
     expect(() =>
       parseAppViewState({
         preferences: { displayMode: "used", autoRefresh: true },

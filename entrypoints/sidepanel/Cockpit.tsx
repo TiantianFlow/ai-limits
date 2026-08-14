@@ -519,7 +519,8 @@ export function Cockpit({
           : previousScreen?.name === "overview" &&
               connectedInstances.length === 0 &&
               view.name === "api-key-connect" &&
-              view.providerKind === "newapi"
+              providerAvailability(state, view.providerKind).configKind ===
+                "dynamic-origin"
             ? "Connect your providers"
           : "Overview";
   const detailRecord =
@@ -625,7 +626,8 @@ export function Cockpit({
       ) : null}
 
       {view.name === "api-key-connect" ? (
-        view.providerKind === "newapi" ? (
+        providerAvailability(state, view.providerKind).configKind ===
+        "dynamic-origin" ? (
           <NewApiConnectView
             mode={view.mode}
             initialBaseUrl={

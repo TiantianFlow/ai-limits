@@ -84,7 +84,7 @@ function toPublicControlResponse(
         : providerKind === "newapi"
           ? TEST_NEW_API_INSTANCE
           : `${providerKind}:default`,
-    config,
+    normalizedConfig: config,
     permissions: config
       ? providerRegistry[providerKind].requiredPermissions(config) ?? {}
       : {},
@@ -284,6 +284,17 @@ describe("side-panel App", () => {
       target: { value: "sk-candidate" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    await waitFor(() =>
+      expect(commands).toContainEqual({
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "newapi",
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://API.example.com/gateway/v1/messages",
+        },
+      }),
+    );
 
     await waitFor(() =>
       expect(commands).toContainEqual({
@@ -1264,7 +1275,7 @@ describe("side-panel App", () => {
               state,
               permissionIntentId: TEST_PERMISSION_INTENT,
               instanceId: workId,
-              config: {
+              normalizedConfig: {
                 kind: "dynamic-origin",
                 baseUrl: "https://relay.example",
               },

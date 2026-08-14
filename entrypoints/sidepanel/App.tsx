@@ -8,7 +8,7 @@ import {
   parseDisconnectResponse,
   parsePermissionIntentResponse,
   parseRefreshResponse,
-  isApiKeyProviderKind,
+  providerAvailability,
   providerNames,
   providerPresentation,
   type AppViewState,
@@ -89,6 +89,16 @@ function manualSummary(report: RefreshReport, state: AppViewState): string {
 function confirmationFailure(label?: string): string {
   const subject = label ? `${label} refresh` : "refresh";
   return `Couldn’t confirm the ${subject} result. Check the latest usage before retrying.`;
+}
+
+function rawProviderConfig(
+  state: AppViewState,
+  providerKind: ProviderKind,
+  baseUrl?: string,
+): ProviderInstanceConfig {
+  return providerAvailability(state, providerKind).configKind === "dynamic-origin"
+    ? { kind: "dynamic-origin", baseUrl: baseUrl ?? "" }
+    : { kind: "fixed" };
 }
 
 export function App() {
@@ -320,10 +330,14 @@ export function App() {
   };
 
   const handleConnectProvider = async (providerKind: ProviderKind) => {
-    if (isApiKeyProviderKind(providerKind)) return;
+    const currentState = viewStateRef.current;
+    if (
+      !currentState ||
+      providerAvailability(currentState, providerKind).credentialKind !== "none"
+    ) return;
     clearAnnouncement();
-    const config = { kind: "fixed" } as const;
-    const existingInstanceId = viewStateRef.current?.instances.find(
+    const config = rawProviderConfig(currentState, providerKind);
+    const existingInstanceId = currentState.instances.find(
       (instance) => instance.providerKind === providerKind,
     )?.id;
     let prepared: PermissionIntentResponse;
@@ -389,9 +403,9 @@ export function App() {
       (instanceId
         ? presentationLabel(viewStateRef.current, instanceId)
         : userLabel?.trim()) || providerNames[providerKind];
-    const config: ProviderInstanceConfig = providerKind === "newapi"
-      ? { kind: "dynamic-origin", baseUrl: baseUrl ?? "" }
-      : { kind: "fixed" };
+    const currentState = viewStateRef.current;
+    if (!currentState) return "temporary_error";
+    const config = rawProviderConfig(currentState, providerKind, baseUrl);
     clearAnnouncement();
     let prepared: PermissionIntentResponse;
     try {
@@ -428,7 +442,7 @@ export function App() {
           providerKind,
           instanceId: prepared.instanceId,
           ...(userLabel !== undefined ? { userLabel } : {}),
-          config: prepared.config,
+          config: prepared.normalizedConfig,
           apiKey,
           permissionIntentId: prepared.permissionIntentId,
         } satisfies RuntimeCommand),

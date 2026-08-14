@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 
-import { normalizeDynamicOriginBaseUrlIntent } from "../../../domain/public-protocol";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
 import type { ApiKeyConnectAttemptResult } from "./ApiKeyConnectView";
@@ -46,12 +45,11 @@ export function NewApiConnectView({
   const [apiKey, setApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const normalizedBaseUrl = normalizeDynamicOriginBaseUrlIntent(baseUrl);
   const replace = mode === "replace";
   const title = replace ? "Replace New API connection" : "Connect New API";
   const submitLabel = replace ? "Validate & replace" : "Validate & connect";
   const invalid =
-    !normalizedBaseUrl || apiKey.trim().length === 0 || apiKey.length > 4_096;
+    baseUrl.trim().length === 0 || apiKey.trim().length === 0 || apiKey.length > 4_096;
 
   return (
     <section className="screen api-key-guide" aria-label={title}>
@@ -82,15 +80,14 @@ export function NewApiConnectView({
           aria-label="New API relay key setup"
           onSubmit={(event) => {
             event.preventDefault();
-            if (invalid || submitting || !normalizedBaseUrl) return;
+            if (invalid || submitting) return;
             setSubmitting(true);
             setFeedback("");
-            setBaseUrl(normalizedBaseUrl);
             const trimmedLabel = userLabel.trim();
             const submission =
               replace || trimmedLabel
-                ? onSubmit(normalizedBaseUrl, apiKey, trimmedLabel)
-                : onSubmit(normalizedBaseUrl, apiKey);
+                ? onSubmit(baseUrl, apiKey, trimmedLabel)
+                : onSubmit(baseUrl, apiKey);
             void submission
               .then((result) => setFeedback(feedbackByResult[result]))
               .catch(() => setFeedback(feedbackByResult.temporary_error))
@@ -128,9 +125,6 @@ export function NewApiConnectView({
             disabled={submitting}
             aria-describedby="newapi-base-url-help"
             onChange={(event) => setBaseUrl(event.currentTarget.value)}
-            onBlur={() => {
-              if (normalizedBaseUrl) setBaseUrl(normalizedBaseUrl);
-            }}
           />
           <small id="newapi-base-url-help">
             Paste the homepage, dashboard URL, or an API URL such as
