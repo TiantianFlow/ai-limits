@@ -1,10 +1,7 @@
-import {
-  parseAppViewState,
-  type AppViewState,
-} from "../../domain/public-protocol";
+import type { AppViewState } from "../../domain/public-protocol";
 import type { FidelityState } from "./copy";
 
-export function finalizeFidelityViewState(
+export function prepareFidelityViewState(
   viewState: AppViewState,
   fidelityState: FidelityState,
 ): AppViewState {
@@ -27,5 +24,5 @@ export function finalizeFidelityViewState(
         }
       : viewState;
 
-  return parseAppViewState(candidate);
+  return candidate;
 }

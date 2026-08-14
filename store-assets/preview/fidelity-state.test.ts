@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AppViewState } from "../../domain/public-protocol";
 import { parseAppViewState } from "../../domain/public-protocol";
-import { finalizeFidelityViewState } from "./fidelity-state";
+import { prepareFidelityViewState } from "./fidelity-state";
 
 const state: AppViewState = {
   preferences: { displayMode: "used", autoRefresh: true },
@@ -27,9 +27,9 @@ const state: AppViewState = {
   ],
 };
 
-describe("finalizeFidelityViewState", () => {
+describe("prepareFidelityViewState", () => {
   it("omits collision labels instead of creating parser-invalid undefined fields", () => {
-    const finalized = finalizeFidelityViewState(state, "unlabeled-collision");
+    const finalized = prepareFidelityViewState(state, "unlabeled-collision");
     const instance = finalized.instances[0]!;
 
     expect(Object.hasOwn(instance, "userLabel")).toBe(false);
@@ -43,8 +43,8 @@ describe("finalizeFidelityViewState", () => {
       instances: [{ ...state.instances[0]!, userLabel: undefined }],
     } as AppViewState;
 
-    expect(() => finalizeFidelityViewState(invalid, "default")).toThrow(
-      "Missing application state",
-    );
+    expect(() =>
+      parseAppViewState(prepareFidelityViewState(invalid, "default")),
+    ).toThrow("Missing application state");
   });
 });

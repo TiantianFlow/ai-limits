@@ -4,10 +4,8 @@ import { createRoot } from "react-dom/client";
 import { Cockpit } from "../../entrypoints/sidepanel/Cockpit";
 import "../../entrypoints/sidepanel/styles.css";
 import type { AppViewState } from "../../domain/public-protocol";
-import type { AppState, DisplayMode } from "../../domain/model";
+import type { DisplayMode } from "../../domain/model";
 import type { ProviderInstanceId } from "../../domain/instances";
-import { createFixtureState } from "../../providers/fixtures";
-import { createInitialState } from "../../providers/initial-state";
 import {
   FIDELITY_FIXED_CLOCK,
   createFidelityScenario,
@@ -18,77 +16,14 @@ import {
   type FidelityScenario,
   type PreviewView,
 } from "./copy";
-import { finalizeFidelityViewState } from "./fidelity-state";
+import {
+  createFidelityPreviewState,
+  createStorePreviewState,
+  updatePreviewState,
+} from "./preview-state";
 import "./styles.css";
 
 const DEFAULT_CAPTURE_NOW = Date.parse(FIDELITY_FIXED_CLOCK);
-
-function fixtureViewState(state: AppState, now: number): AppViewState {
-  const connectedInstances = state.providers.filter(
-    (provider) =>
-      provider.access === "granted" ||
-      provider.snapshot !== undefined ||
-      provider.history.length > 0 ||
-      provider.lastAttempt !== undefined,
-  );
-  return {
-    preferences: state.preferences,
-    instances: connectedInstances.flatMap((provider) => {
-      const instance = {
-        id: `${provider.providerId}:default`,
-        providerKind: provider.providerId,
-        access: provider.access,
-        createdAt: now - 2_000,
-        history: provider.history,
-        ...(provider.providerId === "newapi"
-          ? {
-              userLabel: "Personal relay",
-              baseUrl: "https://relay.example/gateway",
-              origin: "https://relay.example",
-            }
-          : {}),
-        ...(provider.snapshot ? { snapshot: provider.snapshot } : {}),
-        ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
-      } satisfies AppViewState["instances"][number];
-      if (provider.providerId !== "newapi") return [instance];
-      return [
-        instance,
-        {
-          ...structuredClone(instance),
-          id: "newapi:22222222-2222-4222-8222-222222222222",
-          userLabel: "Work relay for product engineering",
-          createdAt: now - 1_000,
-          snapshot: instance.snapshot
-            ? {
-                ...instance.snapshot,
-                metrics: instance.snapshot.metrics.map((metric) =>
-                  metric.type === "quota"
-                    ? { ...metric, usedRatio: Math.min(1, metric.usedRatio + 0.18) }
-                    : metric,
-                ),
-              }
-            : undefined,
-        },
-      ];
-    }),
-  };
-}
-
-function createPreviewState(parameters: URLSearchParams, now: number): AppViewState {
-  const fixture = createFixtureState(now);
-
-  if (parameters.get("providers") === "none") {
-    return fixtureViewState(createInitialState(), now);
-  }
-
-  if (parameters.get("providers") === "partial") {
-    const initial = createInitialState();
-    initial.providers[0] = fixture.providers[0]!;
-    return fixtureViewState(initial, now);
-  }
-
-  return fixtureViewState(fixture, now);
-}
 
 function parseMarketingClock(parameters: URLSearchParams): {
   fixedClock: string;
@@ -213,7 +148,7 @@ function Preview() {
   const view = parseView(parameters);
   const language = parsePreviewLanguage(parameters);
   const panelWidth = parsePanelWidth(parameters);
-  const state = createPreviewState(parameters, now);
+  const state = createStorePreviewState(parameters, now);
   const content = previewContent[language];
   const copy = content[view];
 
@@ -258,48 +193,6 @@ function Preview() {
       </section>
     </main>
   );
-}
-
-function createFidelityState(
-  request: FidelityRequest,
-  scenario: FidelityScenario,
-): AppViewState {
-  const fixture = createFixtureState(request.now);
-  let state: AppState;
-
-  if (scenario.fixtureVariant === "empty") {
-    state = createInitialState();
-  } else if (scenario.fixtureVariant === "partial") {
-    state = createInitialState();
-    state.providers[0] = fixture.providers[0]!;
-  } else {
-    state = fixture;
-  }
-
-  state.preferences = {
-    ...state.preferences,
-    displayMode: request.mode,
-  };
-
-  if (
-    request.state === "partial-refresh" ||
-    request.state === "kimi-interaction"
-  ) {
-    const kimi = state.providers.find(
-      (provider) => provider.providerId === "kimi",
-    );
-    if (kimi) {
-      kimi.lastAttempt = {
-        trigger: "scheduled",
-        startedAt: request.now - 15_000,
-        finishedAt: request.now - 10_000,
-        outcome: { kind: "deferred", reason: "session_required" },
-      };
-    }
-  }
-
-  const viewState = fixtureViewState(state, request.now);
-  return finalizeFidelityViewState(viewState, request.state);
 }
 
 function waitForElement(
@@ -350,7 +243,7 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
     [request],
   );
   const [state, setState] = React.useState(() =>
-    createFidelityState(request, scenario),
+    createFidelityPreviewState(request, scenario),
   );
   const [ready, setReady] = React.useState(false);
 
@@ -371,26 +264,30 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
   }, [request.theme, scenario]);
 
   const updateMode = (mode: DisplayMode) => {
-    setState((current) => ({
-      ...current,
-      preferences: { ...current.preferences, displayMode: mode },
-    }));
+    setState((current) => updatePreviewState(current, (candidate) => ({
+      ...candidate,
+      preferences: { ...candidate.preferences, displayMode: mode },
+    })));
   };
   const updateAutoRefresh = (autoRefresh: boolean) => {
-    setState((current) => ({
-      ...current,
-      preferences: { ...current.preferences, autoRefresh },
-    }));
+    setState((current) =>
+      updatePreviewState(current, (candidate) => ({
+        ...candidate,
+        preferences: { ...candidate.preferences, autoRefresh },
+      })),
+    );
   };
   const disconnectInstance = (instanceId: ProviderInstanceId) => {
-    setState((current) => ({
-      ...current,
-      instances: current.instances.map((instance) =>
-        instance.id === instanceId
-          ? { ...instance, access: "required", snapshot: undefined, history: [] }
-          : instance,
-      ),
-    }));
+    setState((current) =>
+      updatePreviewState(current, (candidate) => ({
+        ...candidate,
+        instances: candidate.instances.map((instance) => {
+          if (instance.id !== instanceId) return instance;
+          const { snapshot: _snapshot, ...disconnected } = instance;
+          return { ...disconnected, access: "required" as const, history: [] };
+        }),
+      })),
+    );
   };
 
   return (
@@ -426,7 +323,24 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
         onRefreshInstance={() => undefined}
         onAutoRefreshChange={updateAutoRefresh}
         onDisconnectInstance={disconnectInstance}
-        onRenameInstance={async () => request.state !== "rename-failure"}
+        onRenameInstance={async (instanceId, userLabel) => {
+          setState((current) =>
+            updatePreviewState(current, (candidate) => ({
+              ...candidate,
+              instances: candidate.instances.map((instance) => {
+                if (instance.id !== instanceId || request.state === "rename-failure") {
+                  return instance;
+                }
+                if (userLabel === undefined) {
+                  const { userLabel: _userLabel, ...unlabeled } = instance;
+                  return unlabeled;
+                }
+                return { ...instance, userLabel };
+              }),
+            })),
+          );
+          return request.state !== "rename-failure";
+        }}
         onDeleteLocalData={() => undefined}
       />
     </div>
