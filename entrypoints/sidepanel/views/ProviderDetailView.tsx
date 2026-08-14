@@ -212,7 +212,7 @@ export function ProviderDetailView({
             <p className="illustrative-note">{provider.emptyDescription}</p>
           )}
 
-        {provider.hasSnapshot ? (
+        {firstWindow ? (
           <button
             className="detail-history-action"
             type="button"

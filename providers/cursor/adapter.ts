@@ -123,7 +123,9 @@ function onDemandCounter(summary: CursorUsageSummary): CounterMetric[] {
     semantic: "spent",
     unit: "USD",
     value: onDemand.used / 100,
-    ...(supplied(onDemand.limit) ? { limit: onDemand.limit / 100 } : {}),
+    ...(supplied(onDemand.limit) && onDemand.limit > 0
+      ? { limit: onDemand.limit / 100 }
+      : {}),
   }];
 }
 

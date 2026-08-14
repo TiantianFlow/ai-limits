@@ -745,6 +745,10 @@ describe("state repository", () => {
                 observedAt: Number.NaN,
                 metrics: [],
               },
+              {
+                observedAt: now - 30 * 60 * 1_000,
+                metrics: [],
+              },
             ],
           },
         ],
