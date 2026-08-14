@@ -1,6 +1,6 @@
 import type { ProviderHealth } from "../../domain/model";
 import { retryAtFromResponse } from "../retry-after";
-import type { CollectionContext, CollectionResult, ProviderAdapter } from "../types";
+import type { CollectionContext, CollectionResult, ProviderCollector } from "../types";
 import { newApiStatusSchema, newApiTokenUsageSchema } from "./schema";
 import { normalizeNewApiBaseUrl } from "./url";
 
@@ -135,4 +135,4 @@ async function collectNewApi({
 export const newApiAdapter = {
   id: "newapi",
   collect: collectNewApi,
-} satisfies ProviderAdapter<"newapi">;
+} satisfies ProviderCollector<"newapi">;

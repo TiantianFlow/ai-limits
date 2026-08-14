@@ -2,13 +2,13 @@ import { render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, test } from "vitest";
 
-import { providerIds, type ProviderId } from "../../../providers/catalog";
+import { providerKinds, type ProviderKind } from "../../../providers/catalog";
 import { ProviderMark } from "./ProviderMark";
 
 describe("ProviderMark", () => {
   test("renders local decorative marks for supported and fallback identities", () => {
-    const invalidProviderId = "unknown-provider" as ProviderId;
-    const providers = [...providerIds, invalidProviderId];
+    const invalidProviderId = "unknown-provider" as ProviderKind;
+    const providers = [...providerKinds, invalidProviderId];
 
     render(
       <div>

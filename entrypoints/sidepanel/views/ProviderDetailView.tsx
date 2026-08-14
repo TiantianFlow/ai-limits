@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { ProviderOperation } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ProviderInstanceId } from "../../../domain/model";
 import {
   providerPresentation,
 } from "../../../providers/catalog";

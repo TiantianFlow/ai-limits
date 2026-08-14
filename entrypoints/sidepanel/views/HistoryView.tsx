@@ -4,7 +4,7 @@ import type {
   DisplayMode,
 } from "../../../domain/model";
 import type { ProviderInstanceView } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ProviderInstanceId } from "../../../domain/model";
 import { providerNames } from "../../../providers/catalog";
 import { instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";

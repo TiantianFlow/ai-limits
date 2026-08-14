@@ -1,11 +1,17 @@
-import type { AppState, DisplayMode, ProviderId, ProviderRecord } from "../domain/model";
-import { migrateState } from "../providers/initial-state";
+import type {
+  InstanceAppState,
+  ProviderInstanceId,
+  ProviderInstanceRecord,
+} from "../domain/model";
+import type { DisplayMode } from "../domain/model";
+import { providerRegistry } from "../providers/registry";
 import {
-  deleteAllProviderCredentials,
-  deleteProviderCredential,
-} from "./credentials";
+  createEmptyInstanceAppState,
+  normalizeInstanceAppState,
+} from "./state-codec";
 
-const STATE_KEY = "aiLimitsState";
+export const INSTANCE_STATE_STORAGE_KEY = "aiLimitsState";
+
 let stateMutationQueue: Promise<void> = Promise.resolve();
 
 function enqueueStateMutation<T>(mutation: () => Promise<T>): Promise<T> {
@@ -16,157 +22,279 @@ function enqueueStateMutation<T>(mutation: () => Promise<T>): Promise<T> {
   );
   return result;
 }
-
-async function writeState(state: AppState, now: number): Promise<void> {
-  await browser.storage.local.set({ [STATE_KEY]: migrateState(state, now) });
+async function readNormalizedState(now: number): Promise<InstanceAppState> {
+  const stored = await browser.storage.local.get(INSTANCE_STATE_STORAGE_KEY);
+  return normalizeInstanceAppState(stored[INSTANCE_STATE_STORAGE_KEY], now);
 }
 
-export async function loadState(
-  now: number = Date.now(),
-): Promise<AppState | undefined> {
-  const stored = await browser.storage.local.get(STATE_KEY);
-  const value = stored[STATE_KEY] as unknown;
-  return value === undefined ? undefined : migrateState(value, now);
-}
-
-export function saveState(state: AppState, now: number): Promise<void> {
-  return enqueueStateMutation(() => writeState(state, now));
-}
-
-async function ensureStateInsideMutation(now: number): Promise<AppState> {
-  const stored = await browser.storage.local.get(STATE_KEY);
-  const value = stored[STATE_KEY] as unknown;
-  const state = migrateState(value, now);
-
-  if (JSON.stringify(value) !== JSON.stringify(state)) {
-    await writeState(state, now);
-  }
-
-  return state;
-}
-
-export function ensureState(now: number): Promise<AppState> {
-  return enqueueStateMutation(() => ensureStateInsideMutation(now));
-}
-
-export function mutateState(
+async function writeNormalizedState(
+  state: InstanceAppState,
   now: number,
-  updater: (state: AppState) => AppState,
-): Promise<void> {
-  return enqueueStateMutation(async () => {
-    const state = await ensureStateInsideMutation(now);
-    await writeState(updater(state), now);
+): Promise<InstanceAppState> {
+  const normalized = normalizeInstanceAppState(state, now);
+  await browser.storage.local.set({
+    [INSTANCE_STATE_STORAGE_KEY]: normalized,
   });
+  return normalized;
 }
 
-export function setDisplayMode(mode: DisplayMode): Promise<void> {
-  return mutateState(Date.now(), (state) => ({
-    ...state,
-    preferences: { ...state.preferences, displayMode: mode },
-  }));
-}
-
-export function setAutoRefresh(autoRefresh: boolean): Promise<void> {
-  return mutateState(Date.now(), (state) => ({
-    ...state,
-    preferences: { ...state.preferences, autoRefresh },
-  }));
-}
-
-export function reconcileProviderAccess(
-  grants: Partial<Record<ProviderId, boolean>>,
-): Promise<void> {
-  return mutateState(Date.now(), (state) => ({
-    ...state,
-    providers: state.providers.map((provider) => {
-      const granted = grants[provider.providerId];
-      if (granted === undefined) {
-        return provider;
-      }
-      if (granted) {
-        return { ...provider, access: "granted" };
-      }
-      if (
-        provider.access === "granted" ||
-        provider.history.length > 0 ||
-        provider.snapshot !== undefined ||
-        provider.lastAttempt !== undefined
-      ) {
-        return {
-          providerId: provider.providerId,
-          access: "required",
-          history: [],
-        };
-      }
-
-      return provider;
-    }),
-  }));
-}
-
-export function markProviderAccessRequired(
-  providerIds: readonly ProviderId[],
-): Promise<void> {
-  const required = new Set(providerIds);
-  return mutateState(Date.now(), (state) => ({
-    ...state,
-    providers: state.providers.map((provider) =>
-      required.has(provider.providerId)
-        ? { ...provider, access: "required" }
-        : provider,
-    ),
-  }));
-}
-
-async function resetProviderData(providerId: ProviderId): Promise<void> {
-  await mutateState(Date.now(), (state) => ({
-    ...state,
-    providers: state.providers.map((provider) => {
-      if (provider.providerId !== providerId) {
-        return provider;
-      }
-
-      return { providerId, access: "required", history: [] };
-    }),
-  }));
-}
-
-export async function disconnectProviderData(providerId: ProviderId): Promise<void> {
-  await deleteProviderCredential(providerId);
-  await resetProviderData(providerId);
-}
-
-export async function deleteAllLocalData(): Promise<AppState> {
-  await deleteAllProviderCredentials();
+function mutateState<T>(
+  updater: (state: InstanceAppState, now: number) => T | Promise<T>,
+): Promise<T> {
   return enqueueStateMutation(async () => {
     const now = Date.now();
-    await browser.storage.local.remove(STATE_KEY);
-    const state = migrateState(undefined, now);
-    await writeState(state, now);
-    return state;
+    const state = await readNormalizedState(now);
+    return updater(state, now);
   });
 }
 
-export function updateProvider(
-  providerId: ProviderId,
-  updater: (provider: ProviderRecord) => ProviderRecord,
-): Promise<void> {
-  return mutateState(Date.now(), (state) => ({
-    ...state,
-    providers: state.providers.map((provider) => {
-      if (provider.providerId !== providerId) {
-        return provider;
-      }
+export async function loadInstanceAppState(): Promise<InstanceAppState> {
+  return readNormalizedState(Date.now());
+}
 
-      const originalProviderId = provider.providerId;
-      const updated = updater(provider);
-      return {
-        ...updated,
-        providerId: originalProviderId,
-        snapshot: updated.snapshot
-          ? { ...updated.snapshot, providerKind: originalProviderId }
-          : undefined,
+function createInstanceIfCurrent(
+  instance: ProviderInstanceRecord,
+  isCurrent: () => boolean,
+): Promise<boolean> {
+  return mutateState(async (state, now) => {
+    if (!isCurrent()) return false;
+    const normalizedCandidate = normalizeInstanceAppState(
+      {
+        version: 5,
+        preferences: state.preferences,
+        instances: [instance],
+      },
+      now,
+    ).instances[0];
+    const duplicateId = state.instances.some(
+      (candidate) => candidate.id === instance.id,
+    );
+    const singletonConflict = state.instances.some(
+      (candidate) =>
+        candidate.providerKind === instance.providerKind &&
+        providerRegistry[instance.providerKind].cardinality === "single",
+    );
+    if (!normalizedCandidate || duplicateId || singletonConflict) {
+      throw new Error("Provider instance cannot be created.");
+    }
+    if (!isCurrent()) return false;
+    await writeNormalizedState(
+      { ...state, instances: [...state.instances, normalizedCandidate] },
+      now,
+    );
+    return true;
+  });
+}
+
+export const connectionRepository = {
+  async list(): Promise<ProviderInstanceRecord[]> {
+    return (await loadInstanceAppState()).instances;
+  },
+
+  async get(
+    id: ProviderInstanceId,
+  ): Promise<ProviderInstanceRecord | undefined> {
+    return (await loadInstanceAppState()).instances.find(
+      (instance) => instance.id === id,
+    );
+  },
+
+  create(instance: ProviderInstanceRecord): Promise<void> {
+    return createInstanceIfCurrent(instance, () => true).then(() => undefined);
+  },
+
+  createIfCurrent(
+    instance: ProviderInstanceRecord,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    return createInstanceIfCurrent(instance, isCurrent);
+  },
+
+  replace(
+    id: ProviderInstanceId,
+    updater: (instance: ProviderInstanceRecord) => ProviderInstanceRecord,
+  ): Promise<boolean> {
+    return mutateState(async (state, now) => {
+      const index = state.instances.findIndex((instance) => instance.id === id);
+      if (index < 0) return false;
+      const current = state.instances[index]!;
+      const immutable = {
+        id: current.id,
+        providerKind: current.providerKind,
+        createdAt: current.createdAt,
       };
-    }),
-  }));
+      const requested = updater(current);
+      const normalizedCandidate = normalizeInstanceAppState(
+        {
+          version: 5,
+          preferences: state.preferences,
+          instances: [
+            {
+              ...requested,
+              id: immutable.id,
+              providerKind: immutable.providerKind,
+              createdAt: immutable.createdAt,
+            },
+          ],
+        },
+        now,
+      ).instances[0];
+      if (!normalizedCandidate) return false;
+      const instances = [...state.instances];
+      instances[index] = normalizedCandidate;
+      await writeNormalizedState({ ...state, instances }, now);
+      return true;
+    });
+  },
+
+  rename(id: ProviderInstanceId, userLabel?: string): Promise<void> {
+    return mutateState(async (state, now) => {
+      const normalizedLabel = userLabel?.trim();
+      await writeNormalizedState(
+        {
+          ...state,
+          instances: state.instances.map((instance) =>
+            instance.id !== id
+              ? instance
+              : {
+                  ...instance,
+                  ...(normalizedLabel
+                    ? { userLabel: normalizedLabel }
+                    : { userLabel: undefined }),
+                },
+          ),
+        },
+        now,
+      );
+    });
+  },
+
+  setAccess(
+    id: ProviderInstanceId,
+    access: "required" | "granted",
+  ): Promise<void> {
+    return mutateState(async (state, now) => {
+      await writeNormalizedState(
+        {
+          ...state,
+          instances: state.instances.map((instance) =>
+            instance.id === id ? { ...instance, access } : instance,
+          ),
+        },
+        now,
+      );
+    });
+  },
+
+  delete(id: ProviderInstanceId): Promise<void> {
+    return mutateState(async (state, now) => {
+      await writeNormalizedState(
+        {
+          ...state,
+          instances: state.instances.filter((instance) => instance.id !== id),
+        },
+        now,
+      );
+    });
+  },
+};
+
+export const usageRepository = {
+  commit(
+    id: ProviderInstanceId,
+    updater: (instance: ProviderInstanceRecord) => ProviderInstanceRecord,
+  ): Promise<boolean> {
+    return mutateState(async (state, now) => {
+      const index = state.instances.findIndex((instance) => instance.id === id);
+      if (index < 0) return false;
+      const current = state.instances[index]!;
+      const immutable = {
+        id: current.id,
+        providerKind: current.providerKind,
+        userLabel: current.userLabel,
+        config:
+          current.config.kind === "fixed"
+            ? ({ kind: "fixed" } as const)
+            : ({
+                kind: "dynamic-origin",
+                baseUrl: current.config.baseUrl,
+              } as const),
+        access: current.access,
+        createdAt: current.createdAt,
+      };
+      const requested = updater(current);
+      const candidate: ProviderInstanceRecord = {
+        ...requested,
+        id: immutable.id,
+        providerKind: immutable.providerKind,
+        ...(immutable.userLabel === undefined
+          ? { userLabel: undefined }
+          : { userLabel: immutable.userLabel }),
+        config: immutable.config,
+        access: immutable.access,
+        createdAt: immutable.createdAt,
+      };
+      const instances = [...state.instances];
+      instances[index] = candidate;
+      const normalized = await writeNormalizedState(
+        { ...state, instances },
+        now,
+      );
+      return normalized.instances.some((instance) => instance.id === id);
+    });
+  },
+
+  clear(id: ProviderInstanceId): Promise<void> {
+    return mutateState(async (state, now) => {
+      await writeNormalizedState(
+        {
+          ...state,
+          instances: state.instances.map((instance) => {
+            if (instance.id !== id) return instance;
+            const {
+              snapshot: _snapshot,
+              lastAttempt: _lastAttempt,
+              ...connection
+            } = instance;
+            return { ...connection, history: [] };
+          }),
+        },
+        now,
+      );
+    });
+  },
+};
+
+export const preferencesRepository = {
+  setDisplayMode(mode: DisplayMode): Promise<void> {
+    return mutateState(async (state, now) => {
+      await writeNormalizedState(
+        {
+          ...state,
+          preferences: { ...state.preferences, displayMode: mode },
+        },
+        now,
+      );
+    });
+  },
+
+  setAutoRefresh(enabled: boolean): Promise<void> {
+    return mutateState(async (state, now) => {
+      await writeNormalizedState(
+        {
+          ...state,
+          preferences: { ...state.preferences, autoRefresh: enabled },
+        },
+        now,
+      );
+    });
+  },
+};
+
+export function deleteAllInstanceData(): Promise<InstanceAppState> {
+  return mutateState(async (_state, now) => {
+    const empty = createEmptyInstanceAppState();
+    await browser.storage.local.remove(INSTANCE_STATE_STORAGE_KEY);
+    return writeNormalizedState(empty, now);
+  });
 }

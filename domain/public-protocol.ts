@@ -2,7 +2,7 @@ import {
   isProviderInstanceId,
   type ProviderInstanceConfig,
   type ProviderInstanceId,
-} from "./instances";
+} from "./model";
 import type {
   DeferredReason,
   DisplayMode,
@@ -19,8 +19,8 @@ import type {
   UsageSnapshot,
 } from "./model";
 import {
-  isApiKeyProviderId,
-  isProviderId,
+  isApiKeyProviderKind,
+  isProviderKind,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
   type ProviderKind,
@@ -350,7 +350,7 @@ function isUsageSnapshot(value: unknown): value is UsageSnapshot {
       ["providerKind", "source", "fetchedAt", "metrics"],
       ["accountLabel", "planLabel", "usageGroups"],
     ) &&
-    isProviderId(value.providerKind) &&
+    isProviderKind(value.providerKind) &&
     (value.accountLabel === undefined || isSafeText(value.accountLabel)) &&
     (value.planLabel === undefined || isSafeText(value.planLabel)) &&
     (value.source === "web-session" ||
@@ -567,7 +567,7 @@ function parseProviderInstanceView(value: unknown): ProviderInstanceView {
       ["userLabel", "baseUrl", "origin", "snapshot", "lastAttempt"],
     ) ||
     !isProviderInstanceId(value.id) ||
-    !isProviderId(value.providerKind) ||
+    !isProviderKind(value.providerKind) ||
     (value.access !== "required" && value.access !== "granted") ||
     !isFiniteNumber(value.createdAt) ||
     !Array.isArray(value.history) ||
@@ -853,11 +853,11 @@ export function isApiKeyConnectionStatus(
 }
 
 export function isPublicProviderKind(value: unknown): value is ProviderKind {
-  return isProviderId(value);
+  return isProviderKind(value);
 }
 
 export function isPublicApiKeyProviderKind(
   value: unknown,
 ): value is ApiKeyProviderKind {
-  return isApiKeyProviderId(value);
+  return isApiKeyProviderKind(value);
 }

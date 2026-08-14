@@ -1,4 +1,4 @@
-import type { ProviderInstanceId } from "../domain/instances";
+import type { ProviderInstanceId } from "../domain/model";
 
 type ProviderOperationKind = "refresh" | "connect";
 

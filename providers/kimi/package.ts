@@ -2,11 +2,11 @@ import { KIMI_RECOVERY_GUIDANCE } from "../../domain/model";
 import type {
   ProviderInstanceConfig,
   ProviderInstanceId,
-} from "../../domain/instances";
+} from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
   ProviderPackage,
   ProviderRuntimeServices,
 } from "../types";
@@ -26,7 +26,7 @@ const KIMI_URL = "https://www.kimi.com/";
 const KIMI_ORIGIN_PATTERN = "https://www.kimi.com/*";
 
 interface KimiPackageDependencies {
-  adapter: ProviderAdapter<"kimi">;
+  adapter: ProviderCollector<"kimi">;
   getCookieToken(): Promise<string | undefined>;
   findPageAccessToken(): Promise<string | undefined>;
   recoverAccessToken(

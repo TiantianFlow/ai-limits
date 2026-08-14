@@ -10,15 +10,16 @@ import {
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AppState } from "../../domain/model";
-import type { ProviderId } from "../../domain/model";
+import type { ProviderKind } from "../../domain/model";
 import type {
   AppViewState,
   ProviderInstanceView,
   ProviderOperation,
 } from "../../domain/public-protocol";
-import { createFixtureState } from "../../providers/fixtures";
-import { createInitialState } from "../../providers/initial-state";
+import {
+  createEmptyFixtureState,
+  createFixtureState,
+} from "../../providers/fixtures";
 import {
   Cockpit as InstanceCockpit,
   providerView as instanceProviderView,
@@ -33,7 +34,7 @@ const WORK_NEW_API_ID =
 afterEach(cleanup);
 
 function toInstance(
-  provider: AppState["providers"][number],
+  provider: ProviderInstanceView,
 ): ProviderInstanceView {
   const snapshot = provider.snapshot
     ? (() => {
@@ -42,43 +43,28 @@ function toInstance(
       })()
     : undefined;
   return {
-    id: `${provider.providerId}:default`,
-    providerKind: provider.providerId,
-    access: provider.access,
-    createdAt: NOW,
-    history: provider.history,
+    ...provider,
     ...(snapshot ? { snapshot } : {}),
-    ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
   };
 }
 
-function toViewState(state: AppState | AppViewState): AppViewState {
-  return "instances" in state
-    ? state
-    : {
-        preferences: state.preferences,
-        instances: state.providers
-          .filter(
-            (provider) =>
-              provider.access === "granted" ||
-              provider.snapshot !== undefined ||
-              provider.history.length > 0 ||
-              provider.lastAttempt !== undefined,
-          )
-          .map(toInstance),
-      };
+function toViewState(state: AppViewState): AppViewState {
+  return {
+    preferences: state.preferences,
+    instances: state.instances.map(toInstance),
+  };
 }
 
 type TestCockpitProps = Omit<
   React.ComponentProps<typeof InstanceCockpit>,
   "state" | "providerOperations" | "onSubmitApiKey"
 > & {
-  state: AppState | AppViewState;
-  providerOperations?: Partial<Record<ProviderId | string, ProviderOperation>>;
-  onRefreshProvider?: (providerId: ProviderId) => void;
-  onDisconnectProvider?: (providerId: ProviderId) => void;
+  state: AppViewState;
+  providerOperations?: Partial<Record<ProviderKind | string, ProviderOperation>>;
+  onRefreshProvider?: (providerId: ProviderKind) => void;
+  onDisconnectProvider?: (providerId: ProviderKind) => void;
   onSubmitApiKey?: (
-    providerId: ProviderId,
+    providerId: ProviderKind,
     apiKey: string,
     baseUrl?: string,
   ) => Promise<"connected" | "invalid_key" | "insufficient_scope" | "invalid_site" | "temporary_error" | "permission_declined">;
@@ -106,14 +92,14 @@ function Cockpit({
         props.onRefreshInstance ??
         (onRefreshProvider
           ? (instanceId) =>
-              onRefreshProvider(instanceId.slice(0, instanceId.indexOf(":")) as ProviderId)
+              onRefreshProvider(instanceId.slice(0, instanceId.indexOf(":")) as ProviderKind)
           : undefined)
       }
       onDisconnectInstance={
         props.onDisconnectInstance ??
         (onDisconnectProvider
           ? (instanceId) =>
-              onDisconnectProvider(instanceId.slice(0, instanceId.indexOf(":")) as ProviderId)
+              onDisconnectProvider(instanceId.slice(0, instanceId.indexOf(":")) as ProviderKind)
           : undefined)
       }
       onSubmitApiKey={
@@ -131,15 +117,15 @@ function Cockpit({
 }
 
 function providerView(
-  provider: AppState["providers"][number],
-  mode: AppState["preferences"]["displayMode"],
+  provider: ProviderInstanceView,
+  mode: AppViewState["preferences"]["displayMode"],
   now: number,
 ) {
   return instanceProviderView(toInstance(provider), mode, now);
 }
 
 function renderCockpit(
-  state: AppState = createFixtureState(NOW),
+  state: AppViewState = createFixtureState(NOW),
   onDisplayModeChange = vi.fn(),
 ) {
   render(
@@ -574,10 +560,15 @@ describe("Cockpit", () => {
   });
 
   it("renders unlimited New API usage without offering quota history", () => {
-    const state = createInitialState();
-    state.providers[5] = {
-      providerId: "newapi",
+    const state = createEmptyFixtureState();
+    state.instances[0] = {
+      id: "newapi:default",
+      providerKind: "newapi",
+      userLabel: "New API",
+      baseUrl: "https://relay.example",
+      origin: "https://relay.example",
       access: "granted",
+      createdAt: NOW,
       history: [],
       snapshot: {
         providerKind: "newapi",
@@ -610,10 +601,12 @@ describe("Cockpit", () => {
   });
 
   it("renders counter and balance metrics on Overview and Detail but offers only quotas in History", () => {
-    const state = createInitialState();
-    state.providers[0] = {
-      providerId: "chatgpt",
+    const state = createEmptyFixtureState();
+    state.instances[0] = {
+      id: "chatgpt:default",
+      providerKind: "chatgpt",
       access: "granted",
+      createdAt: NOW,
       history: [],
       snapshot: {
         providerKind: "chatgpt",
@@ -654,7 +647,7 @@ describe("Cockpit", () => {
           },
         ],
       },
-    } as unknown as AppState["providers"][number];
+    };
 
     renderCockpit(state);
 
@@ -746,7 +739,7 @@ describe("Cockpit", () => {
   it("keeps a retained refresh announcement hidden behind First Run chrome", () => {
     render(
       <Cockpit
-        state={createInitialState()}
+        state={createEmptyFixtureState()}
         now={NOW}
         refreshAnnouncement="Kimi could not refresh. Try again."
         refreshAnnouncementId={8}
@@ -771,7 +764,7 @@ describe("Cockpit", () => {
   });
 
   it("carries provider-authored usage groups into the typed provider view", () => {
-    const provider = createFixtureState(NOW).providers[0]!;
+    const provider = createFixtureState(NOW).instances[0]!;
     provider.snapshot!.usageGroups = [
       {
         id: "priority",
@@ -795,8 +788,8 @@ describe("Cockpit", () => {
   });
 
   it("renders quota rows through provider-authored semantic groups", () => {
-    const state = createInitialState();
-    const provider = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    const provider = createFixtureState(NOW).instances[0]!;
     provider.snapshot!.usageGroups = [
       {
         id: "short-term",
@@ -809,7 +802,7 @@ describe("Cockpit", () => {
         metricIds: ["weekly"],
       },
     ];
-    state.providers[0] = provider;
+    state.instances[0] = provider;
 
     renderCockpit(state);
 
@@ -831,8 +824,8 @@ describe("Cockpit", () => {
   });
 
   it("renders one generic Usage group without embedded History and before the values footer", () => {
-    const state = createInitialState();
-    const provider = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    const provider = createFixtureState(NOW).instances[0]!;
     delete provider.snapshot!.usageGroups;
     provider.snapshot!.metrics.push(
       {
@@ -844,7 +837,7 @@ describe("Cockpit", () => {
         value: 414,
       },
     );
-    state.providers[0] = provider;
+    state.instances[0] = provider;
 
     renderCockpit(state);
 
@@ -873,7 +866,7 @@ describe("Cockpit", () => {
   });
 
   it("introduces First Run with every supported provider and no demo usage", () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
 
     render(
       <Cockpit
@@ -910,7 +903,7 @@ describe("Cockpit", () => {
   });
 
   it("keeps the compact Connect surface inside a labelled action button", () => {
-    renderCockpit(createInitialState());
+    renderCockpit(createEmptyFixtureState());
 
     const connect = screen.getByRole("button", { name: "Connect ChatGPT" });
     const visualSurface = within(connect).getByText("Connect");
@@ -923,7 +916,7 @@ describe("Cockpit", () => {
   });
 
   it("exposes distinct screen names and labelled return controls", () => {
-    renderCockpit(createInitialState());
+    renderCockpit(createEmptyFixtureState());
     expect(
       screen.getByRole("heading", {
         level: 2,
@@ -932,8 +925,8 @@ describe("Cockpit", () => {
     ).toBeVisible();
     cleanup();
 
-    const state = createInitialState();
-    state.providers[0] = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    state.instances[0] = createFixtureState(NOW).instances[0]!;
 
     renderCockpit(state);
 
@@ -968,7 +961,7 @@ describe("Cockpit", () => {
 
   it("renders Provider Detail with grouped usage, recovery status, and connection management", () => {
     const state = createFixtureState(NOW);
-    state.providers[1]!.lastAttempt = {
+    state.instances[1]!.lastAttempt = {
       trigger: "manual_provider",
       startedAt: NOW - 2_000,
       finishedAt: NOW - 1_000,
@@ -994,7 +987,7 @@ describe("Cockpit", () => {
 
   it("renders History with compact selectors, ranges, a chart, and the current cycle", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.history.unshift({
+    state.instances[0]!.history.unshift({
       observedAt: NOW - 4 * 24 * 60 * 60 * 1_000,
       metrics: [
         {
@@ -1224,8 +1217,8 @@ describe("Cockpit", () => {
       <Cockpit
         state={{
           ...state,
-          providers: state.providers.map((provider) =>
-            provider.providerId === "chatgpt" && provider.snapshot
+          instances: state.instances.map((provider) =>
+            provider.providerKind === "chatgpt" && provider.snapshot
               ? {
                   ...provider,
                   snapshot: {
@@ -1298,8 +1291,8 @@ describe("Cockpit", () => {
       <Cockpit
         state={{
           ...state,
-          providers: state.providers.map((provider) =>
-            provider.providerId === "chatgpt"
+          instances: state.instances.map((provider) =>
+            provider.providerKind === "chatgpt"
               ? { ...provider, access: "required" }
               : provider,
           ),
@@ -1321,8 +1314,8 @@ describe("Cockpit", () => {
   });
 
   it("shows only connected providers on Overview and opens Add Provider", () => {
-    const state = createInitialState();
-    state.providers[0] = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    state.instances[0] = createFixtureState(NOW).instances[0]!;
 
     renderCockpit(state);
 
@@ -1384,7 +1377,7 @@ describe("Cockpit", () => {
 
     render(
       <Cockpit
-        state={createInitialState()}
+        state={createEmptyFixtureState()}
         now={NOW}
         providerOperations={{ chatgpt: "requesting_permission" }}
         onDisplayModeChange={vi.fn()}
@@ -1407,7 +1400,7 @@ describe("Cockpit", () => {
     const onOpenApiKeySetup = vi.fn();
     render(
       <Cockpit
-        state={createInitialState()}
+        state={createEmptyFixtureState()}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
@@ -1455,7 +1448,7 @@ describe("Cockpit", () => {
   it("returns to Overview after a successful API-key connection", async () => {
     render(
       <Cockpit
-        state={createInitialState()}
+        state={createEmptyFixtureState()}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
@@ -1483,7 +1476,7 @@ describe("Cockpit", () => {
     const onSubmitApiKey = vi.fn(async () => "connected" as const);
     render(
       <Cockpit
-        state={createInitialState()}
+        state={createEmptyFixtureState()}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
@@ -1522,8 +1515,8 @@ describe("Cockpit", () => {
 
   it("offers credential recovery from the provider card", () => {
     const state = createFixtureState(NOW);
-    const elevenLabs = state.providers.find(
-      (provider) => provider.providerId === "elevenlabs",
+    const elevenLabs = state.instances.find(
+      (provider) => provider.providerKind === "elevenlabs",
     )!;
     elevenLabs.lastAttempt = {
       trigger: "scheduled",
@@ -1595,8 +1588,8 @@ describe("Cockpit", () => {
   });
 
   it("restores focus to the invoker after Back from Add Provider", () => {
-    const state = createInitialState();
-    state.providers[0] = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    state.instances[0] = createFixtureState(NOW).instances[0]!;
 
     renderCockpit(state);
 
@@ -1609,8 +1602,8 @@ describe("Cockpit", () => {
   });
 
   it("opens Add Provider from Settings and restores focus to its remounted invoker", () => {
-    const state = createInitialState();
-    state.providers[0] = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    state.instances[0] = createFixtureState(NOW).instances[0]!;
 
     renderCockpit(state);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -1650,14 +1643,14 @@ describe("Cockpit", () => {
     const recoveryDisclosure =
       "Connect and manual Refresh may briefly open one inactive Kimi tab when recovery is needed. Scheduled or automatic refresh never opens a tab.";
 
-    renderCockpit(createInitialState());
+    renderCockpit(createEmptyFixtureState());
     let kimi = screen.getByRole("article", { name: "Kimi" });
     expect(within(kimi).getByText(connectionDisclosure)).toBeVisible();
     expect(within(kimi).getByText(recoveryDisclosure)).toBeVisible();
     cleanup();
 
-    const state = createInitialState();
-    state.providers[0] = createFixtureState(NOW).providers[0]!;
+    const state = createEmptyFixtureState();
+    state.instances[0] = createFixtureState(NOW).instances[0]!;
     renderCockpit(state);
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
@@ -1759,7 +1752,7 @@ describe("Cockpit", () => {
 
   it("formats the known ChatGPT plan value at the display boundary", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.snapshot!.planLabel = "plus";
+    state.instances[0]!.snapshot!.planLabel = "plus";
 
     renderCockpit(state);
 
@@ -1770,7 +1763,7 @@ describe("Cockpit", () => {
 
   it("describes pace deltas as over or under pace", () => {
     const state = createFixtureState(NOW);
-    const weekly = state.providers[0]!.snapshot!.metrics.find(
+    const weekly = state.instances[0]!.snapshot!.metrics.find(
       (metric) => metric.type === "quota" && metric.id === "weekly",
     );
     if (!weekly || weekly.type !== "quota") {
@@ -1787,10 +1780,10 @@ describe("Cockpit", () => {
 
   it("shows the most recent finished attempt in the idle header", () => {
     const state = createFixtureState(NOW);
-    state.providers.forEach((provider) => {
+    state.instances.forEach((provider) => {
       provider.snapshot!.fetchedAt = NOW - 10 * 60 * 1_000;
     });
-    state.providers[1]!.lastAttempt = {
+    state.instances[1]!.lastAttempt = {
       trigger: "scheduled",
       startedAt: NOW - 3 * 60 * 1_000 - 2_000,
       finishedAt: NOW - 3 * 60 * 1_000,
@@ -1806,7 +1799,7 @@ describe("Cockpit", () => {
 
   it("keeps counter and balance values unchanged in Used and Left modes", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.snapshot!.metrics.push(
+    state.instances[0]!.snapshot!.metrics.push(
       {
         type: "counter",
         id: "extra-usage",
@@ -1880,7 +1873,7 @@ describe("Cockpit", () => {
     expect(reset).toHaveAttribute(
       "datetime",
       new Date(
-        state.providers[0]!.snapshot!.metrics.find(
+        state.instances[0]!.snapshot!.metrics.find(
           (metric) => metric.type === "quota" && metric.id === "weekly",
         )!.cycle!.resetsAt!,
       ).toISOString(),
@@ -1950,15 +1943,15 @@ describe("Cockpit", () => {
 
   it("omits the wall-time track when a window has no timing bounds", () => {
     const state = createFixtureState(NOW);
-    const chatGpt = state.providers[0];
+    const chatGpt = state.instances[0];
 
     if (!chatGpt?.snapshot) {
       throw new Error("Expected the ChatGPT fixture snapshot.");
     }
 
-    const untimedState: AppState = {
+    const untimedState: AppViewState = {
       ...state,
-      providers: [
+      instances: [
         {
           ...chatGpt,
           snapshot: {
@@ -2001,7 +1994,7 @@ describe("Cockpit", () => {
     const onConnectProvider = vi.fn();
     render(
       <Cockpit
-        state={createInitialState()}
+        state={createEmptyFixtureState()}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
@@ -2016,7 +2009,7 @@ describe("Cockpit", () => {
   });
 
   it("renders a neutral not-connected state and disclosures before permission", () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
 
     renderCockpit(state);
 
@@ -2038,7 +2031,7 @@ describe("Cockpit", () => {
 
   it("removes redundant source and connection badges after collection", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.snapshot!.source = "web-session";
+    state.instances[0]!.snapshot!.source = "web-session";
 
     renderCockpit(state);
 
@@ -2050,9 +2043,10 @@ describe("Cockpit", () => {
   });
 
   it("shows failed snapshot-free health in the padded empty state", () => {
-    const state = createInitialState();
-    state.providers[0]!.access = "granted";
-    state.providers[0]!.lastAttempt = {
+    const state = createEmptyFixtureState();
+    const { snapshot: _snapshot, ...chatGpt } = createFixtureState(NOW).instances[0]!;
+    state.instances = [{ ...chatGpt, access: "granted" }];
+    state.instances[0]!.lastAttempt = {
       trigger: "manual_provider",
       startedAt: NOW - 1_000,
       finishedAt: NOW,
@@ -2081,8 +2075,8 @@ describe("Cockpit", () => {
 
   it("marks data stale only after 35 minutes", () => {
     const state = createFixtureState(NOW);
-    state.providers = [state.providers[0]!];
-    state.providers[0]!.snapshot!.fetchedAt = NOW - 35 * 60 * 1_000;
+    state.instances = [state.instances[0]!];
+    state.instances[0]!.snapshot!.fetchedAt = NOW - 35 * 60 * 1_000;
     const view = render(
       <Cockpit
         state={state}
@@ -2109,9 +2103,9 @@ describe("Cockpit", () => {
 
   it("keeps a fresh scheduled Kimi session deferral quiet", () => {
     const state = createFixtureState(NOW);
-    state.providers = [state.providers[2]!];
-    state.providers[0]!.snapshot!.fetchedAt = NOW - 34 * 60 * 1_000;
-    state.providers[0]!.lastAttempt = {
+    state.instances = [state.instances[2]!];
+    state.instances[0]!.snapshot!.fetchedAt = NOW - 34 * 60 * 1_000;
+    state.instances[0]!.lastAttempt = {
       trigger: "scheduled",
       startedAt: NOW - 2_000,
       finishedAt: NOW - 1_000,
@@ -2132,9 +2126,9 @@ describe("Cockpit", () => {
 
   it("keeps a fresh scheduled temporary failure quiet but shows it once stale", () => {
     const state = createFixtureState(NOW);
-    state.providers = [state.providers[0]!];
-    state.providers[0]!.snapshot!.fetchedAt = NOW - 34 * 60 * 1_000;
-    state.providers[0]!.lastAttempt = {
+    state.instances = [state.instances[0]!];
+    state.instances[0]!.snapshot!.fetchedAt = NOW - 34 * 60 * 1_000;
+    state.instances[0]!.lastAttempt = {
       trigger: "scheduled",
       startedAt: NOW - 2_000,
       finishedAt: NOW - 1_000,
@@ -2199,7 +2193,7 @@ describe("Cockpit", () => {
 
   it("opens an accessible dedicated history screen from each connected card", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.history.push({
+    state.instances[0]!.history.push({
       observedAt: NOW - 15 * 60 * 1_000,
       metrics: [
         { type: "quota", metricId: "retired-window", usedRatio: 0.9 },
@@ -2250,8 +2244,8 @@ describe("Cockpit", () => {
 
   it("does not offer history without both provider access and a current snapshot", () => {
     const disconnected = createFixtureState(NOW);
-    disconnected.providers = [
-      { ...disconnected.providers[0]!, access: "required" },
+    disconnected.instances = [
+      { ...disconnected.instances[0]!, access: "required" },
     ];
     const firstView = render(
       <Cockpit
@@ -2267,10 +2261,9 @@ describe("Cockpit", () => {
       screen.queryByRole("button", { name: /^Open ChatGPT history/ }),
     ).not.toBeInTheDocument();
 
-    const snapshotFree = createInitialState();
-    snapshotFree.providers = [
-      { ...snapshotFree.providers[0]!, access: "granted" },
-    ];
+    const snapshotFree = createEmptyFixtureState();
+    const { snapshot: _snapshot, ...chatGpt } = createFixtureState(NOW).instances[0]!;
+    snapshotFree.instances = [{ ...chatGpt, access: "granted" }];
     firstView.rerender(
       <Cockpit
         state={snapshotFree}
@@ -2297,7 +2290,7 @@ describe("Cockpit", () => {
     ["stale", true],
     ["empty", false],
   ])("offers a manual Kimi refresh for a %s scheduled deferral", (_label, hasSnapshot) => {
-    const source = createFixtureState(NOW).providers[2]!;
+    const source = createFixtureState(NOW).instances[2]!;
     const provider = {
       ...source,
       ...(hasSnapshot
@@ -2315,9 +2308,9 @@ describe("Cockpit", () => {
         outcome: { kind: "deferred" as const, reason: "session_required" as const },
       },
     };
-    const state: AppState = {
-      ...createInitialState(),
-      providers: [provider],
+    const state: AppViewState = {
+      ...createEmptyFixtureState(),
+      instances: [provider],
     };
     const onRefreshProvider = vi.fn();
 
@@ -2343,7 +2336,7 @@ describe("Cockpit", () => {
 
   it("hides only an active provider's refresh without hiding usage", () => {
     const state = createFixtureState(NOW);
-    state.providers = [state.providers[0]!, state.providers[2]!];
+    state.instances = [state.instances[0]!, state.instances[2]!];
 
     render(
       <Cockpit
@@ -2371,7 +2364,7 @@ describe("Cockpit", () => {
   });
 
   it("disables Connect while that provider operation is active", () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
 
     render(
       <Cockpit

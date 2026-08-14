@@ -1,7 +1,7 @@
 import type {
   ProviderInstanceConfig,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import {
   providerCatalog,
   type ApiKeyProviderKind,
@@ -15,7 +15,7 @@ import {
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
   ProviderCredential,
   ProviderPackage,
   ProviderRuntimeServices,
@@ -93,7 +93,7 @@ export function createBrowserSessionPackage<
   adapter,
 }: {
   kind: Kind;
-  adapter: ProviderAdapter<Kind>;
+  adapter: ProviderCollector<Kind>;
 }): ProviderPackage {
   return {
     kind,
@@ -123,7 +123,7 @@ export function createApiKeyPackage<Kind extends ApiKeyProviderKind>({
   adapter,
 }: {
   kind: Kind;
-  adapter: ProviderAdapter<Kind>;
+  adapter: ProviderCollector<Kind>;
 }): ProviderPackage {
   return {
     kind,

@@ -3,8 +3,8 @@ import {
   type ProviderInstanceConfig,
   type ProviderInstanceId,
   type ProviderInstanceRecord,
-} from "../domain/instances";
-import { isProviderId, type ProviderKind } from "../providers/catalog";
+} from "../domain/model";
+import { isProviderKind, type ProviderKind } from "../providers/catalog";
 import { providerRegistry } from "../providers/registry";
 
 export const PERMISSION_INTENT_SWEEP_ALARM =
@@ -75,7 +75,7 @@ function decodeCandidate(value: unknown): PermissionIntentCandidate | undefined 
       ["userLabel"],
     ) ||
     !isProviderInstanceId(value.id) ||
-    !isProviderId(value.providerKind) ||
+    !isProviderKind(value.providerKind) ||
     !value.id.startsWith(`${value.providerKind}:`) ||
     typeof value.createdAt !== "number" ||
     !Number.isFinite(value.createdAt) ||

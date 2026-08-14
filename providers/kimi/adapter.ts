@@ -2,7 +2,7 @@ import type { ProviderHealth, QuotaMetric } from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
 } from "../types";
 import { retryAtFromResponse } from "../retry-after";
 import {
@@ -462,7 +462,7 @@ export function retryKimiAdapterAfterChangedToken(
   return collectKimi(context, retryEndpoints.get(result) ?? "current");
 }
 
-export const kimiAdapter: ProviderAdapter<"kimi"> = {
+export const kimiAdapter: ProviderCollector<"kimi"> = {
   id: "kimi",
   collect: collectKimi,
 };

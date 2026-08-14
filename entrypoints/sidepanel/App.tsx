@@ -16,13 +16,13 @@ import {
 import {
   type ProviderInstanceConfig,
   type ProviderInstanceId,
-} from "../../domain/instances";
+} from "../../domain/model";
 import type {
   DisplayMode,
   RefreshReport,
 } from "../../domain/model";
 import {
-  isApiKeyProviderId,
+  isApiKeyProviderKind,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
   type ProviderKind,
@@ -329,7 +329,7 @@ export function App() {
   };
 
   const handleConnectProvider = async (providerKind: ProviderKind) => {
-    if (isApiKeyProviderId(providerKind)) return;
+    if (isApiKeyProviderKind(providerKind)) return;
     clearAnnouncement();
     const config = normalizeProviderConfig(providerKind, { kind: "fixed" });
     const existingInstanceId = viewStateRef.current?.instances.find(

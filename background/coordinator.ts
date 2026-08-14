@@ -2,21 +2,21 @@ import { appendUsageObservation } from "../domain/history";
 import type {
   ProviderInstanceId,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import {
   sanitizedFailureMessage,
   type ProviderAttempt,
   type ProviderRefreshOutcome,
   type RefreshTrigger,
 } from "../domain/model";
-import { normalizeUsageSnapshot } from "../providers/initial-state";
+import { normalizeUsageSnapshot } from "../storage/state-codec";
 import type {
   CollectionResult,
   ProviderCredential,
   ProviderPackage,
   ProviderRuntimeServices,
 } from "../providers/types";
-import { usageRepository } from "../storage/instance-repository";
+import { usageRepository } from "../storage/repository";
 
 const DEFAULT_SCHEDULED_BACKOFF_MS = 15 * 60 * 1_000;
 

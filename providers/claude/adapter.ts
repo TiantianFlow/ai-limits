@@ -6,7 +6,7 @@ import type {
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
 } from "../types";
 import { retryAtFromResponse } from "../retry-after";
 import {
@@ -288,7 +288,7 @@ async function collectClaude({
   }
 }
 
-export const claudeAdapter: ProviderAdapter<"claude"> = {
+export const claudeAdapter: ProviderCollector<"claude"> = {
   id: "claude",
   collect: collectClaude,
 };

@@ -2,7 +2,7 @@ import type { CounterMetric, ProviderHealth, QuotaMetric } from "../../domain/mo
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
 } from "../types";
 import { retryAtFromResponse } from "../retry-after";
 import {
@@ -216,7 +216,7 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
   }
 }
 
-export const cursorAdapter: ProviderAdapter<"cursor"> = {
+export const cursorAdapter: ProviderCollector<"cursor"> = {
   id: "cursor",
   collect: collectCursor,
 };

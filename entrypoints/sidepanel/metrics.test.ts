@@ -6,7 +6,7 @@ import type {
   UsageMetric,
   UsageSnapshot,
 } from "../../domain/model";
-import { normalizeUsageSnapshot } from "../../providers/initial-state";
+import { normalizeUsageSnapshot } from "../../storage/state-codec";
 import {
   balanceMetrics,
   counterMetrics,

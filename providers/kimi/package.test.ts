@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import type { ProviderInstanceRecord } from "../../domain/instances";
+import type { ProviderInstanceRecord } from "../../domain/model";
 import type { CollectionContext, CollectionResult } from "../types";
 import { createKimiPackage } from "./package";
 

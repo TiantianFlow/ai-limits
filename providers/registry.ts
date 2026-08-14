@@ -1,6 +1,6 @@
 import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
-import type { ProviderId, ProviderKind } from "./catalog";
+import type { ProviderKind } from "./catalog";
 import { cursorAdapter } from "./cursor/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { kimiPackage } from "./kimi/package";
@@ -11,9 +11,7 @@ import {
 } from "./package-factories";
 import type { ProviderPackage } from "./types";
 
-export type ConnectableProviderId = ProviderId;
-
-export { providerIds } from "./catalog";
+export { providerKinds } from "./catalog";
 
 export const providerRegistry = {
   chatgpt: createBrowserSessionPackage({

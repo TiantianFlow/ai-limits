@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderInstanceRecord } from "../domain/model";
 import {
   hasInstancePermission,
   permissionChangeAffectsInstance,

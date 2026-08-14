@@ -2,11 +2,11 @@ import { describe, expect, test } from "vitest";
 
 import { providerCatalog } from "./catalog";
 import { createFixtureState } from "./fixtures";
-import { providerRegistry, providerIds } from "./registry";
+import { providerRegistry, providerKinds } from "./registry";
 
 describe("provider registry", () => {
   test("contains every catalog provider with exact grants", () => {
-    expect(providerIds).toEqual([
+    expect(providerKinds).toEqual([
       "chatgpt",
       "claude",
       "kimi",
@@ -15,7 +15,7 @@ describe("provider registry", () => {
       "newapi",
     ]);
     expect(
-      providerIds.map((providerId) => [
+      providerKinds.map((providerId) => [
         providerId,
         providerCatalog[providerId].optionalOrigins,
         providerCatalog[providerId].optionalPermissions,
@@ -33,8 +33,8 @@ describe("provider registry", () => {
       ],
     ]);
     expect(
-      providerIds.map((providerId) => providerRegistry[providerId].kind),
-    ).toEqual(providerIds);
+      providerKinds.map((providerId) => providerRegistry[providerId].kind),
+    ).toEqual(providerKinds);
   });
 
   test("owns cardinality, configuration, credentials, and exact permissions", () => {
@@ -74,10 +74,10 @@ describe("provider registry", () => {
   test("includes representative synthetic ElevenLabs Starter state", () => {
     const elevenlabs = createFixtureState(
       Date.parse("2030-04-15T12:00:00.000Z"),
-    ).providers.find(({ providerId }) => providerId === "elevenlabs");
+    ).instances.find(({ providerKind }) => providerKind === "elevenlabs");
 
     expect(elevenlabs).toMatchObject({
-      providerId: "elevenlabs",
+      providerKind: "elevenlabs",
       access: "granted",
       snapshot: {
         providerKind: "elevenlabs",

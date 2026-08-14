@@ -9,7 +9,7 @@ import type {
   QuotaMetric,
   UsageHistoryObservation,
 } from "../../../domain/model";
-import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ProviderInstanceId } from "../../../domain/model";
 import type { ProviderKind } from "../../../providers/catalog";
 import type { PaceKind } from "../../../domain/quota";
 import { Icon, type IconName } from "./Icon";

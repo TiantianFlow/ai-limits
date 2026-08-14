@@ -260,7 +260,22 @@ describe("quota history", () => {
     const rawCutoff = NOW - 48 * HOUR;
     const typedObservation = (observedAt: number, usedRatio: number) => ({
       observedAt,
-      metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio }],
+      metrics: [
+        { type: "quota" as const, metricId: "weekly", usedRatio },
+        {
+          type: "counter" as const,
+          metricId: "spend",
+          semantic: "spent" as const,
+          value: usedRatio * 100,
+          unit: "USD",
+        },
+        {
+          type: "balance" as const,
+          metricId: "credits",
+          value: 100 - usedRatio * 100,
+          unit: "credits",
+        },
+      ],
     });
     const duplicates = [
       typedObservation(NOW - 30 * DAY - 1, 0.1),
@@ -282,6 +297,7 @@ describe("quota history", () => {
     expect(retained).toHaveLength(1_024);
     expect(retained[0]?.observedAt).toBe(NOW - 1_024 * 60_000);
     expect(retained.at(-1)).toEqual(capped.at(-1));
+    expect(retained.every(({ metrics }) => metrics.length === 3)).toBe(true);
   });
 
 });

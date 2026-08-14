@@ -692,4 +692,37 @@ describe("coordinated storage migration", () => {
       browser.storage.local.get("aiLimitsConnectionSuppressions"),
     ).resolves.toEqual({ aiLimitsConnectionSuppressions: ["claude"] });
   });
+
+  test("reruns byte-equivalently after interruption between atomic cutover and legacy cleanup", async () => {
+    await browser.storage.local.set(
+      legacyInput({
+        aiLimitsState: releasedState([releasedProvider("chatgpt")]),
+        aiLimitsConnectionSuppressions: ["claude"],
+      }),
+    );
+    const remove = vi
+      .spyOn(browser.storage.local, "remove")
+      .mockRejectedValueOnce(new Error("service worker interrupted"));
+
+    await expect(migrateLegacyStorageInPlace(now, {})).rejects.toThrow(
+      "service worker interrupted",
+    );
+    const afterInterruptedCutover = await browser.storage.local.get([
+      "aiLimitsState",
+      "aiLimitsCredentials",
+    ]);
+    await expect(
+      browser.storage.local.get("aiLimitsConnectionSuppressions"),
+    ).resolves.toEqual({ aiLimitsConnectionSuppressions: ["claude"] });
+
+    await migrateLegacyStorageInPlace(now + day, {});
+
+    await expect(
+      browser.storage.local.get(["aiLimitsState", "aiLimitsCredentials"]),
+    ).resolves.toEqual(afterInterruptedCutover);
+    await expect(
+      browser.storage.local.get("aiLimitsConnectionSuppressions"),
+    ).resolves.toEqual({});
+    expect(remove).toHaveBeenCalledTimes(2);
+  });
 });

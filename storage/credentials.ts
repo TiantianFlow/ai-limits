@@ -1,11 +1,11 @@
 import {
-  isApiKeyProviderId,
-  type ApiKeyProviderId,
-  type ProviderId,
-} from "../providers/catalog";
-import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
+  isConnectionRevision,
+  isProviderInstanceId,
+  type ProviderInstanceId,
+} from "../domain/model";
+import { isApiKeyProviderKind } from "../providers/catalog";
 
-const CREDENTIAL_STORAGE_KEY = "aiLimitsCredentials";
+export const CREDENTIAL_STORAGE_KEY = "aiLimitsCredentials";
 const MAX_API_KEY_LENGTH = 4_096;
 
 export type CredentialStatus = "active" | "rejected";
@@ -13,13 +13,16 @@ export type CredentialStatus = "active" | "rejected";
 export interface StoredApiKeyCredential {
   kind: "api-key";
   value: string;
-  baseUrl?: string;
   status: CredentialStatus;
 }
-
 export interface VersionedStoredApiKeyCredential
   extends StoredApiKeyCredential {
   revision: string;
+}
+
+export interface CredentialStateV2 {
+  version: 2;
+  credentials: Record<ProviderInstanceId, VersionedStoredApiKeyCredential>;
 }
 
 export type ConditionalCredentialSaveResult =
@@ -30,25 +33,11 @@ export type ConditionalCredentialSaveResult =
       revision: string;
     };
 
-interface CredentialStateV1 {
-  version: 1;
-  providers: Partial<Record<ApiKeyProviderId, VersionedStoredApiKeyCredential>>;
-}
-
 let credentialMutationQueue: Promise<void> = Promise.resolve();
 let credentialStorageInitialized = false;
 
-function enqueueCredentialMutation<T>(mutation: () => Promise<T>): Promise<T> {
-  const result = credentialMutationQueue.then(mutation);
-  credentialMutationQueue = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
-}
-
-function emptyCredentialState(): CredentialStateV1 {
-  return { version: 1, providers: {} };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function normalizeApiKey(value: unknown): string | undefined {
@@ -60,148 +49,127 @@ function normalizeApiKey(value: unknown): string | undefined {
 }
 
 function normalizeCredential(
-  providerId: ApiKeyProviderId,
   value: unknown,
 ): VersionedStoredApiKeyCredential | undefined {
   if (
-    typeof value !== "object" ||
-    value === null ||
-    (value as { kind?: unknown }).kind !== "api-key" ||
-    !["active", "rejected"].includes((value as { status?: unknown }).status as string)
+    !isRecord(value) ||
+    value.kind !== "api-key" ||
+    (value.status !== "active" && value.status !== "rejected") ||
+    !isConnectionRevision(value.revision)
   ) {
     return undefined;
   }
-
-  const apiKey = normalizeApiKey((value as { value?: unknown }).value);
+  const apiKey = normalizeApiKey(value.value);
   if (!apiKey) return undefined;
-
-  const baseUrl =
-    providerId === "newapi"
-      ? normalizeNewApiBaseUrl((value as { baseUrl?: unknown }).baseUrl)
-      : undefined;
-  if (providerId === "newapi" && !baseUrl) return undefined;
-
   return {
     kind: "api-key",
     value: apiKey,
-    ...(baseUrl ? { baseUrl } : {}),
-    status: (value as { status: CredentialStatus }).status,
-    revision:
-      typeof (value as { revision?: unknown }).revision === "string" &&
-      (value as { revision: string }).revision.length > 0
-        ? (value as { revision: string }).revision
-        : `legacy:${providerId}`,
+    status: value.status,
+    revision: value.revision,
   };
 }
 
-function normalizeCredentialState(value: unknown): CredentialStateV1 {
+function isApiKeyInstanceId(value: unknown): value is ProviderInstanceId {
+  return (
+    isProviderInstanceId(value) &&
+    isApiKeyProviderKind(value.slice(0, value.indexOf(":")))
+  );
+}
+
+export function emptyCredentialStateV2(): CredentialStateV2 {
+  return { version: 2, credentials: {} };
+}
+
+export function normalizeCredentialStateV2(value: unknown): CredentialStateV2 {
   if (
-    typeof value !== "object" ||
-    value === null ||
-    (value as { version?: unknown }).version !== 1 ||
-    typeof (value as { providers?: unknown }).providers !== "object" ||
-    (value as { providers?: unknown }).providers === null
+    !isRecord(value) ||
+    value.version !== 2 ||
+    !isRecord(value.credentials)
   ) {
-    return emptyCredentialState();
+    return emptyCredentialStateV2();
   }
-
-  const storedProviders = (value as { providers: Record<string, unknown> }).providers;
-  const providers: CredentialStateV1["providers"] = {};
-  for (const [providerId, credential] of Object.entries(storedProviders)) {
-    if (!isApiKeyProviderId(providerId)) continue;
-    const normalizedCredential = normalizeCredential(providerId, credential);
-    if (normalizedCredential) providers[providerId] = normalizedCredential;
+  const credentials: CredentialStateV2["credentials"] = {};
+  for (const [instanceId, candidate] of Object.entries(value.credentials)) {
+    if (!isApiKeyInstanceId(instanceId)) continue;
+    const credential = normalizeCredential(candidate);
+    if (credential) credentials[instanceId] = credential;
   }
-
-  return { version: 1, providers };
+  return { version: 2, credentials };
 }
 
-async function readCredentialState(): Promise<CredentialStateV1> {
+function enqueueCredentialMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const result = credentialMutationQueue.then(mutation);
+  credentialMutationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function readCredentialState(): Promise<CredentialStateV2> {
   const stored = await browser.storage.local.get(CREDENTIAL_STORAGE_KEY);
-  return normalizeCredentialState(stored[CREDENTIAL_STORAGE_KEY]);
+  return normalizeCredentialStateV2(stored[CREDENTIAL_STORAGE_KEY]);
 }
 
-async function writeCredentialState(state: CredentialStateV1): Promise<void> {
-  await browser.storage.local.set({ [CREDENTIAL_STORAGE_KEY]: state });
+async function writeCredentialState(state: CredentialStateV2): Promise<void> {
+  await browser.storage.local.set({
+    [CREDENTIAL_STORAGE_KEY]: normalizeCredentialStateV2(state),
+  });
 }
 
-function canUseCredentialStorage(): boolean {
-  return credentialStorageInitialized;
-}
-
-export async function initializeCredentialStorage(): Promise<void> {
+export async function initializeCredentialVault(): Promise<void> {
   credentialStorageInitialized = false;
-  await browser.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+  await browser.storage.local.setAccessLevel({
+    accessLevel: "TRUSTED_CONTEXTS",
+  });
   credentialStorageInitialized = true;
 }
 
-export async function readProviderCredential(
-  providerId: ProviderId,
+export async function readCredential(
+  instanceId: ProviderInstanceId,
 ): Promise<StoredApiKeyCredential | undefined> {
-  const credential = await readProviderCredentialWithRevision(providerId);
+  const credential = await readCredentialWithRevision(instanceId);
   if (!credential) return undefined;
   const { revision: _revision, ...storedCredential } = credential;
   return storedCredential;
 }
 
-export async function readProviderCredentialWithRevision(
-  providerId: ProviderId,
+export async function readCredentialWithRevision(
+  instanceId: ProviderInstanceId,
 ): Promise<VersionedStoredApiKeyCredential | undefined> {
-  if (!canUseCredentialStorage() || !isApiKeyProviderId(providerId)) {
+  if (!credentialStorageInitialized || !isApiKeyInstanceId(instanceId)) {
     return undefined;
   }
-
-  return (await readCredentialState()).providers[providerId];
+  return (await readCredentialState()).credentials[instanceId];
 }
 
-export function saveProviderApiKey(
-  providerId: ApiKeyProviderId,
-  value: string,
-  status: CredentialStatus = "active",
-  baseUrl?: string,
-): Promise<void> {
-  return saveProviderApiKeyIfCurrent(
-    providerId,
-    value,
-    () => true,
-    status,
-    baseUrl,
-  ).then(() => undefined);
-}
-
-export function saveProviderApiKeyIfCurrent(
-  providerId: ApiKeyProviderId,
+export function saveApiKeyIfCurrent(
+  instanceId: ProviderInstanceId,
   value: string,
   isCurrent: () => boolean,
   status: CredentialStatus = "active",
-  baseUrl?: string,
 ): Promise<ConditionalCredentialSaveResult> {
   const apiKey = normalizeApiKey(value);
-  const normalizedBaseUrl =
-    providerId === "newapi" ? normalizeNewApiBaseUrl(baseUrl) : undefined;
   if (
-    !canUseCredentialStorage() ||
+    !credentialStorageInitialized ||
+    !isApiKeyInstanceId(instanceId) ||
     !apiKey ||
-    (providerId === "newapi" && !normalizedBaseUrl)
+    (status !== "active" && status !== "rejected")
   ) {
     return Promise.resolve({ saved: false });
   }
-
   return enqueueCredentialMutation(async () => {
     const state = await readCredentialState();
-    if (!isCurrent()) {
-      return { saved: false } as const;
-    }
-    const previous = state.providers[providerId];
+    if (!isCurrent()) return { saved: false } as const;
+    const previous = state.credentials[instanceId];
     const revision = globalThis.crypto.randomUUID();
     await writeCredentialState({
       ...state,
-      providers: {
-        ...state.providers,
-        [providerId]: {
+      credentials: {
+        ...state.credentials,
+        [instanceId]: {
           kind: "api-key",
           value: apiKey,
-          ...(normalizedBaseUrl ? { baseUrl: normalizedBaseUrl } : {}),
           status,
           revision,
         },
@@ -211,33 +179,20 @@ export function saveProviderApiKeyIfCurrent(
   });
 }
 
-export function markProviderCredentialRejected(
-  providerId: ApiKeyProviderId,
-): Promise<void> {
-  if (!canUseCredentialStorage()) return Promise.resolve();
-
-  return enqueueCredentialMutation(async () => {
-    const state = await readCredentialState();
-    const credential = state.providers[providerId];
-    if (!credential) return;
-    await writeCredentialState({
-      ...state,
-      providers: { ...state.providers, [providerId]: { ...credential, status: "rejected" } },
-    });
-  });
-}
-
-export function markProviderCredentialRejectedIfRevision(
-  providerId: ApiKeyProviderId,
+export function markCredentialRejectedIfRevision(
+  instanceId: ProviderInstanceId,
   expectedRevision: string,
 ): Promise<void> {
-  if (!canUseCredentialStorage() || expectedRevision.length === 0) {
+  if (
+    !credentialStorageInitialized ||
+    !isApiKeyInstanceId(instanceId) ||
+    expectedRevision.length === 0
+  ) {
     return Promise.resolve();
   }
-
   return enqueueCredentialMutation(async () => {
     const state = await readCredentialState();
-    const credential = state.providers[providerId];
+    const credential = state.credentials[instanceId];
     if (
       credential?.status !== "active" ||
       credential.revision !== expectedRevision
@@ -246,67 +201,69 @@ export function markProviderCredentialRejectedIfRevision(
     }
     await writeCredentialState({
       ...state,
-      providers: {
-        ...state.providers,
-        [providerId]: { ...credential, status: "rejected" },
+      credentials: {
+        ...state.credentials,
+        [instanceId]: { ...credential, status: "rejected" },
       },
     });
   });
 }
 
-export function restoreProviderCredentialIfRevision(
-  providerId: ApiKeyProviderId,
+export function restoreCredentialIfRevision(
+  instanceId: ProviderInstanceId,
   expectedRevision: string,
   previous: VersionedStoredApiKeyCredential | undefined,
 ): Promise<boolean> {
-  if (!canUseCredentialStorage() || expectedRevision.length === 0) {
+  if (
+    !credentialStorageInitialized ||
+    !isApiKeyInstanceId(instanceId) ||
+    expectedRevision.length === 0
+  ) {
     return Promise.resolve(false);
   }
-
   return enqueueCredentialMutation(async () => {
     const state = await readCredentialState();
-    const credential = state.providers[providerId];
+    const credential = state.credentials[instanceId];
     if (
       credential?.status !== "active" ||
       credential.revision !== expectedRevision
     ) {
       return false;
     }
-
-    const providers = { ...state.providers };
-    if (previous) {
-      providers[providerId] = previous;
+    const credentials = { ...state.credentials };
+    const normalizedPrevious = normalizeCredential(previous);
+    if (normalizedPrevious) {
+      credentials[instanceId] = normalizedPrevious;
     } else {
-      delete providers[providerId];
+      delete credentials[instanceId];
     }
-    await writeCredentialState({ ...state, providers });
+    await writeCredentialState({ ...state, credentials });
     return true;
   });
 }
 
-export function deleteProviderCredential(providerId: ProviderId): Promise<void> {
-  if (!isApiKeyProviderId(providerId)) {
-    return Promise.resolve();
+export function deleteCredential(
+  instanceId: ProviderInstanceId,
+): Promise<void> {
+  if (!isApiKeyInstanceId(instanceId)) return Promise.resolve();
+  if (!credentialStorageInitialized) {
+    return Promise.reject(new Error("Credential storage is unavailable."));
   }
-  if (!canUseCredentialStorage()) {
-    return enqueueCredentialMutation(() =>
-      browser.storage.local.remove(CREDENTIAL_STORAGE_KEY),
-    );
-  }
-
   return enqueueCredentialMutation(async () => {
     const state = await readCredentialState();
-    const { [providerId]: _deletedCredential, ...providers } = state.providers;
-    await writeCredentialState({ ...state, providers });
+    const credentials = { ...state.credentials };
+    delete credentials[instanceId];
+    await writeCredentialState({ ...state, credentials });
   });
 }
 
-export function deleteAllProviderCredentials(): Promise<void> {
-  if (!canUseCredentialStorage()) {
+export function deleteAllCredentials(): Promise<void> {
+  if (!credentialStorageInitialized) {
     return enqueueCredentialMutation(() =>
       browser.storage.local.remove(CREDENTIAL_STORAGE_KEY),
     );
   }
-
-  return enqueueCredentialMutation(() => writeCredentialState(emptyCredentialState()));
+  return enqueueCredentialMutation(() =>
+    writeCredentialState(emptyCredentialStateV2()),
+  );
 }

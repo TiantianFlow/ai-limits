@@ -1,7 +1,7 @@
-import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderInstanceRecord } from "../domain/model";
 import { providerRegistry } from "../providers/registry";
 import type { ProviderPackage } from "../providers/types";
-import { readCredentialWithRevision } from "../storage/credential-vault";
+import { readCredentialWithRevision } from "../storage/credentials";
 import { hasInstancePermission } from "./permissions";
 
 type ProviderPackageCatalog = Record<

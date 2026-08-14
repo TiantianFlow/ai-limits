@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type {
   ProviderInstanceId,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import type { CollectionResult, ProviderPackage } from "../providers/types";
 import {
   connectionRepository,
   loadInstanceAppState,
-} from "../storage/instance-repository";
+} from "../storage/repository";
 import {
   collectProviderOutcome,
   commitProviderOutcome,

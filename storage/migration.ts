@@ -2,12 +2,16 @@ import {
   isConnectionRevision,
   type InstanceAppState,
   type ProviderInstanceRecord,
-} from "../domain/instances";
-import type { DisplayMode, UsageHistoryObservation } from "../domain/model";
+} from "../domain/model";
+import type {
+  DisplayMode,
+  MetricCycle,
+  MetricScope,
+  UsageHistoryObservation,
+} from "../domain/model";
 import type { ProviderKind, ApiKeyProviderKind } from "../providers/catalog";
-import { isApiKeyProviderId, isProviderId, providerCatalog, providerIds } from "../providers/catalog";
+import { isApiKeyProviderKind, isProviderKind, providerCatalog, providerKinds } from "../providers/catalog";
 import { normalizeNewApiBaseUrl, newApiPermissionOrigin } from "../providers/newapi/url";
-import { convertReleasedV4ProviderWire } from "../providers/v4-wire-migration";
 import {
   CREDENTIAL_STORAGE_KEY,
   emptyCredentialStateV2,
@@ -15,7 +19,7 @@ import {
   type CredentialStateV2,
   type CredentialStatus,
   type VersionedStoredApiKeyCredential,
-} from "./credential-vault";
+} from "./credentials";
 import {
   createEmptyInstanceAppState,
   normalizeInstanceAppState,
@@ -94,7 +98,7 @@ function normalizeLegacyCredentials(
   }
   const credentials: Partial<Record<ApiKeyProviderKind, LegacyCredential>> = {};
   for (const [providerKind, candidate] of Object.entries(value.providers)) {
-    if (!isApiKeyProviderId(providerKind)) continue;
+    if (!isApiKeyProviderKind(providerKind)) continue;
     const credential = normalizeLegacyCredential(providerKind, candidate);
     if (credential) credentials[providerKind] = credential;
   }
@@ -103,7 +107,7 @@ function normalizeLegacyCredentials(
 
 function normalizedSuppressions(value: unknown): Set<ProviderKind> {
   return new Set(
-    Array.isArray(value) ? value.filter(isProviderId) : [],
+    Array.isArray(value) ? value.filter(isProviderKind) : [],
   );
 }
 
@@ -278,13 +282,13 @@ function migrateReleasedV4(
     ? stateValue.providers
     : [];
 
-  for (const providerKind of providerIds) {
+  for (const providerKind of providerKinds) {
     if (suppressions.has(providerKind)) continue;
     const storedProvider = storedProviders.find(
       (candidate) =>
         isRecord(candidate) && candidate.providerId === providerKind,
     );
-    const credential = isApiKeyProviderId(providerKind)
+    const credential = isApiKeyProviderKind(providerKind)
       ? credentials[providerKind]
       : undefined;
     const permissionGranted = hasGrantedPermission(
@@ -384,7 +388,7 @@ export function migrateLegacyStorage(
       rawInstances.flatMap((candidate) =>
         isRecord(candidate) &&
         typeof candidate.id === "string" &&
-        isApiKeyProviderId(candidate.providerKind) &&
+        isApiKeyProviderKind(candidate.providerKind) &&
         Object.hasOwn(candidate, "connectionRevision") &&
         !isConnectionRevision(candidate.connectionRevision)
           ? [candidate.id]
@@ -398,7 +402,7 @@ export function migrateLegacyStorage(
           if (
             !isRecord(candidate) ||
             typeof candidate.id !== "string" ||
-            !isApiKeyProviderId(candidate.providerKind) ||
+            !isApiKeyProviderKind(candidate.providerKind) ||
             Object.hasOwn(candidate, "connectionRevision")
           ) {
             return candidate;
@@ -413,7 +417,7 @@ export function migrateLegacyStorage(
     );
     const activeApiKeyInstances = new Set(
       state.instances
-        .filter(({ providerKind }) => isApiKeyProviderId(providerKind))
+        .filter(({ providerKind }) => isApiKeyProviderKind(providerKind))
         .map(({ id }) => id),
     );
     const credentials = Object.fromEntries(
@@ -452,4 +456,258 @@ export async function migrateLegacyStorageInPlace(
   });
   await browser.storage.local.remove(LEGACY_SUPPRESSION_STORAGE_KEY);
   return migrated;
+}
+
+interface ConvertedReleasedV4Wire {
+  snapshot?: unknown;
+  history?: unknown;
+}
+
+function metricScope(
+  providerId: ProviderKind,
+  id: unknown,
+  kind: unknown,
+): MetricScope {
+  if (kind === "model") return "model";
+  if (kind === "feature") return "feature";
+  if (providerId === "elevenlabs" && id === "monthly-credits") {
+    return "product";
+  }
+  return "general";
+}
+
+function metricCycle(
+  providerId: ProviderKind,
+  kind: unknown,
+  value: Record<string, unknown>,
+): MetricCycle | undefined {
+  const hasTiming =
+    value.startedAt !== undefined ||
+    value.resetsAt !== undefined ||
+    value.durationMs !== undefined;
+  if (!hasTiming) return undefined;
+
+  const cadence =
+    kind === "calendar" || (providerId === "cursor" && kind === "model")
+      ? "calendar"
+      : "rolling";
+  return {
+    cadence,
+    ...(value.startedAt === undefined ? {} : { startedAt: value.startedAt as number }),
+    ...(value.resetsAt === undefined ? {} : { resetsAt: value.resetsAt as number }),
+    ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs as number }),
+  };
+}
+
+function convertWindow(
+  value: unknown,
+  providerId: ProviderKind,
+): Record<string, unknown> | undefined {
+  if (
+    !isRecord(value) ||
+    !["rolling", "calendar", "model", "feature"].includes(value.kind as string) ||
+    (value.sourceSemantics !== "used" && value.sourceSemantics !== "remaining")
+  ) {
+    return undefined;
+  }
+
+  const cycle = metricCycle(providerId, value.kind, value);
+  return {
+    type: "quota",
+    id: value.id,
+    label: value.label,
+    scope: metricScope(providerId, value.id, value.kind),
+    usedRatio: value.usedRatio,
+    ...(value.used === undefined ? {} : { used: value.used }),
+    ...(value.limit === undefined ? {} : { limit: value.limit }),
+    ...(value.unit === undefined ? {} : { unit: value.unit }),
+    ...(cycle === undefined ? {} : { cycle }),
+    ...(value.segments === undefined ? {} : { segments: value.segments }),
+  };
+}
+
+function creditCycle(value: Record<string, unknown>): MetricCycle | undefined {
+  return value.resetsAt === undefined
+    ? undefined
+    : { cadence: "calendar", resetsAt: value.resetsAt as number };
+}
+
+function convertCredit(
+  value: unknown,
+  providerId: ProviderKind,
+): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  const cycle = creditCycle(value);
+  const base = {
+    id: value.id,
+    label: value.label,
+    scope: "product",
+    unit: value.unit,
+    ...(cycle === undefined ? {} : { cycle }),
+  };
+
+  if (providerId === "chatgpt") {
+    return {
+      ...base,
+      type: "balance",
+      value: value.remaining,
+      ...(value.limit === undefined ? {} : { initialLimit: value.limit }),
+    };
+  }
+
+  if (providerId === "claude" || providerId === "cursor") {
+    return {
+      ...base,
+      type: "counter",
+      semantic: "spent",
+      value: value.used,
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+    };
+  }
+
+  if (providerId === "newapi") {
+    return {
+      ...base,
+      type: "counter",
+      semantic: "consumed",
+      value: value.used,
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+    };
+  }
+
+  return undefined;
+}
+
+function convertGroups(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return value;
+
+  return value.map((group) => {
+    if (!isRecord(group)) return group;
+    if (!Array.isArray(group.windowIds) || !Array.isArray(group.creditIds)) {
+      return group;
+    }
+    const windowIds = group.windowIds;
+    const creditIds = group.creditIds;
+    return {
+      id: group.id,
+      label: group.label,
+      ...(group.description === undefined ? {} : { description: group.description }),
+      metricIds: [...windowIds, ...creditIds],
+    };
+  });
+}
+
+function convertSnapshot(
+  value: unknown,
+  providerId: ProviderKind,
+): Record<string, unknown> | undefined {
+  if (
+    !isRecord(value) ||
+    value.providerId !== providerId ||
+    (value.source !== "web-session" &&
+      value.source !== "oauth" &&
+      value.source !== "api-key") ||
+    !Array.isArray(value.windows) ||
+    !Array.isArray(value.credits)
+  ) {
+    return undefined;
+  }
+
+  const windows = value.windows.map((window) => convertWindow(window, providerId));
+  const credits = value.credits.map((credit) => convertCredit(credit, providerId));
+  if (
+    windows.some((window) => window === undefined) ||
+    credits.some((credit) => credit === undefined)
+  ) {
+    return undefined;
+  }
+
+  const usageGroups = convertGroups(value.usageGroups);
+  return {
+    providerKind: providerId,
+    ...(value.accountLabel === undefined ? {} : { accountLabel: value.accountLabel }),
+    ...(value.planLabel === undefined ? {} : { planLabel: value.planLabel }),
+    source: value.source,
+    fetchedAt: value.fetchedAt,
+    metrics: [...windows, ...credits],
+    ...(usageGroups === undefined ? {} : { usageGroups }),
+  };
+}
+
+function quotaCadences(snapshot: Record<string, unknown> | undefined) {
+  const cadences = new Map<string, MetricCycle["cadence"]>();
+  if (!snapshot || !Array.isArray(snapshot.metrics)) return cadences;
+  for (const metric of snapshot.metrics) {
+    if (
+      isRecord(metric) &&
+      metric.type === "quota" &&
+      typeof metric.id === "string" &&
+      isRecord(metric.cycle) &&
+      (metric.cycle.cadence === "rolling" || metric.cycle.cadence === "calendar")
+    ) {
+      cadences.set(metric.id, metric.cycle.cadence);
+    }
+  }
+  return cadences;
+}
+
+function convertHistory(
+  value: unknown,
+  cadences: ReadonlyMap<string, MetricCycle["cadence"]>,
+): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((observation) => {
+    if (!isRecord(observation) || !Array.isArray(observation.windows)) {
+      return observation;
+    }
+    return {
+      observedAt: observation.observedAt,
+      metrics: observation.windows.map((sample) => {
+        if (!isRecord(sample)) return sample;
+        const cadence =
+          typeof sample.windowId === "string"
+            ? cadences.get(sample.windowId)
+            : undefined;
+        const hasCycle =
+          cadence !== undefined ||
+          sample.startedAt !== undefined ||
+          sample.resetsAt !== undefined ||
+          sample.durationMs !== undefined;
+        return {
+          type: "quota",
+          metricId: sample.windowId,
+          usedRatio: sample.usedRatio,
+          ...(hasCycle
+            ? {
+                cycle: {
+                  ...(cadence === undefined ? {} : { cadence }),
+                  ...(sample.startedAt === undefined
+                    ? {}
+                    : { startedAt: sample.startedAt }),
+                  ...(sample.resetsAt === undefined
+                    ? {}
+                    : { resetsAt: sample.resetsAt }),
+                  ...(sample.durationMs === undefined
+                    ? {}
+                    : { durationMs: sample.durationMs }),
+                },
+              }
+            : {}),
+        };
+      }),
+    };
+  });
+}
+
+/** Converts only the released 0.2.3/V4 storage wire shape into Task 2 input. */
+function convertReleasedV4ProviderWire(
+  stored: Record<string, unknown>,
+  providerId: ProviderKind,
+): ConvertedReleasedV4Wire {
+  const snapshot = convertSnapshot(stored.snapshot, providerId);
+  return {
+    ...(snapshot === undefined ? {} : { snapshot }),
+    history: convertHistory(stored.history, quotaCadences(snapshot)),
+  };
 }

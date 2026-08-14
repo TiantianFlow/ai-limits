@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import type { InstanceAppState } from "../domain/instances";
+import type { InstanceAppState } from "../domain/model";
 import {
   createProviderService,
   type ProviderService,

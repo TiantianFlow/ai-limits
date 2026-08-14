@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderInstanceRecord } from "../domain/model";
 import type {
   CollectionContext,
   ProviderPackage,
