@@ -2353,7 +2353,6 @@ describe("credential-aware background lifecycle", () => {
       "elevenlabs",
       deriveRefreshPolicy("manual_provider"),
       () => true,
-      Promise.resolve(),
       controller.signal,
     );
 
@@ -2377,7 +2376,6 @@ describe("credential-aware background lifecycle", () => {
       "elevenlabs",
       deriveRefreshPolicy("scheduled"),
       () => true,
-      Promise.resolve(),
       new AbortController().signal,
     );
 
@@ -2398,7 +2396,6 @@ describe("credential-aware background lifecycle", () => {
       "elevenlabs",
       deriveRefreshPolicy("manual_provider"),
       () => true,
-      Promise.resolve(),
       new AbortController().signal,
     );
 
@@ -2426,7 +2423,6 @@ describe("credential-aware background lifecycle", () => {
       "elevenlabs",
       deriveRefreshPolicy("manual_provider"),
       () => true,
-      Promise.resolve(),
       new AbortController().signal,
     );
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());

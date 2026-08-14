@@ -24,6 +24,7 @@ const browserSessionDisclosure =
 
 export const providerCatalog = {
   chatgpt: {
+    cardinality: "single",
     displayName: "ChatGPT",
     optionalOrigins: ["https://chatgpt.com/*"],
     optionalPermissions: [],
@@ -37,6 +38,7 @@ export const providerCatalog = {
     },
   },
   claude: {
+    cardinality: "single",
     displayName: "Claude",
     optionalOrigins: ["https://claude.ai/*"],
     optionalPermissions: [],
@@ -50,6 +52,7 @@ export const providerCatalog = {
     },
   },
   kimi: {
+    cardinality: "single",
     displayName: "Kimi",
     optionalOrigins: ["https://www.kimi.com/*"],
     optionalPermissions: ["cookies", "scripting"],
@@ -67,6 +70,7 @@ export const providerCatalog = {
     },
   },
   cursor: {
+    cardinality: "single",
     displayName: "Cursor",
     optionalOrigins: ["https://cursor.com/*"],
     optionalPermissions: [],
@@ -81,6 +85,7 @@ export const providerCatalog = {
     },
   },
   elevenlabs: {
+    cardinality: "single",
     displayName: "ElevenLabs",
     optionalOrigins: ["https://api.elevenlabs.io/*"],
     optionalPermissions: [],
@@ -99,6 +104,7 @@ export const providerCatalog = {
     },
   },
   newapi: {
+    cardinality: "multiple",
     displayName: "New API",
     optionalOrigins: [
       "https://*/*",
@@ -160,6 +166,16 @@ export function assertProviderCatalogPermissionSafety(
 assertProviderCatalogPermissionSafety(providerCatalog);
 
 export type ProviderKind = keyof typeof providerCatalog;
+
+export function canCreateProviderInstance(
+  providerKind: ProviderKind,
+  instances: readonly { providerKind: ProviderKind }[],
+): boolean {
+  return (
+    providerCatalog[providerKind].cardinality === "multiple" ||
+    !instances.some((instance) => instance.providerKind === providerKind)
+  );
+}
 
 /** @deprecated Temporary bridge removed in Task 7. */
 export type ProviderId = ProviderKind;

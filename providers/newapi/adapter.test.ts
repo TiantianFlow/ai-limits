@@ -21,8 +21,8 @@ function context(fetch: typeof globalThis.fetch): CollectionContext {
     credential: {
       kind: "api-key",
       value: TEST_KEY,
-      baseUrl: "https://new-api.example.com/gateway",
     },
+    baseUrl: "https://new-api.example.com/gateway",
   };
 }
 

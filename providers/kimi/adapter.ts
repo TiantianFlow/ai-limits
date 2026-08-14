@@ -1,8 +1,4 @@
-import {
-  KIMI_RECOVERY_GUIDANCE,
-  type ProviderHealth,
-  type QuotaMetric,
-} from "../../domain/model";
+import type { ProviderHealth, QuotaMetric } from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
@@ -32,8 +28,18 @@ const LEGACY_USAGES_ENDPOINT =
 const MINUTE_MS = 60 * 1_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
-const SESSION_REQUIRED = Symbol("kimi-session-required");
 const SEGMENT_SUM_TOLERANCE = 1e-6;
+type KimiUsageEndpoint = "current" | "legacy";
+const retryEndpoints = new WeakMap<object, KimiUsageEndpoint>();
+
+function sessionRequired(endpoint: KimiUsageEndpoint): CollectionResult {
+  const result: CollectionResult = {
+    ok: false,
+    deferred: { reason: "session_required" },
+  };
+  retryEndpoints.set(result, endpoint);
+  return result;
+}
 
 function healthForResponse(response: Response, now: number): ProviderHealth {
   if (response.status === 401) {
@@ -353,159 +359,48 @@ function kimiRequest(
 }
 
 async function collectKimi({
+  accessToken,
   fetch: injectedFetch,
-  getCookie,
-  interaction,
-  kimiSessionResolver,
   now,
   signal,
-}: CollectionContext): Promise<CollectionResult> {
+}: CollectionContext,
+  initialEndpoint: KimiUsageEndpoint = "current",
+): Promise<CollectionResult> {
+  const token = accessToken?.trim();
+  if (!token) {
+    return sessionRequired(initialEndpoint);
+  }
+
   try {
-    const findAvailableAccessToken = async (): Promise<string | undefined> => {
-      try {
-        return (
-          await kimiSessionResolver?.findAvailableAccessToken()
-        )?.trim();
-      } catch {
-        return undefined;
-      }
-    };
-    const cookie = await getCookie?.({ url: KIMI_URL, name: "kimi-auth" });
-    const cookieToken = cookie?.value.trim();
-    let recoveryAttempted = false;
-    let initialAccessToken = cookieToken;
-    if (!initialAccessToken) {
-      initialAccessToken = await findAvailableAccessToken();
+    let response = await kimiRequest(
+      injectedFetch,
+      initialEndpoint === "legacy"
+        ? LEGACY_USAGES_ENDPOINT
+        : SUBSCRIPTION_STATS_ENDPOINT,
+      token,
+      initialEndpoint === "legacy" ? { scope: ["FEATURE_CODING"] } : {},
+      signal,
+    );
+    if (response.status === 401) {
+      return sessionRequired(initialEndpoint);
     }
 
-    if (!initialAccessToken) {
-      if (interaction !== "allowed") {
-        return {
-          ok: false,
-          deferred: { reason: "session_required" },
-        };
-      }
-
-      let recoveredToken: string | undefined;
-      recoveryAttempted = true;
-      try {
-        recoveredToken = (
-          await kimiSessionResolver?.recoverAccessToken(undefined)
-        )?.trim();
-      } catch {
-        // Interactive recovery failures are reduced to approved fallback copy.
-      }
-      if (recoveredToken) {
-        initialAccessToken = recoveredToken;
-      }
-    }
-
-    if (!initialAccessToken) {
-      return {
-        ok: false,
-        health: {
-          kind: "temporary_error",
-          message: KIMI_RECOVERY_GUIDANCE,
-        },
-      };
-    }
-    let activeAccessToken = initialAccessToken;
-    let pageTokenRereadAfterUnauthorized = false;
-
-    const requestWithCredentialPolicy = async (
-      endpoint: string,
-      body: unknown,
-    ): Promise<Response | typeof SESSION_REQUIRED> => {
-      let endpointResponse = await kimiRequest(
+    let legacy = initialEndpoint === "legacy";
+    if (!legacy && (response.status === 404 || response.status === 405)) {
+      legacy = true;
+      response = await kimiRequest(
         injectedFetch,
-        endpoint,
-        activeAccessToken,
-        body,
+        LEGACY_USAGES_ENDPOINT,
+        token,
+        { scope: ["FEATURE_CODING"] },
         signal,
       );
-
-      if (
-        endpointResponse.status === 401 &&
-        !pageTokenRereadAfterUnauthorized
-      ) {
-        pageTokenRereadAfterUnauthorized = true;
-        const pageToken = await findAvailableAccessToken();
-        if (pageToken && pageToken !== activeAccessToken) {
-          activeAccessToken = pageToken;
-          endpointResponse = await kimiRequest(
-            injectedFetch,
-            endpoint,
-            activeAccessToken,
-            body,
-            signal,
-          );
-        }
-      }
-
-      if (endpointResponse.status !== 401) return endpointResponse;
-      if (interaction !== "allowed") return SESSION_REQUIRED;
-
-      if (!recoveryAttempted) {
-        recoveryAttempted = true;
-        let recoveredToken: string | undefined;
-        try {
-          recoveredToken = (
-            await kimiSessionResolver?.recoverAccessToken(activeAccessToken)
-          )?.trim();
-        } catch {
-          // Interactive recovery failures are reduced to approved fallback copy.
-        }
-        if (recoveredToken && recoveredToken !== activeAccessToken) {
-          activeAccessToken = recoveredToken;
-          endpointResponse = await kimiRequest(
-            injectedFetch,
-            endpoint,
-            activeAccessToken,
-            body,
-            signal,
-          );
-        }
-      }
-
-      return endpointResponse;
-    };
-
-    let response = await requestWithCredentialPolicy(
-      SUBSCRIPTION_STATS_ENDPOINT,
-      {},
-    );
-    if (response === SESSION_REQUIRED) {
-      return {
-        ok: false,
-        deferred: { reason: "session_required" },
-      };
-    }
-
-    let legacy = false;
-    if (response.status === 404 || response.status === 405) {
-      legacy = true;
-      response = await requestWithCredentialPolicy(
-        LEGACY_USAGES_ENDPOINT,
-        { scope: ["FEATURE_CODING"] },
-      );
-      if (response === SESSION_REQUIRED) {
-        return {
-          ok: false,
-          deferred: { reason: "session_required" },
-        };
+      if (response.status === 401) {
+        return sessionRequired("legacy");
       }
     }
     if (!response.ok) {
-      return {
-        ok: false,
-        health:
-          response.status === 401
-            ? {
-                kind: "temporary_error",
-                message: KIMI_RECOVERY_GUIDANCE,
-              }
-            : healthForResponse(response, now),
-      };
+      return { ok: false, health: healthForResponse(response, now) };
     }
 
     const body = await parseJson(response);
@@ -522,7 +417,7 @@ async function collectKimi({
         const subscriptionResponse = await kimiRequest(
           injectedFetch,
           SUBSCRIPTION_ENDPOINT,
-          activeAccessToken,
+          token,
           {},
           signal,
         );
@@ -558,6 +453,13 @@ async function collectKimi({
   } catch {
     return { ok: false, health: { kind: "temporary_error" } };
   }
+}
+
+export function retryKimiAdapterAfterChangedToken(
+  result: CollectionResult,
+  context: CollectionContext,
+): Promise<CollectionResult> {
+  return collectKimi(context, retryEndpoints.get(result) ?? "current");
 }
 
 export const kimiAdapter: ProviderAdapter<"kimi"> = {

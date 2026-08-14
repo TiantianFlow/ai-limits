@@ -7,16 +7,8 @@ import {
 import { updateAutoRefreshTransaction } from "../background/auto-refresh";
 import type { AppState, ProviderRefreshOutcome } from "../domain/model";
 import {
-  cleanupAbandonedKimiRecoveryTab,
-  createKimiRecoveryAfterStartupCleanup,
-  findKimiPageAccessToken,
-  refreshKimiAccessTokenInTemporaryTab,
-} from "../background/kimi-session";
-import { readKimiPageAccessToken } from "../background/kimi-page";
-import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
-  type ProviderOperationEvent,
 } from "../background/messages";
 import {
   createApiKeyConnectionLifecycle,
@@ -44,6 +36,7 @@ import {
   type ApiKeyProviderId,
 } from "../providers/catalog";
 import {
+  legacyProviderAdapterRegistry,
   providerIds,
   providerRegistry,
   type ConnectableProviderId,
@@ -97,92 +90,58 @@ async function syncRefreshAlarm(
   await ensureRefreshAlarm();
 }
 
-function announceKimiRecovery(): void {
-  void browser.runtime
-    .sendMessage({
-      type: "PROVIDER_OPERATION",
-      providerId: "kimi",
-      operation: "waiting_for_session",
-    } satisfies ProviderOperationEvent)
-    .catch(() => undefined);
-}
-
 export async function collectProvider(
   providerId: ConnectableProviderId,
   policy: RefreshPolicy,
   shouldCommit: () => boolean,
-  kimiStartupCleanup: Promise<void>,
   invalidationSignal: AbortSignal,
 ): Promise<ProviderRefreshOutcome> {
-  const adapter = providerRegistry[providerId];
+  const adapter = legacyProviderAdapterRegistry[providerId];
   const storedCredential = isApiKeyProviderId(providerId)
     ? await readProviderCredentialWithRevision(providerId)
     : undefined;
+  const context = {
+    fetch: globalThis.fetch.bind(globalThis),
+    now: Date.now(),
+    signal: invalidationSignal,
+    ...(storedCredential?.status === "active"
+      ? {
+          credential: {
+            kind: "api-key" as const,
+            value: storedCredential.value,
+          },
+          ...(storedCredential.baseUrl
+            ? { baseUrl: storedCredential.baseUrl }
+            : {}),
+        }
+      : {}),
+  };
+  const collectionAdapter =
+    providerId === "kimi"
+      ? {
+          id: "kimi" as const,
+          collect: () =>
+            providerRegistry.kimi.collect(
+              {
+                id: "kimi:default",
+                providerKind: "kimi",
+                config: { kind: "fixed" },
+                access: "granted",
+                createdAt: context.now,
+                history: [],
+              },
+              {
+                fetch: context.fetch,
+                now: context.now,
+                signal: context.signal,
+                interaction: policy.interaction,
+              },
+            ),
+        }
+      : adapter;
   const outcome = await collectAndCommitProvider(
-    adapter,
-    {
-      fetch: globalThis.fetch.bind(globalThis),
-      now: Date.now(),
-      signal: invalidationSignal,
-      ...(storedCredential?.status === "active"
-        ? {
-            credential: {
-              kind: "api-key" as const,
-              value: storedCredential.value,
-              ...(storedCredential.baseUrl
-                ? { baseUrl: storedCredential.baseUrl }
-                : {}),
-            },
-          }
-        : {}),
-      ...(providerId === "kimi"
-        ? {
-            getCookie: (details: { url: string; name: string }) =>
-              browser.cookies.get(details),
-            interaction: policy.interaction,
-            kimiSessionResolver: {
-              findAvailableAccessToken: () =>
-                findKimiPageAccessToken({
-                  queryTabs: () =>
-                    browser.tabs.query({ url: "https://www.kimi.com/*" }),
-                  readAccessToken: (tabId) =>
-                    readKimiPageAccessToken(tabId, (details) =>
-                      browser.scripting.executeScript(details),
-                    ),
-                }),
-              recoverAccessToken: createKimiRecoveryAfterStartupCleanup({
-                startupCleanup: kimiStartupCleanup,
-                signal: invalidationSignal,
-                recoverAccessToken: (rejectedToken?: string) => {
-                  announceKimiRecovery();
-                  return refreshKimiAccessTokenInTemporaryTab({
-                    rejectedToken,
-                    createTab: (details) => browser.tabs.create(details),
-                    getTab: (tabId) => browser.tabs.get(tabId),
-                    readAccessToken: (tabId) =>
-                      readKimiPageAccessToken(tabId, (details) =>
-                        browser.scripting.executeScript(details),
-                      ),
-                    removeTab: (tabId) => browser.tabs.remove(tabId),
-                    addUpdatedListener: (listener) => {
-                      browser.tabs.onUpdated.addListener(listener);
-                      return () =>
-                        browser.tabs.onUpdated.removeListener(listener);
-                    },
-                    addRemovedListener: (listener) => {
-                      browser.tabs.onRemoved.addListener(listener);
-                      return () =>
-                        browser.tabs.onRemoved.removeListener(listener);
-                    },
-                    storageSession: browser.storage.session,
-                    signal: invalidationSignal,
-                  });
-                },
-              }),
-            },
-          }
-        : {}),
-    },
+    collectionAdapter,
+    context,
     policy.trigger,
     () => !invalidationSignal.aborted && shouldCommit(),
   );
@@ -259,11 +218,7 @@ export default defineBackground(() => {
       providerCatalog[providerId].connection.kind === "browser-session",
   );
   const apiKeyProviderIds = providerIds.filter(isApiKeyProviderId);
-  const kimiStartupCleanup = cleanupAbandonedKimiRecoveryTab({
-    storageSession: browser.storage.session,
-    getTab: (tabId) => browser.tabs.get(tabId),
-    removeTab: (tabId) => browser.tabs.remove(tabId),
-  });
+  void providerRegistry.kimi.startup?.();
   const providerOperationLane = createProviderOperationLane();
   const apiKeyConnectionLifecycle = createApiKeyConnectionLifecycle();
   interface PermissionConnectIntent {
@@ -337,7 +292,6 @@ export default defineBackground(() => {
           () =>
             providerOperationLane.isCurrent(operation) &&
             control.isCurrentGeneration(),
-          kimiStartupCleanup,
           control.signal,
         );
       } finally {

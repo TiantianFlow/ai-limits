@@ -42,12 +42,13 @@ function totalsAreConsistent(granted: number, used: number, available: number): 
 }
 
 async function collectNewApi({
+  baseUrl: configuredBaseUrl,
   credential,
   fetch,
   now,
   signal,
 }: CollectionContext): Promise<CollectionResult> {
-  const baseUrl = normalizeNewApiBaseUrl(credential?.baseUrl);
+  const baseUrl = normalizeNewApiBaseUrl(configuredBaseUrl);
   const apiKey = credential?.kind === "api-key" ? credential.value.trim() : "";
   if (!baseUrl || !apiKey) {
     return { ok: false, health: { kind: "signed_out" } };

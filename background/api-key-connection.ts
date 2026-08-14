@@ -4,7 +4,7 @@ import type {
   RefreshReport,
 } from "../domain/model";
 import type { ApiKeyProviderId } from "../providers/catalog";
-import { providerRegistry } from "../providers/registry";
+import { legacyProviderAdapterRegistry } from "../providers/registry";
 import type { CollectionContext } from "../providers/types";
 import {
   markProviderCredentialRejectedIfRevision,
@@ -143,15 +143,15 @@ export async function connectApiKeyProvider(
       throw new Error("Invalid API key.");
     }
 
-    const adapter = providerRegistry[providerId];
+    const adapter = legacyProviderAdapterRegistry[providerId];
     const collected = await collectProviderOutcome(
       adapter,
       {
         ...context,
+        ...(baseUrl ? { baseUrl } : {}),
         credential: {
           kind: "api-key",
           value: normalizedApiKey,
-          ...(baseUrl ? { baseUrl } : {}),
         },
       },
       "connect",

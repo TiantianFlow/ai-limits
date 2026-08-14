@@ -33,8 +33,39 @@ describe("provider registry", () => {
       ],
     ]);
     expect(
-      providerIds.map((providerId) => providerRegistry[providerId].id),
+      providerIds.map((providerId) => providerRegistry[providerId].kind),
     ).toEqual(providerIds);
+  });
+
+  test("owns cardinality, configuration, credentials, and exact permissions", () => {
+    expect(providerRegistry.newapi.cardinality).toBe("multiple");
+    expect(providerRegistry.newapi.credentialKind).toBe("api-key");
+    expect(providerRegistry.chatgpt.cardinality).toBe("single");
+    expect(providerRegistry.chatgpt.credentialKind).toBe("none");
+    expect(
+      providerRegistry.newapi.normalizeConfig({
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example/path?secret=no",
+      }),
+    ).toEqual({ kind: "dynamic-origin", baseUrl: "https://relay.example" });
+    expect(
+      providerRegistry.newapi.requiredPermissions({
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example/private/path?secret=no",
+      }),
+    ).toEqual({ origins: ["https://relay.example/*"] });
+    expect(
+      providerRegistry.chatgpt.requiredPermissions({
+        kind: "dynamic-origin",
+        baseUrl: "https://wrong.example",
+      }),
+    ).toBeUndefined();
+    expect(
+      providerRegistry.kimi.requiredPermissions({ kind: "fixed" }),
+    ).toEqual({
+      origins: ["https://www.kimi.com/*"],
+      permissions: ["cookies", "scripting"],
+    });
   });
 
   test("includes representative synthetic ElevenLabs Starter state", () => {
