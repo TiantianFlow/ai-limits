@@ -19,6 +19,7 @@ export function ProviderMark({ providerId, size }: ProviderMarkProps) {
     ? providerPresentation(providerId)
     : undefined;
   const markPath = presentation?.markPath ?? fallbackMarkPath;
+  const usesFallbackMark = markPath === fallbackMarkPath;
   const pixels = size === "sm" ? 24 : 28;
 
   return (
@@ -34,7 +35,7 @@ export function ProviderMark({ providerId, size }: ProviderMarkProps) {
       <img
         alt=""
         aria-hidden="true"
-        className={`provider-mark provider-mark--${size} provider-mark--provider-${resolvedProviderId}`}
+        className={`provider-mark provider-mark--${size} provider-mark--provider-${resolvedProviderId}${usesFallbackMark ? " provider-mark--fallback" : ""}`}
         height={pixels}
         src={markPath}
         width={pixels}

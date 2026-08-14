@@ -1,7 +1,7 @@
 import type { Ref } from "react";
 import React from "react";
 
-import type { ProviderOperation } from "../../../background/messages";
+import type { ProviderOperation } from "../../../domain/public-protocol";
 import type { ProviderInstanceId } from "../../../domain/instances";
 import type { ApiKeyProviderKind, ProviderKind } from "../../../providers/catalog";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
@@ -68,6 +68,8 @@ export function OverviewView({
                     ? {
                         label: "Replace key",
                         accessibleLabel: `Replace ${card.instanceLabel} API key`,
+                        title: `Replace ${card.instanceLabel} API key`,
+                        icon: "key",
                         focusKey: `overview-replace-api-key-${instanceId}`,
                         onClick: () =>
                           onReplaceApiKey(

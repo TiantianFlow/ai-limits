@@ -7,6 +7,7 @@ export type IconName =
   | "code"
   | "feedback"
   | "info"
+  | "key"
   | "minus"
   | "plus"
   | "refresh"
@@ -32,12 +33,18 @@ export function Icon({ name, className = "" }: IconProps) {
     <svg
       aria-hidden="true"
       className={`icon ${className}`.trim()}
+      data-icon={name}
       viewBox="0 0 20 20"
     >
       {name === "refresh" ? (
         <>
           <path {...common} d="M15.8 7.2A6.2 6.2 0 1 0 16 12" />
           <path {...common} d="M12.7 4.5h3.4v3.4" />
+        </>
+      ) : name === "key" ? (
+        <>
+          <circle {...common} cx="7" cy="9" r="3.5" />
+          <path {...common} d="m9.8 11.2 6.2 6.2M13 14.4l1.8-1.8M15 16.4l1.8-1.8" />
         </>
       ) : name === "settings" ? (
         <>

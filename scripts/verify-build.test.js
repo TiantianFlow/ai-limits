@@ -63,6 +63,9 @@ describe("built Chrome artifact contract", () => {
     "TRUSTED_CONTEXTS",
     "xi-api-key",
     "/v1/user/subscription",
+    "aiLimitsPermissionIntents",
+    "connectionRevision",
+    "providerRegistry",
   ])(
     "rejects %s from a built side-panel asset while allowing ordinary key guidance",
     (forbidden) => {

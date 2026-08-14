@@ -37,6 +37,9 @@ const SIDE_PANEL_CREDENTIAL_BOUNDARIES = [
   "TRUSTED_CONTEXTS",
   "xi-api-key",
   "/v1/user/subscription",
+  "aiLimitsPermissionIntents",
+  "connectionRevision",
+  "providerRegistry",
 ];
 const KEY_SHAPED_VALUE = /\bsk[-_][A-Za-z0-9_-]{20,}\b/;
 

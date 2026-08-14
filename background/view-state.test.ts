@@ -4,7 +4,7 @@ import type { InstanceAppState } from "../domain/instances";
 import { projectAppViewState } from "./view-state";
 
 describe("public app view state", () => {
-  test("allowlists instance fields and exposes only normalized dynamic origin display", () => {
+  test("allowlists the normalized dynamic collection URL and origin without durable config", () => {
     const durable = {
       version: 5,
       preferences: { displayMode: "left", autoRefresh: false, secretMode: true },
@@ -15,7 +15,7 @@ describe("public app view state", () => {
           userLabel: "Relay",
           config: {
             kind: "dynamic-origin",
-            baseUrl: "https://relay.example",
+            baseUrl: "https://relay.example/gateway",
             apiKey: "must-not-escape",
           },
           access: "granted",
@@ -40,6 +40,7 @@ describe("public app view state", () => {
           id: "newapi:550e8400-e29b-41d4-a716-446655440000",
           providerKind: "newapi",
           userLabel: "Relay",
+          baseUrl: "https://relay.example/gateway",
           origin: "https://relay.example",
           access: "granted",
           createdAt: 1,

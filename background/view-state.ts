@@ -1,7 +1,10 @@
 import type {
   InstanceAppState,
-  ProviderInstanceId,
 } from "../domain/instances";
+import type {
+  AppViewState,
+  ProviderInstanceView,
+} from "../domain/public-protocol";
 import type {
   MetricCycle,
   MetricHistorySample,
@@ -10,24 +13,7 @@ import type {
   UsageMetric,
   UsageSnapshot,
 } from "../domain/model";
-import type { ProviderKind } from "../providers/catalog";
-
-export interface ProviderInstanceView {
-  id: ProviderInstanceId;
-  providerKind: ProviderKind;
-  userLabel?: string;
-  origin?: string;
-  access: "required" | "granted";
-  createdAt: number;
-  history: UsageHistoryObservation[];
-  snapshot?: UsageSnapshot;
-  lastAttempt?: ProviderAttempt;
-}
-
-export interface AppViewState {
-  preferences: InstanceAppState["preferences"];
-  instances: ProviderInstanceView[];
-}
+export type { AppViewState, ProviderInstanceView } from "../domain/public-protocol";
 
 function projectCycle(cycle: MetricCycle | undefined): MetricCycle | undefined {
   if (!cycle) return undefined;
@@ -191,7 +177,10 @@ export function projectAppViewState(state: InstanceAppState): AppViewState {
         ? {}
         : { userLabel: instance.userLabel }),
       ...(instance.config.kind === "dynamic-origin"
-        ? { origin: new URL(instance.config.baseUrl).origin }
+        ? {
+            baseUrl: instance.config.baseUrl,
+            origin: new URL(instance.config.baseUrl).origin,
+          }
         : {}),
       access: instance.access,
       createdAt: instance.createdAt,

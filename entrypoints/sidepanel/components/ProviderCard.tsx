@@ -1,16 +1,18 @@
 import React from "react";
 
-import type { ProviderOperation } from "../../../background/messages";
+import type {
+  ProviderInstanceView,
+  ProviderOperation,
+} from "../../../domain/public-protocol";
 import type {
   DisplayMode,
   QuotaMetric,
   UsageHistoryObservation,
 } from "../../../domain/model";
 import type { ProviderInstanceId } from "../../../domain/instances";
-import type { ProviderInstanceView } from "../../../background/view-state";
 import type { ProviderKind } from "../../../providers/catalog";
 import type { PaceKind } from "../../../domain/quota";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { InteractionBanner } from "./InteractionBanner";
 import { ProviderMark } from "./ProviderMark";
 import { QuotaBars, type QuotaSegmentView } from "./QuotaBars";
@@ -70,6 +72,8 @@ export interface ProviderCardProps {
   action?: {
     label: string;
     accessibleLabel: string;
+    icon?: IconName;
+    title?: string;
     focusKey?: string;
     onClick: () => void;
   };
@@ -177,12 +181,13 @@ export function ProviderCard({
             className="provider-card__refresh"
             type="button"
             aria-label={action.accessibleLabel}
+            title={action.title ?? action.accessibleLabel}
             data-focus-key={action.focusKey}
             disabled={operation !== undefined}
             onClick={action.onClick}
           >
             <Icon
-              name="refresh"
+              name={action.icon ?? "refresh"}
               className={operation ? "icon--spin" : ""}
             />
           </button>

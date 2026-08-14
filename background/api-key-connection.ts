@@ -3,6 +3,7 @@ import type {
   ProviderInstanceRecord,
 } from "../domain/instances";
 import type { ProviderRefreshOutcome } from "../domain/model";
+import type { ApiKeyConnectionStatus } from "../domain/public-protocol";
 import type {
   ProviderPackage,
   ProviderRuntimeServices,
@@ -10,12 +11,7 @@ import type {
 import { markCredentialRejectedIfRevision } from "../storage/credential-vault";
 import { collectProviderOutcome } from "./coordinator";
 
-export type ApiKeyConnectionStatus =
-  | "connected"
-  | "invalid_key"
-  | "insufficient_scope"
-  | "invalid_site"
-  | "temporary_error";
+export type { ApiKeyConnectionStatus } from "../domain/public-protocol";
 
 export interface ApiKeyConnectionValidation {
   outcome: ProviderRefreshOutcome;

@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { ProviderOperation } from "../../../background/messages";
+import type { ProviderOperation } from "../../../domain/public-protocol";
 import type { ProviderKind } from "../../../providers/catalog";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { ProviderConnectRow } from "../components/ProviderConnectRow";

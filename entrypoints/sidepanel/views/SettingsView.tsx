@@ -1,7 +1,7 @@
 import type { Ref } from "react";
 import React, { useEffect, useRef, useState } from "react";
 
-import type { ProviderInstanceView } from "../../../background/view-state";
+import type { ProviderInstanceView } from "../../../domain/public-protocol";
 import type { ProviderInstanceId } from "../../../domain/instances";
 import {
   type ApiKeyProviderKind,
@@ -9,7 +9,7 @@ import {
   providerNames,
   providerPresentation,
 } from "../../../providers/catalog";
-import { instanceLabel } from "../instance-label";
+import { instanceLabel, instanceLabels } from "../instance-label";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
@@ -33,7 +33,7 @@ export interface SettingsViewProps {
   onRenameInstance: (
     instanceId: ProviderInstanceId,
     userLabel?: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDeleteLocalData: () => void;
   onConfirmDeleteChange: (confirm: boolean) => void;
 }
@@ -72,12 +72,15 @@ export function SettingsView({
   const [renamingInstanceId, setRenamingInstanceId] =
     useState<ProviderInstanceId>();
   const [labelDraft, setLabelDraft] = useState("");
+  const [renamePending, setRenamePending] = useState(false);
+  const [renameError, setRenameError] = useState("");
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreDeleteFocus = useRef(false);
   const renameTriggerRefs = useRef<
     Partial<Record<ProviderInstanceId, HTMLButtonElement | null>>
   >({});
   const restoreRenameFocus = useRef<ProviderInstanceId | undefined>(undefined);
+  const labelsByInstance = instanceLabels(instances);
 
   useEffect(() => {
     if (!confirmDelete && restoreDeleteFocus.current) {
@@ -154,7 +157,7 @@ export function SettingsView({
             <ul className="settings-provider-list">
               {instances.map((instance) => {
                 const name = providerNames[instance.providerKind];
-                const label = instanceLabel(instance);
+                const label = labelsByInstance.get(instance.id) ?? instanceLabel(instance);
                 const presentation = providerPresentation(instance.providerKind);
                 const connectionMethod =
                   providerCatalog[instance.providerKind].connection.kind === "api-key"
@@ -200,17 +203,42 @@ export function SettingsView({
                             type="text"
                             maxLength={128}
                             value={labelDraft}
+                            disabled={renamePending}
                             autoFocus
-                            onChange={(event) => setLabelDraft(event.currentTarget.value)}
+                            onChange={(event) => {
+                              setLabelDraft(event.currentTarget.value);
+                              setRenameError("");
+                            }}
                           />
                           <button
                             type="button"
                             aria-label={`Save label for ${label}`}
+                            aria-busy={renamePending}
+                            disabled={renamePending}
                             onClick={() => {
                               const trimmed = labelDraft.trim();
-                              onRenameInstance(instance.id, trimmed || undefined);
-                              restoreRenameFocus.current = instance.id;
-                              setRenamingInstanceId(undefined);
+                              setRenamePending(true);
+                              setRenameError("");
+                              void onRenameInstance(
+                                instance.id,
+                                trimmed || undefined,
+                              )
+                                .then((success) => {
+                                  if (!success) {
+                                    setRenameError(
+                                      "Couldn’t rename this connection. Try again.",
+                                    );
+                                    return;
+                                  }
+                                  restoreRenameFocus.current = instance.id;
+                                  setRenamingInstanceId(undefined);
+                                })
+                                .catch(() => {
+                                  setRenameError(
+                                    "Couldn’t rename this connection. Try again.",
+                                  );
+                                })
+                                .finally(() => setRenamePending(false));
                             }}
                           >
                             <span aria-hidden="true">Save</span>
@@ -218,13 +246,24 @@ export function SettingsView({
                           <button
                             type="button"
                             aria-label={`Cancel renaming ${label}`}
+                            disabled={renamePending}
                             onClick={() => {
+                              setRenameError("");
                               restoreRenameFocus.current = instance.id;
                               setRenamingInstanceId(undefined);
                             }}
                           >
                             <span aria-hidden="true">Cancel</span>
                           </button>
+                          {renamePending ? (
+                            <p className="settings-rename__feedback" role="status">
+                              Renaming…
+                            </p>
+                          ) : renameError ? (
+                            <p className="settings-rename__feedback" role="alert">
+                              {renameError}
+                            </p>
+                          ) : null}
                         </div>
                       ) : (
                         <button
@@ -235,6 +274,7 @@ export function SettingsView({
                           aria-label={`Rename ${label}`}
                           data-focus-key={`settings-rename-${instance.id}`}
                           onClick={() => {
+                            setRenameError("");
                             setLabelDraft(instance.userLabel ?? "");
                             setRenamingInstanceId(instance.id);
                           }}

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { Cockpit } from "../../entrypoints/sidepanel/Cockpit";
 import "../../entrypoints/sidepanel/styles.css";
-import type { AppViewState } from "../../background/view-state";
+import type { AppViewState } from "../../domain/public-protocol";
 import type { AppState, DisplayMode } from "../../domain/model";
 import type { ProviderInstanceId } from "../../domain/instances";
 import { createFixtureState } from "../../providers/fixtures";
@@ -42,6 +42,7 @@ function fixtureViewState(state: AppState, now: number): AppViewState {
         ...(provider.providerId === "newapi"
           ? {
               userLabel: "Personal relay",
+              baseUrl: "https://relay.example/gateway",
               origin: "https://relay.example",
             }
           : {}),

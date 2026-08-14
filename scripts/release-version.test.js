@@ -75,4 +75,20 @@ describe("release version", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps production side-panel modules directed away from background internals", () => {
+    const productionSidePanelFiles = execFileSync(
+      "git",
+      ["ls-files", "-z", "entrypoints/sidepanel"],
+    )
+      .toString("utf8")
+      .split("\0")
+      .filter(Boolean)
+      .filter((file) => /\.(?:ts|tsx)$/u.test(file) && !file.includes(".test."));
+    const offenders = productionSidePanelFiles.filter((file) =>
+      /from\s+["'][^"']*background\//u.test(read(file)),
+    );
+
+    expect(offenders).toEqual([]);
+  });
 });
