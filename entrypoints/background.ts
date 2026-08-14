@@ -85,7 +85,6 @@ interface ActivatedBackground {
   ): Promise<void>;
   runScheduledRefresh(): Promise<void>;
   sweepPermissionIntents(): Promise<void>;
-  openSidePanel(tab: Browser.tabs.Tab): Promise<void>;
 }
 
 async function activateBackground(
@@ -198,9 +197,6 @@ async function activateBackground(
       await service.sweepPermissionIntents();
       await reconcileAlarm();
     },
-    async openSidePanel(tab) {
-      await browser.sidePanel.open({ windowId: tab.windowId });
-    },
   };
 }
 
@@ -217,6 +213,12 @@ export interface BackgroundEventRegistration {
 export function registerBackgroundEventCapture(
   options: BackgroundInitializationOptions = productionOptions,
 ): BackgroundEventRegistration {
+  void browser.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((error) => {
+      console.error("Unable to enable toolbar side-panel behavior.", error);
+    });
+
   let wakeEventQueue: Promise<void> = Promise.resolve();
   const activation = Promise.resolve().then(() => activateBackground(options));
   const enqueueWakeEvent = (
@@ -245,9 +247,6 @@ export function registerBackgroundEventCapture(
     } else if (alarm.name === PERMISSION_INTENT_SWEEP_ALARM) {
       enqueueWakeEvent((background) => background.sweepPermissionIntents());
     }
-  });
-  browser.action.onClicked.addListener((tab) => {
-    enqueueWakeEvent((background) => background.openSidePanel(tab));
   });
 
   return { activation: activation.then(() => undefined) };
