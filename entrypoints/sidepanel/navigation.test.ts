@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ProviderId } from "../../domain/model";
+import type { ProviderInstanceId } from "../../domain/instances";
 import {
   navigateCockpit,
   type CockpitNavigationState,
@@ -8,9 +8,30 @@ import {
 } from "./navigation";
 
 const overview: CockpitScreen = { name: "overview" };
-const chatGpt: ProviderId = "chatgpt";
+const chatGptInstance: ProviderInstanceId = "chatgpt:default";
+const personalRelay: ProviderInstanceId =
+  "newapi:11111111-1111-4111-8111-111111111111";
+const workRelay: ProviderInstanceId =
+  "newapi:22222222-2222-4222-8222-222222222222";
 
 describe("navigateCockpit", () => {
+  it("treats same-kind provider routes as distinct instance routes", () => {
+    const personal: CockpitNavigationState = {
+      current: { name: "provider", instanceId: personalRelay },
+      backStack: [overview],
+    };
+
+    const work = navigateCockpit(personal, {
+      type: "push",
+      screen: { name: "provider", instanceId: workRelay },
+    });
+
+    expect(work).toEqual({
+      current: { name: "provider", instanceId: workRelay },
+      backStack: [overview, { name: "provider", instanceId: personalRelay }],
+    });
+  });
+
   it("pushes Provider and History so Back returns to the exact provider origin", () => {
     const initial: CockpitNavigationState = {
       current: overview,
@@ -19,13 +40,13 @@ describe("navigateCockpit", () => {
 
     const provider = navigateCockpit(initial, {
       type: "push",
-      screen: { name: "provider", providerId: chatGpt },
+      screen: { name: "provider", instanceId: chatGptInstance },
     });
     const history = navigateCockpit(provider, {
       type: "push",
       screen: {
         name: "history",
-        providerId: chatGpt,
+        instanceId: chatGptInstance,
         metricId: "weekly",
       },
     });
@@ -33,17 +54,17 @@ describe("navigateCockpit", () => {
     expect(history).toEqual({
       current: {
         name: "history",
-        providerId: chatGpt,
+        instanceId: chatGptInstance,
         metricId: "weekly",
       },
-      backStack: [overview, { name: "provider", providerId: chatGpt }],
+      backStack: [overview, { name: "provider", instanceId: chatGptInstance }],
     });
     expect(navigateCockpit(history, { type: "pop" })).toEqual(provider);
   });
 
   it("returns from Settings to the Provider that opened it", () => {
     const provider: CockpitNavigationState = {
-      current: { name: "provider", providerId: chatGpt },
+      current: { name: "provider", instanceId: chatGptInstance },
       backStack: [overview],
     };
 
@@ -79,14 +100,14 @@ describe("navigateCockpit", () => {
       type: "push",
       screen: {
         name: "api-key-connect",
-        providerId: "elevenlabs",
+        providerKind: "elevenlabs",
         mode: "connect",
       },
     });
 
     expect(apiKeyGuide.current).toEqual({
       name: "api-key-connect",
-      providerId: "elevenlabs",
+      providerKind: "elevenlabs",
       mode: "connect",
     });
     expect(navigateCockpit(apiKeyGuide, { type: "pop" })).toEqual(addProvider);
@@ -94,7 +115,7 @@ describe("navigateCockpit", () => {
 
   it("does not add the current screen to the stack twice", () => {
     const provider: CockpitNavigationState = {
-      current: { name: "provider", providerId: chatGpt },
+      current: { name: "provider", instanceId: chatGptInstance },
       backStack: [overview],
     };
 
@@ -114,8 +135,8 @@ describe("navigateCockpit", () => {
 
   it("clears the stack when returning home", () => {
     const history: CockpitNavigationState = {
-      current: { name: "history", providerId: chatGpt },
-      backStack: [overview, { name: "provider", providerId: chatGpt }],
+      current: { name: "history", instanceId: chatGptInstance },
+      backStack: [overview, { name: "provider", instanceId: chatGptInstance }],
     };
 
     expect(navigateCockpit(history, { type: "home" })).toEqual({

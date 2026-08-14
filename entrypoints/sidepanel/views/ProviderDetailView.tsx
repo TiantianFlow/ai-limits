@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
-import type { ProviderId } from "../../../domain/model";
+import type { ProviderInstanceId } from "../../../domain/instances";
 import {
   providerPresentation,
 } from "../../../providers/catalog";
@@ -18,9 +18,9 @@ export interface ProviderDetailViewProps {
   operation?: ProviderOperation;
   onBack: () => void;
   onHome: () => void;
-  onRefreshProvider: (providerId: ProviderId) => void;
+  onRefreshInstance: (instanceId: ProviderInstanceId) => void;
   onOpenHistory: (
-    providerId: ProviderId,
+    instanceId: ProviderInstanceId,
     metricId?: string,
     focusKey?: string,
   ) => void;
@@ -71,7 +71,7 @@ export function ProviderDetailView({
   operation,
   onBack,
   onHome,
-  onRefreshProvider,
+  onRefreshInstance,
   onOpenHistory,
   onOpenSettings,
 }: ProviderDetailViewProps) {
@@ -109,10 +109,10 @@ export function ProviderDetailView({
       : undefined);
 
   return (
-    <section className="screen" aria-label={`${provider.name} detail`}>
+    <section className="screen" aria-label={`${provider.instanceLabel} detail`}>
       <PageHeader
-        title={provider.name}
-        subtitle={[provider.plan, "Provider usage"].filter(Boolean).join(" · ")}
+        title={provider.instanceLabel}
+        subtitle={[provider.name, provider.plan, "Provider usage"].filter(Boolean).join(" · ")}
         backLabel="Overview"
         onBack={onBack}
         actions={
@@ -120,19 +120,20 @@ export function ProviderDetailView({
             <button
               className="icon-button"
               type="button"
-              aria-label={`Refresh ${provider.name}`}
-              title={`Refresh ${provider.name}`}
+              aria-label={`Refresh ${provider.instanceLabel}`}
+              title={`Refresh ${provider.instanceLabel}`}
+              data-focus-key={`provider-refresh-${provider.instanceId}`}
               disabled={operation !== undefined}
-              onClick={() => onRefreshProvider(provider.providerId)}
+              onClick={() => onRefreshInstance(provider.instanceId)}
             >
               <Icon name="refresh" className={operation ? "icon--spin" : ""} />
             </button>
             <button
               className="icon-button"
               type="button"
-              aria-label="Settings"
-              title="Settings"
-              data-focus-key={`provider-settings-${provider.providerId}`}
+              aria-label={`Settings for ${provider.instanceLabel}`}
+              title={`Settings for ${provider.instanceLabel}`}
+              data-focus-key={`provider-settings-${provider.instanceId}`}
               onClick={onOpenSettings}
             >
               <Icon name="settings" />
@@ -141,7 +142,7 @@ export function ProviderDetailView({
         }
       />
 
-      <article className="provider-detail screen-body" aria-label={provider.name}>
+      <article className="provider-detail screen-body" aria-label={provider.instanceLabel}>
         <div className="provider-detail__status">
           <ProviderMark providerId={provider.providerId} size="md" />
           <StatusChip
@@ -157,7 +158,7 @@ export function ProviderDetailView({
 
         {provider.hasSnapshot
           ? provider.usageGroups.map((group) => {
-              const headingId = `provider-detail-${provider.providerId}-${group.id}`;
+              const headingId = `provider-detail-${provider.instanceId.replace(/[^a-zA-Z0-9_-]/g, "-")}-${group.id}`;
               return (
                 <section
                   className="detail-group"
@@ -173,18 +174,18 @@ export function ProviderDetailView({
                     <div className="detail-group__quotas">
                       {group.quotas.map((quota) => {
                         const historyFocusKey =
-                          `provider-history-${provider.providerId}-${quota.id}`;
+                          `provider-history-${provider.instanceId}-${quota.id}`;
 
                         return (
                           <QuotaBars
                             key={quota.id}
                             {...quota}
                             mode={provider.mode}
-                            historyLabel={`Open ${provider.name} history for ${quota.label}`}
+                            historyLabel={`Open ${provider.instanceLabel} history for ${quota.label}`}
                             historyFocusKey={historyFocusKey}
                             onOpenHistory={(metricId) =>
                               onOpenHistory(
-                                provider.providerId,
+                                provider.instanceId,
                                 metricId,
                                 historyFocusKey,
                               )
@@ -216,9 +217,9 @@ export function ProviderDetailView({
           <button
             className="detail-history-action"
             type="button"
-            aria-label={`Open ${provider.name} history`}
-            data-focus-key={`provider-history-${provider.providerId}`}
-            onClick={() => onOpenHistory(provider.providerId, firstWindow?.id)}
+            aria-label={`Open ${provider.instanceLabel} history`}
+            data-focus-key={`provider-history-${provider.instanceId}`}
+            onClick={() => onOpenHistory(provider.instanceId, firstWindow?.id)}
           >
             <Icon name="trending-up" />
             Open history
@@ -240,7 +241,7 @@ export function ProviderDetailView({
           )}
           <button
             type="button"
-            aria-label={`Manage ${provider.name} in Settings`}
+            aria-label={`Manage ${provider.instanceLabel} in Settings`}
             onClick={onOpenSettings}
           >
             Manage or disconnect in Settings

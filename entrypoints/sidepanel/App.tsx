@@ -22,16 +22,23 @@ import {
   type ProviderInstanceId,
 } from "../../domain/instances";
 import type {
+  DeferredReason,
   DisplayMode,
+  FailureCategory,
+  ProviderAttempt,
+  ProviderRefreshOutcome,
   RefreshReport,
+  RefreshTrigger,
+  UsageHistoryObservation,
+  UsageMetric,
+  UsageSnapshot,
 } from "../../domain/model";
-import type { ConnectableProviderId } from "../../providers/registry";
 import {
   isApiKeyProviderId,
   isProviderId,
-  type ApiKeyProviderId,
+  type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
-  type ProviderId,
+  type ProviderKind,
   providerCatalog,
   providerNames,
 } from "../../providers/catalog";
@@ -39,10 +46,8 @@ import {
   normalizeProviderConfig,
 } from "../../providers/package-factories";
 import { Cockpit } from "./Cockpit";
-import {
-  projectLegacyInstanceOperations,
-  projectLegacyInstanceState,
-} from "./legacy-instance-adapter";
+import type { ApiKeySubmission } from "./Cockpit";
+import { instanceLabel } from "./instance-label";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface RefreshResponse {
@@ -98,6 +103,259 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function hasExactKeys(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+  const allowed = new Set([...required, ...optional]);
+  return (
+    required.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => allowed.has(key))
+  );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isSafeText(
+  value: unknown,
+  maximumLength = 512,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= maximumLength &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
+}
+
+function isOptionalFiniteNumber(value: unknown): boolean {
+  return value === undefined || isFiniteNumber(value);
+}
+
+function isMetricCycle(value: unknown): boolean {
+  return (
+    hasExactKeys(value, [], ["cadence", "startedAt", "resetsAt", "durationMs"]) &&
+    (value.cadence === undefined ||
+      value.cadence === "rolling" ||
+      value.cadence === "calendar") &&
+    isOptionalFiniteNumber(value.startedAt) &&
+    isOptionalFiniteNumber(value.resetsAt) &&
+    isOptionalFiniteNumber(value.durationMs)
+  );
+}
+
+function isMetricSegment(value: unknown): boolean {
+  return (
+    hasExactKeys(value, ["id", "label", "usedRatio"]) &&
+    isSafeText(value.id, 128) &&
+    isSafeText(value.label) &&
+    isFiniteNumber(value.usedRatio)
+  );
+}
+
+function isUsageMetric(value: unknown): value is UsageMetric {
+  if (!isRecord(value)) return false;
+  const commonValid =
+    isSafeText(value.id, 128) &&
+    isSafeText(value.label) &&
+    (value.scope === "general" ||
+      value.scope === "model" ||
+      value.scope === "feature" ||
+      value.scope === "product") &&
+    (value.cycle === undefined || isMetricCycle(value.cycle));
+  if (!commonValid) return false;
+
+  if (value.type === "quota") {
+    return (
+      hasExactKeys(
+        value,
+        ["type", "id", "label", "scope", "usedRatio"],
+        ["cycle", "used", "limit", "unit", "segments"],
+      ) &&
+      isFiniteNumber(value.usedRatio) &&
+      isOptionalFiniteNumber(value.used) &&
+      isOptionalFiniteNumber(value.limit) &&
+      (value.unit === undefined || isSafeText(value.unit, 128)) &&
+      (value.segments === undefined ||
+        (Array.isArray(value.segments) &&
+          value.segments.every(isMetricSegment)))
+    );
+  }
+  if (value.type === "counter") {
+    return (
+      hasExactKeys(
+        value,
+        ["type", "id", "label", "scope", "semantic", "value", "unit"],
+        ["cycle", "limit"],
+      ) &&
+      (value.semantic === "consumed" || value.semantic === "spent") &&
+      isFiniteNumber(value.value) &&
+      isSafeText(value.unit, 128) &&
+      isOptionalFiniteNumber(value.limit)
+    );
+  }
+  if (value.type === "balance") {
+    return (
+      hasExactKeys(
+        value,
+        ["type", "id", "label", "scope", "value", "unit"],
+        ["cycle", "initialLimit"],
+      ) &&
+      isFiniteNumber(value.value) &&
+      isSafeText(value.unit, 128) &&
+      isOptionalFiniteNumber(value.initialLimit)
+    );
+  }
+  return false;
+}
+
+function isUsageGroup(value: unknown): boolean {
+  return (
+    hasExactKeys(value, ["id", "label", "metricIds"], ["description"]) &&
+    isSafeText(value.id, 128) &&
+    isSafeText(value.label) &&
+    (value.description === undefined || isSafeText(value.description, 1_024)) &&
+    Array.isArray(value.metricIds) &&
+    value.metricIds.every((metricId) => isSafeText(metricId, 128))
+  );
+}
+
+function isUsageSnapshot(value: unknown): value is UsageSnapshot {
+  return (
+    hasExactKeys(
+      value,
+      ["providerKind", "source", "fetchedAt", "metrics"],
+      ["accountLabel", "planLabel", "usageGroups"],
+    ) &&
+    isProviderId(value.providerKind) &&
+    (value.accountLabel === undefined || isSafeText(value.accountLabel)) &&
+    (value.planLabel === undefined || isSafeText(value.planLabel)) &&
+    (value.source === "web-session" ||
+      value.source === "oauth" ||
+      value.source === "api-key" ||
+      value.source === "fixture") &&
+    isFiniteNumber(value.fetchedAt) &&
+    Array.isArray(value.metrics) &&
+    value.metrics.every(isUsageMetric) &&
+    (value.usageGroups === undefined ||
+      (Array.isArray(value.usageGroups) &&
+        value.usageGroups.every(isUsageGroup)))
+  );
+}
+
+function isHistoryMetric(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const commonValid =
+    isSafeText(value.metricId, 128) &&
+    (value.cycle === undefined || isMetricCycle(value.cycle));
+  if (!commonValid) return false;
+  if (value.type === "quota") {
+    return (
+      hasExactKeys(value, ["type", "metricId", "usedRatio"], ["cycle"]) &&
+      isFiniteNumber(value.usedRatio)
+    );
+  }
+  if (value.type === "counter") {
+    return (
+      hasExactKeys(
+        value,
+        ["type", "metricId", "semantic", "value", "unit"],
+        ["limit", "cycle"],
+      ) &&
+      (value.semantic === "consumed" || value.semantic === "spent") &&
+      isFiniteNumber(value.value) &&
+      isSafeText(value.unit, 128) &&
+      isOptionalFiniteNumber(value.limit)
+    );
+  }
+  if (value.type === "balance") {
+    return (
+      hasExactKeys(value, ["type", "metricId", "value", "unit"], ["initialLimit", "cycle"]) &&
+      isFiniteNumber(value.value) &&
+      isSafeText(value.unit, 128) &&
+      isOptionalFiniteNumber(value.initialLimit)
+    );
+  }
+  return false;
+}
+
+function isHistoryObservation(value: unknown): value is UsageHistoryObservation {
+  return (
+    hasExactKeys(value, ["observedAt", "metrics"]) &&
+    isFiniteNumber(value.observedAt) &&
+    Array.isArray(value.metrics) &&
+    value.metrics.every(isHistoryMetric)
+  );
+}
+
+const refreshTriggers = new Set<RefreshTrigger>([
+  "connect",
+  "manual_provider",
+  "manual_all",
+  "scheduled",
+]);
+const deferredReasons = new Set<DeferredReason>(["session_required", "backoff"]);
+const failureCategories = new Set<FailureCategory>([
+  "signed_out",
+  "credential_invalid",
+  "credential_scope_required",
+  "challenge_blocked",
+  "provider_changed",
+  "temporary_error",
+]);
+
+function isAttemptOutcome(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value.kind === "success") return hasExactKeys(value, ["kind"]);
+  if (value.kind === "deferred") {
+    return (
+      hasExactKeys(value, ["kind", "reason"], ["retryAt"]) &&
+      deferredReasons.has(value.reason as DeferredReason) &&
+      isOptionalFiniteNumber(value.retryAt)
+    );
+  }
+  if (value.kind === "failure") {
+    return (
+      hasExactKeys(value, ["kind", "category"], ["message", "retryAt"]) &&
+      failureCategories.has(value.category as FailureCategory) &&
+      (value.message === undefined || isSafeText(value.message, 1_024)) &&
+      isOptionalFiniteNumber(value.retryAt)
+    );
+  }
+  return false;
+}
+
+function isProviderAttempt(value: unknown): value is ProviderAttempt {
+  return (
+    hasExactKeys(value, ["trigger", "startedAt", "finishedAt", "outcome"]) &&
+    refreshTriggers.has(value.trigger as RefreshTrigger) &&
+    isFiniteNumber(value.startedAt) &&
+    isFiniteNumber(value.finishedAt) &&
+    isAttemptOutcome(value.outcome)
+  );
+}
+
+function isNormalizedOrigin(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2_048) return false;
+  try {
+    const parsed = new URL(value);
+    return (
+      value === parsed.origin &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.protocol === "https:" ||
+        (parsed.protocol === "http:" &&
+          (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function asProviderInstanceView(value: unknown): ProviderInstanceView {
   if (
     !isRecord(value) ||
@@ -105,11 +363,14 @@ function asProviderInstanceView(value: unknown): ProviderInstanceView {
     !isProviderInstanceId(value.id) ||
     !isProviderId(value.providerKind) ||
     (value.access !== "required" && value.access !== "granted") ||
-    typeof value.createdAt !== "number" ||
+    !isFiniteNumber(value.createdAt) ||
     !Array.isArray(value.history) ||
+    !value.history.every(isHistoryObservation) ||
     (Object.hasOwn(value, "userLabel") &&
-      typeof value.userLabel !== "string") ||
-    (Object.hasOwn(value, "origin") && typeof value.origin !== "string")
+      (!isSafeText(value.userLabel, 128) || value.userLabel.trim() !== value.userLabel)) ||
+    (Object.hasOwn(value, "origin") && !isNormalizedOrigin(value.origin)) ||
+    (Object.hasOwn(value, "snapshot") && !isUsageSnapshot(value.snapshot)) ||
+    (Object.hasOwn(value, "lastAttempt") && !isProviderAttempt(value.lastAttempt))
   ) {
     throw new Error("Missing application state");
   }
@@ -139,26 +400,80 @@ function asAppViewState(value: unknown): AppViewState {
     },
     instances: value.instances.map(asProviderInstanceView),
   };
-  projectLegacyInstanceState(state);
+  const ids = new Set<ProviderInstanceId>();
+  for (const instance of state.instances) {
+    if (ids.has(instance.id)) throw new Error("Missing application state");
+    ids.add(instance.id);
+    if (!instance.id.startsWith(`${instance.providerKind}:`)) {
+      throw new Error("Missing application state");
+    }
+    if (
+      instance.snapshot &&
+      instance.snapshot.providerKind !== instance.providerKind
+    ) {
+      throw new Error("Missing application state");
+    }
+  }
   return state;
 }
 
 function asRefreshReport(value: unknown): RefreshReport {
   if (
-    !isRecord(value) ||
-    typeof value.startedAt !== "number" ||
-    typeof value.finishedAt !== "number" ||
+    !hasExactKeys(value, ["trigger", "startedAt", "finishedAt", "results"]) ||
+    !refreshTriggers.has(value.trigger as RefreshTrigger) ||
+    !isFiniteNumber(value.startedAt) ||
+    !isFiniteNumber(value.finishedAt) ||
     !Array.isArray(value.results) ||
     !value.results.every(
       (result) =>
-        isRecord(result) &&
+        hasExactKeys(result, ["instanceId", "outcome"]) &&
         isProviderInstanceId(result.instanceId) &&
-        isRecord(result.outcome),
+        isProviderRefreshOutcome(result.outcome, result.instanceId),
     )
   ) {
     throw new Error("Missing refresh response");
   }
+  const ids = value.results.map((result) => result.instanceId);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Missing refresh response");
+  }
   return value as unknown as RefreshReport;
+}
+
+function isProviderRefreshOutcome(
+  value: unknown,
+  instanceId: ProviderInstanceId,
+): value is ProviderRefreshOutcome {
+  if (!isRecord(value)) return false;
+  if (value.kind === "success") {
+    return (
+      hasExactKeys(value, ["kind", "snapshot"]) &&
+      isUsageSnapshot(value.snapshot) &&
+      instanceId.startsWith(`${value.snapshot.providerKind}:`)
+    );
+  }
+  if (value.kind === "deferred") {
+    return (
+      hasExactKeys(value, ["kind", "reason"], ["retryAt"]) &&
+      deferredReasons.has(value.reason as DeferredReason) &&
+      isOptionalFiniteNumber(value.retryAt)
+    );
+  }
+  if (value.kind === "failure") {
+    return (
+      hasExactKeys(value, ["kind", "category"], ["message", "retryAt"]) &&
+      failureCategories.has(value.category as FailureCategory) &&
+      (value.message === undefined || isSafeText(value.message, 1_024)) &&
+      isOptionalFiniteNumber(value.retryAt)
+    );
+  }
+  return (
+    value.kind === "skipped" &&
+    hasExactKeys(value, ["kind", "reason"]) &&
+    (value.reason === "permission_required" ||
+      value.reason === "auto_refresh_disabled" ||
+      value.reason === "superseded")
+  );
 }
 
 function manualSummary(report: RefreshReport, state: AppViewState): string {
@@ -196,13 +511,13 @@ function manualSummary(report: RefreshReport, state: AppViewState): string {
   }`;
 }
 
-function confirmationFailure(providerId?: ProviderId): string {
-  const subject = providerId ? `${providerNames[providerId]} refresh` : "refresh";
+function confirmationFailure(label?: string): string {
+  const subject = label ? `${label} refresh` : "refresh";
   return `Couldn’t confirm the ${subject} result. Check the latest usage before retrying.`;
 }
 
 function asRefreshResponse(value: unknown): RefreshResponse {
-  if (!isRecord(value) || !("state" in value) || !("report" in value)) {
+  if (!hasExactKeys(value, ["state", "report"])) {
     throw new Error("Missing refresh response");
   }
   return {
@@ -213,8 +528,7 @@ function asRefreshResponse(value: unknown): RefreshResponse {
 
 function asDeleteResponse(value: unknown): DeleteResponse {
   if (
-    !isRecord(value) ||
-    !("state" in value) ||
+    !hasExactKeys(value, ["state", "result"]) ||
     (value.result !== "deleted" &&
       value.result !== "deleted_with_permission_errors")
   ) {
@@ -225,9 +539,14 @@ function asDeleteResponse(value: unknown): DeleteResponse {
 
 function asDisconnectResponse(value: unknown): DisconnectResponse {
   if (
-    !isRecord(value) ||
-    !("state" in value) ||
-    !isRecord(value.result) ||
+    !hasExactKeys(value, ["state", "result"]) ||
+    !hasExactKeys(
+      value.result,
+      ["ok", "localDataDeleted"],
+      value.result && isRecord(value.result) && value.result.ok === false
+        ? ["error"]
+        : [],
+    ) ||
     value.result.localDataDeleted !== true ||
     (value.result.ok !== true &&
       (value.result.ok !== false ||
@@ -251,9 +570,7 @@ const apiKeyConnectionStatuses = new Set<ApiKeyConnectionStatus>([
 
 function asApiKeyConnectionResponse(value: unknown): ApiKeyConnectionResponse {
   if (
-    !isRecord(value) ||
-    !("state" in value) ||
-    !("report" in value) ||
+    !hasExactKeys(value, ["state", "report", "result"]) ||
     typeof value.result !== "string" ||
     !apiKeyConnectionStatuses.has(value.result as ApiKeyConnectionStatus)
   ) {
@@ -434,15 +751,17 @@ export function App() {
   };
 
   const preparePermission = async (
-    providerId: ProviderId,
+    providerKind: ProviderKind,
     config: ProviderInstanceConfig,
     instanceId?: ProviderInstanceId,
+    userLabel?: string,
   ) => {
     const prepared = asPermissionIntentResponse(
       await browser.runtime.sendMessage({
         type: "PREPARE_PROVIDER_PERMISSION",
-        providerKind: providerId,
+        providerKind,
         ...(instanceId ? { instanceId } : {}),
+        ...(userLabel !== undefined ? { userLabel } : {}),
         config,
       } satisfies RuntimeCommand),
     );
@@ -476,19 +795,19 @@ export function App() {
     }
   };
 
-  const handleConnectProvider = async (providerId: ConnectableProviderId) => {
-    if (isApiKeyProviderId(providerId)) return;
+  const handleConnectProvider = async (providerKind: ProviderKind) => {
+    if (isApiKeyProviderId(providerKind)) return;
     clearAnnouncement();
-    const config = normalizeProviderConfig(providerId, { kind: "fixed" });
-    const existingInstanceId = viewStateRef.current
-      ? projectLegacyInstanceState(viewStateRef.current).instanceIds[providerId]
-      : undefined;
+    const config = normalizeProviderConfig(providerKind, { kind: "fixed" });
+    const existingInstanceId = viewStateRef.current?.instances.find(
+      (instance) => instance.providerKind === providerKind,
+    )?.id;
     let prepared: PermissionIntentResponse;
     try {
       if (!config) throw new Error("Invalid provider config");
-      prepared = await preparePermission(providerId, config, existingInstanceId);
+      prepared = await preparePermission(providerKind, config, existingInstanceId);
     } catch {
-      announce(`Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`);
+      announce(`Couldn’t connect ${providerNames[providerKind]}. Reload AI Limits and try again.`);
       return;
     }
     setProviderOperation(prepared.instanceId, "requesting_permission");
@@ -496,12 +815,12 @@ export function App() {
     try {
       granted = await requestPreparedPermission(prepared);
     } catch {
-      announce(`Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`);
+      announce(`Couldn’t connect ${providerNames[providerKind]}. Reload AI Limits and try again.`);
       setProviderOperation(prepared.instanceId);
       return;
     }
     if (!granted) {
-      announce(`${providerNames[providerId]} was not connected.`);
+      announce(`${providerNames[providerKind]} was not connected.`);
       setProviderOperation(prepared.instanceId);
       return;
     }
@@ -511,7 +830,7 @@ export function App() {
       const response = asRefreshResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_BROWSER_PROVIDER",
-          providerKind: providerId as BrowserSessionProviderKind,
+          providerKind: providerKind as BrowserSessionProviderKind,
           permissionIntentId: prepared.permissionIntentId,
         } satisfies RuntimeCommand),
       );
@@ -519,14 +838,14 @@ export function App() {
       announce(manualSummary(response.report, response.state));
     } catch {
       await abandonPermissionIntent(prepared.permissionIntentId);
-      announce(confirmationFailure(providerId));
+      announce(confirmationFailure(providerNames[providerKind]));
     } finally {
       setProviderOperation(prepared.instanceId);
     }
   };
 
-  const handleOpenApiKeySetup = (providerId: ApiKeyProviderId) => {
-    const connection = providerCatalog[providerId].connection;
+  const handleOpenApiKeySetup = (providerKind: ApiKeyProviderKind) => {
+    const connection = providerCatalog[providerKind].connection;
     if (connection.origin !== "static") return;
     void browser.tabs.create({ url: connection.setupUrl }).catch(() => {
       announce("Couldn’t open the ElevenLabs API keys page. Try the link again.");
@@ -534,27 +853,33 @@ export function App() {
   };
 
   const handleSubmitApiKey = async (
-    providerId: ApiKeyProviderId,
-    apiKey: string,
-    baseUrl?: string,
+    submission: ApiKeySubmission,
   ): Promise<ApiKeyConnectAttemptResult> => {
+    const {
+      providerKind,
+      apiKey,
+      baseUrl,
+      instanceId,
+      userLabel,
+    } = submission;
     const config = normalizeProviderConfig(
-      providerId,
-      providerId === "newapi"
+      providerKind,
+      providerKind === "newapi"
         ? { kind: "dynamic-origin", baseUrl }
         : { kind: "fixed" },
     );
     if (!config) return "invalid_site";
-    const projection = viewStateRef.current
-      ? projectLegacyInstanceState(viewStateRef.current)
-      : undefined;
-    const instanceId = projection?.instanceIds[providerId];
     clearAnnouncement();
     let prepared: PermissionIntentResponse;
     try {
-      prepared = await preparePermission(providerId, config, instanceId);
+      prepared = await preparePermission(
+        providerKind,
+        config,
+        instanceId,
+        userLabel,
+      );
     } catch {
-      announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
+      announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
       return "temporary_error";
     }
     setProviderOperation(prepared.instanceId, "requesting_permission");
@@ -562,12 +887,12 @@ export function App() {
     try {
       granted = await requestPreparedPermission(prepared);
     } catch {
-      announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
+      announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
       setProviderOperation(prepared.instanceId);
       return "temporary_error";
     }
     if (!granted) {
-      announce(`${providerNames[providerId]} access was not changed.`);
+      announce(`${providerNames[providerKind]} access was not changed.`);
       setProviderOperation(prepared.instanceId);
       return "permission_declined";
     }
@@ -577,8 +902,9 @@ export function App() {
       const response = asApiKeyConnectionResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_API_KEY_PROVIDER",
-          providerKind: providerId,
+          providerKind,
           instanceId: prepared.instanceId,
+          ...(userLabel !== undefined ? { userLabel } : {}),
           config,
           apiKey,
           permissionIntentId: prepared.permissionIntentId,
@@ -587,14 +913,14 @@ export function App() {
       commitViewState(response.state);
       switch (response.result) {
         case "connected":
-          announce(`Connected ${providerNames[providerId]}.`);
+          announce(`Connected ${userLabel?.trim() || providerNames[providerKind]}.`);
           break;
         case "invalid_key":
-          announce(`Enter a valid ${providerNames[providerId]} API key.`);
+          announce(`Enter a valid ${providerNames[providerKind]} API key.`);
           break;
         case "insufficient_scope":
           announce(
-            providerId === "elevenlabs"
+            providerKind === "elevenlabs"
               ? "Allow User → Read and check any IP restrictions, then try again."
               : "This relay key could not read its usage. Check the key and any IP restrictions.",
           );
@@ -603,24 +929,25 @@ export function App() {
           announce("This site did not return compatible New API status and usage data.");
           break;
         case "temporary_error":
-          announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
+          announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
           break;
       }
       return response.result;
     } catch {
       await abandonPermissionIntent(prepared.permissionIntentId);
-      announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
+      announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
       return "temporary_error";
     } finally {
       setProviderOperation(prepared.instanceId);
     }
   };
 
-  const handleRefreshProvider = async (providerId: ConnectableProviderId) => {
-    const instanceId = viewStateRef.current
-      ? projectLegacyInstanceState(viewStateRef.current).instanceIds[providerId]
-      : undefined;
-    if (!instanceId) return;
+  const handleRefreshInstance = async (instanceId: ProviderInstanceId) => {
+    const instance = viewStateRef.current?.instances.find(
+      (candidate) => candidate.id === instanceId,
+    );
+    if (!instance) return;
+    const label = instanceLabel(instance);
     clearAnnouncement();
     setProviderOperation(instanceId, "fetching");
     try {
@@ -633,7 +960,7 @@ export function App() {
       commitViewState(response.state);
       announce(manualSummary(response.report, response.state));
     } catch {
-      announce(confirmationFailure(providerId));
+      announce(confirmationFailure(label));
     } finally {
       setProviderOperation(instanceId);
     }
@@ -701,11 +1028,12 @@ export function App() {
     }
   };
 
-  const handleDisconnectProvider = async (providerId: ConnectableProviderId) => {
-    const instanceId = viewStateRef.current
-      ? projectLegacyInstanceState(viewStateRef.current).instanceIds[providerId]
-      : undefined;
-    if (!instanceId) return;
+  const handleDisconnectInstance = async (instanceId: ProviderInstanceId) => {
+    const instance = viewStateRef.current?.instances.find(
+      (candidate) => candidate.id === instanceId,
+    );
+    if (!instance) return;
+    const label = instanceLabel(instance);
     clearAnnouncement();
     try {
       const response = asDisconnectResponse(
@@ -717,11 +1045,36 @@ export function App() {
       commitViewState(response.state);
       announce(
         response.result.ok
-          ? `Disconnected ${providerNames[providerId]} and deleted its stored usage.`
-          : `Deleted ${providerNames[providerId]}’s local usage. Browser access could not be removed.`,
+          ? `Disconnected ${label} and deleted its stored usage.`
+          : `Deleted ${label}’s local usage. Browser access could not be removed.`,
       );
     } catch {
-      announce(`Couldn’t disconnect ${providerNames[providerId]}.`);
+      announce(`Couldn’t disconnect ${label}.`);
+    }
+  };
+
+  const handleRenameInstance = async (
+    instanceId: ProviderInstanceId,
+    userLabel?: string,
+  ) => {
+    const current = viewStateRef.current?.instances.find(
+      (candidate) => candidate.id === instanceId,
+    );
+    if (!current) return;
+    clearAnnouncement();
+    try {
+      const next = asAppViewState(
+        await browser.runtime.sendMessage({
+          type: "RENAME_INSTANCE",
+          instanceId,
+          ...(userLabel ? { userLabel } : {}),
+        } satisfies RuntimeCommand),
+      );
+      commitViewState(next);
+      const renamed = next.instances.find((instance) => instance.id === instanceId);
+      announce(`Renamed connection to ${renamed ? instanceLabel(renamed) : providerNames[current.providerKind]}.`);
+    } catch {
+      announce(`Couldn’t rename ${instanceLabel(current)}.`);
     }
   };
 
@@ -767,24 +1120,26 @@ export function App() {
     return <main className="loading-state">Loading usage…</main>;
   }
 
-  const { state } = projectLegacyInstanceState(viewState);
   return (
     <Cockpit
-      state={state}
+      state={viewState}
       now={now}
       isRefreshing={isRefreshing}
       refreshAnnouncement={announcement.message}
       refreshAnnouncementId={announcement.id}
       autoRefreshPending={isAutoRefreshPending}
-      providerOperations={projectLegacyInstanceOperations(providerOperations)}
+      providerOperations={providerOperations}
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => void handleRefresh()}
       onConnectProvider={(providerId) => void handleConnectProvider(providerId)}
       onOpenApiKeySetup={handleOpenApiKeySetup}
       onSubmitApiKey={handleSubmitApiKey}
-      onRefreshProvider={(providerId) => void handleRefreshProvider(providerId)}
+      onRefreshInstance={(instanceId) => void handleRefreshInstance(instanceId)}
       onAutoRefreshChange={(enabled) => void handleAutoRefreshChange(enabled)}
-      onDisconnectProvider={(providerId) => void handleDisconnectProvider(providerId)}
+      onDisconnectInstance={(instanceId) => void handleDisconnectInstance(instanceId)}
+      onRenameInstance={(instanceId, userLabel) =>
+        void handleRenameInstance(instanceId, userLabel)
+      }
       onDeleteLocalData={() => void handleDeleteLocalData()}
     />
   );

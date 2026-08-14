@@ -1,14 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import type { ProviderOperation } from "../../background/messages";
+import type {
+  AppViewState,
+  ProviderInstanceView,
+} from "../../background/view-state";
+import type { ProviderInstanceId } from "../../domain/instances";
 import { sanitizedFailureMessage } from "../../domain/model";
 import type {
-  AppState,
   BalanceMetric,
   CounterMetric,
   DisplayMode,
-  ProviderId,
-  ProviderRecord,
   QuotaMetric,
 } from "../../domain/model";
 import {
@@ -18,9 +20,12 @@ import {
   type PaceStatus,
 } from "../../domain/quota";
 import {
-  type ApiKeyProviderId,
+  type ApiKeyProviderKind,
+  type ProviderKind,
+  canCreateProviderInstance,
   isApiKeyProviderId,
   providerCatalog,
+  providerIds,
   providerNames,
   providerPresentation,
 } from "../../providers/catalog";
@@ -52,27 +57,36 @@ import {
 import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
 import { balanceMetrics, counterMetrics, quotaMetrics } from "./metrics";
+import { instanceLabel } from "./instance-label";
+
+export interface ApiKeySubmission {
+  providerKind: ApiKeyProviderKind;
+  apiKey: string;
+  baseUrl?: string;
+  instanceId?: ProviderInstanceId;
+  userLabel?: string;
+}
 
 export interface CockpitProps {
-  state: AppState;
+  state: AppViewState;
   now: number;
   isRefreshing?: boolean;
   refreshAnnouncement?: string;
   refreshAnnouncementId?: number;
   autoRefreshPending?: boolean;
-  providerOperations?: Partial<Record<ProviderId, ProviderOperation>>;
+  providerOperations?: Partial<Record<ProviderInstanceId, ProviderOperation>>;
   onDisplayModeChange: (mode: DisplayMode) => void;
   onRefresh: () => void;
-  onConnectProvider: (providerId: ProviderId) => void;
-  onOpenApiKeySetup?: (providerId: ApiKeyProviderId) => void;
-  onSubmitApiKey?: (
-    providerId: ApiKeyProviderId,
-    apiKey: string,
-    baseUrl?: string,
-  ) => Promise<ApiKeyConnectAttemptResult>;
-  onRefreshProvider?: (providerId: ProviderId) => void;
+  onConnectProvider: (providerKind: ProviderKind) => void;
+  onOpenApiKeySetup?: (providerKind: ApiKeyProviderKind) => void;
+  onSubmitApiKey?: (submission: ApiKeySubmission) => Promise<ApiKeyConnectAttemptResult>;
+  onRefreshInstance?: (instanceId: ProviderInstanceId) => void;
   onAutoRefreshChange?: (enabled: boolean) => void;
-  onDisconnectProvider?: (providerId: ProviderId) => void;
+  onDisconnectInstance?: (instanceId: ProviderInstanceId) => void;
+  onRenameInstance?: (
+    instanceId: ProviderInstanceId,
+    userLabel?: string,
+  ) => void;
   onDeleteLocalData?: () => void;
 }
 
@@ -203,11 +217,11 @@ function formatFreshness(fetchedAt: number, now: number): string {
   return `Updated ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
 }
 
-function lastRefreshLabel(state: AppState, now: number): string {
-  const latest = state.providers.reduce<number | undefined>((current, provider) => {
+function lastRefreshLabel(state: AppViewState, now: number): string {
+  const latest = state.instances.reduce<number | undefined>((current, instance) => {
     const providerLatest = Math.max(
-      provider.snapshot?.fetchedAt ?? -1,
-      provider.lastAttempt?.finishedAt ?? -1,
+      instance.snapshot?.fetchedAt ?? -1,
+      instance.lastAttempt?.finishedAt ?? -1,
     );
     return providerLatest < 0
       ? current
@@ -222,7 +236,7 @@ function lastRefreshLabel(state: AppState, now: number): string {
 }
 
 function attemptMessage(
-  provider: ProviderRecord,
+  provider: ProviderInstanceView,
   stale: boolean,
 ): string | undefined {
   const outcome = provider.lastAttempt?.outcome;
@@ -236,7 +250,7 @@ function attemptMessage(
     }
 
     if (
-      provider.providerId === "kimi" &&
+      provider.providerKind === "kimi" &&
       provider.lastAttempt?.trigger === "scheduled"
     ) {
       return stale || !provider.snapshot
@@ -244,7 +258,7 @@ function attemptMessage(
         : undefined;
     }
 
-    return provider.providerId === "kimi"
+    return provider.providerKind === "kimi"
       ? "Kimi needs a browser session."
       : "Refresh is waiting for a browser session.";
   }
@@ -262,13 +276,13 @@ function attemptMessage(
 }
 
 export function providerView(
-  provider: ProviderRecord,
+  provider: ProviderInstanceView,
   mode: DisplayMode,
   now: number,
 ): ProviderCardProps {
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
-  const presentation = providerPresentation(provider.providerId);
+  const presentation = providerPresentation(provider.providerKind);
   const quotas = snapshot?.metrics
     ? quotaMetrics(snapshot).map((metric) => quotaView(metric, mode, now))
     : [];
@@ -278,15 +292,17 @@ export function providerView(
         ...balanceMetrics(snapshot).map(balanceView),
       ]
     : [];
-  const rawPlan = snapshot?.planLabel ?? snapshot?.accountLabel;
+  const rawPlan = snapshot?.planLabel;
   const plan =
-    provider.providerId === "chatgpt" && rawPlan?.toLowerCase() === "plus"
+    provider.providerKind === "chatgpt" && rawPlan?.toLowerCase() === "plus"
       ? "Plus"
       : rawPlan;
 
   return {
-    providerId: provider.providerId,
-    name: providerNames[provider.providerId],
+    instanceId: provider.id,
+    instanceLabel: instanceLabel(provider),
+    providerId: provider.providerKind,
+    name: providerNames[provider.providerKind],
     plan,
     mode,
     values,
@@ -309,9 +325,9 @@ export function providerView(
     emptyDescription:
       provider.access === "required"
         ? presentation.connectionDisclosure
-        : `No ${providerNames[provider.providerId]} usage has been stored yet.`,
+        : `No ${providerNames[provider.providerKind]} usage has been stored yet.`,
     extraDisclosure:
-      provider.access === "required" && provider.providerId === "kimi"
+      provider.access === "required" && provider.providerKind === "kimi"
         ? presentation.manualRefreshDisclosure
         : undefined,
   };
@@ -330,9 +346,10 @@ export function Cockpit({
   onConnectProvider,
   onOpenApiKeySetup = () => undefined,
   onSubmitApiKey = async () => "temporary_error",
-  onRefreshProvider = () => undefined,
+  onRefreshInstance = () => undefined,
   onAutoRefreshChange = () => undefined,
-  onDisconnectProvider = () => undefined,
+  onDisconnectInstance = () => undefined,
+  onRenameInstance = () => undefined,
   onDeleteLocalData = () => undefined,
 }: CockpitProps) {
   const mode = state.preferences.displayMode;
@@ -343,8 +360,8 @@ export function Cockpit({
   const view = navigation.current;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [historySelection, setHistorySelection] = useState<{
-    providerId?: ProviderId;
-    metrics: Partial<Record<ProviderId, string>>;
+    instanceId?: ProviderInstanceId;
+    metrics: Partial<Record<ProviderInstanceId, string>>;
   }>({ metrics: {} });
   const cockpitRef = useRef<HTMLElement>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
@@ -405,56 +422,77 @@ export function Cockpit({
   };
 
   const openApiKeyConnect = (
-    providerId: ApiKeyProviderId,
+    providerKind: ApiKeyProviderKind,
     mode: "connect" | "replace",
+    instanceId?: ProviderInstanceId,
   ) => {
     const focusKey =
       view.name === "settings"
-        ? `settings-replace-api-key-${providerId}`
+        ? `settings-replace-api-key-${instanceId}`
         : mode === "replace"
-          ? `overview-replace-api-key-${providerId}`
-          : `connect-provider-${providerId}`;
-    pushScreen({ name: "api-key-connect", providerId, mode }, focusKey);
-    if (providerCatalog[providerId].connection.origin === "static") {
-      onOpenApiKeySetup(providerId);
+          ? `overview-replace-api-key-${instanceId}`
+          : `connect-provider-${providerKind}`;
+    pushScreen(
+      {
+        name: "api-key-connect",
+        providerKind,
+        mode,
+        ...(instanceId ? { instanceId } : {}),
+      },
+      focusKey,
+    );
+    if (providerCatalog[providerKind].connection.origin === "static") {
+      onOpenApiKeySetup(providerKind);
     }
   };
 
-  const connectProvider = (providerId: ProviderId) => {
-    if (isApiKeyProviderId(providerId)) {
-      openApiKeyConnect(providerId, "connect");
+  const connectProvider = (providerKind: ProviderKind) => {
+    if (isApiKeyProviderId(providerKind)) {
+      openApiKeyConnect(providerKind, "connect");
       return;
     }
 
-    onConnectProvider(providerId);
+    onConnectProvider(providerKind);
   };
 
-  const connectedProviders = state.providers.filter(
-    (provider) => provider.access === "granted",
+  const connectedInstances = state.instances.filter(
+    (instance) => instance.access === "granted",
   );
-  const disconnectedProviders = state.providers.filter(
-    (provider) => provider.access !== "granted",
+  const availableProviderKinds = providerIds.filter((providerKind) =>
+    canCreateProviderInstance(providerKind, connectedInstances),
   );
-  const overviewProviders = connectedProviders.map((provider) => {
-    const { providerId: _providerId, ...card } = providerView(provider, mode, now);
+  const availableProviders = availableProviderKinds.map((providerKind) => ({
+    providerKind,
+    operation:
+      providerCatalog[providerKind].cardinality === "single"
+        ? providerOperations[`${providerKind}:default`]
+        : undefined,
+  }));
+  const overviewProviders = connectedInstances.map((instance) => {
+    const card = providerView(instance, mode, now);
     const failureCategory =
-      provider.lastAttempt?.outcome.kind === "failure"
-        ? provider.lastAttempt.outcome.category
+      instance.lastAttempt?.outcome.kind === "failure"
+        ? instance.lastAttempt.outcome.category
         : undefined;
     return {
-      providerId: provider.providerId,
+      instanceId: instance.id,
+      providerKind: instance.providerKind,
       card,
       needsApiKeyReplacement:
-        providerCatalog[provider.providerId].connection.kind === "api-key" &&
+        providerCatalog[instance.providerKind].connection.kind === "api-key" &&
         (failureCategory === "credential_invalid" ||
           failureCategory === "credential_scope_required"),
     };
   });
-  const isFirstRun = view.name === "overview" && connectedProviders.length === 0;
+  const isFirstRun = view.name === "overview" && connectedInstances.length === 0;
   const previousScreen = navigation.backStack.at(-1);
+  const labelForInstance = (instanceId: ProviderInstanceId): string => {
+    const instance = state.instances.find((candidate) => candidate.id === instanceId);
+    return instance ? instanceLabel(instance) : "Provider";
+  };
   const historyBackLabel =
     previousScreen?.name === "provider"
-      ? providerNames[previousScreen.providerId]
+      ? labelForInstance(previousScreen.instanceId)
       : previousScreen?.name === "overview"
         ? "Overview"
         : previousScreen?.name === "settings"
@@ -462,7 +500,7 @@ export function Cockpit({
           : "Back";
   const apiKeyBackLabel =
     previousScreen?.name === "provider"
-      ? providerNames[previousScreen.providerId]
+      ? labelForInstance(previousScreen.instanceId)
       : previousScreen?.name === "add-provider"
         ? "Add provider"
         : previousScreen?.name === "settings"
@@ -470,30 +508,30 @@ export function Cockpit({
           : "Overview";
   const detailRecord =
     view.name === "provider"
-      ? state.providers.find(
-          (provider) =>
-            provider.providerId === view.providerId &&
-            provider.access === "granted",
+      ? state.instances.find(
+          (instance) =>
+            instance.id === view.instanceId &&
+            instance.access === "granted",
         )
       : undefined;
   const detailProvider = detailRecord
     ? providerView(detailRecord, mode, now)
     : undefined;
-  const activeHistoryProviderId =
-    historySelection.providerId ??
-    (view.name === "history" ? view.providerId : undefined);
-  const activeHistoryMetricId = activeHistoryProviderId
-    ? historySelection.metrics[activeHistoryProviderId] ??
-      (view.name === "history" && view.providerId === activeHistoryProviderId
+  const activeHistoryInstanceId =
+    historySelection.instanceId ??
+    (view.name === "history" ? view.instanceId : undefined);
+  const activeHistoryMetricId = activeHistoryInstanceId
+    ? historySelection.metrics[activeHistoryInstanceId] ??
+      (view.name === "history" && view.instanceId === activeHistoryInstanceId
         ? view.metricId
         : undefined)
     : undefined;
-  const activeHistoryRecord = activeHistoryProviderId
-    ? state.providers.find(
-        (provider) =>
-          provider.providerId === activeHistoryProviderId &&
-          provider.access === "granted" &&
-          provider.snapshot,
+  const activeHistoryRecord = activeHistoryInstanceId
+    ? state.instances.find(
+        (instance) =>
+          instance.id === activeHistoryInstanceId &&
+          instance.access === "granted" &&
+          instance.snapshot,
       )
     : undefined;
   const activeHistoryView = activeHistoryRecord
@@ -504,18 +542,18 @@ export function Cockpit({
     .find((quota) => quota.id === activeHistoryMetricId);
 
   const openHistory = (
-    providerId: ProviderId,
+    instanceId: ProviderInstanceId,
     focusKey: string,
     requestedMetricId?: string,
   ) => {
-    const snapshot = state.providers.find((provider) => provider.providerId === providerId)?.snapshot;
+    const snapshot = state.instances.find((instance) => instance.id === instanceId)?.snapshot;
     const providerMetrics = snapshot ? quotaMetrics(snapshot) : [];
     const explicitMetricId = providerMetrics.some(
       (metric) => metric.id === requestedMetricId,
     )
       ? requestedMetricId
       : undefined;
-    const savedMetricId = historySelection.metrics[providerId];
+    const savedMetricId = historySelection.metrics[instanceId];
     const validSavedMetricId = providerMetrics.some(
       (metric) => metric.id === savedMetricId,
     )
@@ -524,13 +562,13 @@ export function Cockpit({
     const metricId =
       explicitMetricId ?? validSavedMetricId ?? providerMetrics[0]?.id;
     setHistorySelection((current) => ({
-      providerId,
+      instanceId,
       metrics: {
         ...current.metrics,
-        ...(metricId ? { [providerId]: metricId } : {}),
+        ...(metricId ? { [instanceId]: metricId } : {}),
       },
     }));
-    pushScreen({ name: "history", providerId, metricId }, focusKey);
+    pushScreen({ name: "history", instanceId, metricId }, focusKey);
   };
 
   return (
@@ -540,7 +578,7 @@ export function Cockpit({
           mode={mode}
           isRefreshing={isRefreshing}
           settingsOpen={false}
-          providerCount={connectedProviders.length}
+          providerCount={connectedInstances.length}
           lastRefreshLabel={lastRefreshLabel(state, now)}
           settingsButtonRef={settingsButton}
           onDisplayModeChange={onDisplayModeChange}
@@ -559,13 +597,40 @@ export function Cockpit({
       ) : null}
 
       {view.name === "api-key-connect" ? (
-        view.providerId === "newapi" ? (
+        view.providerKind === "newapi" ? (
           <NewApiConnectView
             mode={view.mode}
+            initialBaseUrl={
+              view.instanceId
+                ? state.instances.find((instance) => instance.id === view.instanceId)
+                    ?.origin
+                : undefined
+            }
+            initialUserLabel={
+              view.instanceId
+                ? state.instances.find((instance) => instance.id === view.instanceId)
+                    ?.userLabel
+                : undefined
+            }
+            instanceLabel={
+              view.instanceId
+                ? labelForInstance(view.instanceId)
+                : undefined
+            }
             backLabel={apiKeyBackLabel}
             onBack={popScreen}
-            onSubmit={async (baseUrl, apiKey) => {
-              const result = await onSubmitApiKey(view.providerId, apiKey, baseUrl);
+            onSubmit={async (baseUrl, apiKey, userLabel) => {
+              const result = await onSubmitApiKey({
+                providerKind: view.providerKind,
+                apiKey,
+                baseUrl,
+                ...(view.instanceId ? { instanceId: view.instanceId } : {}),
+                ...(
+                  view.mode === "replace" || userLabel
+                    ? { userLabel }
+                    : {}
+                ),
+              });
               if (result === "connected") goHome();
               return result;
             }}
@@ -575,9 +640,13 @@ export function Cockpit({
             mode={view.mode}
             backLabel={apiKeyBackLabel}
             onBack={popScreen}
-            onOpenSetup={() => onOpenApiKeySetup(view.providerId)}
+            onOpenSetup={() => onOpenApiKeySetup(view.providerKind)}
             onSubmit={async (apiKey) => {
-              const result = await onSubmitApiKey(view.providerId, apiKey);
+              const result = await onSubmitApiKey({
+                providerKind: view.providerKind,
+                apiKey,
+                ...(view.instanceId ? { instanceId: view.instanceId } : {}),
+              });
               if (result === "connected") goHome();
               return result;
             }}
@@ -587,13 +656,13 @@ export function Cockpit({
         <SettingsView
           autoRefresh={state.preferences.autoRefresh}
           autoRefreshPending={autoRefreshPending}
-          providers={state.providers}
+          instances={state.instances}
           now={now}
           confirmDelete={confirmDelete}
           addProviderButtonRef={settingsAddProviderButton}
           closeLabel={
             previousScreen?.name === "provider"
-              ? providerNames[previousScreen.providerId]
+              ? labelForInstance(previousScreen.instanceId)
               : "Overview"
           }
           onClose={popScreen}
@@ -601,17 +670,17 @@ export function Cockpit({
             pushScreen({ name: "add-provider" }, "settings-add-provider")
           }
           onAutoRefreshChange={onAutoRefreshChange}
-          onDisconnectProvider={onDisconnectProvider}
-          onReplaceApiKey={(providerId) =>
-            openApiKeyConnect(providerId, "replace")
+          onDisconnectInstance={onDisconnectInstance}
+          onRenameInstance={onRenameInstance}
+          onReplaceApiKey={(providerKind, instanceId) =>
+            openApiKeyConnect(providerKind, "replace", instanceId)
           }
           onDeleteLocalData={onDeleteLocalData}
           onConfirmDeleteChange={setConfirmDelete}
         />
       ) : view.name === "add-provider" ? (
         <AddProviderView
-          providers={disconnectedProviders}
-          providerOperations={providerOperations}
+          providers={availableProviders}
           origin={previousScreen?.name === "settings" ? "settings" : "overview"}
           onBack={popScreen}
           onConnectProvider={connectProvider}
@@ -619,47 +688,46 @@ export function Cockpit({
       ) : view.name === "provider" ? (
         <ProviderDetailView
           provider={detailProvider}
-          operation={providerOperations[view.providerId]}
+          operation={providerOperations[view.instanceId]}
           onBack={popScreen}
           onHome={goHome}
-          onRefreshProvider={onRefreshProvider}
-          onOpenHistory={(providerId, metricId, focusKey) =>
+          onRefreshInstance={onRefreshInstance}
+          onOpenHistory={(instanceId, metricId, focusKey) =>
             openHistory(
-              providerId,
-              focusKey ?? `provider-history-${providerId}`,
+              instanceId,
+              focusKey ?? `provider-history-${instanceId}`,
               metricId ?? (detailRecord?.snapshot ? quotaMetrics(detailRecord.snapshot)[0]?.id : undefined),
             )
           }
           onOpenSettings={() =>
             pushScreen(
               { name: "settings" },
-              `provider-settings-${view.providerId}`,
+              `provider-settings-${view.instanceId}`,
             )
           }
         />
       ) : view.name === "history" ? (
         <HistoryView
-          providers={state.providers}
-          providerId={activeHistoryProviderId ?? view.providerId}
+          instances={state.instances}
+          instanceId={activeHistoryInstanceId ?? view.instanceId}
           metricId={activeHistoryMetricId}
-          metricIdsByProvider={historySelection.metrics}
+          metricIdsByInstance={historySelection.metrics}
           currentQuota={activeHistoryQuota}
           mode={mode}
           now={now}
           backLabel={historyBackLabel}
           onBack={popScreen}
           onDisplayModeChange={onDisplayModeChange}
-          onSelectionChange={(providerId, metricId) =>
+          onSelectionChange={(instanceId, metricId) =>
             setHistorySelection((current) => ({
-              providerId,
-              metrics: { ...current.metrics, [providerId]: metricId },
+              instanceId,
+              metrics: { ...current.metrics, [instanceId]: metricId },
             }))
           }
         />
       ) : isFirstRun ? (
         <FirstRunView
-          providers={disconnectedProviders}
-          providerOperations={providerOperations}
+          providers={availableProviders}
           onConnectProvider={connectProvider}
         />
       ) : (
@@ -670,22 +738,22 @@ export function Cockpit({
           onAddProvider={() =>
             pushScreen({ name: "add-provider" }, "overview-add-provider")
           }
-          onRefreshProvider={onRefreshProvider}
-          onOpenProvider={(providerId) =>
+          onRefreshInstance={onRefreshInstance}
+          onOpenProvider={(instanceId) =>
             pushScreen(
-              { name: "provider", providerId },
-              `overview-provider-${providerId}`,
+              { name: "provider", instanceId },
+              `overview-provider-${instanceId}`,
             )
           }
-          onOpenHistory={(providerId, metricId) =>
+          onOpenHistory={(instanceId, metricId) =>
             openHistory(
-              providerId,
-              `provider-history-${providerId}-${metricId}`,
+              instanceId,
+              `provider-history-${instanceId}-${metricId}`,
               metricId,
             )
           }
-          onReplaceApiKey={(providerId) =>
-            openApiKeyConnect(providerId, "replace")
+          onReplaceApiKey={(providerKind, instanceId) =>
+            openApiKeyConnect(providerKind, "replace", instanceId)
           }
         />
       )}

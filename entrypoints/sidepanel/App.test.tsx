@@ -24,6 +24,8 @@ import { App } from "./App";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
 const TEST_PERMISSION_INTENT = "550e8400-e29b-41d4-a716-446655440099";
+const TEST_NEW_API_INSTANCE =
+  "newapi:33333333-3333-4333-8333-333333333333";
 
 let messageListener:
   | ((
@@ -78,7 +80,9 @@ function toPublicControlResponse(
     instanceId:
       typeof message.instanceId === "string"
         ? message.instanceId
-        : `${providerKind}:default`,
+        : providerKind === "newapi"
+          ? TEST_NEW_API_INSTANCE
+          : `${providerKind}:default`,
     permissions: config
       ? providerRegistry[providerKind].requiredPermissions(config) ?? {}
       : {},
@@ -117,13 +121,26 @@ function successfulOutcomes(
 function toPublicState(state: AppState): AppViewState {
   return {
     preferences: state.preferences,
-    instances: state.providers.map((provider) => ({
+    instances: state.providers.filter(
+      (provider) =>
+        provider.access === "granted" ||
+        provider.snapshot !== undefined ||
+        provider.history.length > 0 ||
+        provider.lastAttempt !== undefined,
+    ).map((provider) => ({
       id: `${provider.providerId}:default`,
       providerKind: provider.providerId,
       access: provider.access,
       createdAt: NOW,
       history: provider.history,
-      ...(provider.snapshot ? { snapshot: provider.snapshot } : {}),
+      ...(provider.snapshot
+        ? {
+            snapshot: (() => {
+              const { accountLabel: _accountLabel, ...rest } = provider.snapshot;
+              return rest;
+            })(),
+          }
+        : {}),
       ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
     })),
   };
@@ -147,6 +164,70 @@ function toPublicResponse(value: unknown): unknown {
 }
 
 describe("side-panel App", () => {
+  test("keeps New API add mode instance-free after an existing instance", async () => {
+    const initial = createInitialState();
+    initial.providers[5] = {
+      providerId: "newapi",
+      access: "granted",
+      history: [],
+      snapshot: {
+        providerKind: "newapi",
+        accountLabel: "Personal relay",
+        source: "api-key",
+        fetchedAt: NOW,
+        metrics: [],
+      },
+    };
+    const commands: Record<string, unknown>[] = [];
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(
+        message.type === "CONNECT_API_KEY_PROVIDER"
+          ? {
+              state: initial,
+              report: report({}, "connect"),
+              result: "invalid_key",
+            }
+          : initial,
+      );
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add provider" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect New API" }));
+    fireEvent.change(screen.getByLabelText("Instance label (optional)"), {
+      target: { value: "Work relay" },
+    });
+    fireEvent.change(screen.getByLabelText("New API site URL"), {
+      target: { value: "https://relay.example" },
+    });
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "candidate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
+
+    await waitFor(() =>
+      expect(commands).toContainEqual({
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "newapi",
+        userLabel: "Work relay",
+        config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      }),
+    );
+    expect(
+      commands.find(({ type }) => type === "PREPARE_PROVIDER_PERMISSION"),
+    ).not.toHaveProperty("instanceId");
+    await waitFor(() =>
+      expect(commands).toContainEqual(
+        expect.objectContaining({
+          type: "CONNECT_API_KEY_PROVIDER",
+          instanceId: TEST_NEW_API_INSTANCE,
+        }),
+      ),
+    );
+  });
+
   test("requests only the normalized New API instance and sends one candidate command", async () => {
     const initial = createInitialState();
     const commands: Record<string, unknown>[] = [];
@@ -186,7 +267,7 @@ describe("side-panel App", () => {
       expect(commands).toContainEqual({
         type: "CONNECT_API_KEY_PROVIDER",
         providerKind: "newapi",
-        instanceId: "newapi:default",
+        instanceId: TEST_NEW_API_INSTANCE,
         config: {
           kind: "dynamic-origin",
           baseUrl: "https://api.example.com/gateway",
@@ -201,6 +282,202 @@ describe("side-panel App", () => {
     expect(requestPermission).not.toHaveBeenCalledWith({
       origins: ["https://*/*"],
     });
+  });
+
+  test("replaces only the selected New API instance and clears a blank custom label", async () => {
+    const personalId = "newapi:11111111-1111-4111-8111-111111111111";
+    const workId = "newapi:22222222-2222-4222-8222-222222222222";
+    const state: AppViewState = {
+      preferences: { displayMode: "used", autoRefresh: true },
+      instances: [
+        {
+          id: personalId,
+          providerKind: "newapi",
+          userLabel: "Personal relay",
+          origin: "https://relay.example",
+          access: "granted",
+          createdAt: NOW - 2_000,
+          history: [],
+          snapshot: {
+            providerKind: "newapi",
+            source: "api-key",
+            fetchedAt: NOW,
+            metrics: [],
+          },
+        },
+        {
+          id: workId,
+          providerKind: "newapi",
+          userLabel: "Work relay",
+          origin: "https://relay.example",
+          access: "granted",
+          createdAt: NOW - 1_000,
+          history: [
+            {
+              observedAt: NOW - 500,
+              metrics: [
+                {
+                  type: "quota",
+                  metricId: "relay-key-quota",
+                  usedRatio: 0.4,
+                },
+              ],
+            },
+          ],
+          snapshot: {
+            providerKind: "newapi",
+            accountLabel: "Relay account",
+            source: "api-key",
+            fetchedAt: NOW,
+            metrics: [
+              {
+                type: "quota",
+                id: "relay-key-quota",
+                label: "API key quota",
+                scope: "feature",
+                usedRatio: 0.4,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const renamed = structuredClone(state);
+    delete renamed.instances[1]!.userLabel;
+    const commands: Record<string, unknown>[] = [];
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    installMessageHandler((message, respond) => {
+      commands.push(message);
+      respond(
+        message.type === "RENAME_INSTANCE"
+          ? renamed
+          : message.type === "CONNECT_API_KEY_PROVIDER"
+            ? {
+                state: renamed,
+                report: {
+                  trigger: "connect",
+                  startedAt: NOW,
+                  finishedAt: NOW + 1,
+                  results: [
+                    {
+                      instanceId: workId,
+                      outcome: {
+                        kind: "success",
+                        snapshot: renamed.instances[1]!.snapshot!,
+                      },
+                    },
+                  ],
+                },
+                result: "connected",
+              }
+            : state,
+      );
+    });
+
+    render(<App />);
+    await screen.findByText("Personal relay");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename Work relay" }));
+    fireEvent.change(screen.getByLabelText("Instance label"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save label for Work relay" }),
+    );
+
+    await waitFor(() =>
+      expect(commands).toContainEqual({
+        type: "RENAME_INSTANCE",
+        instanceId: workId,
+      }),
+    );
+    expect(await screen.findByText("Relay account")).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Replace Relay account API key" }),
+    );
+    expect(screen.getByLabelText("New API site URL")).toHaveValue(
+      "https://relay.example",
+    );
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "replacement" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & replace" }));
+
+    await waitFor(() =>
+      expect(commands).toContainEqual({
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "newapi",
+        instanceId: workId,
+        userLabel: "",
+        config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      }),
+    );
+    expect(
+      commands.find(
+        ({ type, instanceId }) =>
+          type === "PREPARE_PROVIDER_PERMISSION" && instanceId === workId,
+      ),
+    ).not.toHaveProperty("instanceId", personalId);
+    await waitFor(() =>
+      expect(commands).toContainEqual(
+        expect.objectContaining({
+          type: "CONNECT_API_KEY_PROVIDER",
+          providerKind: "newapi",
+          instanceId: workId,
+          userLabel: "",
+          apiKey: "replacement",
+        }),
+      ),
+    );
+  });
+
+  test("rejects secret-bearing nested fields in public view state", async () => {
+    const state = toPublicState(createFixtureState(NOW));
+    const metric = state.instances[0]!.snapshot!.metrics[0]!;
+    const unsafeMetric: Record<string, unknown> = {
+      ...metric,
+      credential: "must-not-cross-the-boundary",
+    };
+    state.instances[0]!.snapshot!.metrics[0] = unsafeMetric as unknown as typeof metric;
+    vi.spyOn(browser.runtime, "sendMessage").mockResolvedValue(state as never);
+
+    render(<App />);
+
+    expect(await screen.findByText("Couldn’t load usage.")).toBeVisible();
+    expect(document.body).not.toHaveTextContent("must-not-cross-the-boundary");
+  });
+
+  test("rejects non-exact instance-keyed refresh reports", async () => {
+    const state = toPublicState(createFixtureState(NOW));
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) =>
+        (message as { type?: string }).type === "REFRESH_INSTANCE"
+          ? {
+              state,
+              report: {
+                trigger: "manual_provider",
+                startedAt: NOW,
+                finishedAt: NOW + 1,
+                results: [
+                  {
+                    instanceId: "chatgpt:default",
+                    outcome: { kind: "success", snapshot: state.instances[0]!.snapshot },
+                  },
+                ],
+                apiKey: "must-not-cross-the-boundary",
+              },
+            }
+          : state as never,
+    );
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh ChatGPT" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t confirm the ChatGPT refresh result. Check the latest usage before retrying.",
+    );
+    expect(document.body).not.toHaveTextContent("must-not-cross-the-boundary");
   });
 
   test("opens the ElevenLabs setup page without requesting API access", async () => {
@@ -283,7 +560,6 @@ describe("side-panel App", () => {
       {
         type: "PREPARE_PROVIDER_PERMISSION",
         providerKind: "elevenlabs",
-        instanceId: "elevenlabs:default",
         config: { kind: "fixed" },
       },
       {
@@ -333,7 +609,6 @@ describe("side-panel App", () => {
       {
         type: "PREPARE_PROVIDER_PERMISSION",
         providerKind: "elevenlabs",
-        instanceId: "elevenlabs:default",
         config: { kind: "fixed" },
       },
       {
@@ -702,7 +977,6 @@ describe("side-panel App", () => {
       {
         type: "PREPARE_PROVIDER_PERMISSION",
         providerKind: "chatgpt",
-        instanceId: "chatgpt:default",
         config: { kind: "fixed" },
       },
       {
@@ -943,7 +1217,9 @@ describe("side-panel App", () => {
     const disabledState = structuredClone(state);
     disabledState.preferences.autoRefresh = false;
     let finishToggle: ((value: unknown) => void) | undefined;
+    const commands: Record<string, unknown>[] = [];
     installMessageHandler((message, respond) => {
+      commands.push(message);
       if (message.type === "SET_AUTO_REFRESH") {
         finishToggle = respond;
         return;
@@ -958,6 +1234,11 @@ describe("side-panel App", () => {
     fireEvent.click(autoRefresh);
 
     await act(async () => saveState(disabledState, NOW));
+    await waitFor(() =>
+      expect(
+        commands.filter(({ type }) => type === "GET_STATE").length,
+      ).toBeGreaterThanOrEqual(2),
+    );
     expect(autoRefresh).toBeChecked();
     expect(autoRefresh).toBeDisabled();
 

@@ -1,13 +1,15 @@
 import type { Ref } from "react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-import type { ProviderId, ProviderRecord } from "../../../domain/model";
+import type { ProviderInstanceView } from "../../../background/view-state";
+import type { ProviderInstanceId } from "../../../domain/instances";
 import {
-  type ApiKeyProviderId,
+  type ApiKeyProviderKind,
   providerCatalog,
   providerNames,
   providerPresentation,
 } from "../../../providers/catalog";
+import { instanceLabel } from "../instance-label";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
@@ -15,7 +17,7 @@ import { ProviderMark } from "../components/ProviderMark";
 export interface SettingsViewProps {
   autoRefresh: boolean;
   autoRefreshPending: boolean;
-  providers: ProviderRecord[];
+  instances: ProviderInstanceView[];
   now: number;
   confirmDelete: boolean;
   addProviderButtonRef: Ref<HTMLButtonElement>;
@@ -23,14 +25,21 @@ export interface SettingsViewProps {
   onClose: () => void;
   onAddProvider: () => void;
   onAutoRefreshChange: (enabled: boolean) => void;
-  onDisconnectProvider: (providerId: ProviderId) => void;
-  onReplaceApiKey: (providerId: ApiKeyProviderId) => void;
+  onDisconnectInstance: (instanceId: ProviderInstanceId) => void;
+  onReplaceApiKey: (
+    providerKind: ApiKeyProviderKind,
+    instanceId: ProviderInstanceId,
+  ) => void;
+  onRenameInstance: (
+    instanceId: ProviderInstanceId,
+    userLabel?: string,
+  ) => void;
   onDeleteLocalData: () => void;
   onConfirmDeleteChange: (confirm: boolean) => void;
 }
 
-function freshness(provider: ProviderRecord, now: number): string {
-  const fetchedAt = provider.snapshot?.fetchedAt;
+function freshness(instance: ProviderInstanceView, now: number): string {
+  const fetchedAt = instance.snapshot?.fetchedAt;
   if (fetchedAt === undefined) {
     return "No successful read yet";
   }
@@ -46,7 +55,7 @@ function freshness(provider: ProviderRecord, now: number): string {
 export function SettingsView({
   autoRefresh,
   autoRefreshPending,
-  providers,
+  instances,
   now,
   confirmDelete,
   addProviderButtonRef,
@@ -54,16 +63,21 @@ export function SettingsView({
   onClose,
   onAddProvider,
   onAutoRefreshChange,
-  onDisconnectProvider,
+  onDisconnectInstance,
   onReplaceApiKey,
+  onRenameInstance,
   onDeleteLocalData,
   onConfirmDeleteChange,
 }: SettingsViewProps) {
-  const connectedProviders = providers.filter(
-    (provider) => provider.access === "granted",
-  );
+  const [renamingInstanceId, setRenamingInstanceId] =
+    useState<ProviderInstanceId>();
+  const [labelDraft, setLabelDraft] = useState("");
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreDeleteFocus = useRef(false);
+  const renameTriggerRefs = useRef<
+    Partial<Record<ProviderInstanceId, HTMLButtonElement | null>>
+  >({});
+  const restoreRenameFocus = useRef<ProviderInstanceId | undefined>(undefined);
 
   useEffect(() => {
     if (!confirmDelete && restoreDeleteFocus.current) {
@@ -71,6 +85,14 @@ export function SettingsView({
       deleteTriggerRef.current?.focus();
     }
   }, [confirmDelete]);
+
+  useEffect(() => {
+    if (!renamingInstanceId && restoreRenameFocus.current) {
+      const instanceId = restoreRenameFocus.current;
+      restoreRenameFocus.current = undefined;
+      renameTriggerRefs.current[instanceId]?.focus();
+    }
+  }, [renamingInstanceId]);
 
   return (
     <section className="screen settings-panel" aria-label="Provider settings">
@@ -128,29 +150,39 @@ export function SettingsView({
               Add provider
             </button>
           </div>
-          {connectedProviders.length ? (
+          {instances.length ? (
             <ul className="settings-provider-list">
-              {connectedProviders.map((provider) => {
-                const name = providerNames[provider.providerId];
-                const presentation = providerPresentation(provider.providerId);
+              {instances.map((instance) => {
+                const name = providerNames[instance.providerKind];
+                const label = instanceLabel(instance);
+                const presentation = providerPresentation(instance.providerKind);
                 const connectionMethod =
-                  providerCatalog[provider.providerId].connection.kind === "api-key"
+                  providerCatalog[instance.providerKind].connection.kind === "api-key"
                     ? "API key"
                     : "Browser session";
+                const editing = renamingInstanceId === instance.id;
+                const inputId = `settings-label-${instance.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
                 return (
-                  <li key={provider.providerId} aria-label={`${name} settings`}>
-                    <ProviderMark providerId={provider.providerId} size="sm" />
+                  <li key={instance.id} aria-label={`${label} settings`}>
+                    <ProviderMark providerId={instance.providerKind} size="sm" />
                     <div className="settings-provider-copy">
-                      <p>
-                        <strong>{name}</strong>{" "}
-                        {provider.snapshot?.planLabel ? (
-                          <span>{provider.snapshot.planLabel}</span>
+                      <p
+                        role="heading"
+                        aria-level={3}
+                        aria-label={label === name ? name : `${name} · ${label}`}
+                      >
+                        <strong>{name}</strong>
+                        {label !== name ? (
+                          <span className="settings-provider-copy__instance">{label}</span>
                         ) : null}
                       </p>
                       <small>
-                        {freshness(provider, now)} · {connectionMethod} · read-only
+                        {freshness(instance, now)} · {connectionMethod} · read-only
                       </small>
-                      {providerCatalog[provider.providerId].connection.kind ===
+                      {instance.snapshot?.planLabel ? (
+                        <small>{instance.snapshot.planLabel}</small>
+                      ) : null}
+                      {providerCatalog[instance.providerKind].connection.kind ===
                       "api-key" ? (
                         <small>API key saved</small>
                       ) : null}
@@ -160,22 +192,78 @@ export function SettingsView({
                       ) : null}
                     </div>
                     <div className="settings-provider-actions">
-                      {providerCatalog[provider.providerId].connection.kind === "api-key" ? (
+                      {editing ? (
+                        <div className="settings-rename" role="group" aria-label={`Rename ${label}`}>
+                          <label htmlFor={inputId}>Instance label</label>
+                          <input
+                            id={inputId}
+                            type="text"
+                            maxLength={128}
+                            value={labelDraft}
+                            autoFocus
+                            onChange={(event) => setLabelDraft(event.currentTarget.value)}
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Save label for ${label}`}
+                            onClick={() => {
+                              const trimmed = labelDraft.trim();
+                              onRenameInstance(instance.id, trimmed || undefined);
+                              restoreRenameFocus.current = instance.id;
+                              setRenamingInstanceId(undefined);
+                            }}
+                          >
+                            <span aria-hidden="true">Save</span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Cancel renaming ${label}`}
+                            onClick={() => {
+                              restoreRenameFocus.current = instance.id;
+                              setRenamingInstanceId(undefined);
+                            }}
+                          >
+                            <span aria-hidden="true">Cancel</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          ref={(element) => {
+                            renameTriggerRefs.current[instance.id] = element;
+                          }}
+                          type="button"
+                          aria-label={`Rename ${label}`}
+                          data-focus-key={`settings-rename-${instance.id}`}
+                          onClick={() => {
+                            setLabelDraft(instance.userLabel ?? "");
+                            setRenamingInstanceId(instance.id);
+                          }}
+                        >
+                          <span aria-hidden="true">Rename</span>
+                        </button>
+                      )}
+                      {providerCatalog[instance.providerKind].connection.kind === "api-key" ? (
                         <button
                           type="button"
-                          aria-label={`Replace ${name} API key`}
-                          data-focus-key={`settings-replace-api-key-${provider.providerId}`}
-                          onClick={() => onReplaceApiKey(provider.providerId as ApiKeyProviderId)}
+                          aria-label={`Replace ${label} API key`}
+                          data-focus-key={`settings-replace-api-key-${instance.id}`}
+                          onClick={() =>
+                            onReplaceApiKey(
+                              instance.providerKind as ApiKeyProviderKind,
+                              instance.id,
+                            )
+                          }
                         >
-                          Replace key
+                          <span aria-hidden="true">Replace key</span>
                         </button>
                       ) : null}
                       <button
                         type="button"
-                        aria-label={`Disconnect ${name}`}
-                        onClick={() => onDisconnectProvider(provider.providerId)}
+                        aria-label={`Disconnect ${label}`}
+                        data-focus-key={`settings-disconnect-${instance.id}`}
+                        onClick={() => onDisconnectInstance(instance.id)}
                       >
-                        Disconnect
+                        <span aria-hidden="true">Disconnect</span>
                       </button>
                     </div>
                   </li>

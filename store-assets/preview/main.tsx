@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 
 import { Cockpit } from "../../entrypoints/sidepanel/Cockpit";
 import "../../entrypoints/sidepanel/styles.css";
-import type { AppState, DisplayMode, ProviderId } from "../../domain/model";
+import type { AppViewState } from "../../background/view-state";
+import type { AppState, DisplayMode } from "../../domain/model";
+import type { ProviderInstanceId } from "../../domain/instances";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
 import {
@@ -20,20 +22,70 @@ import "./styles.css";
 
 const DEFAULT_CAPTURE_NOW = Date.parse(FIDELITY_FIXED_CLOCK);
 
-function createPreviewState(parameters: URLSearchParams, now: number): AppState {
+function fixtureViewState(state: AppState, now: number): AppViewState {
+  const connectedInstances = state.providers.filter(
+    (provider) =>
+      provider.access === "granted" ||
+      provider.snapshot !== undefined ||
+      provider.history.length > 0 ||
+      provider.lastAttempt !== undefined,
+  );
+  return {
+    preferences: state.preferences,
+    instances: connectedInstances.flatMap((provider) => {
+      const instance = {
+        id: `${provider.providerId}:default`,
+        providerKind: provider.providerId,
+        access: provider.access,
+        createdAt: now - 2_000,
+        history: provider.history,
+        ...(provider.providerId === "newapi"
+          ? {
+              userLabel: "Personal relay",
+              origin: "https://relay.example",
+            }
+          : {}),
+        ...(provider.snapshot ? { snapshot: provider.snapshot } : {}),
+        ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
+      } satisfies AppViewState["instances"][number];
+      if (provider.providerId !== "newapi") return [instance];
+      return [
+        instance,
+        {
+          ...structuredClone(instance),
+          id: "newapi:22222222-2222-4222-8222-222222222222",
+          userLabel: "Work relay for product engineering",
+          createdAt: now - 1_000,
+          snapshot: instance.snapshot
+            ? {
+                ...instance.snapshot,
+                metrics: instance.snapshot.metrics.map((metric) =>
+                  metric.type === "quota"
+                    ? { ...metric, usedRatio: Math.min(1, metric.usedRatio + 0.18) }
+                    : metric,
+                ),
+              }
+            : undefined,
+        },
+      ];
+    }),
+  };
+}
+
+function createPreviewState(parameters: URLSearchParams, now: number): AppViewState {
   const fixture = createFixtureState(now);
 
   if (parameters.get("providers") === "none") {
-    return createInitialState();
+    return fixtureViewState(createInitialState(), now);
   }
 
   if (parameters.get("providers") === "partial") {
     const initial = createInitialState();
     initial.providers[0] = fixture.providers[0]!;
-    return initial;
+    return fixtureViewState(initial, now);
   }
 
-  return fixture;
+  return fixtureViewState(fixture, now);
 }
 
 function parseMarketingClock(parameters: URLSearchParams): {
@@ -124,7 +176,7 @@ function ExtensionPreview({
   chromeSidePanelLabel: string;
   now: number;
   panelWidth?: 340 | 400 | 460;
-  state: AppState;
+  state: AppViewState;
 }) {
   return (
     <div
@@ -209,7 +261,7 @@ function Preview() {
 function createFidelityState(
   request: FidelityRequest,
   scenario: FidelityScenario,
-): AppState {
+): AppViewState {
   const fixture = createFixtureState(request.now);
   let state: AppState;
 
@@ -244,7 +296,7 @@ function createFidelityState(
     }
   }
 
-  return state;
+  return fixtureViewState(state, request.now);
 }
 
 function waitForElement(
@@ -327,13 +379,13 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
       preferences: { ...current.preferences, autoRefresh },
     }));
   };
-  const disconnectProvider = (providerId: ProviderId) => {
+  const disconnectInstance = (instanceId: ProviderInstanceId) => {
     setState((current) => ({
       ...current,
-      providers: current.providers.map((provider) =>
-        provider.providerId === providerId
-          ? { ...provider, access: "required", snapshot: undefined, history: [] }
-          : provider,
+      instances: current.instances.map((instance) =>
+        instance.id === instanceId
+          ? { ...instance, access: "required", snapshot: undefined, history: [] }
+          : instance,
       ),
     }));
   };
@@ -362,15 +414,15 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
         autoRefreshPending={scenario.autoRefreshPending}
         providerOperations={
           scenario.providerOperation
-            ? { kimi: scenario.providerOperation }
+            ? { "kimi:default": scenario.providerOperation }
             : undefined
         }
         onDisplayModeChange={updateMode}
         onRefresh={() => undefined}
         onConnectProvider={() => undefined}
-        onRefreshProvider={() => undefined}
+        onRefreshInstance={() => undefined}
         onAutoRefreshChange={updateAutoRefresh}
-        onDisconnectProvider={disconnectProvider}
+        onDisconnectInstance={disconnectInstance}
         onDeleteLocalData={() => undefined}
       />
     </div>

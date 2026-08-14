@@ -7,11 +7,15 @@ import type { ApiKeyConnectAttemptResult } from "./ApiKeyConnectView";
 
 export interface NewApiConnectViewProps {
   mode: "connect" | "replace";
+  initialBaseUrl?: string;
+  initialUserLabel?: string;
+  instanceLabel?: string;
   backLabel: string;
   onBack: () => void;
   onSubmit: (
     baseUrl: string,
     apiKey: string,
+    userLabel?: string,
   ) => Promise<ApiKeyConnectAttemptResult>;
 }
 
@@ -30,11 +34,15 @@ const feedbackByResult: Record<ApiKeyConnectAttemptResult, string> = {
 
 export function NewApiConnectView({
   mode,
+  initialBaseUrl = "",
+  initialUserLabel = "",
+  instanceLabel,
   backLabel,
   onBack,
   onSubmit,
 }: NewApiConnectViewProps) {
-  const [baseUrl, setBaseUrl] = useState("");
+  const [baseUrl, setBaseUrl] = useState(initialBaseUrl);
+  const [userLabel, setUserLabel] = useState(initialUserLabel);
   const [apiKey, setApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -49,7 +57,7 @@ export function NewApiConnectView({
     <section className="screen api-key-guide" aria-label={title}>
       <PageHeader
         title={title}
-        subtitle="One instance · One relay key"
+        subtitle={`${instanceLabel ? `${instanceLabel} · ` : ""}One instance · One relay key`}
         backLabel={backLabel}
         onBack={onBack}
       />
@@ -64,9 +72,9 @@ export function NewApiConnectView({
         </div>
 
         <p className="settings-copy">
-          AI Limits currently supports one New API instance and one relay key.
-          It shows key-specific granted, used, and remaining quota. Unlimited
-          keys show absolute usage without an invented percentage.
+          Each New API connection keeps its own relay key, label, usage, and
+          history. It shows key-specific granted, used, and remaining quota.
+          Unlimited keys show absolute usage without an invented percentage.
         </p>
 
         <form
@@ -78,7 +86,12 @@ export function NewApiConnectView({
             setSubmitting(true);
             setFeedback("");
             setBaseUrl(normalizedBaseUrl);
-            void onSubmit(normalizedBaseUrl, apiKey)
+            const trimmedLabel = userLabel.trim();
+            const submission =
+              replace || trimmedLabel
+                ? onSubmit(normalizedBaseUrl, apiKey, trimmedLabel)
+                : onSubmit(normalizedBaseUrl, apiKey);
+            void submission
               .then((result) => setFeedback(feedbackByResult[result]))
               .catch(() => setFeedback(feedbackByResult.temporary_error))
               .finally(() => {
@@ -87,6 +100,23 @@ export function NewApiConnectView({
               });
           }}
         >
+          <label htmlFor="newapi-user-label">Instance label (optional)</label>
+          <input
+            id="newapi-user-label"
+            type="text"
+            autoComplete="off"
+            maxLength={128}
+            placeholder="Personal relay"
+            value={userLabel}
+            disabled={submitting}
+            aria-describedby="newapi-user-label-help"
+            onChange={(event) => setUserLabel(event.currentTarget.value)}
+          />
+          <small id="newapi-user-label-help">
+            Used to distinguish this connection. If blank, AI Limits uses the
+            reported account name or relay hostname.
+          </small>
+
           <label htmlFor="newapi-base-url">New API site URL</label>
           <input
             id="newapi-base-url"
@@ -137,8 +167,7 @@ export function NewApiConnectView({
 
         <p className="settings-copy">
           This mode does not read account wallet, subscriptions, admin data, or
-          multiple instances. Those New API APIs exist upstream but are not
-          enabled in AI Limits yet.
+          other relay keys. Each configured instance is read independently.
         </p>
         {feedback ? <p className="health-message">{feedback}</p> : null}
       </div>
