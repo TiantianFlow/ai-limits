@@ -1,4 +1,4 @@
-import type { UsageGroup } from "../../domain/model";
+import type { LegacyUsageGroup } from "../../domain/model";
 import type {
   CreditView,
   QuotaView,
@@ -6,7 +6,7 @@ import type {
 } from "./components/ProviderCard";
 
 export function usageGroupViews(
-  groups: readonly UsageGroup[] | undefined,
+  groups: readonly LegacyUsageGroup[] | undefined,
   quotas: readonly QuotaView[],
   credits: readonly CreditView[],
 ): UsageGroupView[] {

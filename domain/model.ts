@@ -39,11 +39,15 @@ export interface UsageGroup {
   id: string;
   label: string;
   description?: string;
-  /** The canonical metric membership. Optional while V4 window/credit groups remain. */
-  metricIds?: string[];
-  /** @deprecated Temporary V4 bridge removed in Task 2. */
+  metricIds: string[];
+}
+
+/** @deprecated Temporary V4 bridge removed in Task 2. */
+export interface LegacyUsageGroup {
+  id: string;
+  label: string;
+  description?: string;
   windowIds: string[];
-  /** @deprecated Temporary V4 bridge removed in Task 2. */
   creditIds: string[];
 }
 
@@ -123,7 +127,7 @@ export interface ProviderSnapshot {
   fetchedAt: number;
   windows: QuotaWindow[];
   credits: CreditBalance[];
-  usageGroups?: UsageGroup[];
+  usageGroups?: LegacyUsageGroup[];
 }
 
 export interface QuotaHistorySample {
