@@ -28,6 +28,11 @@ export interface StoredPermissionIntent {
   expiresAt: number;
 }
 
+interface PermissionIntentState {
+  intents: StoredPermissionIntent[];
+  cleanups: StoredPermissionIntent[];
+}
+
 interface PermissionIntentStoreOptions {
   clock?: () => number;
   randomUUID?: () => string;
@@ -151,6 +156,28 @@ function asPermissionOwner(
   };
 }
 
+function permissionResourceKey(candidate: PermissionIntentCandidate): string {
+  const requirements =
+    providerRegistry[candidate.providerKind].requiredPermissions(
+      candidate.config,
+    );
+  const origins = [...new Set(requirements?.origins ?? [])].sort();
+  const permissions = [...new Set(requirements?.permissions ?? [])].sort();
+  return JSON.stringify({ origins, permissions });
+}
+
+function coalesceCleanups(
+  cleanups: readonly StoredPermissionIntent[],
+): StoredPermissionIntent[] {
+  const seen = new Set<string>();
+  return cleanups.filter((cleanup) => {
+    const key = permissionResourceKey(cleanup.candidate);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function createPermissionIntentStore(
   options: PermissionIntentStoreOptions = {},
 ) {
@@ -170,22 +197,63 @@ export function createPermissionIntentStore(
     return result;
   };
 
-  const read = async (): Promise<StoredPermissionIntent[]> => {
+  const read = async (): Promise<PermissionIntentState> => {
     const state = (await storage.get(STORAGE_KEY))[STORAGE_KEY];
-    if (!isRecord(state) || state.version !== 1 || !Array.isArray(state.intents)) {
-      return [];
+    if (!isRecord(state)) {
+      return { intents: [], cleanups: [] };
     }
-    return state.intents
-      .map(decodeIntent)
-      .filter((intent): intent is StoredPermissionIntent => intent !== undefined)
-      .slice(0, MAX_INTENTS);
+    if (
+      state.version === 2 &&
+      hasOnlyKeys(state, ["version", "intents", "cleanups"]) &&
+      Array.isArray(state.intents) &&
+      Array.isArray(state.cleanups)
+    ) {
+      const intents = state.intents
+        .map(decodeIntent)
+        .filter(
+          (intent): intent is StoredPermissionIntent =>
+            intent !== undefined && intent.phase !== "cleanup-pending",
+        )
+        .slice(0, MAX_INTENTS);
+      const cleanups = state.cleanups
+        .map(decodeIntent)
+        .filter(
+          (intent): intent is StoredPermissionIntent =>
+            intent !== undefined && intent.phase === "cleanup-pending",
+        );
+      return { intents, cleanups: coalesceCleanups(cleanups) };
+    }
+    if (state.version === 1 && Array.isArray(state.intents)) {
+      const decoded = state.intents
+        .map(decodeIntent)
+        .filter(
+          (intent): intent is StoredPermissionIntent => intent !== undefined,
+        );
+      return {
+        intents: decoded
+          .filter(({ phase }) => phase !== "cleanup-pending")
+          .slice(0, MAX_INTENTS),
+        cleanups: coalesceCleanups(
+          decoded.filter(({ phase }) => phase === "cleanup-pending"),
+        ),
+      };
+    }
+    return { intents: [], cleanups: [] };
   };
 
-  const write = async (intents: readonly StoredPermissionIntent[]) => {
+  const write = async ({ intents, cleanups }: PermissionIntentState) => {
+    const boundedIntents = intents.slice(-MAX_INTENTS);
+    const durableCleanups = coalesceCleanups(cleanups);
     await storage.set({
-      [STORAGE_KEY]: { version: 1, intents: intents.slice(-MAX_INTENTS) },
+      [STORAGE_KEY]: {
+        version: 2,
+        intents: boundedIntents,
+        cleanups: durableCleanups,
+      },
     });
-    const nextExpiry = intents.reduce<number | undefined>(
+    const nextExpiry = [...boundedIntents, ...durableCleanups].reduce<
+      number | undefined
+    >(
       (earliest, intent) =>
         earliest === undefined || intent.expiresAt < earliest
           ? intent.expiresAt
@@ -205,7 +273,8 @@ export function createPermissionIntentStore(
     create(instance: ProviderInstanceRecord): Promise<StoredPermissionIntent> {
       return enqueue(async () => {
         const now = clock();
-        const intents = await read();
+        const state = await read();
+        const { intents } = state;
         if (intents.length >= MAX_INTENTS) {
           throw new Error("Too many pending permission intents.");
         }
@@ -215,7 +284,7 @@ export function createPermissionIntentStore(
           candidate: storedCandidate(instance),
           expiresAt: now + ttlMs,
         };
-        await write([...intents, intent]);
+        await write({ ...state, intents: [...intents, intent] });
         return intent;
       });
     },
@@ -226,7 +295,8 @@ export function createPermissionIntentStore(
     ): Promise<StoredPermissionIntent | undefined> {
       return enqueue(async () => {
         const now = clock();
-        const intents = await read();
+        const state = await read();
+        const { intents } = state;
         const current = intents.find(
           (intent) => intent.id === id && intent.expiresAt > now,
         );
@@ -234,15 +304,25 @@ export function createPermissionIntentStore(
         if (!granted) {
           const cleanup = { ...current, phase: "cleanup-pending" as const };
           claimed.delete(id);
-          await write(
-            intents.map((intent) => (intent.id === id ? cleanup : intent)),
+          const cleanups = coalesceCleanups([...state.cleanups, cleanup]);
+          const evidence = cleanups.find(
+            ({ candidate }) =>
+              permissionResourceKey(candidate) ===
+              permissionResourceKey(cleanup.candidate),
           );
-          return cleanup;
+          await write({
+            intents: intents.filter((intent) => intent.id !== id),
+            cleanups,
+          });
+          return evidence;
         }
         const resolved = { ...current, phase: "granted" as const };
-        await write(
-          intents.map((intent) => (intent.id === id ? resolved : intent)),
-        );
+        await write({
+          ...state,
+          intents: intents.map((intent) =>
+            intent.id === id ? resolved : intent,
+          ),
+        });
         return resolved;
       });
     },
@@ -251,7 +331,7 @@ export function createPermissionIntentStore(
       return enqueue(async () => {
         if (claimed.has(id)) return undefined;
         const now = clock();
-        const intent = (await read()).find(
+        const intent = (await read()).intents.find(
           (candidate) =>
             candidate.id === id &&
             candidate.phase === "granted" &&
@@ -266,21 +346,33 @@ export function createPermissionIntentStore(
     finish(id: string): Promise<void> {
       return enqueue(async () => {
         claimed.delete(id);
-        await write((await read()).filter((intent) => intent.id !== id));
+        const state = await read();
+        await write({
+          ...state,
+          intents: state.intents.filter((intent) => intent.id !== id),
+        });
       });
     },
 
     abandon(id: string): Promise<StoredPermissionIntent | undefined> {
       return enqueue(async () => {
         claimed.delete(id);
-        const intents = await read();
+        const state = await read();
+        const { intents } = state;
         const current = intents.find((intent) => intent.id === id);
         if (!current) return undefined;
         const cleanup = { ...current, phase: "cleanup-pending" as const };
-        await write(
-          intents.map((intent) => (intent.id === id ? cleanup : intent)),
+        const cleanups = coalesceCleanups([...state.cleanups, cleanup]);
+        const evidence = cleanups.find(
+          ({ candidate }) =>
+            permissionResourceKey(candidate) ===
+            permissionResourceKey(cleanup.candidate),
         );
-        return cleanup;
+        await write({
+          intents: intents.filter((intent) => intent.id !== id),
+          cleanups,
+        });
+        return evidence;
       });
     },
 
@@ -288,10 +380,12 @@ export function createPermissionIntentStore(
       instance: ProviderInstanceRecord,
     ): Promise<StoredPermissionIntent> {
       return enqueue(async () => {
-        const intents = await read();
-        if (intents.length >= MAX_INTENTS) {
-          throw new Error("Too many pending permission intents.");
-        }
+        const state = await read();
+        const resourceKey = permissionResourceKey(storedCandidate(instance));
+        const existing = state.cleanups.find(
+          ({ candidate }) => permissionResourceKey(candidate) === resourceKey,
+        );
+        if (existing) return existing;
         const now = clock();
         const cleanup: StoredPermissionIntent = {
           id: `cleanup:${randomUUID()}`,
@@ -300,9 +394,11 @@ export function createPermissionIntentStore(
           expiresAt: now,
         };
         try {
-          await write([...intents, cleanup]);
+          await write({ ...state, cleanups: [...state.cleanups, cleanup] });
         } catch (error) {
-          const persisted = (await read()).find(({ id }) => id === cleanup.id);
+          const persisted = (await read()).cleanups.find(
+            ({ id }) => id === cleanup.id,
+          );
           if (!persisted) throw error;
         }
         return cleanup;
@@ -312,12 +408,16 @@ export function createPermissionIntentStore(
     completeCleanup(id: string): Promise<void> {
       return enqueue(async () => {
         claimed.delete(id);
-        await write((await read()).filter((intent) => intent.id !== id));
+        const state = await read();
+        await write({
+          ...state,
+          cleanups: state.cleanups.filter((intent) => intent.id !== id),
+        });
       });
     },
 
     listActiveCandidates(): Promise<ProviderInstanceRecord[]> {
-      return read().then((intents) =>
+      return read().then(({ intents }) =>
         intents
           .filter(
             ({ expiresAt, phase }) =>
@@ -330,27 +430,32 @@ export function createPermissionIntentStore(
     sweepExpired(): Promise<StoredPermissionIntent[]> {
       return enqueue(async () => {
         const now = clock();
-        const intents = await read();
-        const next = intents.map((intent) =>
-          intent.phase === "cleanup-pending" || intent.expiresAt > now
-            ? intent
-            : { ...intent, phase: "cleanup-pending" as const },
-        );
-        const cleanup = next.filter(
-          (intent) => intent.phase === "cleanup-pending",
-        );
-        cleanup.forEach(({ id }) => claimed.delete(id));
-        await write(next);
-        return cleanup;
+        const state = await read();
+        const expired = state.intents
+          .filter(({ expiresAt }) => expiresAt <= now)
+          .map((intent) => ({
+            ...intent,
+            phase: "cleanup-pending" as const,
+          }));
+        const intents = state.intents.filter(({ expiresAt }) => expiresAt > now);
+        const cleanups = coalesceCleanups([
+          ...state.cleanups,
+          ...expired,
+        ]);
+        expired.forEach(({ id }) => claimed.delete(id));
+        await write({ intents, cleanups });
+        return cleanups;
       });
     },
 
     clearAll(): Promise<ProviderInstanceRecord[]> {
       return enqueue(async () => {
-        const intents = await read();
+        const state = await read();
         claimed.clear();
-        await write([]);
-        return intents.map(({ candidate }) => asPermissionOwner(candidate));
+        await write({ intents: [], cleanups: [] });
+        return [...state.intents, ...state.cleanups].map(({ candidate }) =>
+          asPermissionOwner(candidate),
+        );
       });
     },
   };

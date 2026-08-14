@@ -125,6 +125,24 @@ async function authorizedBrowserIntent(
   return prepared.permissionIntentId;
 }
 
+function sequentialUuid(start = 1) {
+  let sequence = start;
+  return () =>
+    `550e8400-e29b-41d4-a716-${(sequence++).toString(16).padStart(12, "0")}`;
+}
+
+async function fillActivePermissionIntentCapacity(service: ProviderService) {
+  for (let index = 0; index < 16; index += 1) {
+    await service.prepareProviderPermission({
+      providerKind: "newapi",
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: `https://pending-${index}.example`,
+      },
+    });
+  }
+}
+
 beforeEach(async () => {
   vi.restoreAllMocks();
   await browser.storage.local.clear();
@@ -1283,8 +1301,124 @@ describe("generic provider instance service", () => {
     await expect(
       browser.storage.local.get("aiLimitsPermissionIntents"),
     ).resolves.toEqual({
-      aiLimitsPermissionIntents: { version: 1, intents: [] },
+      aiLimitsPermissionIntents: { version: 2, intents: [], cleanups: [] },
     });
+  });
+
+  test("full active-intent capacity cannot block final-owner local deletion or restart cleanup", async () => {
+    await seed({
+      ...newApiInstance(FIRST),
+      history: [
+        {
+          observedAt: NOW,
+          metrics: [
+            {
+              type: "quota",
+              metricId: "primary",
+              usedRatio: 0.4,
+            },
+          ],
+        },
+      ],
+    }, "capacity-secret");
+    let permissionPresent = true;
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockResolvedValueOnce(false as never)
+      .mockImplementationOnce(async () => {
+        permissionPresent = false;
+        return true as never;
+      });
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: sequentialUuid(1_000),
+    });
+    await fillActivePermissionIntentCapacity(service);
+
+    await expect(service.disconnectInstance(FIRST)).resolves.toEqual({
+      ok: false,
+      error: "permission_removal_failed",
+      localDataDeleted: true,
+    });
+    await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+    await expect(connectionRepository.get(FIRST)).resolves.toBeUndefined();
+    const durable = (
+      await browser.storage.local.get("aiLimitsPermissionIntents")
+    ).aiLimitsPermissionIntents as {
+      intents: unknown[];
+      cleanups: unknown[];
+    };
+    expect(durable.intents).toHaveLength(16);
+    expect(durable.cleanups).toHaveLength(1);
+    expect(JSON.stringify(durable)).not.toMatch(
+      /capacity-secret|metricId|primary|history|credential/i,
+    );
+
+    await browser.storage.session.clear();
+    const restarted = createProviderService({ clock: () => NOW + 1 });
+    await restarted.sweepPermissionIntents();
+
+    expect(remove).toHaveBeenCalledTimes(2);
+    await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+    await expect(connectionRepository.get(FIRST)).resolves.toBeUndefined();
+    const afterRetry = (
+      await browser.storage.local.get("aiLimitsPermissionIntents")
+    ).aiLimitsPermissionIntents as {
+      intents: unknown[];
+      cleanups: unknown[];
+    };
+    expect(afterRetry.intents).toHaveLength(16);
+    expect(afterRetry.cleanups).toEqual([]);
+  });
+
+  test("full active-intent capacity still preserves a same-origin sibling owner", async () => {
+    await seed({
+      ...newApiInstance(FIRST),
+      history: [
+        {
+          observedAt: NOW,
+          metrics: [
+            {
+              type: "quota",
+              metricId: "primary",
+              usedRatio: 0.4,
+            },
+          ],
+        },
+      ],
+    }, "first-capacity-secret");
+    await seed(newApiInstance(SECOND), "sibling-capacity-secret");
+    const remove = vi.spyOn(browser.permissions, "remove");
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: sequentialUuid(2_000),
+    });
+    await fillActivePermissionIntentCapacity(service);
+
+    await expect(service.disconnectInstance(FIRST)).resolves.toEqual({
+      ok: true,
+      localDataDeleted: true,
+    });
+
+    expect(remove).not.toHaveBeenCalled();
+    await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+    await expect(readCredentialWithRevision(SECOND)).resolves.toMatchObject({
+      value: "sibling-capacity-secret",
+    });
+    expect((await loadInstanceAppState()).instances.map(({ id }) => id)).toEqual([
+      SECOND,
+    ]);
+    const durable = (
+      await browser.storage.local.get("aiLimitsPermissionIntents")
+    ).aiLimitsPermissionIntents as {
+      intents: unknown[];
+      cleanups: unknown[];
+    };
+    expect(durable.intents).toHaveLength(16);
+    expect(durable.cleanups).toEqual([]);
   });
 
   test("disconnecting the last owner removes its exact origin after local deletion", async () => {
