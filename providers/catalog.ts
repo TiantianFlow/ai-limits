@@ -159,13 +159,24 @@ export function assertProviderCatalogPermissionSafety(
 
 assertProviderCatalogPermissionSafety(providerCatalog);
 
-export type ProviderId = keyof typeof providerCatalog;
+export type ProviderKind = keyof typeof providerCatalog;
 
-export type ApiKeyProviderId = {
-  [Id in ProviderId]: (typeof providerCatalog)[Id]["connection"]["kind"] extends "api-key"
-    ? Id
+/** @deprecated Temporary bridge removed in Task 7. */
+export type ProviderId = ProviderKind;
+
+export type BrowserSessionProviderKind = {
+  [Kind in ProviderKind]: (typeof providerCatalog)[Kind]["connection"]["kind"] extends "browser-session"
+    ? Kind
     : never;
-}[ProviderId];
+}[ProviderKind];
+
+export type ApiKeyProviderKind = Exclude<
+  ProviderKind,
+  BrowserSessionProviderKind
+>;
+
+/** @deprecated Temporary bridge removed in Task 7. */
+export type ApiKeyProviderId = ApiKeyProviderKind;
 
 export const providerIds = Object.keys(providerCatalog) as ProviderId[];
 

@@ -10,10 +10,28 @@ import {
   providerIds,
   providerNames,
 } from "./catalog";
+import type {
+  ApiKeyProviderKind,
+  BrowserSessionProviderKind,
+  ProviderKind,
+} from "./catalog";
 import { createInitialState } from "./initial-state";
 import { providerRegistry } from "./registry";
 
 describe("provider catalog", () => {
+  test("derives provider kind vocabularies from the static catalog", () => {
+    const browserSessionKinds: BrowserSessionProviderKind[] = [
+      "chatgpt",
+      "claude",
+      "kimi",
+      "cursor",
+    ];
+    const apiKeyKinds: ApiKeyProviderKind[] = ["elevenlabs", "newapi"];
+    const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
+
+    expect(allKinds).toEqual(providerIds);
+  });
+
   test("provides complete local presentation metadata for every supported provider", () => {
     type Presentation = {
       markPath: string;

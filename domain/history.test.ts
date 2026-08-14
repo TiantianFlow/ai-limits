@@ -3,11 +3,15 @@ import { describe, expect, test } from "vitest";
 import type {
   ProviderSnapshot,
   QuotaHistoryObservation,
+  UsageSnapshot,
 } from "./model";
 import {
+  appendUsageObservation,
   appendQuotaObservation,
+  observationFromUsage,
   observationFromSnapshot,
   quotaHistorySegments,
+  retainUsageHistory,
   retainQuotaHistory,
 } from "./history";
 
@@ -52,6 +56,121 @@ function observation(
 }
 
 describe("quota history", () => {
+  test("retains typed metric observations with the established raw, compacted, and capped policy", () => {
+    const typedSnapshot: UsageSnapshot = {
+      providerKind: "chatgpt",
+      source: "fixture",
+      fetchedAt: NOW,
+      metrics: [
+        {
+          type: "quota",
+          id: "weekly",
+          label: "Weekly usage",
+          scope: "general",
+          usedRatio: 0.42,
+          cycle: { resetsAt: NOW + 2 * DAY, durationMs: 7 * DAY },
+        },
+        {
+          type: "counter",
+          id: "spend",
+          label: "Spend",
+          scope: "product",
+          semantic: "spent",
+          value: 12.5,
+          unit: "USD",
+        },
+      ],
+    };
+    const sameHourStart = Date.UTC(2026, 7, 7, 9);
+    const history = [
+      {
+        observedAt: NOW - 31 * DAY,
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.1 }],
+      },
+      {
+        observedAt: sameHourStart + 5 * 60 * 1_000,
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.2 }],
+      },
+      {
+        observedAt: sameHourStart + 55 * 60 * 1_000,
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.3 }],
+      },
+      {
+        observedAt: NOW - HOUR,
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.4 }],
+      },
+    ];
+
+    expect(retainUsageHistory(history, NOW)).toEqual([
+      history[2],
+      history[3],
+    ]);
+    expect(appendUsageObservation(history, typedSnapshot).at(-1)).toEqual(
+      observationFromUsage(typedSnapshot),
+    );
+  });
+
+  test("segments only quota metric history across a missing metric, a long gap, or a changed cycle", () => {
+    const first = NOW - 6 * HOUR;
+    const history = [
+      {
+        observedAt: first,
+        metrics: [
+          {
+            type: "quota" as const,
+            metricId: "weekly",
+            usedRatio: 0.4,
+            cycle: { cadence: "rolling" as const, resetsAt: NOW + DAY },
+          },
+        ],
+      },
+      {
+        observedAt: first + 30 * 60 * 1_000,
+        metrics: [{ type: "counter" as const, metricId: "spend", semantic: "spent" as const, value: 12.5, unit: "USD" }],
+      },
+      {
+        observedAt: NOW - 4 * HOUR,
+        metrics: [
+          {
+            type: "quota" as const,
+            metricId: "weekly",
+            usedRatio: 0.45,
+            cycle: { cadence: "rolling" as const, resetsAt: NOW + DAY },
+          },
+        ],
+      },
+      {
+        observedAt: NOW - 2 * HOUR,
+        metrics: [
+          {
+            type: "quota" as const,
+            metricId: "weekly",
+            usedRatio: 0.5,
+            cycle: { cadence: "rolling" as const, resetsAt: NOW + DAY },
+          },
+        ],
+      },
+      {
+        observedAt: NOW - HOUR,
+        metrics: [
+          {
+            type: "quota" as const,
+            metricId: "weekly",
+            usedRatio: 0.03,
+            cycle: { cadence: "calendar" as const, resetsAt: NOW + 8 * DAY },
+          },
+        ],
+      },
+    ];
+
+    expect(quotaHistorySegments(history, "weekly")).toEqual([
+      [{ observedAt: first, usedRatio: 0.4 }],
+      [{ observedAt: NOW - 4 * HOUR, usedRatio: 0.45 }],
+      [{ observedAt: NOW - 2 * HOUR, usedRatio: 0.5 }],
+      [{ observedAt: NOW - HOUR, usedRatio: 0.03 }],
+    ]);
+  });
+
   test("applies bounded retention without inventing a new observation", () => {
     const sameHourStart = Date.UTC(2026, 7, 7, 9);
     const history = [
@@ -128,6 +247,44 @@ describe("quota history", () => {
       [{ observedAt: afterOmission, usedRatio: 0.45 }],
       [{ observedAt: afterGap, usedRatio: 0.5 }],
       [{ observedAt: afterReset, usedRatio: 0.03 }],
+    ]);
+  });
+
+  test("keeps the legacy chart connected when only non-reset metadata changes", () => {
+    const first = NOW - HOUR;
+    const reset = NOW + DAY;
+    const history: QuotaHistoryObservation[] = [
+      {
+        observedAt: first,
+        windows: [
+          {
+            windowId: "weekly",
+            usedRatio: 0.4,
+            startedAt: first - 6 * DAY,
+            resetsAt: reset,
+            durationMs: 7 * DAY,
+          },
+        ],
+      },
+      {
+        observedAt: NOW,
+        windows: [
+          {
+            windowId: "weekly",
+            usedRatio: 0.5,
+            startedAt: first - 5 * DAY,
+            resetsAt: reset,
+            durationMs: 6 * DAY,
+          },
+        ],
+      },
+    ];
+
+    expect(quotaHistorySegments(history, "weekly")).toEqual([
+      [
+        { observedAt: first, usedRatio: 0.4 },
+        { observedAt: NOW, usedRatio: 0.5 },
+      ],
     ]);
   });
 
