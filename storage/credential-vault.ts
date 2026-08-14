@@ -248,9 +248,7 @@ export function deleteCredential(
 ): Promise<void> {
   if (!isApiKeyInstanceId(instanceId)) return Promise.resolve();
   if (!credentialStorageInitialized) {
-    return enqueueCredentialMutation(() =>
-      browser.storage.local.remove(CREDENTIAL_STORAGE_KEY),
-    );
+    return Promise.reject(new Error("Credential storage is unavailable."));
   }
   return enqueueCredentialMutation(async () => {
     const state = await readCredentialState();

@@ -206,6 +206,56 @@ describe("queued instance repositories", () => {
     });
   });
 
+  test("snapshots immutable fields before an updater mutates its input in place", async () => {
+    const firstId = "newapi:550e8400-e29b-41d4-a716-446655440000";
+    const siblingId = "newapi:0c5f2af7-21d4-4cd1-bcd8-09005c65e45f";
+    await repository.connectionRepository.create(
+      newApiInstance(firstId, "Personal relay"),
+    );
+    await repository.connectionRepository.create(
+      newApiInstance(siblingId, "Work relay"),
+    );
+
+    await expect(
+      repository.usageRepository.commit(firstId, (current) => {
+        current.id = "chatgpt:default";
+        current.providerKind = "chatgpt";
+        if (current.config.kind === "dynamic-origin") {
+          current.config.baseUrl = "https://mutated.example";
+        }
+        current.createdAt = 0;
+        return current;
+      }),
+    ).resolves.toBe(true);
+
+    await expect(repository.connectionRepository.list()).resolves.toEqual([
+      {
+        id: "newapi:550e8400-e29b-41d4-a716-446655440000",
+        providerKind: "newapi",
+        userLabel: "Personal relay",
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example",
+        },
+        access: "granted",
+        createdAt: now,
+        history: [],
+      },
+      {
+        id: "newapi:0c5f2af7-21d4-4cd1-bcd8-09005c65e45f",
+        providerKind: "newapi",
+        userLabel: "Work relay",
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example",
+        },
+        access: "granted",
+        createdAt: now,
+        history: [],
+      },
+    ]);
+  });
+
   test("returns false for missing usage targets and clears one instance's usage", async () => {
     const instance = newApiInstance("newapi:default", "Personal relay");
     instance.snapshot = {
