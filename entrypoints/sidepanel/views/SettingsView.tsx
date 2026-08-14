@@ -1,14 +1,14 @@
 import type { Ref } from "react";
 import React, { useEffect, useRef, useState } from "react";
 
-import type { ProviderInstanceView } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/model";
 import {
   type ApiKeyProviderKind,
-  providerCatalog,
+  type ProviderInstanceId,
+  type ProviderInstanceView,
+  type ProviderAvailabilityView,
   providerNames,
   providerPresentation,
-} from "../../../providers/catalog";
+} from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { PageHeader } from "../components/PageHeader";
@@ -18,6 +18,7 @@ export interface SettingsViewProps {
   autoRefresh: boolean;
   autoRefreshPending: boolean;
   instances: ProviderInstanceView[];
+  providers: ProviderAvailabilityView[];
   now: number;
   confirmDelete: boolean;
   addProviderButtonRef: Ref<HTMLButtonElement>;
@@ -56,6 +57,7 @@ export function SettingsView({
   autoRefresh,
   autoRefreshPending,
   instances,
+  providers,
   now,
   confirmDelete,
   addProviderButtonRef,
@@ -168,8 +170,11 @@ export function SettingsView({
                 const name = providerNames[instance.providerKind];
                 const label = labelsByInstance.get(instance.id)!;
                 const presentation = providerPresentation(instance.providerKind);
+                const usesApiKey = providers.find(
+                  (provider) => provider.providerKind === instance.providerKind,
+                )?.credentialKind === "api-key";
                 const connectionMethod =
-                  providerCatalog[instance.providerKind].connection.kind === "api-key"
+                  usesApiKey
                     ? "API key"
                     : "Browser session";
                 const editing = renamingInstanceId === instance.id;
@@ -198,8 +203,7 @@ export function SettingsView({
                       {instance.snapshot?.planLabel ? (
                         <small>{instance.snapshot.planLabel}</small>
                       ) : null}
-                      {providerCatalog[instance.providerKind].connection.kind ===
-                      "api-key" ? (
+                      {usesApiKey ? (
                         <small>API key saved</small>
                       ) : null}
                       <small>{presentation.connectionDisclosure}</small>
@@ -300,7 +304,7 @@ export function SettingsView({
                           <span aria-hidden="true">Rename</span>
                         </button>
                       )}
-                      {providerCatalog[instance.providerKind].connection.kind === "api-key" ? (
+                      {usesApiKey ? (
                         <button
                           type="button"
                           aria-label={`Replace ${label} API key`}

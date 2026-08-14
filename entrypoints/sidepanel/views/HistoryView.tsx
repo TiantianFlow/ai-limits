@@ -2,10 +2,10 @@ import React, { useEffect, useState } from "react";
 
 import type {
   DisplayMode,
-} from "../../../domain/model";
-import type { ProviderInstanceView } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/model";
-import { providerNames } from "../../../providers/catalog";
+  ProviderInstanceId,
+  ProviderInstanceView,
+} from "../../../domain/public-protocol";
+import { providerNames } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";

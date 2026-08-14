@@ -57,6 +57,7 @@ describe("provider collection context", () => {
       kind: "chatgpt",
       cardinality: "single",
       credentialKind: "none",
+      configKind: "fixed",
       normalizeConfig: () => ({ kind: "fixed" }),
       requiredPermissions: () => ({ origins: ["https://chatgpt.com/*"] }),
       collect: async () => ({

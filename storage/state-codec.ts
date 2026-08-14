@@ -385,6 +385,7 @@ function normalizeAttemptOutcome(
     value.kind !== "failure" ||
     !categories.includes(value.category as (typeof categories)[number]) ||
     (value.message !== undefined && !nonEmptyString(value.message)) ||
+    (value.guidance !== undefined && value.guidance !== "retry_session") ||
     !optionalNonNegative(value.retryAt)
   ) {
     return undefined;
@@ -396,6 +397,9 @@ function normalizeAttemptOutcome(
     ...(value.message === undefined
       ? {}
       : { message: sanitizedFailureMessage(category, value.message) }),
+    ...(value.guidance === "retry_session"
+      ? { guidance: "retry_session" as const }
+      : {}),
     ...(value.retryAt === undefined ? {} : { retryAt: value.retryAt }),
   };
 }

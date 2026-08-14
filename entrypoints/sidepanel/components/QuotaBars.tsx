@@ -1,7 +1,6 @@
 import React from "react";
 
-import type { DisplayMode } from "../../../domain/model";
-import type { PaceKind } from "../../../domain/quota";
+import type { DisplayMode, PaceKind } from "../../../domain/public-protocol";
 import { PaceSignal } from "./PaceSignal";
 
 export interface QuotaSegmentView {

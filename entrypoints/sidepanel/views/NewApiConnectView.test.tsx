@@ -75,12 +75,12 @@ describe("NewApiConnectView", () => {
 
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "https://api.example.com/new-api",
+        "https://api.example.com/new-api/v1/messages",
         " sk-test ",
       ),
     );
     expect(screen.getByLabelText("New API site URL")).toHaveValue(
-      "https://api.example.com/new-api",
+      "https://api.example.com/new-api/v1/messages",
     );
     expect(screen.getByLabelText("New API relay key")).toHaveValue("");
   });

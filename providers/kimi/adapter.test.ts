@@ -666,8 +666,7 @@ describe("Kimi adapter", () => {
       ok: false,
       health: {
         kind: "temporary_error",
-        message:
-          "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+        guidance: "retry_session",
       },
     });
     expect(recoverAccessToken).toHaveBeenCalledTimes(1);
@@ -781,8 +780,7 @@ describe("Kimi adapter", () => {
       ok: false,
       health: {
         kind: "temporary_error",
-        message:
-          "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+        guidance: "retry_session",
       },
     });
     expect(recoverAccessToken).toHaveBeenCalledTimes(1);
@@ -1001,8 +999,7 @@ describe("Kimi adapter", () => {
       ok: false,
       health: {
         kind: "temporary_error",
-        message:
-          "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+        guidance: "retry_session",
       },
     });
     expect(JSON.stringify(result)).not.toContain(rawError);
@@ -1022,8 +1019,7 @@ describe("Kimi adapter", () => {
             ok: false,
             health: {
               kind: "temporary_error",
-              message:
-                "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+              guidance: "retry_session",
             },
           }
         : { ok: false, health: { kind: "temporary_error" } },

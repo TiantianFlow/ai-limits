@@ -4,8 +4,13 @@ import type { ProviderInstanceRecord } from "../domain/model";
 import {
   createApiKeyPackage,
   createBrowserSessionPackage,
+  normalizeFixedConfig,
 } from "./package-factories";
 import type { CollectionContext, ProviderCollector } from "./types";
+import {
+  newApiPermissionOrigin,
+  normalizeNewApiBaseUrl,
+} from "./newapi/url";
 
 const services = {
   fetch: globalThis.fetch,
@@ -29,6 +34,26 @@ function instance(
   };
 }
 
+function normalizeDynamicConfig(value: unknown) {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    (value as { kind?: unknown }).kind !== "dynamic-origin"
+  ) {
+    return undefined;
+  }
+  const baseUrl = normalizeNewApiBaseUrl(
+    (value as { baseUrl?: unknown }).baseUrl,
+  );
+  return baseUrl ? ({ kind: "dynamic-origin", baseUrl } as const) : undefined;
+}
+
+const dynamicPermissions = (value: unknown) => {
+  const config = normalizeDynamicConfig(value);
+  const origin = config ? newApiPermissionOrigin(config.baseUrl) : undefined;
+  return origin ? { origins: [origin] } : undefined;
+};
+
 describe("provider package factories", () => {
   test("passes only generic request inputs to a fixed browser-session adapter", async () => {
     const collect = vi.fn(async (_context: CollectionContext) => ({
@@ -39,6 +64,8 @@ describe("provider package factories", () => {
     const providerPackage = createBrowserSessionPackage({
       kind: "chatgpt",
       adapter,
+      cardinality: "single",
+      requiredPermissions: () => ({ origins: ["https://chatgpt.com/*"] }),
     });
 
     await providerPackage.collect(
@@ -58,6 +85,10 @@ describe("provider package factories", () => {
     const providerPackage = createApiKeyPackage({
       kind: "elevenlabs",
       adapter: { id: "elevenlabs", collect },
+      cardinality: "single",
+      configKind: "fixed",
+      normalizeConfig: normalizeFixedConfig,
+      requiredPermissions: () => ({ origins: ["https://api.elevenlabs.io/*"] }),
     });
 
     await expect(
@@ -73,6 +104,10 @@ describe("provider package factories", () => {
     const seen: CollectionContext[] = [];
     const providerPackage = createApiKeyPackage({
       kind: "newapi",
+      cardinality: "multiple",
+      configKind: "dynamic-origin",
+      normalizeConfig: normalizeDynamicConfig,
+      requiredPermissions: dynamicPermissions,
       adapter: {
         id: "newapi",
         collect: async (context) => {
@@ -119,6 +154,10 @@ describe("provider package factories", () => {
     const providerPackage = createApiKeyPackage({
       kind: "newapi",
       adapter: { id: "newapi", collect },
+      cardinality: "multiple",
+      configKind: "dynamic-origin",
+      normalizeConfig: normalizeDynamicConfig,
+      requiredPermissions: dynamicPermissions,
     });
     const config = providerPackage.normalizeConfig({
       kind: "dynamic-origin",

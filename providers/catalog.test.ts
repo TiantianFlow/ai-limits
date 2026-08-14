@@ -3,13 +3,9 @@ import { describe, expect, test } from "vitest";
 import { isRuntimeCommand } from "../background/messages";
 import * as catalog from "./catalog";
 import {
-  assertProviderCatalogPermissionSafety,
-  canCreateProviderInstance,
   isApiKeyProviderKind,
   isProviderKind,
-  providerCatalog,
   providerKinds,
-  providerNames,
 } from "./catalog";
 import type {
   ApiKeyProviderKind,
@@ -32,31 +28,6 @@ describe("provider catalog", () => {
     expect(allKinds).toEqual(providerKinds);
   });
 
-  test("allows multiple New API instances and only one of every other kind", () => {
-    expect(
-      providerKinds.map((providerKind) => [
-        providerKind,
-        providerCatalog[providerKind].cardinality,
-      ]),
-    ).toEqual([
-      ["chatgpt", "single"],
-      ["claude", "single"],
-      ["kimi", "single"],
-      ["cursor", "single"],
-      ["elevenlabs", "single"],
-      ["newapi", "multiple"],
-    ]);
-
-    const existing = [
-      { providerKind: "chatgpt" as const },
-      { providerKind: "newapi" as const },
-      { providerKind: "newapi" as const },
-    ];
-    expect(canCreateProviderInstance("chatgpt", existing)).toBe(false);
-    expect(canCreateProviderInstance("claude", existing)).toBe(true);
-    expect(canCreateProviderInstance("newapi", existing)).toBe(true);
-  });
-
   test("provides complete local presentation metadata for every supported provider", () => {
     type Presentation = {
       markPath: string;
@@ -65,6 +36,7 @@ describe("provider catalog", () => {
       connectionDisclosure: string;
       capabilities: readonly string[];
       manualRefreshDisclosure?: string;
+      apiKeySetupUrl?: string;
     };
     const providerPresentation = (
       catalog as typeof catalog & {
@@ -124,6 +96,7 @@ describe("provider catalog", () => {
         connectionDisclosure:
           "Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.",
         capabilities: ["Monthly credits", "Voice limits"],
+        apiKeySetupUrl: "https://elevenlabs.io/app/developers/api-keys",
       },
       {
         providerId: "newapi",
@@ -136,84 +109,6 @@ describe("provider catalog", () => {
     ]);
   });
 
-  test("is the ordered source of provider identity, connection, refresh, names, and permissions", () => {
-    expect(providerKinds).toEqual([
-      "chatgpt",
-      "claude",
-      "kimi",
-      "cursor",
-      "elevenlabs",
-      "newapi",
-    ]);
-    expect(
-      providerKinds.map((providerId) => ({
-        providerId,
-        name: providerNames[providerId],
-        origins: providerCatalog[providerId].optionalOrigins,
-        permissions: providerCatalog[providerId].optionalPermissions,
-        connection: providerCatalog[providerId].connection,
-        scheduledRefresh: providerCatalog[providerId].scheduledRefresh,
-      })),
-    ).toEqual([
-      {
-        providerId: "chatgpt",
-        name: "ChatGPT",
-        origins: ["https://chatgpt.com/*"],
-        permissions: [],
-        connection: { kind: "browser-session" },
-        scheduledRefresh: true,
-      },
-      {
-        providerId: "claude",
-        name: "Claude",
-        origins: ["https://claude.ai/*"],
-        permissions: [],
-        connection: { kind: "browser-session" },
-        scheduledRefresh: true,
-      },
-      {
-        providerId: "kimi",
-        name: "Kimi",
-        origins: ["https://www.kimi.com/*"],
-        permissions: ["cookies", "scripting"],
-        connection: { kind: "browser-session" },
-        scheduledRefresh: true,
-      },
-      {
-        providerId: "cursor",
-        name: "Cursor",
-        origins: ["https://cursor.com/*"],
-        permissions: [],
-        connection: { kind: "browser-session" },
-        scheduledRefresh: true,
-      },
-      {
-        providerId: "elevenlabs",
-        name: "ElevenLabs",
-        origins: ["https://api.elevenlabs.io/*"],
-        permissions: [],
-        connection: {
-          kind: "api-key",
-          origin: "static",
-          setupUrl: "https://elevenlabs.io/app/developers/api-keys",
-        },
-        scheduledRefresh: true,
-      },
-      {
-        providerId: "newapi",
-        name: "New API",
-        origins: [
-          "https://*/*",
-          "http://localhost/*",
-          "http://127.0.0.1/*",
-        ],
-        permissions: [],
-        connection: { kind: "api-key", origin: "dynamic" },
-        scheduledRefresh: true,
-      },
-    ]);
-  });
-
   test("keeps registry and runtime commands catalog-complete", () => {
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
     expect(
@@ -221,13 +116,8 @@ describe("provider catalog", () => {
     ).toEqual(providerKinds);
     expect(
       providerKinds.every((providerKind) =>
-        providerCatalog[providerKind].connection.kind === "browser-session"
+        isApiKeyProviderKind(providerKind)
           ? isRuntimeCommand({
-              type: "CONNECT_BROWSER_PROVIDER",
-              providerKind,
-              permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
-            })
-          : isRuntimeCommand({
               type: "CONNECT_API_KEY_PROVIDER",
               providerKind,
               config:
@@ -238,6 +128,11 @@ describe("provider catalog", () => {
                     }
                   : { kind: "fixed" },
               apiKey: "candidate",
+              permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
+            })
+          : isRuntimeCommand({
+              type: "CONNECT_BROWSER_PROVIDER",
+              providerKind,
               permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
             }),
       ),
@@ -257,35 +152,5 @@ describe("provider catalog", () => {
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);
-  });
-
-  test("keeps optional origins exact so shared access can be revoked safely", () => {
-    expect(() =>
-      assertProviderCatalogPermissionSafety(providerCatalog),
-    ).not.toThrow();
-
-    expect(() =>
-      assertProviderCatalogPermissionSafety({
-        sample: {
-          optionalOrigins: ["https://*.example.com/*"],
-        },
-      }),
-    ).toThrow(/exact HTTPS host/);
-
-    expect(() =>
-      assertProviderCatalogPermissionSafety({
-        sample: {
-          optionalOrigins: ["https://example.com?scope=all/*"],
-        },
-      }),
-    ).toThrow(/exact HTTPS host/);
-
-    expect(() =>
-      assertProviderCatalogPermissionSafety({
-        sample: {
-          optionalOrigins: ["https://example.com:8443/*"],
-        },
-      }),
-    ).toThrow(/exact HTTPS host/);
   });
 });

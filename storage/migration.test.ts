@@ -276,6 +276,101 @@ describe("published 0.2.3 storage migration", () => {
     ]));
   });
 
+  test("maps every released V4 provider-specific metric and group shape exactly", () => {
+    const result = migrateLegacyStorage(
+      legacyInput({
+        aiLimitsState: releasedState([
+          releasedProvider("chatgpt", {
+            credits: [{ id: "credits", label: "Credits", unit: "credits", remaining: 9, limit: 20 }],
+          }),
+          releasedProvider("claude", {
+            credits: [{ id: "extra", label: "Extra usage", unit: "USD", used: 4, limit: 10 }],
+          }),
+          releasedProvider("kimi", {
+            windows: [releasedQuotaWindow({
+              id: "coding",
+              label: "Coding usage",
+              segments: [
+                { id: "chat", label: "Chat", usedRatio: 0.15 },
+                { id: "agent", label: "Agent", usedRatio: 0.25 },
+              ],
+            })],
+          }),
+          releasedProvider("cursor", {
+            windows: [releasedQuotaWindow({ id: "models", label: "Model usage", kind: "model" })],
+          }),
+          releasedProvider("elevenlabs", {
+            windows: [
+              releasedQuotaWindow({ id: "monthly-credits", label: "Monthly credits", kind: "calendar", used: 25, limit: 100, unit: "credits" }),
+              releasedQuotaWindow({ id: "voice-slots", label: "Voice slots", kind: "feature", used: 2, limit: 10, unit: "voices" }),
+            ],
+            usageGroups: [{ id: "voices", label: "Voices", windowIds: ["monthly-credits", "voice-slots"], creditIds: [] }],
+          }),
+          releasedProvider("newapi", {
+            credits: [{ id: "consumed", label: "Consumed", unit: "quota units", used: 42, limit: 100 }],
+            usageGroups: [{ id: "relay", label: "Relay", windowIds: ["weekly"], creditIds: ["consumed"] }],
+          }),
+        ]),
+        aiLimitsCredentials: {
+          version: 1,
+          providers: {
+            elevenlabs: { kind: "api-key", value: "eleven-secret", status: "active", revision: "eleven-v4" },
+            newapi: { kind: "api-key", value: "relay-secret", baseUrl: "https://relay.example/v1", status: "active", revision: "relay-v4" },
+          },
+        },
+      }),
+      now,
+      {
+        origins: [
+          "https://chatgpt.com/*",
+          "https://claude.ai/*",
+          "https://www.kimi.com/*",
+          "https://cursor.com/*",
+          "https://api.elevenlabs.io/*",
+          "https://relay.example/*",
+        ],
+        permissions: ["cookies", "scripting"],
+      },
+    );
+
+    expect(result.state.instances.map(({ providerKind }) => providerKind)).toEqual([
+      "chatgpt", "claude", "kimi", "cursor", "elevenlabs", "newapi",
+    ]);
+    const metrics = Object.fromEntries(result.state.instances.map((instance) => [
+      instance.providerKind,
+      instance.snapshot?.metrics,
+    ]));
+    expect(metrics.chatgpt).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "balance", id: "credits", value: 9, initialLimit: 20 }),
+    ]));
+    expect(metrics.claude).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "counter", semantic: "spent", id: "extra", value: 4 }),
+    ]));
+    expect(metrics.kimi).toEqual([
+      expect.objectContaining({
+        id: "coding",
+        segments: [
+          { id: "chat", label: "Chat", usedRatio: 0.15 },
+          { id: "agent", label: "Agent", usedRatio: 0.25 },
+        ],
+      }),
+    ]);
+    expect(metrics.cursor).toEqual([
+      expect.objectContaining({ id: "models", scope: "model", cycle: expect.objectContaining({ cadence: "calendar" }) }),
+    ]);
+    expect(metrics.elevenlabs).toEqual([
+      expect.objectContaining({ id: "monthly-credits", scope: "product" }),
+      expect.objectContaining({ id: "voice-slots", scope: "feature" }),
+    ]);
+    expect(metrics.newapi).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "counter", semantic: "consumed", id: "consumed", value: 42 }),
+    ]));
+    expect(result.state.instances.find(({ providerKind }) => providerKind === "elevenlabs")?.snapshot?.usageGroups)
+      .toEqual([{ id: "voices", label: "Voices", metricIds: ["monthly-credits", "voice-slots"] }]);
+    expect(result.state.instances.find(({ providerKind }) => providerKind === "newapi")?.snapshot?.usageGroups)
+      .toEqual([{ id: "relay", label: "Relay", metricIds: ["weekly", "consumed"] }]);
+  });
+
   test("suppression wins over data, credentials, and granted permission", () => {
     const result = migrateLegacyStorage(
       legacyInput({
@@ -579,29 +674,33 @@ describe("published 0.2.3 storage migration", () => {
     expect(result.credentialState).toEqual({ version: 2, credentials: {} });
   });
 
-  test("adds a missing V5 binding but preserves an existing mismatch to fail closed", () => {
-    const result = migrateLegacyStorage(
-      {
+  test.each([
+    ["missing", undefined],
+    ["malformed", " malformed binding "],
+    ["mismatched", "old-connection-revision"],
+  ])(
+    "quarantines a credential for an existing V5 %s binding without erasing nonsecret instance data",
+    (_name, connectionRevision) => {
+      const input = {
         aiLimitsState: {
           version: 5,
-          preferences: { displayMode: "used", autoRefresh: true },
+          preferences: { displayMode: "used" as const, autoRefresh: true },
           instances: [
             {
               id: "newapi:default",
               providerKind: "newapi",
               config: { kind: "dynamic-origin", baseUrl: "https://old.example" },
-              access: "granted",
+              access: "granted" as const,
               createdAt: now,
-              history: [],
-              connectionRevision: "old-connection-revision",
-            },
-            {
-              id: "elevenlabs:default",
-              providerKind: "elevenlabs",
-              config: { kind: "fixed" },
-              access: "granted",
-              createdAt: now,
-              history: [],
+              history: [
+                {
+                  observedAt: now - hour,
+                  metrics: [
+                    { type: "quota" as const, metricId: "weekly", usedRatio: 0.4 },
+                  ],
+                },
+              ],
+              ...(connectionRevision === undefined ? {} : { connectionRevision }),
             },
           ],
         },
@@ -614,6 +713,59 @@ describe("published 0.2.3 storage migration", () => {
               status: "active",
               revision: "replacement-revision",
             },
+          },
+        },
+      };
+
+      const first = migrateLegacyStorage(input, now, {});
+      const second = migrateLegacyStorage(
+        {
+          aiLimitsState: first.state,
+          aiLimitsCredentials: first.credentialState,
+        },
+        now + day,
+        {},
+      );
+
+      expect(first.state.instances).toEqual([
+        expect.objectContaining({
+          id: "newapi:default",
+          config: { kind: "dynamic-origin", baseUrl: "https://old.example" },
+          history: [expect.objectContaining({ observedAt: now - hour })],
+        }),
+      ]);
+      expect(first.state.instances[0]).toEqual(
+        connectionRevision === "old-connection-revision"
+          ? expect.objectContaining({ connectionRevision })
+          : expect.not.objectContaining({ connectionRevision: expect.anything() }),
+      );
+      expect(first.credentialState).toEqual({ version: 2, credentials: {} });
+      expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+      expect(JSON.stringify(first.state)).not.toContain("replacement-secret");
+    },
+  );
+
+  test("retains only an exactly bound existing V5 credential", () => {
+    const result = migrateLegacyStorage(
+      {
+        aiLimitsState: {
+          version: 5,
+          preferences: { displayMode: "used", autoRefresh: true },
+          instances: [
+            {
+              id: "elevenlabs:default",
+              providerKind: "elevenlabs",
+              config: { kind: "fixed" },
+              access: "granted",
+              createdAt: now,
+              history: [],
+              connectionRevision: "existing-revision",
+            },
+          ],
+        },
+        aiLimitsCredentials: {
+          version: 2,
+          credentials: {
             "elevenlabs:default": {
               kind: "api-key",
               value: "existing-secret",
@@ -627,16 +779,8 @@ describe("published 0.2.3 storage migration", () => {
       {},
     );
 
-    expect(result.state.instances).toEqual([
-      expect.objectContaining({
-        id: "newapi:default",
-        connectionRevision: "old-connection-revision",
-      }),
-      expect.objectContaining({
-        id: "elevenlabs:default",
-        connectionRevision: "existing-revision",
-      }),
-    ]);
+    expect(result.credentialState.credentials["elevenlabs:default"])
+      .toMatchObject({ revision: "existing-revision", value: "existing-secret" });
   });
 });
 

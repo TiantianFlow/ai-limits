@@ -4,7 +4,7 @@ import {
   isProviderKind,
   providerPresentation,
   type ProviderKind,
-} from "../../../providers/catalog";
+} from "../../../domain/public-protocol";
 
 export interface ProviderMarkProps {
   providerId: ProviderKind;

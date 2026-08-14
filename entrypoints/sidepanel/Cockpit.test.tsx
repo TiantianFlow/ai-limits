@@ -51,6 +51,7 @@ function toInstance(
 function toViewState(state: AppViewState): AppViewState {
   return {
     preferences: state.preferences,
+    providers: state.providers,
     instances: state.instances.map(toInstance),
   };
 }
@@ -164,6 +165,7 @@ function twoNewApiInstances(): AppViewState {
   ];
   return {
     preferences: { displayMode: "used", autoRefresh: true },
+    providers: createEmptyFixtureState().providers,
     instances: [
       {
         id: PERSONAL_NEW_API_ID,
@@ -1348,6 +1350,7 @@ describe("Cockpit", () => {
   it("keeps an ungranted singleton available until it is connected", () => {
     const state: AppViewState = {
       preferences: { displayMode: "used", autoRefresh: true },
+      providers: createEmptyFixtureState().providers,
       instances: [
         {
           id: "chatgpt:default",
@@ -1505,7 +1508,7 @@ describe("Cockpit", () => {
       expect(onSubmitApiKey).toHaveBeenCalledWith(
         "newapi",
         "sk-test",
-        "https://api.example.com/gateway",
+        "https://api.example.com/gateway/v1/messages",
       ),
     );
     expect(

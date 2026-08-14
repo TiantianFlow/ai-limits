@@ -35,6 +35,7 @@ describe("public app view state", () => {
 
     expect(view).toEqual({
       preferences: { displayMode: "left", autoRefresh: false },
+      providers: view.providers,
       instances: [
         {
           id: "newapi:550e8400-e29b-41d4-a716-446655440000",
@@ -48,6 +49,14 @@ describe("public app view state", () => {
         },
       ],
     });
+    expect(view.providers).toEqual(expect.arrayContaining([
+      {
+        providerKind: "newapi",
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+      },
+    ]));
     const serialized = JSON.stringify(view);
     for (const secret of [
       "must-not-escape",
@@ -58,10 +67,10 @@ describe("public app view state", () => {
       "vault-secret",
       "rawMigrationState",
       "repository",
-      "config",
     ]) {
       expect(serialized).not.toContain(secret);
     }
+    expect(serialized).not.toContain('"config":');
   });
 
   test("copies only normalized metric, history, and attempt view data", () => {

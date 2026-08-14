@@ -1,6 +1,7 @@
 import type {
   InstanceAppState,
 } from "../domain/model";
+import { providerKinds, providerRegistry } from "../providers/registry";
 import type {
   AppViewState,
   ProviderInstanceView,
@@ -159,6 +160,7 @@ function projectAttempt(attempt: ProviderAttempt): ProviderAttempt {
               kind: "failure",
               category: outcome.category,
               ...(outcome.message === undefined ? {} : { message: outcome.message }),
+              ...(outcome.guidance === undefined ? {} : { guidance: outcome.guidance }),
               ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
             },
   };
@@ -170,6 +172,18 @@ export function projectAppViewState(state: InstanceAppState): AppViewState {
       displayMode: state.preferences.displayMode,
       autoRefresh: state.preferences.autoRefresh,
     },
+    providers: providerKinds.map((providerKind) => {
+      const provider = providerRegistry[providerKind];
+      return {
+        providerKind,
+        cardinality: provider.cardinality,
+        credentialKind: provider.credentialKind,
+        configKind: provider.configKind,
+        ...(provider.failureGuidance?.retry_session === undefined
+          ? {}
+          : { recoveryGuidance: provider.failureGuidance.retry_session }),
+      };
+    }),
     instances: state.instances.map((instance) => ({
       id: instance.id,
       providerKind: instance.providerKind,

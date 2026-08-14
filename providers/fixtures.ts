@@ -7,6 +7,21 @@ import type {
   AppViewState,
   ProviderInstanceView,
 } from "../domain/public-protocol";
+import { providerDefinitions } from "./definitions";
+import { kimiPackage } from "./kimi/package";
+
+const fixtureProviderAvailability = Object.entries(providerDefinitions).map(
+  ([providerKind, definition]) => ({
+    providerKind: providerKind as keyof typeof providerDefinitions,
+    cardinality: definition.cardinality,
+    credentialKind: definition.credentialKind,
+    configKind: definition.configKind,
+    ...(providerKind === "kimi" &&
+    kimiPackage.failureGuidance?.retry_session !== undefined
+      ? { recoveryGuidance: kimiPackage.failureGuidance.retry_session }
+      : {}),
+  }),
+);
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -181,6 +196,7 @@ export function createFixtureState(
 
   return {
     preferences: { displayMode: "used", autoRefresh: true },
+    providers: fixtureProviderAvailability,
     instances,
   };
 }
@@ -188,6 +204,7 @@ export function createFixtureState(
 export function createEmptyFixtureState(): AppViewState {
   return {
     preferences: { displayMode: "used", autoRefresh: true },
+    providers: fixtureProviderAvailability,
     instances: [],
   };
 }

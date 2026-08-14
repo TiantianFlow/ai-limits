@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-import { normalizeNewApiBaseUrl } from "../../../providers/newapi/url";
+import { normalizeDynamicOriginBaseUrlIntent } from "../../../domain/public-protocol";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
 import type { ApiKeyConnectAttemptResult } from "./ApiKeyConnectView";
@@ -46,7 +46,7 @@ export function NewApiConnectView({
   const [apiKey, setApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const normalizedBaseUrl = normalizeNewApiBaseUrl(baseUrl);
+  const normalizedBaseUrl = normalizeDynamicOriginBaseUrlIntent(baseUrl);
   const replace = mode === "replace";
   const title = replace ? "Replace New API connection" : "Connect New API";
   const submitLabel = replace ? "Validate & replace" : "Validate & connect";

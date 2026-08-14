@@ -8,30 +8,21 @@ import {
   parseDisconnectResponse,
   parsePermissionIntentResponse,
   parseRefreshResponse,
-  type AppViewState,
-  type PermissionIntentResponse,
-  type ProviderOperation,
-  type RuntimeCommand,
-} from "../../domain/public-protocol";
-import {
-  type ProviderInstanceConfig,
-  type ProviderInstanceId,
-} from "../../domain/model";
-import type {
-  DisplayMode,
-  RefreshReport,
-} from "../../domain/model";
-import {
   isApiKeyProviderKind,
+  providerNames,
+  providerPresentation,
+  type AppViewState,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
+  type DisplayMode,
+  type PermissionIntentResponse,
+  type ProviderInstanceConfig,
+  type ProviderInstanceId,
   type ProviderKind,
-  providerCatalog,
-  providerNames,
-} from "../../providers/catalog";
-import {
-  normalizeProviderConfig,
-} from "../../providers/package-factories";
+  type ProviderOperation,
+  type RefreshReport,
+  type RuntimeCommand,
+} from "../../domain/public-protocol";
 import { Cockpit } from "./Cockpit";
 import type { ApiKeySubmission } from "./Cockpit";
 import { instanceLabels } from "./instance-label";
@@ -331,13 +322,12 @@ export function App() {
   const handleConnectProvider = async (providerKind: ProviderKind) => {
     if (isApiKeyProviderKind(providerKind)) return;
     clearAnnouncement();
-    const config = normalizeProviderConfig(providerKind, { kind: "fixed" });
+    const config = { kind: "fixed" } as const;
     const existingInstanceId = viewStateRef.current?.instances.find(
       (instance) => instance.providerKind === providerKind,
     )?.id;
     let prepared: PermissionIntentResponse;
     try {
-      if (!config) throw new Error("Invalid provider config");
       prepared = await preparePermission(providerKind, config, existingInstanceId);
     } catch {
       announce(`Couldn’t connect ${providerNames[providerKind]}. Reload AI Limits and try again.`);
@@ -378,9 +368,9 @@ export function App() {
   };
 
   const handleOpenApiKeySetup = (providerKind: ApiKeyProviderKind) => {
-    const connection = providerCatalog[providerKind].connection;
-    if (connection.origin !== "static") return;
-    void browser.tabs.create({ url: connection.setupUrl }).catch(() => {
+    const setupUrl = providerPresentation(providerKind).apiKeySetupUrl;
+    if (!setupUrl) return;
+    void browser.tabs.create({ url: setupUrl }).catch(() => {
       announce("Couldn’t open the ElevenLabs API keys page. Try the link again.");
     });
   };
@@ -399,13 +389,9 @@ export function App() {
       (instanceId
         ? presentationLabel(viewStateRef.current, instanceId)
         : userLabel?.trim()) || providerNames[providerKind];
-    const config = normalizeProviderConfig(
-      providerKind,
-      providerKind === "newapi"
-        ? { kind: "dynamic-origin", baseUrl }
-        : { kind: "fixed" },
-    );
-    if (!config) return "invalid_site";
+    const config: ProviderInstanceConfig = providerKind === "newapi"
+      ? { kind: "dynamic-origin", baseUrl: baseUrl ?? "" }
+      : { kind: "fixed" };
     clearAnnouncement();
     let prepared: PermissionIntentResponse;
     try {
@@ -442,7 +428,7 @@ export function App() {
           providerKind,
           instanceId: prepared.instanceId,
           ...(userLabel !== undefined ? { userLabel } : {}),
-          config,
+          config: prepared.config,
           apiKey,
           permissionIntentId: prepared.permissionIntentId,
         } satisfies RuntimeCommand),

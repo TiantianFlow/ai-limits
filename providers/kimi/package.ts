@@ -1,4 +1,3 @@
-import { KIMI_RECOVERY_GUIDANCE } from "../../domain/model";
 import type {
   ProviderInstanceConfig,
   ProviderInstanceId,
@@ -10,6 +9,7 @@ import type {
   ProviderPackage,
   ProviderRuntimeServices,
 } from "../types";
+import { providerDefinitions } from "../definitions";
 import {
   kimiAdapter,
   retryKimiAdapterAfterChangedToken,
@@ -23,7 +23,7 @@ import {
 } from "./session-recovery";
 
 const KIMI_URL = "https://www.kimi.com/";
-const KIMI_ORIGIN_PATTERN = "https://www.kimi.com/*";
+const KIMI_ORIGIN_PATTERN = providerDefinitions.kimi.optionalOrigins[0];
 
 interface KimiPackageDependencies {
   adapter: ProviderCollector<"kimi">;
@@ -69,7 +69,7 @@ function recoveryFailure(): CollectionResult {
     ok: false,
     health: {
       kind: "temporary_error",
-      message: KIMI_RECOVERY_GUIDANCE,
+      guidance: "retry_session",
     },
   };
 }
@@ -111,14 +111,19 @@ export function createKimiPackage(
 
   return {
     kind: "kimi",
-    cardinality: "single",
-    credentialKind: "none",
+    cardinality: providerDefinitions.kimi.cardinality,
+    credentialKind: providerDefinitions.kimi.credentialKind,
+    configKind: providerDefinitions.kimi.configKind,
+    failureGuidance: {
+      retry_session:
+        "Kimi was still starting. Try Refresh once more, or open or reload Kimi.",
+    },
     normalizeConfig: fixedConfig,
     requiredPermissions: (config) =>
       fixedConfig(config)
         ? {
             origins: [KIMI_ORIGIN_PATTERN],
-            permissions: ["cookies", "scripting"],
+            permissions: [...providerDefinitions.kimi.optionalPermissions],
           }
         : undefined,
     async startup(): Promise<void> {

@@ -1,17 +1,15 @@
 import React from "react";
 
 import type {
-  ProviderInstanceView,
-  ProviderOperation,
-} from "../../../domain/public-protocol";
-import type {
   DisplayMode,
+  PaceKind,
+  ProviderInstanceView,
+  ProviderInstanceId,
+  ProviderKind,
+  ProviderOperation,
   QuotaMetric,
   UsageHistoryObservation,
-} from "../../../domain/model";
-import type { ProviderInstanceId } from "../../../domain/model";
-import type { ProviderKind } from "../../../providers/catalog";
-import type { PaceKind } from "../../../domain/quota";
+} from "../../../domain/public-protocol";
 import { Icon, type IconName } from "./Icon";
 import { InteractionBanner } from "./InteractionBanner";
 import { ProviderMark } from "./ProviderMark";

@@ -1,5 +1,6 @@
 import type {
   DeferredReason,
+  FailureGuidance,
   ProviderHealth,
   UsageSnapshot,
 } from "../domain/model";
@@ -7,7 +8,7 @@ import type {
   ProviderInstanceConfig,
   ProviderInstanceRecord,
 } from "../domain/model";
-import type { ProviderKind } from "./catalog";
+import type { ProviderKind } from "../domain/provider-kind";
 
 export interface ProviderCredential {
   kind: "api-key";
@@ -47,6 +48,8 @@ export interface ProviderPackage {
   readonly kind: ProviderKind;
   readonly cardinality: "single" | "multiple";
   readonly credentialKind: "none" | "api-key";
+  readonly configKind: ProviderInstanceConfig["kind"];
+  readonly failureGuidance?: Partial<Record<FailureGuidance, string>>;
   normalizeConfig(value: unknown): ProviderInstanceConfig | undefined;
   requiredPermissions(
     config: ProviderInstanceConfig,

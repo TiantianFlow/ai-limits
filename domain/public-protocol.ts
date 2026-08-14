@@ -3,10 +3,33 @@ import {
   type ProviderInstanceConfig,
   type ProviderInstanceId,
 } from "./model";
+export type {
+  BalanceMetric,
+  CounterMetric,
+  DisplayMode,
+  MetricCycle,
+  MetricHistorySample,
+  ProviderAttempt,
+  ProviderInstanceConfig,
+  ProviderInstanceId,
+  ProviderRefreshOutcome,
+  QuotaMetric,
+  RefreshReport,
+  UsageGroup,
+  UsageHistoryObservation,
+  UsageMetric,
+  UsageSnapshot,
+} from "./model";
+export { sanitizedFailureMessage } from "./model";
+export { quotaHistorySegments } from "./history";
+export type { MetricHistoryPoint } from "./history";
+export { displayRatio, elapsedRatio, paceStatus } from "./quota";
+export type { PaceKind, PaceStatus } from "./quota";
 import type {
   DeferredReason,
   DisplayMode,
   FailureCategory,
+  FailureGuidance,
   MetricCycle,
   MetricHistorySample,
   ProviderAttempt,
@@ -21,11 +44,33 @@ import type {
 import {
   isApiKeyProviderKind,
   isProviderKind,
+  providerKinds,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
   type ProviderKind,
-} from "../providers/catalog";
-import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
+} from "./provider-kind";
+export {
+  isApiKeyProviderKind,
+  isProviderKind,
+  providerKinds,
+  type ApiKeyProviderKind,
+  type BrowserSessionProviderKind,
+  type ProviderKind,
+} from "./provider-kind";
+export {
+  providerCatalog,
+  providerNames,
+  providerPresentation,
+  type ProviderPresentation,
+} from "./provider-presentation";
+
+export interface ProviderAvailabilityView {
+  providerKind: ProviderKind;
+  cardinality: "single" | "multiple";
+  credentialKind: "none" | "api-key";
+  configKind: ProviderInstanceConfig["kind"];
+  recoveryGuidance?: string;
+}
 
 export type ApiKeyConnectionStatus =
   | "connected"
@@ -63,7 +108,32 @@ export interface AppViewState {
     displayMode: DisplayMode;
     autoRefresh: boolean;
   };
+  providers: ProviderAvailabilityView[];
   instances: ProviderInstanceView[];
+}
+
+export function providerAvailability(
+  state: AppViewState,
+  providerKind: ProviderKind,
+): ProviderAvailabilityView {
+  const availability = state.providers.find(
+    (provider) => provider.providerKind === providerKind,
+  );
+  if (!availability) throw new Error("Missing provider availability");
+  return availability;
+}
+
+export function canCreateProviderInstance(
+  state: AppViewState,
+  providerKind: ProviderKind,
+): boolean {
+  return (
+    providerAvailability(state, providerKind).cardinality === "multiple" ||
+    !state.instances.some(
+      (instance) =>
+        instance.providerKind === providerKind && instance.access === "granted",
+    )
+  );
 }
 
 export interface ConnectApiKeyProviderCommand {
@@ -152,6 +222,7 @@ export interface PermissionIntentResponse {
   state: AppViewState;
   permissionIntentId: string;
   instanceId: ProviderInstanceId;
+  config: ProviderInstanceConfig;
   permissions: Browser.permissions.Permissions;
 }
 
@@ -484,6 +555,7 @@ const failureCategories = new Set<FailureCategory>([
   "provider_changed",
   "temporary_error",
 ]);
+const failureGuidance = new Set<FailureGuidance>(["retry_session"]);
 
 function isAttemptOutcome(value: unknown): boolean {
   if (!isRecord(value)) return false;
@@ -497,9 +569,11 @@ function isAttemptOutcome(value: unknown): boolean {
   }
   return (
     value.kind === "failure" &&
-    hasExactKeys(value, ["kind", "category"], ["message", "retryAt"]) &&
+    hasExactKeys(value, ["kind", "category"], ["message", "guidance", "retryAt"]) &&
     failureCategories.has(value.category as FailureCategory) &&
     (value.message === undefined || isSafeText(value.message, 1_024)) &&
+    (value.guidance === undefined ||
+      failureGuidance.has(value.guidance as FailureGuidance)) &&
     isOptionalFiniteNumber(value.retryAt)
   );
 }
@@ -533,13 +607,43 @@ function copyAttempt(attempt: ProviderAttempt): ProviderAttempt {
               kind: "failure",
               category: outcome.category,
               ...(outcome.message === undefined ? {} : { message: outcome.message }),
+              ...(outcome.guidance === undefined ? {} : { guidance: outcome.guidance }),
               ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
             },
   };
 }
 
+export function normalizeDynamicOriginBaseUrlIntent(
+  value: unknown,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 2_048) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    const localHttp =
+      parsed.protocol === "http:" &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+    if (
+      (parsed.protocol !== "https:" && !localHttp) ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      parsed.hostname.includes("*")
+    ) {
+      return undefined;
+    }
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin}${pathname === "" ? "" : pathname}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function isNormalizedBaseUrl(value: unknown): value is string {
-  return typeof value === "string" && normalizeNewApiBaseUrl(value) === value;
+  return (
+    typeof value === "string" &&
+    normalizeDynamicOriginBaseUrlIntent(value) === value
+  );
 }
 
 function isNormalizedOrigin(value: unknown): value is string {
@@ -557,6 +661,26 @@ function isNormalizedOrigin(value: unknown): value is string {
   } catch {
     return false;
   }
+}
+
+function isPublicProviderConfig(
+  value: unknown,
+): value is ProviderInstanceConfig {
+  return (
+    hasExactKeys(value, ["kind"]) && value.kind === "fixed"
+  ) || (
+    hasExactKeys(value, ["kind", "baseUrl"]) &&
+    value.kind === "dynamic-origin" &&
+    isNormalizedBaseUrl(value.baseUrl)
+  );
+}
+
+function copyPublicProviderConfig(
+  value: ProviderInstanceConfig,
+): ProviderInstanceConfig {
+  return value.kind === "fixed"
+    ? { kind: "fixed" }
+    : { kind: "dynamic-origin", baseUrl: value.baseUrl };
 }
 
 function parseProviderInstanceView(value: unknown): ProviderInstanceView {
@@ -600,13 +724,42 @@ function parseProviderInstanceView(value: unknown): ProviderInstanceView {
   };
 }
 
+function parseProviderAvailability(value: unknown): ProviderAvailabilityView {
+  if (
+    !hasExactKeys(value, [
+      "providerKind",
+      "cardinality",
+      "credentialKind",
+      "configKind",
+    ], ["recoveryGuidance"]) ||
+    !isProviderKind(value.providerKind) ||
+    (value.cardinality !== "single" && value.cardinality !== "multiple") ||
+    (value.credentialKind !== "none" && value.credentialKind !== "api-key") ||
+    (value.configKind !== "fixed" && value.configKind !== "dynamic-origin") ||
+    (value.recoveryGuidance !== undefined &&
+      !isSafeText(value.recoveryGuidance, 1_024))
+  ) {
+    throw new Error("Missing application state");
+  }
+  return {
+    providerKind: value.providerKind,
+    cardinality: value.cardinality,
+    credentialKind: value.credentialKind,
+    configKind: value.configKind,
+    ...(value.recoveryGuidance === undefined
+      ? {}
+      : { recoveryGuidance: value.recoveryGuidance }),
+  };
+}
+
 export function parseAppViewState(value: unknown): AppViewState {
   if (
-    !hasExactKeys(value, ["preferences", "instances"]) ||
+    !hasExactKeys(value, ["preferences", "providers", "instances"]) ||
     !hasExactKeys(value.preferences, ["displayMode", "autoRefresh"]) ||
     (value.preferences.displayMode !== "used" &&
       value.preferences.displayMode !== "left") ||
     typeof value.preferences.autoRefresh !== "boolean" ||
+    !Array.isArray(value.providers) ||
     !Array.isArray(value.instances)
   ) {
     throw new Error("Missing application state");
@@ -616,8 +769,20 @@ export function parseAppViewState(value: unknown): AppViewState {
       displayMode: value.preferences.displayMode,
       autoRefresh: value.preferences.autoRefresh,
     },
+    providers: value.providers.map(parseProviderAvailability),
     instances: value.instances.map(parseProviderInstanceView),
   };
+  if (
+    state.providers.length !== providerKinds.length ||
+    providerKinds.some(
+      (providerKind) =>
+        state.providers.filter(
+          (provider) => provider.providerKind === providerKind,
+        ).length !== 1,
+    )
+  ) {
+    throw new Error("Missing application state");
+  }
   const ids = new Set<ProviderInstanceId>();
   for (const instance of state.instances) {
     if (ids.has(instance.id) || !instance.id.startsWith(`${instance.providerKind}:`)) {
@@ -658,9 +823,11 @@ function isProviderRefreshOutcome(
   }
   if (value.kind === "failure") {
     return (
-      hasExactKeys(value, ["kind", "category"], ["message", "retryAt"]) &&
+      hasExactKeys(value, ["kind", "category"], ["message", "guidance", "retryAt"]) &&
       failureCategories.has(value.category as FailureCategory) &&
       (value.message === undefined || isSafeText(value.message, 1_024)) &&
+      (value.guidance === undefined ||
+        failureGuidance.has(value.guidance as FailureGuidance)) &&
       isOptionalFiniteNumber(value.retryAt)
     );
   }
@@ -689,6 +856,7 @@ function copyRefreshOutcome(outcome: ProviderRefreshOutcome): ProviderRefreshOut
       kind: "failure",
       category: outcome.category,
       ...(outcome.message === undefined ? {} : { message: outcome.message }),
+      ...(outcome.guidance === undefined ? {} : { guidance: outcome.guidance }),
       ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
     };
   }
@@ -804,9 +972,10 @@ export function parsePermissionIntentResponse(
   value: unknown,
 ): PermissionIntentResponse {
   if (
-    !hasExactKeys(value, ["state", "permissionIntentId", "instanceId", "permissions"]) ||
+    !hasExactKeys(value, ["state", "permissionIntentId", "instanceId", "config", "permissions"]) ||
     !isPermissionIntentId(value.permissionIntentId) ||
     !isProviderInstanceId(value.instanceId) ||
+    !isPublicProviderConfig(value.config) ||
     !hasExactKeys(value.permissions, [], ["origins", "permissions"]) ||
     (value.permissions.origins !== undefined &&
       (!Array.isArray(value.permissions.origins) ||
@@ -821,6 +990,7 @@ export function parsePermissionIntentResponse(
     state: parseAppViewState(value.state),
     permissionIntentId: value.permissionIntentId,
     instanceId: value.instanceId,
+    config: copyPublicProviderConfig(value.config),
     permissions: {
       ...(value.permissions.origins === undefined
         ? {}

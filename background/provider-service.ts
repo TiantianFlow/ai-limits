@@ -87,6 +87,7 @@ export interface PrepareProviderPermissionRequest {
 export interface PrepareProviderPermissionResult {
   permissionIntentId: string;
   instanceId: ProviderInstanceId;
+  config: ProviderInstanceConfig;
   permissions: Browser.permissions.Permissions;
 }
 
@@ -290,6 +291,7 @@ export function createProviderService(
       return {
         permissionIntentId: intent.id,
         instanceId: candidate.id,
+        config: candidate.config,
         permissions: permissions ?? {},
       };
     });

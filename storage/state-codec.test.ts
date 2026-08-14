@@ -207,6 +207,7 @@ describe("V5 instance state codec", () => {
           kind: "failure",
           category: "credential_invalid",
           message: "provider response synthetic-secret",
+          guidance: "retry_session",
         },
       },
     };
@@ -221,10 +222,35 @@ describe("V5 instance state codec", () => {
       kind: "failure",
       category: "credential_invalid",
       message: "The API key is invalid. Enter a valid key and try again.",
+      guidance: "retry_session",
     });
     expect(JSON.stringify(state)).not.toMatch(
       /synthetic-secret|apiKey|\"credential\"/,
     );
+  });
+
+  test("rejects injected failure guidance instead of persisting provider copy", () => {
+    const instance = {
+      ...newApiInstance("newapi:default", "Personal relay"),
+      lastAttempt: {
+        trigger: "manual_provider",
+        startedAt: now - 1_000,
+        finishedAt: now,
+        outcome: {
+          kind: "failure",
+          category: "temporary_error",
+          guidance: "<img src=x onerror=synthetic-secret>",
+        },
+      },
+    };
+
+    const state = normalizeInstanceAppState(
+      { version: 5, preferences: {}, instances: [instance] },
+      now,
+    );
+
+    expect(state.instances[0]).not.toHaveProperty("lastAttempt");
+    expect(JSON.stringify(state)).not.toContain("synthetic-secret");
   });
 
   test("rejects duplicate metric IDs in history and prunes retention on startup", () => {

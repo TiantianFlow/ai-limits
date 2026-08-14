@@ -1,6 +1,8 @@
-import type { ProviderInstanceView } from "../../domain/public-protocol";
-import { providerNames } from "../../providers/catalog";
-import type { ProviderInstanceId } from "../../domain/model";
+import {
+  providerNames,
+  type ProviderInstanceId,
+  type ProviderInstanceView,
+} from "../../domain/public-protocol";
 
 function nonBlank(value: string | undefined): string | undefined {
   const trimmed = value?.trim();

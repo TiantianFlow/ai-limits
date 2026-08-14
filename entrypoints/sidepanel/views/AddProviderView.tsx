@@ -1,12 +1,15 @@
 import React from "react";
 
-import type { ProviderOperation } from "../../../domain/public-protocol";
-import type { ProviderKind } from "../../../providers/catalog";
+import type { ProviderKind, ProviderOperation } from "../../../domain/public-protocol";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderConnectRow } from "../components/ProviderConnectRow";
 
 export interface AddProviderViewProps {
-  providers: Array<{ providerKind: ProviderKind; operation?: ProviderOperation }>;
+  providers: Array<{
+    providerKind: ProviderKind;
+    credentialKind: "none" | "api-key";
+    operation?: ProviderOperation;
+  }>;
   origin: "overview" | "settings";
   onBack: () => void;
   onConnectProvider: (providerKind: ProviderKind) => void;
@@ -30,10 +33,11 @@ export function AddProviderView({
         <h2 className="section-label">Available · {providers.length}</h2>
         {providers.length ? (
           <div className="provider-list">
-            {providers.map(({ providerKind, operation }) => (
+            {providers.map(({ providerKind, credentialKind, operation }) => (
               <ProviderConnectRow
                 key={providerKind}
                 providerKind={providerKind}
+                credentialKind={credentialKind}
                 operation={operation}
                 onConnect={onConnectProvider}
               />

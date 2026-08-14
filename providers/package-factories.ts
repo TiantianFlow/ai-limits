@@ -2,16 +2,11 @@ import type {
   ProviderInstanceConfig,
   ProviderInstanceRecord,
 } from "../domain/model";
-import {
-  providerCatalog,
-  type ApiKeyProviderKind,
-  type BrowserSessionProviderKind,
-  type ProviderKind,
+import type {
+  ApiKeyProviderKind,
+  BrowserSessionProviderKind,
+  ProviderKind,
 } from "./catalog";
-import {
-  newApiPermissionOrigin,
-  normalizeNewApiBaseUrl,
-} from "./newapi/url";
 import type {
   CollectionContext,
   CollectionResult,
@@ -21,59 +16,23 @@ import type {
   ProviderRuntimeServices,
 } from "./types";
 
-export function normalizeProviderConfig(
-  kind: ProviderKind,
+export function normalizeFixedConfig(
   value: unknown,
 ): ProviderInstanceConfig | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-
-  const connection = providerCatalog[kind].connection;
-  if (connection.kind !== "api-key" || connection.origin !== "dynamic") {
-    return (value as { kind?: unknown }).kind === "fixed"
-      ? { kind: "fixed" }
-      : undefined;
-  }
-
-  if ((value as { kind?: unknown }).kind !== "dynamic-origin") {
-    return undefined;
-  }
-  const baseUrl = normalizeNewApiBaseUrl(
-    (value as { baseUrl?: unknown }).baseUrl,
-  );
-  return baseUrl
-    ? { kind: "dynamic-origin", baseUrl }
-    : undefined;
-}
-
-export function requiredPermissionsForProviderConfig(
-  kind: ProviderKind,
-  config: ProviderInstanceConfig,
-): Browser.permissions.Permissions | undefined {
-  const definition = providerCatalog[kind];
-  const origins =
-    definition.connection.kind === "api-key" &&
-    definition.connection.origin === "dynamic"
-      ? config.kind === "dynamic-origin"
-        ? [newApiPermissionOrigin(config.baseUrl)].filter(
-            (origin): origin is string => origin !== undefined,
-          )
-        : []
-      : [...definition.optionalOrigins];
-  const permissions = [...definition.optionalPermissions];
-  return origins.length || permissions.length
-    ? {
-        ...(origins.length ? { origins } : {}),
-        ...(permissions.length ? { permissions } : {}),
-      }
+  return typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "fixed"
+    ? { kind: "fixed" }
     : undefined;
 }
 
 function matchesPackage(
   kind: ProviderKind,
   instance: ProviderInstanceRecord,
+  normalizeConfig: (value: unknown) => ProviderInstanceConfig | undefined,
 ): ProviderInstanceConfig | undefined {
   if (instance.providerKind !== kind) return undefined;
-  return normalizeProviderConfig(kind, instance.config);
+  return normalizeConfig(instance.config);
 }
 
 function adapterContext(
@@ -91,23 +50,25 @@ export function createBrowserSessionPackage<
 >({
   kind,
   adapter,
+  cardinality,
+  requiredPermissions,
 }: {
   kind: Kind;
   adapter: ProviderCollector<Kind>;
+  cardinality: "single" | "multiple";
+  requiredPermissions: (
+    config: ProviderInstanceConfig,
+  ) => Browser.permissions.Permissions | undefined;
 }): ProviderPackage {
   return {
     kind,
-    cardinality: providerCatalog[kind].cardinality,
+    cardinality,
     credentialKind: "none",
-    normalizeConfig: (value) => normalizeProviderConfig(kind, value),
-    requiredPermissions: (config) => {
-      const normalizedConfig = normalizeProviderConfig(kind, config);
-      return normalizedConfig
-        ? requiredPermissionsForProviderConfig(kind, normalizedConfig)
-        : undefined;
-    },
+    configKind: "fixed",
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions,
     collect(instance, services): Promise<CollectionResult> {
-      if (!matchesPackage(kind, instance)) {
+      if (!matchesPackage(kind, instance, normalizeFixedConfig)) {
         return Promise.resolve({
           ok: false,
           health: { kind: "provider_changed" },
@@ -121,23 +82,29 @@ export function createBrowserSessionPackage<
 export function createApiKeyPackage<Kind extends ApiKeyProviderKind>({
   kind,
   adapter,
+  cardinality,
+  configKind,
+  normalizeConfig,
+  requiredPermissions,
 }: {
   kind: Kind;
   adapter: ProviderCollector<Kind>;
+  cardinality: "single" | "multiple";
+  configKind: ProviderInstanceConfig["kind"];
+  normalizeConfig: (value: unknown) => ProviderInstanceConfig | undefined;
+  requiredPermissions: (
+    config: ProviderInstanceConfig,
+  ) => Browser.permissions.Permissions | undefined;
 }): ProviderPackage {
   return {
     kind,
-    cardinality: providerCatalog[kind].cardinality,
+    cardinality,
     credentialKind: "api-key",
-    normalizeConfig: (value) => normalizeProviderConfig(kind, value),
-    requiredPermissions: (config) => {
-      const normalizedConfig = normalizeProviderConfig(kind, config);
-      return normalizedConfig
-        ? requiredPermissionsForProviderConfig(kind, normalizedConfig)
-        : undefined;
-    },
+    configKind,
+    normalizeConfig,
+    requiredPermissions,
     collect(instance, services, credentialOverride): Promise<CollectionResult> {
-      const normalizedConfig = matchesPackage(kind, instance);
+      const normalizedConfig = matchesPackage(kind, instance, normalizeConfig);
       const credential = normalizeCredential(credentialOverride);
       if (!normalizedConfig) {
         return Promise.resolve({

@@ -1,4 +1,4 @@
-import type { UsageGroup } from "../../domain/model";
+import type { UsageGroup } from "../../domain/public-protocol";
 import type {
   MetricValueView,
   QuotaView,

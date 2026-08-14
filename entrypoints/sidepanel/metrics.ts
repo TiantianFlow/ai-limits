@@ -3,7 +3,7 @@ import type {
   CounterMetric,
   QuotaMetric,
   UsageSnapshot,
-} from "../../domain/model";
+} from "../../domain/public-protocol";
 
 export function quotaMetrics(snapshot: UsageSnapshot): QuotaMetric[] {
   return snapshot.metrics.filter(

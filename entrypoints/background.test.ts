@@ -41,6 +41,10 @@ function fakeService(overrides: Partial<ProviderService> = {}): ProviderService 
     prepareProviderPermission: vi.fn(async () => ({
       permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
+      config: {
+        kind: "dynamic-origin" as const,
+        baseUrl: "https://relay.example/gateway",
+      },
       permissions: {},
     })),
     resolveProviderPermission: vi.fn(async () => undefined),
@@ -188,6 +192,7 @@ describe("service-worker activation barrier", () => {
     await registration.activation;
     await expect(stateResponse).resolves.toEqual({
       preferences: { displayMode: "used", autoRefresh: true },
+      providers: expect.any(Array),
       instances: [],
     });
     await vi.waitFor(() => {
@@ -507,6 +512,7 @@ describe("instance runtime wiring", () => {
     const response = await invoke(runtimeListener!, { type: "GET_STATE" });
     expect(response).toEqual({
       preferences: { displayMode: "used", autoRefresh: true },
+      providers: expect.any(Array),
       instances: [
         {
           id: "newapi:550e8400-e29b-41d4-a716-446655440000",
@@ -520,7 +526,7 @@ describe("instance runtime wiring", () => {
         },
       ],
     });
-    expect(JSON.stringify(response)).not.toContain("config");
+    expect(JSON.stringify(response)).not.toContain('"config":');
 
     const prepared = await invoke(runtimeListener!, {
       type: "PREPARE_PROVIDER_PERMISSION",
@@ -535,9 +541,13 @@ describe("instance runtime wiring", () => {
       state: response,
       permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example/gateway",
+      },
       permissions: {},
     });
-    expect(JSON.stringify(prepared)).not.toContain("gateway");
+    expect(JSON.stringify(prepared)).not.toContain("secret");
   });
 
   test("forwards external permission removal without deleting instance data", async () => {

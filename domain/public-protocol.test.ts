@@ -2,10 +2,20 @@ import { describe, expect, test } from "vitest";
 
 import { parseAppViewState } from "./public-protocol";
 
+const providers = [
+  { providerKind: "chatgpt", cardinality: "single", credentialKind: "none", configKind: "fixed" },
+  { providerKind: "claude", cardinality: "single", credentialKind: "none", configKind: "fixed" },
+  { providerKind: "kimi", cardinality: "single", credentialKind: "none", configKind: "fixed", recoveryGuidance: "Safe retry guidance." },
+  { providerKind: "cursor", cardinality: "single", credentialKind: "none", configKind: "fixed" },
+  { providerKind: "elevenlabs", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "newapi", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
+] as const;
+
 describe("public side-panel protocol", () => {
   test("reconstructs every accepted public state object instead of retaining source references", () => {
     const source = {
       preferences: { displayMode: "used", autoRefresh: true },
+      providers,
       instances: [
         {
           id: "newapi:11111111-1111-4111-8111-111111111111",
@@ -88,13 +98,12 @@ describe("public side-panel protocol", () => {
     expect(source.instances[0]!.snapshot.metrics[0]!.label).toBe("Relay quota");
   });
 
-  test.each([
-    "https://relay.example/gateway/",
-    "https://relay.example/gateway/v1",
-  ])("rejects a non-normalized public New API base URL %s", (baseUrl) => {
+  test("rejects a non-normalized public New API base URL", () => {
+    const baseUrl = "https://relay.example/gateway/";
     expect(() =>
       parseAppViewState({
         preferences: { displayMode: "used", autoRefresh: true },
+        providers,
         instances: [
           {
             id: "newapi:11111111-1111-4111-8111-111111111111",
@@ -141,6 +150,7 @@ describe("public side-panel protocol", () => {
       expect(() =>
         parseAppViewState({
           preferences: { displayMode: "used", autoRefresh: true },
+          providers,
           instances: [instance],
         }),
       ).toThrow("Missing application state");

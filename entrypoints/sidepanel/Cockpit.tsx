@@ -1,34 +1,27 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import type {
-  AppViewState,
-  ProviderInstanceView,
-  ProviderOperation,
-} from "../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../domain/model";
-import { sanitizedFailureMessage } from "../../domain/model";
-import type {
-  BalanceMetric,
-  CounterMetric,
-  DisplayMode,
-  QuotaMetric,
-} from "../../domain/model";
 import {
+  canCreateProviderInstance,
   displayRatio,
   elapsedRatio,
   paceStatus,
-  type PaceStatus,
-} from "../../domain/quota";
-import {
-  type ApiKeyProviderKind,
-  type ProviderKind,
-  canCreateProviderInstance,
-  isApiKeyProviderKind,
-  providerCatalog,
+  providerAvailability,
   providerKinds,
   providerNames,
   providerPresentation,
-} from "../../providers/catalog";
+  sanitizedFailureMessage,
+  type ApiKeyProviderKind,
+  type AppViewState,
+  type BalanceMetric,
+  type CounterMetric,
+  type DisplayMode,
+  type PaceStatus,
+  type ProviderInstanceId,
+  type ProviderInstanceView,
+  type ProviderKind,
+  type ProviderOperation,
+  type QuotaMetric,
+} from "../../domain/public-protocol";
 import {
   type MetricValueView,
   type ProviderCardProps,
@@ -238,6 +231,7 @@ function lastRefreshLabel(state: AppViewState, now: number): string {
 function attemptMessage(
   provider: ProviderInstanceView,
   stale: boolean,
+  recoveryGuidance?: string,
 ): string | undefined {
   const outcome = provider.lastAttempt?.outcome;
   if (!outcome || outcome.kind === "success") {
@@ -272,6 +266,13 @@ function attemptMessage(
     return undefined;
   }
 
+  if (outcome.guidance === "retry_session") {
+    return (
+      recoveryGuidance ??
+      sanitizedFailureMessage(outcome.category, outcome.message)
+    );
+  }
+
   return sanitizedFailureMessage(outcome.category, outcome.message);
 }
 
@@ -280,6 +281,7 @@ export function providerView(
   mode: DisplayMode,
   now: number,
   resolvedInstanceLabel = instanceLabels([provider]).get(provider.id)!,
+  recoveryGuidance?: string,
 ): ProviderCardProps {
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
@@ -314,7 +316,7 @@ export function providerView(
     freshness: snapshot ? formatFreshness(snapshot.fetchedAt, now) : undefined,
     stale,
     access: provider.access,
-    attemptMessage: attemptMessage(provider, stale),
+    attemptMessage: attemptMessage(provider, stale, recoveryGuidance),
     hasSnapshot: snapshot !== undefined,
     history: snapshot
       ? {
@@ -442,14 +444,14 @@ export function Cockpit({
       },
       focusKey,
     );
-    if (providerCatalog[providerKind].connection.origin === "static") {
+    if (providerPresentation(providerKind).apiKeySetupUrl) {
       onOpenApiKeySetup(providerKind);
     }
   };
 
   const connectProvider = (providerKind: ProviderKind) => {
-    if (isApiKeyProviderKind(providerKind)) {
-      openApiKeyConnect(providerKind, "connect");
+    if (providerAvailability(state, providerKind).credentialKind === "api-key") {
+      openApiKeyConnect(providerKind as ApiKeyProviderKind, "connect");
       return;
     }
 
@@ -461,12 +463,13 @@ export function Cockpit({
   );
   const labelsByInstance = instanceLabels(state.instances);
   const availableProviderKinds = providerKinds.filter((providerKind) =>
-    canCreateProviderInstance(providerKind, connectedInstances),
+    canCreateProviderInstance(state, providerKind),
   );
   const availableProviders = availableProviderKinds.map((providerKind) => ({
     providerKind,
+    credentialKind: providerAvailability(state, providerKind).credentialKind,
     operation:
-      providerCatalog[providerKind].cardinality === "single"
+      providerAvailability(state, providerKind).cardinality === "single"
         ? providerOperations[`${providerKind}:default`]
         : undefined,
   }));
@@ -476,6 +479,7 @@ export function Cockpit({
       mode,
       now,
       labelsByInstance.get(instance.id)!,
+      providerAvailability(state, instance.providerKind).recoveryGuidance,
     );
     const failureCategory =
       instance.lastAttempt?.outcome.kind === "failure"
@@ -486,7 +490,7 @@ export function Cockpit({
       providerKind: instance.providerKind,
       card,
       needsApiKeyReplacement:
-        providerCatalog[instance.providerKind].connection.kind === "api-key" &&
+        providerAvailability(state, instance.providerKind).credentialKind === "api-key" &&
         (failureCategory === "credential_invalid" ||
           failureCategory === "credential_scope_required"),
     };
@@ -532,6 +536,7 @@ export function Cockpit({
         mode,
         now,
         labelsByInstance.get(detailRecord.id)!,
+        providerAvailability(state, detailRecord.providerKind).recoveryGuidance,
       )
     : undefined;
   const activeHistoryInstanceId =
@@ -557,6 +562,7 @@ export function Cockpit({
         mode,
         now,
         labelsByInstance.get(activeHistoryRecord.id)!,
+        providerAvailability(state, activeHistoryRecord.providerKind).recoveryGuidance,
       )
     : undefined;
   const activeHistoryQuota = activeHistoryView?.usageGroups
@@ -679,6 +685,7 @@ export function Cockpit({
           autoRefresh={state.preferences.autoRefresh}
           autoRefreshPending={autoRefreshPending}
           instances={state.instances}
+          providers={state.providers}
           now={now}
           confirmDelete={confirmDelete}
           addProviderButtonRef={settingsAddProviderButton}
