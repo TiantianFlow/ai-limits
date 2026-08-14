@@ -31,7 +31,9 @@ export function observationFromUsage(
             metricId: metric.id,
             type: metric.type,
             usedRatio: metric.usedRatio,
-            ...(metric.cycle === undefined ? {} : { cycle: metric.cycle }),
+            ...(metric.cycle === undefined
+              ? {}
+              : { cycle: historyCycle(metric.cycle) }),
           };
         case "counter":
           return {
@@ -41,7 +43,9 @@ export function observationFromUsage(
             value: metric.value,
             unit: metric.unit,
             ...(metric.limit === undefined ? {} : { limit: metric.limit }),
-            ...(metric.cycle === undefined ? {} : { cycle: metric.cycle }),
+            ...(metric.cycle === undefined
+              ? {}
+              : { cycle: historyCycle(metric.cycle) }),
           };
         case "balance":
           return {
@@ -52,10 +56,21 @@ export function observationFromUsage(
             ...(metric.initialLimit === undefined
               ? {}
               : { initialLimit: metric.initialLimit }),
-            ...(metric.cycle === undefined ? {} : { cycle: metric.cycle }),
+            ...(metric.cycle === undefined
+              ? {}
+              : { cycle: historyCycle(metric.cycle) }),
           };
       }
     }),
+  };
+}
+
+function historyCycle(cycle: MetricCycle): MetricCycle {
+  return {
+    ...(cycle.cadence === undefined ? {} : { cadence: cycle.cadence }),
+    ...(cycle.startedAt === undefined ? {} : { startedAt: cycle.startedAt }),
+    ...(cycle.resetsAt === undefined ? {} : { resetsAt: cycle.resetsAt }),
+    ...(cycle.durationMs === undefined ? {} : { durationMs: cycle.durationMs }),
   };
 }
 

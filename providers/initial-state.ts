@@ -7,6 +7,7 @@ import type {
   AppState,
   CreditBalance,
   DisplayMode,
+  LegacyUsageGroup,
   ProviderAttempt,
   ProviderId,
   ProviderRecord,
@@ -15,7 +16,6 @@ import type {
   QuotaHistorySample,
   QuotaSegment,
   QuotaWindow,
-  UsageGroup,
 } from "../domain/model";
 import { providerIds } from "./catalog";
 
@@ -160,12 +160,12 @@ function normalizeUsageGroups(
   value: unknown,
   windows: readonly QuotaWindow[],
   credits: readonly CreditBalance[],
-): UsageGroup[] | undefined {
+): LegacyUsageGroup[] | undefined {
   if (value === undefined || !Array.isArray(value) || value.length === 0) {
     return undefined;
   }
 
-  const groups = value.map((group): UsageGroup | undefined => {
+  const groups = value.map((group): LegacyUsageGroup | undefined => {
     if (
       !isRecord(group) ||
       !isNonEmptyString(group.id) ||
@@ -200,7 +200,7 @@ function normalizeUsageGroups(
     ...windows.map((window) => `window:${window.id}`),
     ...credits.map((credit) => `credit:${credit.id}`),
   ]);
-  const memberships = (groups as UsageGroup[]).flatMap((group) => [
+  const memberships = (groups as LegacyUsageGroup[]).flatMap((group) => [
     ...group.windowIds.map((id) => `window:${id}`),
     ...group.creditIds.map((id) => `credit:${id}`),
   ]);
@@ -212,7 +212,7 @@ function normalizeUsageGroups(
     return undefined;
   }
 
-  return groups as UsageGroup[];
+  return groups as LegacyUsageGroup[];
 }
 
 function looksLikeEmail(value: string): boolean {

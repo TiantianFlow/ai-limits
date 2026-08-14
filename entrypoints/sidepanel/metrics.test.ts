@@ -19,6 +19,20 @@ const snapshot: UsageSnapshot = {
   metrics: [],
 };
 
+const metricOnlyUsageSnapshot: UsageSnapshot = {
+  providerKind: "chatgpt",
+  source: "fixture",
+  fetchedAt: 1_000,
+  metrics: [],
+  usageGroups: [
+    {
+      id: "usage",
+      label: "Usage",
+      metricIds: ["weekly"],
+    },
+  ],
+};
+
 const metrics: UsageMetric[] = [
   {
     type: "quota",
@@ -76,6 +90,9 @@ void balanceWithSpentSemantic;
 
 describe("usage metrics", () => {
   test("selects canonical quota, counter, and balance metrics by discriminant", () => {
+    expect(metricOnlyUsageSnapshot.usageGroups).toEqual([
+      { id: "usage", label: "Usage", metricIds: ["weekly"] },
+    ]);
     expect(quotaMetrics({ ...snapshot, metrics })).toHaveLength(1);
     expect(counterMetrics({ ...snapshot, metrics })[0]?.semantic).toBe("spent");
     expect(balanceMetrics({ ...snapshot, metrics })[0]?.value).toBe(177.697);

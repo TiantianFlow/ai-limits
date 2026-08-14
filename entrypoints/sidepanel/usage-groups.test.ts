@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import type { UsageGroup } from "../../domain/model";
+import type { LegacyUsageGroup } from "../../domain/model";
 import type {
   CreditView,
   QuotaView,
@@ -30,7 +30,7 @@ const credits: CreditView[] = [
 
 describe("usageGroupViews", () => {
   test("resolves provider-authored groups from explicit measure references", () => {
-    const groups: UsageGroup[] = [
+    const groups: LegacyUsageGroup[] = [
       {
         id: "priority",
         label: "Priority usage",
