@@ -4,8 +4,6 @@ import { createRoot } from "react-dom/client";
 import { Cockpit } from "../../entrypoints/sidepanel/Cockpit";
 import "../../entrypoints/sidepanel/styles.css";
 import type { AppViewState } from "../../domain/public-protocol";
-import type { DisplayMode } from "../../domain/model";
-import type { ProviderInstanceId } from "../../domain/instances";
 import {
   FIDELITY_FIXED_CLOCK,
   createFidelityScenario,
@@ -17,9 +15,9 @@ import {
   type PreviewView,
 } from "./copy";
 import {
+  applyFidelityPreviewTransition,
   createFidelityPreviewState,
   createStorePreviewState,
-  updatePreviewState,
 } from "./preview-state";
 import "./styles.css";
 
@@ -263,33 +261,6 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
     return () => controller.abort();
   }, [request.theme, scenario]);
 
-  const updateMode = (mode: DisplayMode) => {
-    setState((current) => updatePreviewState(current, (candidate) => ({
-      ...candidate,
-      preferences: { ...candidate.preferences, displayMode: mode },
-    })));
-  };
-  const updateAutoRefresh = (autoRefresh: boolean) => {
-    setState((current) =>
-      updatePreviewState(current, (candidate) => ({
-        ...candidate,
-        preferences: { ...candidate.preferences, autoRefresh },
-      })),
-    );
-  };
-  const disconnectInstance = (instanceId: ProviderInstanceId) => {
-    setState((current) =>
-      updatePreviewState(current, (candidate) => ({
-        ...candidate,
-        instances: candidate.instances.map((instance) => {
-          if (instance.id !== instanceId) return instance;
-          const { snapshot: _snapshot, ...disconnected } = instance;
-          return { ...disconnected, access: "required" as const, history: [] };
-        }),
-      })),
-    );
-  };
-
   return (
     <div
       className="fidelity-page"
@@ -317,29 +288,52 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
             ? { "kimi:default": scenario.providerOperation }
             : undefined
         }
-        onDisplayModeChange={updateMode}
-        onRefresh={() => undefined}
-        onConnectProvider={() => undefined}
-        onRefreshInstance={() => undefined}
-        onAutoRefreshChange={updateAutoRefresh}
-        onDisconnectInstance={disconnectInstance}
-        onRenameInstance={async (instanceId, userLabel) => {
+        onDisplayModeChange={(mode) =>
           setState((current) =>
-            updatePreviewState(current, (candidate) => ({
-              ...candidate,
-              instances: candidate.instances.map((instance) => {
-                if (instance.id !== instanceId || request.state === "rename-failure") {
-                  return instance;
-                }
-                if (userLabel === undefined) {
-                  const { userLabel: _userLabel, ...unlabeled } = instance;
-                  return unlabeled;
-                }
-                return { ...instance, userLabel };
-              }),
-            })),
+            applyFidelityPreviewTransition(current, { type: "display-mode", mode }),
+          )
+        }
+        onRefresh={() =>
+          setState((current) =>
+            applyFidelityPreviewTransition(current, { type: "refresh-status" }),
+          )
+        }
+        onConnectProvider={() => undefined}
+        onRefreshInstance={(instanceId) =>
+          setState((current) =>
+            applyFidelityPreviewTransition(current, {
+              type: "refresh-status",
+              instanceId,
+            }),
+          )
+        }
+        onAutoRefreshChange={(autoRefresh) =>
+          setState((current) =>
+            applyFidelityPreviewTransition(current, {
+              type: "auto-refresh",
+              autoRefresh,
+            }),
+          )
+        }
+        onDisconnectInstance={(instanceId) =>
+          setState((current) =>
+            applyFidelityPreviewTransition(current, {
+              type: "disconnect",
+              instanceId,
+            }),
+          )
+        }
+        onRenameInstance={async (instanceId, userLabel) => {
+          const succeeds = request.state !== "rename-failure";
+          setState((current) =>
+            applyFidelityPreviewTransition(current, {
+              type: "rename",
+              instanceId,
+              userLabel,
+              succeeds,
+            }),
           );
-          return request.state !== "rename-failure";
+          return succeeds;
         }}
         onDeleteLocalData={() => undefined}
       />

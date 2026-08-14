@@ -47,4 +47,21 @@ describe("prepareFidelityViewState", () => {
       parseAppViewState(prepareFidelityViewState(invalid, "default")),
     ).toThrow("Missing application state");
   });
+
+  it("rejects malformed collision fields before preparing omissions", () => {
+    const invalid = {
+      ...state,
+      instances: [
+        {
+          ...state.instances[0]!,
+          userLabel: undefined,
+          snapshot: undefined,
+        },
+      ],
+    } as AppViewState;
+
+    expect(() => prepareFidelityViewState(invalid, "unlabeled-collision")).toThrow(
+      "Missing application state",
+    );
+  });
 });

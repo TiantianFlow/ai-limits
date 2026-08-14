@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAppViewState } from "../../domain/public-protocol";
+import {
+  parseAppViewState,
+  type AppViewState,
+} from "../../domain/public-protocol";
 import {
   createFidelityScenario,
   FIDELITY_FIXED_CLOCK,
@@ -10,8 +13,10 @@ import {
   type PreviewView,
 } from "./copy";
 import {
+  applyFidelityPreviewTransition,
   createFidelityPreviewState,
   createStorePreviewState,
+  type FidelityPreviewTransition,
   updatePreviewState,
 } from "./preview-state";
 
@@ -137,5 +142,102 @@ describe("preview view state", () => {
         instances: [{ ...current.instances[0]!, userLabel: undefined }],
       })),
     ).toThrow("Missing application state");
+  });
+
+  it("applies the exact fidelity callback transitions through the public parser", () => {
+    const initial = createFidelityPreviewState(
+      request("settings", "default"),
+      createFidelityScenario(request("settings", "default")),
+    );
+    const workId = "newapi:22222222-2222-4222-8222-222222222222";
+
+    const refreshed = applyFidelityPreviewTransition(initial, {
+      type: "refresh-status",
+      instanceId: workId,
+    });
+    const disconnected = applyFidelityPreviewTransition(initial, {
+      type: "disconnect",
+      instanceId: workId,
+    });
+    const renamed = applyFidelityPreviewTransition(initial, {
+      type: "rename",
+      instanceId: workId,
+      userLabel: "Renamed work relay",
+      succeeds: true,
+    });
+    const labelCleared = applyFidelityPreviewTransition(initial, {
+      type: "rename",
+      instanceId: workId,
+      userLabel: undefined,
+      succeeds: true,
+    });
+    const renameFailed = applyFidelityPreviewTransition(initial, {
+      type: "rename",
+      instanceId: workId,
+      userLabel: "Ignored after failure",
+      succeeds: false,
+    });
+
+    expect(refreshed).not.toBe(initial);
+    expect(parseAppViewState(refreshed)).toEqual(refreshed);
+    expect(disconnected.instances.find((instance) => instance.id === workId)).toEqual(
+      expect.objectContaining({ access: "required", history: [] }),
+    );
+    expect(
+      Object.hasOwn(
+        disconnected.instances.find((instance) => instance.id === workId)!,
+        "snapshot",
+      ),
+    ).toBe(false);
+    expect(renamed.instances.find((instance) => instance.id === workId)?.userLabel).toBe(
+      "Renamed work relay",
+    );
+    expect(
+      Object.hasOwn(
+        labelCleared.instances.find((instance) => instance.id === workId)!,
+        "userLabel",
+      ),
+    ).toBe(false);
+    expect(renameFailed).not.toBe(initial);
+    expect(renameFailed.instances.find((instance) => instance.id === workId)?.userLabel).toBe(
+      "Work relay for product engineering",
+    );
+  });
+
+  it("rejects malformed current state before every fidelity callback transition", () => {
+    const initial = createFidelityPreviewState(
+      request("settings", "default"),
+      createFidelityScenario(request("settings", "default")),
+    );
+    const malformed = {
+      ...initial,
+      instances: [{ ...initial.instances[0]!, userLabel: undefined }],
+    } as AppViewState;
+    const workId = "newapi:22222222-2222-4222-8222-222222222222";
+
+    const transitions: FidelityPreviewTransition[] = [
+      { type: "display-mode", mode: "left" },
+      { type: "auto-refresh", autoRefresh: false },
+      { type: "refresh-status", instanceId: workId },
+      { type: "disconnect", instanceId: workId },
+      {
+        type: "rename",
+        instanceId: workId,
+        userLabel: undefined,
+        succeeds: true,
+      },
+      {
+        type: "rename",
+        instanceId: workId,
+        userLabel: "Ignored after failure",
+        succeeds: false,
+      },
+    ];
+
+    for (const transition of transitions) {
+      expect(() => applyFidelityPreviewTransition(malformed, transition)).toThrow(
+        "Missing application state",
+      );
+    }
   });
 });

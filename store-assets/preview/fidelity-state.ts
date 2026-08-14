@@ -1,15 +1,19 @@
-import type { AppViewState } from "../../domain/public-protocol";
+import {
+  parseAppViewState,
+  type AppViewState,
+} from "../../domain/public-protocol";
 import type { FidelityState } from "./copy";
 
 export function prepareFidelityViewState(
-  viewState: AppViewState,
+  viewState: unknown,
   fidelityState: FidelityState,
 ): AppViewState {
+  const parsed = parseAppViewState(viewState);
   const candidate =
     fidelityState === "unlabeled-collision"
       ? {
-          ...viewState,
-          instances: viewState.instances.map((instance) => {
+          ...parsed,
+          instances: parsed.instances.map((instance) => {
             if (instance.providerKind !== "newapi") return instance;
             const {
               userLabel: _userLabel,
@@ -22,7 +26,7 @@ export function prepareFidelityViewState(
             return { ...unlabeledInstance, snapshot: unlabeledSnapshot };
           }),
         }
-      : viewState;
+      : parsed;
 
   return candidate;
 }
