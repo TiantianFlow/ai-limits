@@ -22,17 +22,17 @@ import {
   normalizeInstanceAppState,
 } from "./state-codec";
 
-export const LEGACY_STATE_STORAGE_KEY = "aiLimitsState";
-export const LEGACY_SUPPRESSION_STORAGE_KEY =
+const LEGACY_STATE_STORAGE_KEY = "aiLimitsState";
+const LEGACY_SUPPRESSION_STORAGE_KEY =
   "aiLimitsConnectionSuppressions";
 
-export interface LegacyStorageInput {
+interface LegacyStorageInput {
   aiLimitsState?: unknown;
   aiLimitsCredentials?: unknown;
   aiLimitsConnectionSuppressions?: unknown;
 }
 
-export interface MigratedLegacyStorage {
+interface MigratedLegacyStorage {
   state: InstanceAppState;
   credentialState: CredentialStateV2;
 }

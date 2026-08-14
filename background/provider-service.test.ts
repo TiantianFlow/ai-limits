@@ -156,7 +156,7 @@ describe("generic provider instance service", () => {
     expect(prepared).toEqual({
       permissionIntentId: "550e8400-e29b-41d4-a716-446655440000",
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440099",
-      config: {
+      normalizedConfig: {
         kind: "dynamic-origin",
         baseUrl: "https://relay.example/gateway",
       },
@@ -166,6 +166,41 @@ describe("generic provider instance service", () => {
     expect(JSON.stringify(await browser.storage.local.get(null))).not.toMatch(
       /apiKey|credential|secret|revision|lease/i,
     );
+  });
+
+  test.each([
+    ["https://API.example/gateway/api/status", "https://api.example/gateway"],
+    ["https://API.example/gateway/api/usage/token", "https://api.example/gateway"],
+    ["https://API.example/gateway/v1/chat/completions", "https://api.example/gateway"],
+    ["https://API.example/gateway/console/profile", "https://api.example/gateway"],
+  ])("returns package-authoritative New API normalization for %s", async (raw, expected) => {
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: vi
+        .fn()
+        .mockReturnValueOnce("550e8400-e29b-41d4-a716-446655440099")
+        .mockReturnValueOnce("550e8400-e29b-41d4-a716-446655440000"),
+    });
+
+    const prepared = await service.prepareProviderPermission({
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: raw },
+    });
+
+    expect(prepared.normalizedConfig).toEqual({
+      kind: "dynamic-origin",
+      baseUrl: expected,
+    });
+  });
+
+  test("rejects an invalid New API URL before creating a permission intent", async () => {
+    const service = createProviderService({ clock: () => NOW });
+
+    await expect(service.prepareProviderPermission({
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "javascript:alert(1)" },
+    })).rejects.toThrow("Provider configuration is invalid");
+    expect(await browser.storage.local.get(null)).toEqual({});
   });
 
   test("keeps a same-origin pending owner through sibling disconnect, then removes the orphan on abandon", async () => {

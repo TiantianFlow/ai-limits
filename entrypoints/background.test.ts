@@ -41,7 +41,7 @@ function fakeService(overrides: Partial<ProviderService> = {}): ProviderService 
     prepareProviderPermission: vi.fn(async () => ({
       permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
-      config: {
+      normalizedConfig: {
         kind: "dynamic-origin" as const,
         baseUrl: "https://relay.example/gateway",
       },
@@ -541,7 +541,7 @@ describe("instance runtime wiring", () => {
       state: response,
       permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
-      config: {
+      normalizedConfig: {
         kind: "dynamic-origin",
         baseUrl: "https://relay.example/gateway",
       },

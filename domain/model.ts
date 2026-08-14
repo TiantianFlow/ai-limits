@@ -166,6 +166,12 @@ export type FailureCategory =
 
 export type FailureGuidance = "retry_session";
 
+export function sanitizedFailureGuidance(
+  value: unknown,
+): FailureGuidance | undefined {
+  return value === "retry_session" ? value : undefined;
+}
+
 export type ProviderRefreshOutcome =
   | { kind: "success"; snapshot: UsageSnapshot }
   | { kind: "deferred"; reason: DeferredReason; retryAt?: number }

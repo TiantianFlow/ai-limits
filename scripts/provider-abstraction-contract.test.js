@@ -40,6 +40,16 @@ function source(relative) {
 }
 
 describe("provider abstraction contract", () => {
+  it("exports only migration entry points, never legacy wire shapes", () => {
+    const exports = [...source("storage/migration.ts").matchAll(
+      /\bexport\s+(?:async\s+)?(?:interface|type|class|const|function)\s+([A-Za-z_$][\w$]*)/g,
+    )].map((match) => match[1]);
+    expect(exports).toEqual([
+      "migrateLegacyStorage",
+      "migrateLegacyStorageInPlace",
+    ]);
+  });
+
   it("has no temporary provider, domain, or migration bridge modules", () => {
     expect(FORBIDDEN_BRIDGES.filter((file) => existsSync(path.join(ROOT, file)))).toEqual([]);
   });

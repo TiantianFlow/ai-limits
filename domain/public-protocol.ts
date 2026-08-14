@@ -222,7 +222,7 @@ export interface PermissionIntentResponse {
   state: AppViewState;
   permissionIntentId: string;
   instanceId: ProviderInstanceId;
-  config: ProviderInstanceConfig;
+  normalizedConfig: ProviderInstanceConfig;
   permissions: Browser.permissions.Permissions;
 }
 
@@ -613,37 +613,26 @@ function copyAttempt(attempt: ProviderAttempt): ProviderAttempt {
   };
 }
 
-export function normalizeDynamicOriginBaseUrlIntent(
-  value: unknown,
-): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > 2_048) return undefined;
+function isSafePublicBaseUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2_048) {
+    return false;
+  }
   try {
-    const parsed = new URL(trimmed);
+    const parsed = new URL(value);
     const localHttp =
       parsed.protocol === "http:" &&
       (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
-    if (
+    return !(
       (parsed.protocol !== "https:" && !localHttp) ||
       parsed.username !== "" ||
       parsed.password !== "" ||
-      parsed.hostname.includes("*")
-    ) {
-      return undefined;
-    }
-    const pathname = parsed.pathname.replace(/\/+$/, "");
-    return `${parsed.origin}${pathname === "" ? "" : pathname}`;
+      parsed.hostname.includes("*") ||
+      parsed.search !== "" ||
+      parsed.hash !== ""
+    );
   } catch {
-    return undefined;
+    return false;
   }
-}
-
-function isNormalizedBaseUrl(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    normalizeDynamicOriginBaseUrlIntent(value) === value
-  );
 }
 
 function isNormalizedOrigin(value: unknown): value is string {
@@ -671,7 +660,7 @@ function isPublicProviderConfig(
   ) || (
     hasExactKeys(value, ["kind", "baseUrl"]) &&
     value.kind === "dynamic-origin" &&
-    isNormalizedBaseUrl(value.baseUrl)
+    isSafePublicBaseUrl(value.baseUrl)
   );
 }
 
@@ -698,7 +687,7 @@ function parseProviderInstanceView(value: unknown): ProviderInstanceView {
     !value.history.every(isHistoryObservation) ||
     (Object.hasOwn(value, "userLabel") &&
       (!isSafeText(value.userLabel, 128) || value.userLabel.trim() !== value.userLabel)) ||
-    (Object.hasOwn(value, "baseUrl") && !isNormalizedBaseUrl(value.baseUrl)) ||
+    (Object.hasOwn(value, "baseUrl") && !isSafePublicBaseUrl(value.baseUrl)) ||
     (Object.hasOwn(value, "origin") && !isNormalizedOrigin(value.origin)) ||
     (Object.hasOwn(value, "snapshot") && !isUsageSnapshot(value.snapshot)) ||
     (Object.hasOwn(value, "lastAttempt") && !isProviderAttempt(value.lastAttempt))
@@ -972,10 +961,10 @@ export function parsePermissionIntentResponse(
   value: unknown,
 ): PermissionIntentResponse {
   if (
-    !hasExactKeys(value, ["state", "permissionIntentId", "instanceId", "config", "permissions"]) ||
+    !hasExactKeys(value, ["state", "permissionIntentId", "instanceId", "normalizedConfig", "permissions"]) ||
     !isPermissionIntentId(value.permissionIntentId) ||
     !isProviderInstanceId(value.instanceId) ||
-    !isPublicProviderConfig(value.config) ||
+    !isPublicProviderConfig(value.normalizedConfig) ||
     !hasExactKeys(value.permissions, [], ["origins", "permissions"]) ||
     (value.permissions.origins !== undefined &&
       (!Array.isArray(value.permissions.origins) ||
@@ -990,7 +979,7 @@ export function parsePermissionIntentResponse(
     state: parseAppViewState(value.state),
     permissionIntentId: value.permissionIntentId,
     instanceId: value.instanceId,
-    config: copyPublicProviderConfig(value.config),
+    normalizedConfig: copyPublicProviderConfig(value.normalizedConfig),
     permissions: {
       ...(value.permissions.origins === undefined
         ? {}

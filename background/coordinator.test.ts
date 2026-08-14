@@ -14,6 +14,7 @@ import {
   commitProviderOutcome,
   refreshProviderInstance,
 } from "./coordinator";
+import { projectAppViewState } from "./view-state";
 
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
@@ -168,6 +169,82 @@ describe("instance coordinator", () => {
 
     expect(outcome).toEqual({ kind: "skipped", reason: "superseded" });
     expect((await connectionRepository.get(FIRST))?.lastAttempt).toBeUndefined();
+  });
+
+  test("persists validated neutral recovery guidance and projects it after re-read", async () => {
+    await connectionRepository.create(instance(FIRST));
+
+    await refreshProviderInstance(
+      providerPackage(async () => ({
+        ok: false,
+        health: {
+          kind: "temporary_error",
+          message: "Open the provider and retry.",
+          guidance: "retry_session",
+        },
+      })),
+      instance(FIRST),
+      services(),
+      "manual_provider",
+      () => true,
+      undefined,
+      () => NOW + 40,
+    );
+
+    const restartedState = await loadInstanceAppState();
+    expect(restartedState.instances[0]?.lastAttempt?.outcome).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+      message: "AI Limits could not refresh this provider. Try again later.",
+      guidance: "retry_session",
+    });
+    expect(projectAppViewState(restartedState).instances[0]?.lastAttempt?.outcome)
+      .toEqual({
+        kind: "failure",
+        category: "temporary_error",
+        message: "AI Limits could not refresh this provider. Try again later.",
+        guidance: "retry_session",
+      });
+  });
+
+  test("drops malformed guidance while retaining a sanitized generic failure", async () => {
+    const result = await collectProviderOutcome(
+      providerPackage(async () => ({
+        ok: false,
+        health: {
+          kind: "temporary_error",
+          message: "token=synthetic-secret",
+          guidance: "<img src=x onerror=synthetic-secret>",
+        },
+      } as unknown as CollectionResult)),
+      instance(FIRST),
+      services(),
+      "manual_provider",
+      undefined,
+      () => NOW + 50,
+    );
+
+    expect(result.outcome).toEqual({
+      kind: "failure",
+      category: "temporary_error",
+      message: "AI Limits could not refresh this provider. Try again later.",
+    });
+  });
+
+  test("keeps generic failures guidance-free", async () => {
+    const result = await collectProviderOutcome(
+      providerPackage(async () => ({
+        ok: false,
+        health: { kind: "signed_out" },
+      })),
+      instance(FIRST),
+      services(),
+      "manual_provider",
+      undefined,
+      () => NOW + 60,
+    );
+
+    expect(result.outcome).toEqual({ kind: "failure", category: "signed_out" });
   });
 
   test("skips a result if the selected instance disappears before commit", async () => {

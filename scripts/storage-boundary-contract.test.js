@@ -74,6 +74,19 @@ describe("storage boundary contract", () => {
     expect(source("domain/public-protocol.ts")).not.toMatch(
       /from\s+["'][^"']*(?:storage|background|providers\/(?:types|registry|package-factories|[^/]+\/adapter)|credential|vault|migration|repository)[^"']*["']/,
     );
+    expect(source("domain/public-protocol.ts")).not.toMatch(
+      /normalize(?:DynamicOrigin|NewApi)BaseUrl/,
+    );
+  });
+
+  it("keeps side-panel config behavior generic and package-authoritative", () => {
+    const sidePanelConfigFlow = executableSources("entrypoints/sidepanel")
+      .map(source)
+      .join("\n");
+    expect(sidePanelConfigFlow).not.toMatch(/normalize(?:DynamicOrigin|NewApi)BaseUrl/);
+    expect(sidePanelConfigFlow).not.toMatch(
+      /providerKind\s*={2,3}\s*["']newapi["']|["']newapi["']\s*={2,3}\s*providerKind/,
+    );
   });
 
   it("keeps the complete production side-panel import graph free of packages, collectors, and vaults", () => {
