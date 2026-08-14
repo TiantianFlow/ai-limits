@@ -83,7 +83,7 @@ export function instanceLabels(
     const label = baseLabels.get(instance.id)!;
     collisions.set(label, [...(collisions.get(label) ?? []), instance]);
   }
-  return new Map(
+  const initialLabels = new Map(
     instances.map((instance) => {
       const label = baseLabels.get(instance.id)!;
       const siblings = collisions.get(label) ?? [];
@@ -94,5 +94,36 @@ export function instanceLabels(
           : label,
       ] as const;
     }),
+  );
+  const reservedLiteralLabels = new Set(
+    instances.flatMap((instance) => {
+      const baseLabel = baseLabels.get(instance.id)!;
+      return collisions.get(baseLabel)?.length === 1 ? [baseLabel] : [];
+    }),
+  );
+  const usedLabels = new Set<string>();
+  const resolvedLabels = new Map<ProviderInstanceId, string>();
+  const sortedInstances = [...instances].sort((first, second) =>
+    first.id < second.id ? -1 : first.id > second.id ? 1 : 0,
+  );
+  for (const instance of sortedInstances) {
+    const baseLabel = baseLabels.get(instance.id)!;
+    const generated = (collisions.get(baseLabel)?.length ?? 0) > 1;
+    let label = initialLabels.get(instance.id)!;
+    const unavailable = (candidate: string) =>
+      usedLabels.has(candidate) ||
+      (generated && reservedLiteralLabels.has(candidate));
+    if (unavailable(label)) {
+      const fullIdentityLabel = `${label} · ${instance.id}`;
+      label = fullIdentityLabel;
+      for (let counter = 2; unavailable(label); counter += 1) {
+        label = `${fullIdentityLabel} · ${counter}`;
+      }
+    }
+    usedLabels.add(label);
+    resolvedLabels.set(instance.id, label);
+  }
+  return new Map(
+    instances.map((instance) => [instance.id, resolvedLabels.get(instance.id)!]),
   );
 }

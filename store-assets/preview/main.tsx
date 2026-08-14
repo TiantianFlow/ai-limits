@@ -18,6 +18,7 @@ import {
   type FidelityScenario,
   type PreviewView,
 } from "./copy";
+import { finalizeFidelityViewState } from "./fidelity-state";
 import "./styles.css";
 
 const DEFAULT_CAPTURE_NOW = Date.parse(FIDELITY_FIXED_CLOCK);
@@ -298,27 +299,7 @@ function createFidelityState(
   }
 
   const viewState = fixtureViewState(state, request.now);
-  if (request.state === "unlabeled-collision") {
-    return {
-      ...viewState,
-      instances: viewState.instances.map((instance) => {
-        if (instance.providerKind !== "newapi") return instance;
-        const snapshot = instance.snapshot
-          ? (() => {
-              const { accountLabel: _accountLabel, ...publicSnapshot } =
-                instance.snapshot;
-              return publicSnapshot;
-            })()
-          : undefined;
-        return {
-          ...instance,
-          userLabel: undefined,
-          ...(snapshot ? { snapshot } : {}),
-        };
-      }),
-    };
-  }
-  return viewState;
+  return finalizeFidelityViewState(viewState, request.state);
 }
 
 function waitForElement(
