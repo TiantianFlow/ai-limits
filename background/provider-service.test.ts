@@ -21,6 +21,7 @@ import {
   type ConnectApiKeyProviderRequest,
   type ProviderService,
 } from "./provider-service";
+import { PERMISSION_INTENT_SWEEP_ALARM } from "./permission-intents";
 import { projectAppViewState } from "./view-state";
 
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
@@ -1148,6 +1149,142 @@ describe("generic provider instance service", () => {
       value: "second-secret",
     });
     expect((await loadInstanceAppState()).instances.map(({ id }) => id)).toEqual([SECOND]);
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+      "cleanup-pending",
+    );
+  });
+
+  test.each([
+    ["returns false", false],
+    ["throws", new Error("remove unavailable")],
+  ])(
+    "disconnect persists nonsecret final-owner cleanup evidence when permission removal %s",
+    async (_description, removalResult) => {
+      await seed({
+        ...newApiInstance(FIRST),
+        history: [
+          {
+            observedAt: NOW,
+            metrics: [
+              {
+                type: "counter",
+                metricId: "spend",
+                semantic: "spent",
+                value: 7,
+                unit: "USD",
+              },
+            ],
+          },
+        ],
+      }, "first-secret");
+      vi.mocked(browser.permissions.contains).mockResolvedValue(true as never);
+      vi.spyOn(browser.permissions, "remove").mockImplementation(async () => {
+        if (removalResult instanceof Error) throw removalResult;
+        return removalResult as never;
+      });
+      const service = createProviderService({
+        clock: () => NOW,
+        randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+      });
+
+      await expect(service.disconnectInstance(FIRST)).resolves.toEqual({
+        ok: false,
+        error: "permission_removal_failed",
+        localDataDeleted: true,
+      });
+
+      await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+      await expect(connectionRepository.get(FIRST)).resolves.toBeUndefined();
+      const durable = JSON.stringify(
+        (await browser.storage.local.get("aiLimitsPermissionIntents"))
+          .aiLimitsPermissionIntents,
+      );
+      expect(durable).toContain("cleanup-pending");
+      expect(durable).toContain("https://relay.example");
+      expect(durable).not.toMatch(/first-secret|metricId|spend|history|credential/i);
+    },
+  );
+
+  test("disconnect retains cleanup evidence when remove reports success but exact permission remains", async () => {
+    await seed(newApiInstance(FIRST), "first-secret");
+    vi.mocked(browser.permissions.contains).mockResolvedValue(true as never);
+    vi.spyOn(browser.permissions, "remove").mockResolvedValue(true as never);
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+    });
+
+    await expect(service.disconnectInstance(FIRST)).resolves.toMatchObject({
+      ok: false,
+      error: "permission_removal_failed",
+      localDataDeleted: true,
+    });
+    expect(JSON.stringify(await browser.storage.local.get(null))).toContain(
+      "cleanup-pending",
+    );
+  });
+
+  test("disconnect cleanup survives alarm failure and retries after restart without resurrecting local data", async () => {
+    await seed({
+      ...newApiInstance(FIRST),
+      history: [
+        {
+          observedAt: NOW,
+          metrics: [
+            {
+              type: "quota",
+              metricId: "primary",
+              usedRatio: 0.2,
+            },
+          ],
+        },
+      ],
+    }, "first-secret");
+    let permissionPresent = true;
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockResolvedValueOnce(false as never)
+      .mockImplementationOnce(async () => {
+        permissionPresent = false;
+        return true as never;
+      });
+    vi.spyOn(browser.alarms, "create").mockRejectedValueOnce(
+      new Error("alarm unavailable"),
+    );
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+    });
+
+    await expect(service.disconnectInstance(FIRST)).resolves.toMatchObject({
+      ok: false,
+      error: "permission_removal_failed",
+      localDataDeleted: true,
+    });
+    expect(browser.alarms.create).toHaveBeenCalledWith(
+      PERMISSION_INTENT_SWEEP_ALARM,
+      { when: NOW },
+    );
+    expect(JSON.stringify(await browser.storage.local.get(null))).toContain(
+      "cleanup-pending",
+    );
+
+    vi.mocked(browser.alarms.create).mockResolvedValue(undefined);
+    await browser.storage.session.clear();
+    const restarted = createProviderService({ clock: () => NOW + 1 });
+    await restarted.sweepPermissionIntents();
+
+    expect(remove).toHaveBeenCalledTimes(2);
+    await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+    expect((await loadInstanceAppState()).instances).toEqual([]);
+    await expect(
+      browser.storage.local.get("aiLimitsPermissionIntents"),
+    ).resolves.toEqual({
+      aiLimitsPermissionIntents: { version: 1, intents: [] },
+    });
   });
 
   test("disconnecting the last owner removes its exact origin after local deletion", async () => {
@@ -1175,7 +1312,11 @@ describe("generic provider instance service", () => {
     expect(browser.permissions.remove).toHaveBeenCalledWith({
       origins: ["https://relay.example/*"],
     });
-    expect(events.at(-1)).toBe("permission");
+    expect(events).toContain("permission");
+    expect(events.at(-1)).toBe("local");
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toContain(
+      "cleanup-pending",
+    );
   });
 
   test("delete-all clears every instance credential, state, history, intent, and permission union while preserving unrelated storage", async () => {

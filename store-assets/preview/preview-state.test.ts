@@ -89,6 +89,28 @@ describe("preview view state", () => {
     expect(new Set(newApiInstances.map(({ origin }) => origin))).toEqual(
       new Set(["https://relay.example"]),
     );
+    expect(
+      newApiInstances.map(({ snapshot }) => {
+        const quota = snapshot?.metrics.find(
+          (metric) => metric.type === "quota" && metric.id === "relay-key-quota",
+        );
+        if (
+          !quota ||
+          quota.type !== "quota" ||
+          quota.used === undefined ||
+          quota.limit === undefined
+        ) {
+          throw new Error("missing absolute New API quota fixture");
+        }
+        return {
+          usedRatio: quota.usedRatio,
+          absoluteRatio: quota.used / quota.limit,
+        };
+      }),
+    ).toEqual([
+      { usedRatio: 0.25, absoluteRatio: 0.25 },
+      { usedRatio: 0.43, absoluteRatio: 0.43 },
+    ]);
     expect(newApiInstances.map(({ userLabel }) => userLabel).join(" ")).not.toMatch(
       /personal|work|@/i,
     );
@@ -199,15 +221,9 @@ describe("preview view state", () => {
 
     expect(refreshed).not.toBe(initial);
     expect(parseAppViewState(refreshed)).toEqual(refreshed);
-    expect(disconnected.instances.find((instance) => instance.id === workId)).toEqual(
-      expect.objectContaining({ access: "required", history: [] }),
-    );
     expect(
-      Object.hasOwn(
-        disconnected.instances.find((instance) => instance.id === workId)!,
-        "snapshot",
-      ),
-    ).toBe(false);
+      disconnected.instances.find((instance) => instance.id === workId),
+    ).toBeUndefined();
     expect(renamed.instances.find((instance) => instance.id === workId)?.userLabel).toBe(
       "Renamed work relay",
     );

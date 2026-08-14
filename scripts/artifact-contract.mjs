@@ -1,3 +1,6 @@
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+
 export const EXPECTED_DESCRIPTION =
   "Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
 
@@ -42,6 +45,8 @@ const SIDE_PANEL_CREDENTIAL_BOUNDARIES = [
   "providerRegistry",
 ];
 const KEY_SHAPED_VALUE = /\bsk[-_][A-Za-z0-9_-]{20,}\b/;
+const WORKSTATION_PATH =
+  /(?:\/Users\/[A-Za-z0-9._-]+\/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+\\)/u;
 
 function hasExactMembers(actual, expected) {
   return (
@@ -148,4 +153,132 @@ export function validateReleaseTextEntries(entries) {
   }
 
   return errors;
+}
+
+export function validateReleaseEntryNames(names) {
+  const errors = [];
+
+  for (const name of names) {
+    const lower = String(name).toLowerCase();
+    const components = String(name).split("/");
+    let error;
+
+    if (
+      String(name).startsWith("/") ||
+      String(name).startsWith("\\") ||
+      /^[A-Za-z]:[\\/]/u.test(String(name))
+    ) {
+      error = `Release entry is absolute: ${name}.`;
+    } else if (
+      components.includes("..") ||
+      components.includes(".") ||
+      (components.includes("") && !String(name).endsWith("/"))
+    ) {
+      error = `Release entry contains traversal or an invalid segment: ${name}.`;
+    } else if (String(name).includes("\\")) {
+      error = `Release entry contains a non-portable path separator: ${name}.`;
+    } else if (
+      components.some(
+        (component) => component.toLowerCase() === ".superpowers",
+      ) ||
+      lower === "docs/superpowers" ||
+      lower.startsWith("docs/superpowers/")
+    ) {
+      error = `Release entry exposes Superpowers workflow files: ${name}.`;
+    } else if (lower.endsWith(".map")) {
+      error = `Release entry contains a source map: ${name}.`;
+    } else if (components.some((component) => component.startsWith("."))) {
+      error = `Release entry contains a dotfile: ${name}.`;
+    } else if (
+      /(?:^|\/)(?:release-evidence|test-results|playwright-report|coverage)(?:\/|$)/iu.test(
+        String(name),
+      ) ||
+      /(?:^|\/)task-\d+-report\.md$/iu.test(String(name))
+    ) {
+      error = `Release entry contains generated evidence: ${name}.`;
+    }
+
+    if (error) errors.push(error);
+  }
+  return errors;
+}
+
+export function validateReleaseArtifactContents(entries) {
+  const textEntries = Object.fromEntries(
+    Object.entries(entries).map(([name, value]) => [
+      name,
+      typeof value === "string" ? value : Buffer.from(value).toString("utf8"),
+    ]),
+  );
+  const errors = validateReleaseTextEntries(textEntries);
+
+  for (const [name, text] of Object.entries(textEntries)) {
+    if (WORKSTATION_PATH.test(text)) {
+      errors.push(`Release file contains a workstation path in ${name}.`);
+    }
+    if (text.includes(".superpowers") || text.includes("docs/superpowers/")) {
+      errors.push(`Release file exposes a Superpowers workflow path in ${name}.`);
+    }
+  }
+  return errors;
+}
+
+function compareReleaseEntries(reference, candidate, candidateLabel) {
+  const errors = [];
+  const referenceNames = Object.keys(reference).sort();
+  const candidateNames = Object.keys(candidate).sort();
+
+  for (const name of referenceNames) {
+    if (!(name in candidate)) {
+      errors.push(`${candidateLabel} is missing WXT output file ${name}.`);
+    } else if (
+      !Buffer.from(candidate[name]).equals(Buffer.from(reference[name]))
+    ) {
+      errors.push(`${candidateLabel} bytes differ from WXT output for ${name}.`);
+    }
+  }
+  for (const name of candidateNames) {
+    if (!(name in reference)) {
+      errors.push(
+        `${candidateLabel} has unexpected file ${name} compared with WXT output.`,
+      );
+    }
+  }
+  return errors;
+}
+
+export function validateReleaseArtifactParity({ zip, output, dist }) {
+  const errors = [];
+  for (const entries of [zip, output, dist].filter(Boolean)) {
+    errors.push(...validateReleaseEntryNames(Object.keys(entries)));
+    errors.push(...validateReleaseArtifactContents(entries));
+  }
+  if (zip) errors.push(...compareReleaseEntries(output, zip, "ZIP"));
+  errors.push(...compareReleaseEntries(output, dist, "Staged unpacked"));
+  return errors;
+}
+
+export async function readReleaseDirectoryEntries(root) {
+  const entries = {};
+
+  async function visit(directory, relativeDirectory = "") {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const relativeName = relativeDirectory
+        ? `${relativeDirectory}/${entry.name}`
+        : entry.name;
+      const absoluteName = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(absoluteName, relativeName);
+      } else if (entry.isFile()) {
+        entries[relativeName] = await readFile(absoluteName);
+      } else {
+        throw new Error(
+          `Release tree contains a non-regular entry: ${relativeName}.`,
+        );
+      }
+    }
+  }
+
+  await visit(path.resolve(root));
+  return entries;
 }

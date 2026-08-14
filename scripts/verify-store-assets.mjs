@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,6 +6,7 @@ import {
   readPngDimensions,
   REQUIRED_STORE_ASSET_DIMENSIONS,
   validateMarketingAssetFileSizes,
+  validateMarketingPngInventory,
   validateStoreAssetDimensions,
 } from "./store-assets-contract.mjs";
 
@@ -14,6 +15,21 @@ const assetDirectory = path.join(repositoryRoot, "store-assets");
 const dimensions = {};
 const fileSizes = {};
 const errors = [];
+const marketingPngPaths = [];
+
+for (const entry of await readdir(assetDirectory, {
+  recursive: true,
+  withFileTypes: true,
+})) {
+  if (!entry.isFile() || !/\.png$/iu.test(entry.name)) continue;
+  marketingPngPaths.push(
+    path
+      .relative(assetDirectory, path.join(entry.parentPath, entry.name))
+      .split(path.sep)
+      .join("/"),
+  );
+}
+errors.push(...validateMarketingPngInventory(marketingPngPaths));
 
 for (const name of Object.keys(REQUIRED_STORE_ASSET_DIMENSIONS)) {
   const assetPath = path.join(assetDirectory, name);

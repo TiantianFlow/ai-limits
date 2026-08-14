@@ -4,9 +4,7 @@ English | [简体中文](FAQ.zh-CN.md)
 
 ## Does History update after manual refresh, automatic refresh, or both?
 
-Both. A successful **Connect**, provider **Refresh**, header refresh button, or
-scheduled automatic refresh adds one normalized quota observation containing
-the quota windows returned by that provider.
+Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. Version 0.3.0 graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.
 
 Failed, deferred, skipped, superseded, or malformed refreshes do not add a
 history observation. They also do not insert a zero or copy the last value

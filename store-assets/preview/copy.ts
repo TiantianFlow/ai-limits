@@ -311,7 +311,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "查看变化趋势",
       title: "用量历史，仅存本地。",
       description:
-        "每次成功刷新都会更新本地配额图表；跨越重置周期或数据缺失时保留间隔，避免误导趋势。",
+        "配额图表使用每个实例的类型化历史；跨越重置周期或数据缺失时保留间隔，避免误导趋势。",
     },
     privacy: {
       eyebrow: "数据仅存本地",
@@ -327,7 +327,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
-      description: "ChatGPT · Claude · Kimi · Cursor",
+      description: "6 个服务 · 多个 New API 实例",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
     providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",

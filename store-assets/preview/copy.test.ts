@@ -182,6 +182,8 @@ describe("store artwork copy", () => {
     expect(previewContent.zh_CN.representativeLabel).toContain("英文");
     expect(previewContent.zh_CN.overview.title).toMatch(/[\u3400-\u9fff]/u);
     expect(previewContent.zh_CN.history.title).toMatch(/[\u3400-\u9fff]/u);
+    expect(previewContent.zh_CN.history.description).toContain("每个实例");
+    expect(previewContent.zh_CN.history.description).toContain("类型化历史");
   });
 
   it("gives local quota history a dedicated store-artwork view", () => {
@@ -203,6 +205,9 @@ describe("store artwork copy", () => {
       "Used or Left · Reset timing · Pace · Local history",
       "Local history. No remote backend.",
     ]);
+    expect(previewContent.zh_CN.social.description).toBe(
+      "6 个服务 · 多个 New API 实例",
+    );
   });
 
   it("names all six supported providers in the overview artwork", () => {
