@@ -811,6 +811,95 @@ describe("generic provider instance service", () => {
     expect(collect).not.toHaveBeenCalled();
   });
 
+  test("quarantines an explicitly malformed binding across repeated migration and restart refresh", async () => {
+    await browser.storage.local.set({
+      aiLimitsState: {
+        version: 5,
+        preferences: { displayMode: "used", autoRefresh: true },
+        instances: [
+          {
+            ...newApiInstance(FIRST, "https://malformed.example/gateway"),
+            connectionRevision: " malformed binding ",
+            history: [
+              {
+                observedAt: NOW,
+                metrics: [
+                  {
+                    type: "quota",
+                    metricId: "primary",
+                    usedRatio: 0.25,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            ...newApiInstance(SECOND, "https://sibling.example/gateway"),
+            connectionRevision: "sibling-revision",
+          },
+        ],
+      },
+      aiLimitsCredentials: {
+        version: 2,
+        credentials: {
+          [FIRST]: {
+            kind: "api-key",
+            value: "malformed-secret",
+            status: "active",
+            revision: "credential-revision",
+          },
+          [SECOND]: {
+            kind: "api-key",
+            value: "sibling-secret",
+            status: "active",
+            revision: "sibling-revision",
+          },
+        },
+      },
+    });
+
+    await migrateLegacyStorageInPlace(NOW, {
+      origins: ["https://malformed.example/*", "https://sibling.example/*"],
+    });
+    const firstMigration = await browser.storage.local.get([
+      "aiLimitsState",
+      "aiLimitsCredentials",
+    ]);
+    const firstInstance = await connectionRepository.get(FIRST);
+    expect(firstInstance).toMatchObject({
+      id: FIRST,
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://malformed.example/gateway",
+      },
+      history: [expect.objectContaining({ observedAt: NOW })],
+    });
+    expect(firstInstance).not.toHaveProperty("connectionRevision");
+    await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+    await expect(connectionRepository.get(SECOND)).resolves.toMatchObject({
+      connectionRevision: "sibling-revision",
+    });
+    await expect(readCredentialWithRevision(SECOND)).resolves.toMatchObject({
+      revision: "sibling-revision",
+      value: "sibling-secret",
+    });
+
+    await migrateLegacyStorageInPlace(NOW + 1, {
+      origins: ["https://malformed.example/*", "https://sibling.example/*"],
+    });
+    await expect(
+      browser.storage.local.get(["aiLimitsState", "aiLimitsCredentials"]),
+    ).resolves.toEqual(firstMigration);
+
+    const collect = vi.fn(async () => success("newapi"));
+    const restarted = createProviderService({
+      packages: registryWith({ newapi: { ...providerRegistry.newapi, collect } }),
+      clock: () => NOW + 2,
+    });
+    await restarted.refreshInstance(FIRST, "manual_provider");
+    expect(collect).not.toHaveBeenCalled();
+  });
+
   test("delete-all invalidates an uncommitted new instance before local state can reappear", async () => {
     let enteredCreate: (() => void) | undefined;
     let releaseCreate: (() => void) | undefined;
