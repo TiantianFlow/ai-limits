@@ -225,6 +225,35 @@ describe("Cursor adapter", () => {
     });
   });
 
+  test("omits a non-positive optional on-demand limit", async () => {
+    const body = planSummary();
+    body.individualUsage.onDemand = {
+      enabled: true,
+      used: 0,
+      limit: 0,
+      remaining: 0,
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response(body));
+
+    const result = await cursorAdapter.collect(context(fetch));
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.snapshot.metrics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "counter",
+            id: "on-demand",
+            value: 0,
+          }),
+        ]),
+      );
+      expect(
+        result.snapshot.metrics.find((metric) => metric.id === "on-demand"),
+      ).not.toHaveProperty("limit");
+    }
+  });
+
   test.each([
     ["an out-of-range supplied lane", planSummary({
       individualUsage: {

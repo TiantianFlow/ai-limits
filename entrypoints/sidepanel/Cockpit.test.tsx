@@ -40,6 +40,42 @@ function renderCockpit(
 }
 
 describe("Cockpit", () => {
+  it("renders unlimited New API usage without offering quota history", () => {
+    const state = createInitialState();
+    state.providers[5] = {
+      providerId: "newapi",
+      access: "granted",
+      history: [],
+      snapshot: {
+        providerKind: "newapi",
+        planLabel: "Unlimited",
+        source: "api-key",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "counter",
+            id: "relay-key-usage",
+            label: "API key usage",
+            scope: "feature",
+            semantic: "consumed",
+            value: 42_000,
+            unit: "quota units",
+          },
+        ],
+      },
+    };
+
+    renderCockpit(state);
+    expect(screen.getByText("42,000 quota units used")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Open New API details" }));
+
+    const detail = screen.getByRole("region", { name: "New API detail" });
+    expect(within(detail).getByText("42,000 quota units used")).toBeVisible();
+    expect(
+      within(detail).queryByRole("button", { name: "Open New API history" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders counter and balance metrics on Overview and Detail but offers only quotas in History", () => {
     const state = createInitialState();
     state.providers[0] = {

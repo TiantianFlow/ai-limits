@@ -15,6 +15,7 @@ import type {
   UsageSnapshot,
 } from "../domain/model";
 import { providerIds } from "./catalog";
+import { convertReleasedV4ProviderWire } from "./v4-wire-migration";
 
 export const CURRENT_STATE_VERSION = 4 as const;
 const SEGMENT_SUM_TOLERANCE = 1e-6;
@@ -335,7 +336,8 @@ function normalizeHistoryObservation(
     !isRecord(value) ||
     !isFiniteNumber(value.observedAt) ||
     value.observedAt < 0 ||
-    !Array.isArray(value.metrics)
+    !Array.isArray(value.metrics) ||
+    value.metrics.length === 0
   ) {
     return undefined;
   }
@@ -522,11 +524,22 @@ export function migrateState(value: unknown, now: number): AppState {
       return { providerId, access: "required", history: [] };
     }
 
-    const snapshot = normalizeUsageSnapshot(stored.snapshot, providerId);
+    const releasedV4 =
+      isRecord(value) && value.version === CURRENT_STATE_VERSION
+        ? convertReleasedV4ProviderWire(stored, providerId)
+        : undefined;
+    const snapshot =
+      normalizeUsageSnapshot(stored.snapshot, providerId) ??
+      normalizeUsageSnapshot(releasedV4?.snapshot, providerId);
     const lastAttempt = normalizeAttempt(stored.lastAttempt);
+    const typedHistory = normalizeHistory(stored.history);
+    const releasedV4History = normalizeHistory(releasedV4?.history);
     const history =
       isRecord(value) && value.version === CURRENT_STATE_VERSION
-        ? retainUsageHistory(normalizeHistory(stored.history), now)
+        ? retainUsageHistory(
+            typedHistory.length > 0 ? typedHistory : releasedV4History,
+            now,
+          )
         : isRecord(value) && value.version === 3 && snapshot
           ? retainUsageHistory([observationFromUsage(snapshot)], now)
           : [];
