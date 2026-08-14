@@ -253,6 +253,14 @@ describe("released V4 wire migration", () => {
         usageGroups: [{ id: "usage", label: "Usage", windowIds: ["weekly"] }],
       },
     ],
+    [
+      "a fixture-only source",
+      {
+        source: "fixture",
+        windows: [releasedQuotaWindow({})],
+        credits: [],
+      },
+    ],
   ])("does not use V4 compatibility to repair %s", (_name, fields) => {
     const migrated = migrateState(
       {

@@ -151,6 +151,9 @@ function convertSnapshot(
   if (
     !isRecord(value) ||
     value.providerId !== providerId ||
+    (value.source !== "web-session" &&
+      value.source !== "oauth" &&
+      value.source !== "api-key") ||
     !Array.isArray(value.windows) ||
     !Array.isArray(value.credits)
   ) {
