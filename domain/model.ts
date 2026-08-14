@@ -1,4 +1,5 @@
 import type { ProviderId, ProviderKind } from "../providers/catalog";
+import type { ProviderInstanceId } from "./instances";
 
 export type { ProviderId, ProviderKind } from "../providers/catalog";
 
@@ -143,7 +144,12 @@ export interface RefreshReport {
   trigger: RefreshTrigger;
   startedAt: number;
   finishedAt: number;
-  providers: Partial<Record<ProviderId, ProviderRefreshOutcome>>;
+  results: InstanceRefreshResult[];
+}
+
+export interface InstanceRefreshResult {
+  instanceId: ProviderInstanceId;
+  outcome: ProviderRefreshOutcome;
 }
 
 export interface ProviderAttempt {

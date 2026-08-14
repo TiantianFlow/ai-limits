@@ -1,227 +1,147 @@
-import { providerCatalog } from "../providers/catalog";
-import { newApiPermissionOrigin } from "../providers/newapi/url";
-import type { ConnectableProviderId } from "../providers/registry";
+import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderKind } from "../providers/catalog";
+import { providerRegistry } from "../providers/registry";
+import type { ProviderPackage } from "../providers/types";
 
-interface PermissionDefinition {
-  readonly optionalOrigins: readonly string[];
-  readonly optionalPermissions: readonly string[];
-  readonly connection?:
-    | { readonly kind: "browser-session" }
-    | { readonly kind: "api-key"; readonly origin: "static" | "dynamic" };
+export type PermissionPackageCatalog = {
+  [Kind in ProviderKind]: Pick<ProviderPackage, "requiredPermissions">;
+};
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
 }
 
-type PermissionCatalog = Record<ConnectableProviderId, PermissionDefinition>;
-
-export interface ProviderPermissionContext {
-  readonly baseUrl?: string;
-}
-
-function isSupportedNewApiGrantedOrigin(origin: string): boolean {
-  if (!origin.endsWith("/*")) return false;
-  const rawOrigin = origin.slice(0, -2);
-  try {
-    const parsed = new URL(rawOrigin);
-    return (
-      origin === `${parsed.origin}/*` &&
-      (parsed.protocol === "https:" ||
-        (parsed.protocol === "http:" &&
-          (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")))
-    );
-  } catch {
-    return false;
-  }
-}
-
-function isStaticProviderOrigin(
-  origin: string,
-  catalog: PermissionCatalog,
-): boolean {
-  return Object.values(catalog).some(
-    (provider) =>
-      !(
-        provider.connection?.kind === "api-key" &&
-        provider.connection.origin === "dynamic"
-      ) && provider.optionalOrigins.includes(origin),
-  );
-}
-
-function permissionsFor(
-  providerId: ConnectableProviderId,
-  catalog: PermissionCatalog = providerCatalog,
-  context: ProviderPermissionContext = {},
+function compactPermissions(
+  origins: readonly string[],
+  permissions: readonly string[],
 ): Browser.permissions.Permissions | undefined {
-  const provider = catalog[providerId];
-  const origins =
-    provider.connection?.kind === "api-key" &&
-    provider.connection.origin === "dynamic"
-      ? [newApiPermissionOrigin(context.baseUrl)].filter(
-          (origin): origin is string => origin !== undefined,
-        )
-      : [...provider.optionalOrigins];
-  if (
-    provider.connection?.kind === "api-key" &&
-    provider.connection.origin === "dynamic" &&
-    origins.length === 0
-  ) {
+  const uniqueOrigins = unique(origins);
+  const uniquePermissions = unique(permissions);
+  if (uniqueOrigins.length === 0 && uniquePermissions.length === 0) {
     return undefined;
   }
   return {
-    origins,
-    ...(provider.optionalPermissions.length > 0
-      ? { permissions: [...provider.optionalPermissions] }
-      : {}),
+    ...(uniqueOrigins.length ? { origins: uniqueOrigins } : {}),
+    ...(uniquePermissions.length ? { permissions: uniquePermissions } : {}),
   } as Browser.permissions.Permissions;
 }
 
-export async function hasProviderPermission(
-  providerId: ConnectableProviderId,
-  context: ProviderPermissionContext = {},
-): Promise<boolean> {
-  const permissions = permissionsFor(providerId, providerCatalog, context);
-  return permissions
-    ? Boolean(await browser.permissions.contains(permissions))
-    : false;
+export function requiredPermissionsForInstance(
+  instance: ProviderInstanceRecord,
+  packages: PermissionPackageCatalog = providerRegistry,
+): Browser.permissions.Permissions | undefined {
+  return packages[instance.providerKind].requiredPermissions(instance.config);
 }
 
-export async function requestProviderPermission(
-  providerId: ConnectableProviderId,
-  context: ProviderPermissionContext = {},
+export async function hasInstancePermission(
+  instance: ProviderInstanceRecord,
+  packages: PermissionPackageCatalog = providerRegistry,
 ): Promise<boolean> {
-  const permissions = permissionsFor(providerId, providerCatalog, context);
-  return permissions ? browser.permissions.request(permissions) : false;
+  const required = requiredPermissionsForInstance(instance, packages);
+  return required ? Boolean(await browser.permissions.contains(required)) : true;
 }
 
-export function permissionChangeAffectsProvider(
-  providerId: ConnectableProviderId,
+export async function requestInstancePermission(
+  instance: ProviderInstanceRecord,
+  packages: PermissionPackageCatalog = providerRegistry,
+): Promise<boolean> {
+  const required = requiredPermissionsForInstance(instance, packages);
+  return required ? Boolean(await browser.permissions.request(required)) : true;
+}
+
+export function permissionChangeAffectsInstance(
+  instance: ProviderInstanceRecord,
   changed: Browser.permissions.Permissions | undefined,
-  catalog: PermissionCatalog = providerCatalog,
+  packages: PermissionPackageCatalog = providerRegistry,
 ): boolean {
-  const provider = catalog[providerId];
-  const dynamic =
-    provider.connection?.kind === "api-key" &&
-    provider.connection.origin === "dynamic";
+  const required = requiredPermissionsForInstance(instance, packages);
+  if (!required || !changed) return false;
+  const changedOrigins = new Set(changed.origins ?? []);
+  const changedPermissions = new Set(
+    (changed.permissions ?? []) as readonly string[],
+  );
   return (
-    provider.optionalPermissions.some((permission) =>
-      (changed?.permissions as readonly string[] | undefined)?.includes(permission),
-    ) ||
-    (changed?.origins ?? []).some((origin) =>
-      dynamic
-        ? isSupportedNewApiGrantedOrigin(origin) &&
-          !isStaticProviderOrigin(origin, catalog)
-        : provider.optionalOrigins.includes(origin),
+    (required.origins ?? []).some((origin) => changedOrigins.has(origin)) ||
+    ((required.permissions ?? []) as readonly string[]).some((permission) =>
+      changedPermissions.has(permission),
     )
   );
 }
 
-export async function removeProviderPermission(
-  providerId: ConnectableProviderId,
-  remainingConnectedProviderIds: readonly ConnectableProviderId[],
-  catalog: PermissionCatalog = providerCatalog,
-  context: ProviderPermissionContext = {},
-): Promise<boolean> {
-  const remainingOrigins = new Set(
-    remainingConnectedProviderIds.flatMap((remainingProviderId) =>
-      catalog[remainingProviderId].optionalOrigins,
-    ),
-  );
-  const remainingPermissions = new Set(
-    remainingConnectedProviderIds.flatMap(
-      (remainingProviderId) =>
-        catalog[remainingProviderId].optionalPermissions,
-    ),
-  );
-  const provider = catalog[providerId];
-  const requestedOrigins =
-    provider.connection?.kind === "api-key" &&
-    provider.connection.origin === "dynamic"
-      ? [newApiPermissionOrigin(context.baseUrl)].filter(
-          (origin): origin is string => origin !== undefined,
-        )
-      : provider.optionalOrigins;
-  if (
-    provider.connection?.kind === "api-key" &&
-    provider.connection.origin === "dynamic" &&
-    requestedOrigins.length === 0
-  ) {
-    return false;
+function permissionUnion(
+  instances: readonly ProviderInstanceRecord[],
+  packages: PermissionPackageCatalog,
+): Browser.permissions.Permissions | undefined {
+  const origins: string[] = [];
+  const permissions: string[] = [];
+  for (const instance of instances) {
+    const required = requiredPermissionsForInstance(instance, packages);
+    origins.push(...(required?.origins ?? []));
+    permissions.push(
+      ...((required?.permissions ?? []) as readonly string[]),
+    );
   }
-  const origins = requestedOrigins.filter(
-    (origin) => !remainingOrigins.has(origin),
-  );
-  const permissions = provider.optionalPermissions.filter(
-    (permission) => !remainingPermissions.has(permission),
-  );
-
-  if (origins.length === 0 && permissions.length === 0) {
-    return true;
-  }
-
-  const removablePermissions = {
-    ...(origins.length > 0 ? { origins: [...origins] } : {}),
-    ...(permissions.length > 0 ? { permissions: [...permissions] } : {}),
-  } as Browser.permissions.Permissions;
-  try {
-    await browser.permissions.remove(removablePermissions);
-  } catch {
-    // The exact permission postcondition below is authoritative.
-  }
-  return !(await browser.permissions.contains(removablePermissions));
+  return compactPermissions(origins, permissions);
 }
 
-export async function removeAllProviderPermissions(
-  providerIds: readonly ConnectableProviderId[],
-  catalog: PermissionCatalog = providerCatalog,
+async function exactPermissionsAreAbsent(
+  permissions: Browser.permissions.Permissions,
 ): Promise<boolean> {
-  let granted: Browser.permissions.Permissions;
   try {
-    granted = await browser.permissions.getAll();
+    const checks = [
+      ...(permissions.origins ?? []).map((origin) =>
+        browser.permissions.contains({ origins: [origin] }),
+      ),
+      ...((permissions.permissions ?? []) as readonly string[]).map((permission) =>
+        browser.permissions.contains({
+          permissions: [permission as Browser.runtime.ManifestPermission],
+        }),
+      ),
+    ];
+    const present = await Promise.all(checks);
+    return present.every((value) => !value);
   } catch {
     return false;
   }
+}
 
-  const grantedOrigins = new Set(granted.origins ?? []);
-  const grantedPermissions = new Set(
-    (granted.permissions ?? []) as readonly string[],
+export async function removeUnusedInstancePermissions(
+  removedInstance: ProviderInstanceRecord,
+  remainingInstances: readonly ProviderInstanceRecord[],
+  packages: PermissionPackageCatalog = providerRegistry,
+): Promise<boolean> {
+  const removed = requiredPermissionsForInstance(removedInstance, packages);
+  if (!removed) return true;
+  const remaining = permissionUnion(remainingInstances, packages);
+  const remainingOrigins = new Set(remaining?.origins ?? []);
+  const remainingPermissions = new Set(
+    (remaining?.permissions ?? []) as readonly string[],
   );
-  const claimedOrigins = new Set<string>();
-  const claimedPermissions = new Set<string>();
-  const requests = providerIds.map((providerId) => {
-    const provider = catalog[providerId];
-    const dynamic =
-      provider.connection?.kind === "api-key" &&
-      provider.connection.origin === "dynamic";
-    const origins = dynamic
-      ? [...grantedOrigins].filter(
-          (origin) =>
-            isSupportedNewApiGrantedOrigin(origin) && !claimedOrigins.has(origin),
-        )
-      : provider.optionalOrigins.filter(
-          (origin) => grantedOrigins.has(origin) && !claimedOrigins.has(origin),
-        );
-    const permissions = provider.optionalPermissions.filter(
-      (permission) =>
-        grantedPermissions.has(permission) &&
-        !claimedPermissions.has(permission),
-    );
-    origins.forEach((origin) => claimedOrigins.add(origin));
-    permissions.forEach((permission) => claimedPermissions.add(permission));
-    return { origins, permissions };
-  });
-
-  const results = await Promise.allSettled(
-    requests.map(({ origins, permissions }) => {
-      if (origins.length === 0 && permissions.length === 0) {
-        return Promise.resolve(true);
-      }
-
-      return browser.permissions.remove({
-        ...(origins.length > 0 ? { origins } : {}),
-        ...(permissions.length > 0 ? { permissions } : {}),
-      } as Browser.permissions.Permissions);
-    }),
+  const removable = compactPermissions(
+    (removed.origins ?? []).filter((origin) => !remainingOrigins.has(origin)),
+    ((removed.permissions ?? []) as readonly string[]).filter(
+      (permission) => !remainingPermissions.has(permission),
+    ),
   );
+  if (!removable) return true;
+  try {
+    await browser.permissions.remove(removable);
+  } catch {
+    // The exact postcondition below is authoritative.
+  }
+  return exactPermissionsAreAbsent(removable);
+}
 
-  return results.every(
-    (result) => result.status === "fulfilled" && Boolean(result.value),
-  );
+export async function removeAllInstancePermissions(
+  instances: readonly ProviderInstanceRecord[],
+  packages: PermissionPackageCatalog = providerRegistry,
+): Promise<boolean> {
+  const removable = permissionUnion(instances, packages);
+  if (!removable) return true;
+  try {
+    await browser.permissions.remove(removable);
+  } catch {
+    // The exact postcondition below is authoritative.
+  }
+  return exactPermissionsAreAbsent(removable);
 }

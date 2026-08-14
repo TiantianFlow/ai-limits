@@ -1,70 +1,71 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import type { CollectionContext } from "../providers/types";
-import { isApiKeyProviderId } from "../providers/catalog";
+import type {
+  ProviderInstanceId,
+  ProviderInstanceRecord,
+} from "../domain/instances";
+import type { CollectionResult, ProviderPackage } from "../providers/types";
 import {
-  initializeCredentialStorage,
-  markProviderCredentialRejectedIfRevision,
-  readProviderCredential,
-  readProviderCredentialWithRevision,
-  saveProviderApiKey,
-  saveProviderApiKeyIfCurrent,
-} from "../storage/credentials";
+  initializeCredentialVault,
+  readCredentialWithRevision,
+  saveApiKeyIfCurrent,
+} from "../storage/credential-vault";
 import {
-  connectApiKeyProvider,
   createApiKeyConnectionLifecycle,
   markStoredApiKeyRejectedForOutcome,
 } from "./api-key-connection";
-import { reconcileRemovedProviderPermissions } from "./coordinator";
-import {
-  deleteAllLocalData,
-  disconnectProviderData,
-  ensureState,
-  loadState,
-} from "../storage/repository";
 
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
-const CANDIDATE_KEY = "synthetic-candidate-key";
+const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
+const SECOND = "newapi:550e8400-e29b-41d4-a716-446655440001";
 
-function response(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-function subscriptionFixture(overrides: Record<string, unknown> = {}) {
+function instance(id: ProviderInstanceId): ProviderInstanceRecord {
   return {
-    tier: "starter",
-    character_count: 2_500,
-    character_limit: 10_000,
-    next_character_count_reset_unix: Date.parse("2030-05-01T00:00:00.000Z") / 1_000,
-    character_refresh_period: "monthly_period",
-    ...overrides,
+    id,
+    providerKind: "newapi",
+    config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+    access: "granted",
+    createdAt: NOW,
+    history: [],
   };
 }
 
-function context(fetch: typeof globalThis.fetch): Omit<CollectionContext, "credential"> {
+function success(): CollectionResult {
   return {
-    fetch,
-    now: NOW,
-    signal: new AbortController().signal,
+    ok: true,
+    snapshot: {
+      providerKind: "newapi",
+      source: "api-key",
+      fetchedAt: NOW,
+      metrics: [
+        {
+          type: "quota",
+          id: "primary",
+          label: "Primary",
+          scope: "general",
+          usedRatio: 0.25,
+        },
+      ],
+    },
   };
 }
 
-function lifecycleContext(
-  fetch: typeof globalThis.fetch,
-): Omit<CollectionContext, "credential" | "signal"> {
-  return { fetch, now: NOW };
+function providerPackage(collect: ProviderPackage["collect"]): ProviderPackage {
+  return {
+    kind: "newapi",
+    cardinality: "multiple",
+    credentialKind: "api-key",
+    normalizeConfig: (value) => value as ProviderInstanceRecord["config"],
+    requiredPermissions: () => undefined,
+    collect,
+  };
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => {
-    resolve = next;
-  });
-  return { promise, resolve };
-}
+const services = {
+  fetch: vi.fn() as unknown as typeof globalThis.fetch,
+  now: NOW,
+  interaction: "allowed" as const,
+};
 
 beforeEach(async () => {
   vi.restoreAllMocks();
@@ -72,782 +73,123 @@ beforeEach(async () => {
   Object.assign(browser.storage.local, {
     setAccessLevel: vi.fn(async () => undefined),
   });
-  await initializeCredentialStorage();
+  await initializeCredentialVault();
 });
 
-describe("API-key connection transaction", () => {
-  test("validates and stores a New API key with its normalized instance", async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(
-        response({ success: true, data: { system_name: "Acme AI" } }),
-      )
-      .mockResolvedValueOnce(
-        response({
-          code: true,
-          data: {
-            name: "AI Limits",
-            total_granted: 100,
-            total_used: 25,
-            total_available: 75,
-            unlimited_quota: false,
-            expires_at: 0,
-          },
-        }),
-      );
-
-    const result = await connectApiKeyProvider(
-      "newapi",
-      "sk-candidate",
-      context(fetch),
-      () => true,
-      () => NOW,
-      "https://NEW-API.example.com/gateway/v1/messages",
-    );
-
-    expect(result.result).toBe("connected");
-    await expect(readProviderCredential("newapi")).resolves.toEqual({
-      kind: "api-key",
-      value: "sk-candidate",
-      baseUrl: "https://new-api.example.com/gateway",
-      status: "active",
-    });
-  });
-
-  test("reports an invalid New API site separately from key failures", async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response({ product: "not-new-api" }));
-
-    const result = await connectApiKeyProvider(
-      "newapi",
-      "sk-candidate",
-      context(fetch),
-      () => true,
-      () => NOW,
-      "https://wrong.example.com",
-    );
-
-    expect(result.result).toBe("invalid_site");
-    await expect(readProviderCredential("newapi")).resolves.toBeUndefined();
-  });
-  test("a newer connection supersedes a late response and only the latest key wins", async () => {
-    const firstResponse = deferred<Response>();
-    const firstFetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(() => firstResponse.promise);
-    const secondFetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(
-        response(subscriptionFixture({ tier: "latest-plan" })),
-      );
+describe("API-key instance connection lifecycle", () => {
+  test.each([
+    [{ ok: false, health: { kind: "credential_invalid" } }, "invalid_key"],
+    [
+      { ok: false, health: { kind: "credential_scope_required" } },
+      "insufficient_scope",
+    ],
+    [{ ok: false, health: { kind: "provider_changed" } }, "invalid_site"],
+    [{ ok: false, health: { kind: "temporary_error" } }, "temporary_error"],
+  ] as const)("maps a package validation outcome to %s", async (result, status) => {
     const lifecycle = createApiKeyConnectionLifecycle();
-
-    const first = lifecycle.connect(
-      "elevenlabs",
-      "first-key",
-      lifecycleContext(firstFetch),
-      () => NOW + 1_000,
+    const validation = await lifecycle.connect(
+      instance(FIRST),
+      providerPackage(async () => result),
+      "candidate",
+      services,
+      () => NOW,
     );
-    await vi.waitFor(() => expect(firstFetch).toHaveBeenCalledOnce());
+
+    expect(validation.result).toBe(status);
+  });
+
+  test("passes only the candidate credential to its selected instance package", async () => {
+    const collect = vi.fn(async () => success());
+    const validation = await createApiKeyConnectionLifecycle().connect(
+      instance(FIRST),
+      providerPackage(collect),
+      "candidate-secret",
+      services,
+      () => NOW,
+    );
+
+    expect(validation.result).toBe("connected");
+    expect(collect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: FIRST }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      { kind: "api-key", value: "candidate-secret" },
+    );
+  });
+
+  test("invalidating one sibling does not supersede another sibling connection", async () => {
+    const finish = new Map<ProviderInstanceId, (value: CollectionResult) => void>();
+    const collect = vi.fn(
+      (selected: ProviderInstanceRecord) =>
+        new Promise<CollectionResult>((resolve) => finish.set(selected.id, resolve)),
+    );
+    const lifecycle = createApiKeyConnectionLifecycle();
+    const first = lifecycle.connect(
+      instance(FIRST),
+      providerPackage(collect),
+      "first-secret",
+      services,
+      () => NOW,
+    );
     const second = lifecycle.connect(
-      "elevenlabs",
-      "latest-key",
-      lifecycleContext(secondFetch),
-      () => NOW + 2_000,
+      instance(SECOND),
+      providerPackage(collect),
+      "second-secret",
+      services,
+      () => NOW,
     );
+    await vi.waitFor(() => expect(finish.size).toBe(2));
+
+    lifecycle.invalidateInstance(FIRST);
+    finish.get(FIRST)?.(success());
+    finish.get(SECOND)?.(success());
+
+    await expect(first).resolves.toMatchObject({
+      result: "temporary_error",
+      outcome: { kind: "skipped", reason: "superseded" },
+    });
     await expect(second).resolves.toMatchObject({ result: "connected" });
-    expect(
-      (firstFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.signal
-        ?.aborted,
-    ).toBe(true);
-
-    firstResponse.resolve(
-      response(subscriptionFixture({ tier: "stale-plan" })),
-    );
-    await expect(first).resolves.toMatchObject({
-      result: "temporary_error",
-      report: {
-        providers: {
-          elevenlabs: { kind: "skipped", reason: "superseded" },
-        },
-      },
-    });
-
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "latest-key",
-      status: "active",
-    });
-    expect((await loadState(NOW + 2_000))?.providers[4]?.snapshot?.planLabel)
-      .toBe("latest-plan");
   });
 
-  test("a superseded candidate cannot write after waiting in the credential queue", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-active-key");
-    const storedCredentials = await browser.storage.local.get(null);
-    const blockedRead = deferred<Record<string, unknown>>();
-    const storageGet = vi
-      .spyOn(browser.storage.local, "get")
-      .mockImplementationOnce(() => blockedRead.promise as never);
-    const firstFetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response(subscriptionFixture({ tier: "superseded" })));
-    const secondFetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response({}, 401));
-    const lifecycle = createApiKeyConnectionLifecycle();
-
-    const first = lifecycle.connect(
-      "elevenlabs",
-      "superseded-key",
-      lifecycleContext(firstFetch),
-      () => NOW + 1_000,
-    );
-    await vi.waitFor(() => expect(firstFetch).toHaveBeenCalledOnce());
-    await vi.waitFor(() => expect(storageGet).toHaveBeenCalledOnce());
-    await expect(
-      lifecycle.connect(
-        "elevenlabs",
-        "failed-newer-key",
-        lifecycleContext(secondFetch),
-        () => NOW + 2_000,
-      ),
-    ).resolves.toMatchObject({ result: "invalid_key" });
-
-    blockedRead.resolve(storedCredentials);
-    await expect(first).resolves.toMatchObject({
-      result: "temporary_error",
-      report: {
-        providers: {
-          elevenlabs: { kind: "skipped", reason: "superseded" },
-        },
-      },
-    });
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "prior-active-key",
-      status: "active",
-    });
-  });
-
-  test("a candidate superseded while its credential write is pending rolls back after a newer failure", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-active-key");
-    const candidateWriteStarted = deferred<void>();
-    const releaseCandidateWrite = deferred<void>();
-    const storageSet = browser.storage.local.set.bind(browser.storage.local);
-    vi.spyOn(browser.storage.local, "set").mockImplementation(
-      async (value) => {
-        const credentialState = (value as Record<string, unknown>)
-          .aiLimitsCredentials as
-          | {
-              providers?: {
-                elevenlabs?: { value?: unknown };
-              };
-            }
-          | undefined;
-        if (
-          credentialState?.providers?.elevenlabs?.value ===
-          "superseded-pending-key"
-        ) {
-          candidateWriteStarted.resolve();
-          await releaseCandidateWrite.promise;
-        }
-        return storageSet(value);
-      },
+  test("a newer candidate supersedes only the previous generation of the same instance", async () => {
+    const finish: Array<(value: CollectionResult) => void> = [];
+    const pkg = providerPackage(
+      () => new Promise<CollectionResult>((resolve) => finish.push(resolve)),
     );
     const lifecycle = createApiKeyConnectionLifecycle();
-    const first = lifecycle.connect(
-      "elevenlabs",
-      "superseded-pending-key",
-      lifecycleContext(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture())),
-      ),
-      () => NOW + 1_000,
+    const oldCandidate = lifecycle.connect(
+      instance(FIRST), pkg, "old", services, () => NOW,
     );
-    await candidateWriteStarted.promise;
+    const newCandidate = lifecycle.connect(
+      instance(FIRST), pkg, "new", services, () => NOW,
+    );
+    await vi.waitFor(() => expect(finish).toHaveLength(2));
+    finish[0]?.(success());
+    finish[1]?.(success());
 
-    await expect(
-      lifecycle.connect(
-        "elevenlabs",
-        "failed-newer-key",
-        lifecycleContext(
-          vi
-            .fn<typeof globalThis.fetch>()
-            .mockResolvedValue(response({}, 401)),
-        ),
-        () => NOW + 2_000,
-      ),
-    ).resolves.toMatchObject({ result: "invalid_key" });
-    releaseCandidateWrite.resolve();
-
-    await expect(first).resolves.toMatchObject({
-      result: "temporary_error",
-      report: {
-        providers: {
-          elevenlabs: { kind: "skipped", reason: "superseded" },
-        },
-      },
+    await expect(oldCandidate).resolves.toMatchObject({
+      outcome: { kind: "skipped", reason: "superseded" },
     });
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "prior-active-key",
-      status: "active",
-    });
+    await expect(newCandidate).resolves.toMatchObject({ result: "connected" });
   });
 
-  test.each([
-    [
-      "disconnect",
-      async (lifecycle: ReturnType<typeof createApiKeyConnectionLifecycle>) => {
-        lifecycle.invalidateProvider("elevenlabs");
-        await disconnectProviderData("elevenlabs");
-      },
-    ],
-    [
-      "external permission removal",
-      async (lifecycle: ReturnType<typeof createApiKeyConnectionLifecycle>) => {
-        vi.spyOn(browser.permissions, "contains").mockResolvedValue(
-          false as never,
-        );
-        await reconcileRemovedProviderPermissions(
-          { origins: ["https://api.elevenlabs.io/*"] },
-          ["elevenlabs"],
-          (providerId) => {
-            if (isApiKeyProviderId(providerId)) {
-              lifecycle.invalidateProvider(providerId);
-            }
-          },
-        );
-      },
-    ],
-    [
-      "Delete all data",
-      async (lifecycle: ReturnType<typeof createApiKeyConnectionLifecycle>) => {
-        lifecycle.invalidateAll();
-        await deleteAllLocalData();
-      },
-    ],
-  ] as const)(
-    "%s prevents a deferred successful response from resurrecting credentials or state",
-    async (_label, cleanup) => {
-      const pendingResponse = deferred<Response>();
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockImplementation(() => pendingResponse.promise);
-      const lifecycle = createApiKeyConnectionLifecycle();
-      const connecting = lifecycle.connect(
-        "elevenlabs",
-        CANDIDATE_KEY,
-        lifecycleContext(fetch),
-        () => NOW + 1_000,
-      );
-      await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  test("credential revision rejection is isolated to the selected instance", async () => {
+    const first = await saveApiKeyIfCurrent(FIRST, "first-secret", () => true);
+    const second = await saveApiKeyIfCurrent(SECOND, "second-secret", () => true);
+    expect(first.saved && second.saved).toBe(true);
+    if (!first.saved) throw new Error("missing test credential");
 
-      await cleanup(lifecycle);
-      expect(
-        (fetch.mock.calls[0]?.[1] as RequestInit | undefined)?.signal?.aborted,
-      ).toBe(true);
-      pendingResponse.resolve(response(subscriptionFixture()));
-
-      await expect(connecting).resolves.toMatchObject({
-        result: "temporary_error",
-        report: {
-          providers: {
-            elevenlabs: { kind: "skipped", reason: "superseded" },
-          },
-        },
-      });
-      expect(await readProviderCredential("elevenlabs")).toBeUndefined();
-      expect((await loadState(NOW + 1_000))?.providers[4]).toEqual({
-        providerId: "elevenlabs",
-        access: "required",
-        history: [],
-      });
-    },
-  );
-
-  test.each(["   ", "x".repeat(4_097)])(
-    "rejects an invalid candidate before making a request",
-    async (apiKey) => {
-      const fetch = vi.fn<typeof globalThis.fetch>();
-
-      await expect(
-        connectApiKeyProvider(
-          "elevenlabs",
-          apiKey,
-          context(fetch),
-          () => true,
-          () => NOW + 1_000,
-        ),
-      ).rejects.toThrow("API key connection failed.");
-
-      expect(fetch).not.toHaveBeenCalled();
-      expect(await readProviderCredential("elevenlabs")).toBeUndefined();
-    },
-  );
-
-  test("validates once, saves the key before committing success, and returns only sanitized fields", async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response(subscriptionFixture()));
-    const storageSet = vi.spyOn(browser.storage.local, "set");
-
-    const result = await connectApiKeyProvider(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      context(fetch),
-      () => true,
-      () => NOW + 1_000,
-    );
-
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: CANDIDATE_KEY,
-      status: "active",
-    });
-    const credentialWrite = storageSet.mock.calls.findIndex(
-      ([value]) => Object.hasOwn(value, "aiLimitsCredentials"),
-    );
-    const stateWrite = storageSet.mock.calls.findIndex(
-      ([value]) => Object.hasOwn(value, "aiLimitsState"),
-    );
-    expect(credentialWrite).toBeGreaterThanOrEqual(0);
-    expect(stateWrite).toBeGreaterThan(credentialWrite);
-    expect(Object.keys(result)).toEqual(["state", "report", "result"]);
-    expect(result.result).toBe("connected");
-    expect(result.report).toMatchObject({
-      trigger: "connect",
-      providers: { elevenlabs: { kind: "success" } },
-    });
-    expect(JSON.stringify(result)).not.toContain(CANDIDATE_KEY);
-  });
-
-  test.each([
-    [401, "invalid_key", "credential_invalid"],
-    [403, "insufficient_scope", "credential_scope_required"],
-    [429, "temporary_error", "temporary_error"],
-    [500, "temporary_error", "temporary_error"],
-  ] as const)(
-    "does not save HTTP %i and returns %s without its response body",
-    async (status, resultKind, category) => {
-      const responseSecret = `response-body-secret-${status}`;
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockResolvedValue(response({ detail: responseSecret }, status));
-      const stateBefore = await ensureState(NOW);
-
-      const result = await connectApiKeyProvider(
-        "elevenlabs",
-        CANDIDATE_KEY,
-        context(fetch),
-        () => true,
-        () => NOW + 1_000,
-      );
-
-      expect(fetch).toHaveBeenCalledOnce();
-      expect(await readProviderCredential("elevenlabs")).toBeUndefined();
-      expect(result.result).toBe(resultKind);
-      expect(result.report.providers.elevenlabs).toMatchObject({
-        kind: "failure",
-        category,
-      });
-      expect(result.state).toEqual(stateBefore);
-      expect(await loadState(NOW + 1_000)).toEqual(stateBefore);
-      expect(JSON.stringify(result)).not.toMatch(
-        new RegExp(`${CANDIDATE_KEY}|${responseSecret}`),
-      );
-    },
-  );
-
-  test("does not save a key when a successful response drifts from the schema", async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(
-        response(subscriptionFixture({ character_count: "unexpected" })),
-      );
-
-    const stateBefore = await ensureState(NOW);
-    const result = await connectApiKeyProvider(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      context(fetch),
-      () => true,
-      () => NOW + 1_000,
-    );
-
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(await readProviderCredential("elevenlabs")).toBeUndefined();
-    expect(result.result).toBe("temporary_error");
-    expect(result.report.providers.elevenlabs).toEqual({
+    await markStoredApiKeyRejectedForOutcome(FIRST, first.revision, {
       kind: "failure",
-      category: "provider_changed",
+      category: "credential_invalid",
     });
-    expect(result.state).toEqual(stateBefore);
-    expect(await loadState(NOW + 1_000)).toEqual(stateBefore);
-  });
 
-  test("preserves the prior key and durable state exactly when replacement validation fails", async () => {
-    await connectApiKeyProvider(
-      "elevenlabs",
-      "prior-active-key",
-      context(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture({ tier: "prior-plan" }))),
-      ),
-      () => true,
-      () => NOW + 500,
-    );
-    const stateBefore = await loadState(NOW + 500);
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response({}, 401));
-
-    const result = await connectApiKeyProvider(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      context(fetch),
-      () => true,
-      () => NOW + 1_000,
-    );
-
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "prior-active-key",
-      status: "active",
-    });
-    expect(result.state).toEqual(stateBefore);
-    expect(await loadState(NOW + 1_000)).toEqual(stateBefore);
-  });
-
-  test("overwrites a prior key only after its replacement validates", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-active-key");
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response(subscriptionFixture()));
-
-    await connectApiKeyProvider(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      context(fetch),
-      () => true,
-      () => NOW + 1_000,
-    );
-
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: CANDIDATE_KEY,
-      status: "active",
-    });
-  });
-
-  test("marks only a saved-key invalid outcome as rejected", async () => {
-    await saveProviderApiKey("elevenlabs", "saved-key");
-    const savedCredential = await readProviderCredentialWithRevision(
-      "elevenlabs",
-    );
-
-    await markStoredApiKeyRejectedForOutcome(
-      "elevenlabs",
-      savedCredential!.revision,
-      {
-        kind: "failure",
-        category: "credential_invalid",
-      },
-    );
-
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "saved-key",
+    await expect(readCredentialWithRevision(FIRST)).resolves.toMatchObject({
       status: "rejected",
+      value: "first-secret",
     });
-
-    await saveProviderApiKey("elevenlabs", "replacement-key");
-    const replacementCredential = await readProviderCredentialWithRevision(
-      "elevenlabs",
-    );
-    await markStoredApiKeyRejectedForOutcome(
-      "elevenlabs",
-      replacementCredential!.revision,
-      {
-        kind: "failure",
-        category: "credential_scope_required",
-      },
-    );
-    expect((await readProviderCredential("elevenlabs"))?.status).toBe("active");
-  });
-
-  test("throws a fixed error when local persistence fails", async () => {
-    vi.spyOn(browser.storage.local, "set").mockRejectedValueOnce(
-      new Error(`storage rejected ${CANDIDATE_KEY}`),
-    );
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response(subscriptionFixture()));
-
-    let thrown: unknown;
-    try {
-      await connectApiKeyProvider(
-        "elevenlabs",
-        CANDIDATE_KEY,
-        context(fetch),
-        () => true,
-        () => NOW + 1_000,
-      );
-    } catch (error) {
-      thrown = error;
-    }
-
-    expect(thrown).toEqual(new Error("API key connection failed."));
-    expect(String(thrown)).not.toContain(CANDIDATE_KEY);
-  });
-
-  test("restores the prior credential when state commit fails after candidate save", async () => {
-    await connectApiKeyProvider(
-      "elevenlabs",
-      "prior-active-key",
-      context(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture({ tier: "prior-plan" }))),
-      ),
-      () => true,
-      () => NOW + 500,
-    );
-    const stateBefore = await loadState(NOW + 500);
-    const storageSet = browser.storage.local.set.bind(browser.storage.local);
-    let stateWriteFailed = false;
-    vi.spyOn(browser.storage.local, "set").mockImplementation(
-      async (value) => {
-        if (!stateWriteFailed && Object.hasOwn(value, "aiLimitsState")) {
-          stateWriteFailed = true;
-          throw new Error("state commit failed");
-        }
-        return storageSet(value);
-      },
-    );
-
-    await expect(
-      connectApiKeyProvider(
-        "elevenlabs",
-        CANDIDATE_KEY,
-        context(
-          vi
-            .fn<typeof globalThis.fetch>()
-            .mockResolvedValue(response(subscriptionFixture({ tier: "candidate" }))),
-        ),
-        () => true,
-        () => NOW + 1_000,
-      ),
-    ).rejects.toThrow("API key connection failed.");
-
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "prior-active-key",
+    await expect(readCredentialWithRevision(SECOND)).resolves.toMatchObject({
       status: "active",
+      value: "second-secret",
     });
-    expect(await loadState(NOW + 1_000)).toEqual(stateBefore);
-  });
-
-  test("rollback preserves a rejection committed while candidate validation is pending", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-key");
-    const stateBefore = await ensureState(NOW);
-    const pendingResponse = deferred<Response>();
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(() => pendingResponse.promise);
-
-    const connecting = connectApiKeyProvider(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      context(fetch),
-      () => true,
-      () => NOW + 1_000,
-    );
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    const priorCredential = await readProviderCredentialWithRevision(
-      "elevenlabs",
-    );
-    await markProviderCredentialRejectedIfRevision(
-      "elevenlabs",
-      priorCredential!.revision,
-    );
-    const storageSet = browser.storage.local.set.bind(browser.storage.local);
-    let stateWriteFailed = false;
-    vi.spyOn(browser.storage.local, "set").mockImplementation(
-      async (value) => {
-        if (!stateWriteFailed && Object.hasOwn(value, "aiLimitsState")) {
-          stateWriteFailed = true;
-          throw new Error("state commit failed");
-        }
-        return storageSet(value);
-      },
-    );
-    pendingResponse.resolve(response(subscriptionFixture()));
-
-    await expect(connecting).rejects.toThrow("API key connection failed.");
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "prior-key",
-      status: "rejected",
-    });
-    expect(await loadState(NOW + 1_000)).toEqual(stateBefore);
-  });
-
-  test("a failed pending state write rolls back after a newer connection supersedes it", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-key");
-    const stateBefore = await ensureState(NOW);
-    const stateWriteStarted = deferred<void>();
-    const releaseStateWrite = deferred<void>();
-    const storageSet = browser.storage.local.set.bind(browser.storage.local);
-    vi.spyOn(browser.storage.local, "set").mockImplementation(
-      async (value) => {
-        if (Object.hasOwn(value, "aiLimitsState")) {
-          stateWriteStarted.resolve();
-          await releaseStateWrite.promise;
-          throw new Error("state commit failed");
-        }
-        return storageSet(value);
-      },
-    );
-    const lifecycle = createApiKeyConnectionLifecycle();
-    const first = lifecycle.connect(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      lifecycleContext(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture())),
-      ),
-      () => NOW + 1_000,
-    );
-    await stateWriteStarted.promise;
-
-    const newerFetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(response({}, 401));
-    const newer = lifecycle.connect(
-      "elevenlabs",
-      "failed-newer-key",
-      lifecycleContext(newerFetch),
-      () => NOW + 2_000,
-    );
-    await vi.waitFor(() => expect(newerFetch).toHaveBeenCalledOnce());
-    releaseStateWrite.resolve();
-
-    await expect(newer).resolves.toMatchObject({ result: "invalid_key" });
-    await expect(first).rejects.toThrow("API key connection failed.");
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: "prior-key",
-      status: "active",
-    });
-    expect(await loadState(NOW + 2_000)).toEqual(stateBefore);
-  });
-
-  test("a failed pending state write cannot roll back a newer same-key connection revision", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-key");
-    const stateWriteStarted = deferred<void>();
-    const releaseStateWrite = deferred<void>();
-    const storageSet = browser.storage.local.set.bind(browser.storage.local);
-    let firstStateWrite = true;
-    vi.spyOn(browser.storage.local, "set").mockImplementation(
-      async (value) => {
-        if (firstStateWrite && Object.hasOwn(value, "aiLimitsState")) {
-          firstStateWrite = false;
-          stateWriteStarted.resolve();
-          await releaseStateWrite.promise;
-          throw new Error("state commit failed");
-        }
-        return storageSet(value);
-      },
-    );
-    const lifecycle = createApiKeyConnectionLifecycle();
-    const first = lifecycle.connect(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      lifecycleContext(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture({ tier: "stale" }))),
-      ),
-      () => NOW + 1_000,
-    );
-    await stateWriteStarted.promise;
-
-    const newer = lifecycle.connect(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      lifecycleContext(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture({ tier: "latest" }))),
-      ),
-      () => NOW + 2_000,
-    );
-    releaseStateWrite.resolve();
-
-    await expect(first).rejects.toThrow("API key connection failed.");
-    await expect(newer).resolves.toMatchObject({ result: "connected" });
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: CANDIDATE_KEY,
-      status: "active",
-    });
-    expect((await loadState(NOW + 2_000))?.providers[4]?.snapshot?.planLabel)
-      .toBe("latest");
-  });
-
-  test("a superseded state commit cannot roll back a newer same-key credential revision", async () => {
-    await saveProviderApiKey("elevenlabs", "prior-key");
-    let currentChecks = 0;
-    let newerSave: ReturnType<typeof saveProviderApiKeyIfCurrent> | undefined;
-    const result = await connectApiKeyProvider(
-      "elevenlabs",
-      CANDIDATE_KEY,
-      context(
-        vi
-          .fn<typeof globalThis.fetch>()
-          .mockResolvedValue(response(subscriptionFixture())),
-      ),
-      () => {
-        currentChecks += 1;
-        if (currentChecks === 3) {
-          newerSave = saveProviderApiKeyIfCurrent(
-            "elevenlabs",
-            CANDIDATE_KEY,
-            () => true,
-          );
-          return false;
-        }
-        return true;
-      },
-      () => NOW + 1_000,
-    );
-    const newerSaveResult = await newerSave;
-
-    expect(result).toMatchObject({
-      result: "temporary_error",
-      report: {
-        providers: {
-          elevenlabs: { kind: "skipped", reason: "superseded" },
-        },
-      },
-    });
-    expect(await readProviderCredential("elevenlabs")).toEqual({
-      kind: "api-key",
-      value: CANDIDATE_KEY,
-      status: "active",
-    });
-    expect(newerSaveResult?.saved).toBe(true);
-    if (newerSaveResult?.saved) {
-      expect(
-        (await readProviderCredentialWithRevision("elevenlabs"))?.revision,
-      ).toBe(newerSaveResult.revision);
-    }
   });
 });

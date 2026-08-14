@@ -18,13 +18,14 @@ import type {
   ProviderRuntimeServices,
 } from "./types";
 
-function normalizeConfigForKind(
+export function normalizeProviderConfig(
   kind: ProviderKind,
   value: unknown,
 ): ProviderInstanceConfig | undefined {
   if (typeof value !== "object" || value === null) return undefined;
 
-  if (providerCatalog[kind].connection.kind !== "api-key" || kind !== "newapi") {
+  const connection = providerCatalog[kind].connection;
+  if (connection.kind !== "api-key" || connection.origin !== "dynamic") {
     return (value as { kind?: unknown }).kind === "fixed"
       ? { kind: "fixed" }
       : undefined;
@@ -41,13 +42,14 @@ function normalizeConfigForKind(
     : undefined;
 }
 
-function exactPermissions(
+export function requiredPermissionsForProviderConfig(
   kind: ProviderKind,
   config: ProviderInstanceConfig,
 ): Browser.permissions.Permissions | undefined {
   const definition = providerCatalog[kind];
   const origins =
-    kind === "newapi"
+    definition.connection.kind === "api-key" &&
+    definition.connection.origin === "dynamic"
       ? config.kind === "dynamic-origin"
         ? [`${config.baseUrl}/*`]
         : []
@@ -66,7 +68,7 @@ function matchesPackage(
   instance: ProviderInstanceRecord,
 ): ProviderInstanceConfig | undefined {
   if (instance.providerKind !== kind) return undefined;
-  return normalizeConfigForKind(kind, instance.config);
+  return normalizeProviderConfig(kind, instance.config);
 }
 
 function adapterContext(
@@ -92,11 +94,11 @@ export function createBrowserSessionPackage<
     kind,
     cardinality: providerCatalog[kind].cardinality,
     credentialKind: "none",
-    normalizeConfig: (value) => normalizeConfigForKind(kind, value),
+    normalizeConfig: (value) => normalizeProviderConfig(kind, value),
     requiredPermissions: (config) => {
-      const normalizedConfig = normalizeConfigForKind(kind, config);
+      const normalizedConfig = normalizeProviderConfig(kind, config);
       return normalizedConfig
-        ? exactPermissions(kind, normalizedConfig)
+        ? requiredPermissionsForProviderConfig(kind, normalizedConfig)
         : undefined;
     },
     collect(instance, services): Promise<CollectionResult> {
@@ -122,11 +124,11 @@ export function createApiKeyPackage<Kind extends ApiKeyProviderKind>({
     kind,
     cardinality: providerCatalog[kind].cardinality,
     credentialKind: "api-key",
-    normalizeConfig: (value) => normalizeConfigForKind(kind, value),
+    normalizeConfig: (value) => normalizeProviderConfig(kind, value),
     requiredPermissions: (config) => {
-      const normalizedConfig = normalizeConfigForKind(kind, config);
+      const normalizedConfig = normalizeProviderConfig(kind, config);
       return normalizedConfig
-        ? exactPermissions(kind, normalizedConfig)
+        ? requiredPermissionsForProviderConfig(kind, normalizedConfig)
         : undefined;
     },
     collect(instance, services, credentialOverride): Promise<CollectionResult> {

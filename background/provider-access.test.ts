@@ -1,15 +1,39 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import type {
+  ProviderInstanceId,
+  ProviderInstanceRecord,
+} from "../domain/instances";
 import {
-  initializeCredentialStorage,
-  markProviderCredentialRejected,
-  saveProviderApiKey,
-} from "../storage/credentials";
-import { setProviderConnectionSuppressed } from "../storage/connection-suppressions";
-import {
-  isProviderConnected,
-  isProviderRefreshEligible,
-} from "./provider-access";
+  initializeCredentialVault,
+  saveApiKeyIfCurrent,
+} from "../storage/credential-vault";
+import { isProviderConnected, isProviderRefreshEligible } from "./provider-access";
+
+const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
+const SECOND = "newapi:550e8400-e29b-41d4-a716-446655440001";
+
+function newApi(id: ProviderInstanceId): ProviderInstanceRecord {
+  return {
+    id,
+    providerKind: "newapi",
+    config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+    access: "granted",
+    createdAt: 1,
+    history: [],
+  };
+}
+
+function browserSession(): ProviderInstanceRecord {
+  return {
+    id: "chatgpt:default",
+    providerKind: "chatgpt",
+    config: { kind: "fixed" },
+    access: "granted",
+    createdAt: 1,
+    history: [],
+  };
+}
 
 beforeEach(async () => {
   vi.restoreAllMocks();
@@ -17,82 +41,43 @@ beforeEach(async () => {
   Object.assign(browser.storage.local, {
     setAccessLevel: vi.fn(async () => undefined),
   });
-  await initializeCredentialStorage();
+  await initializeCredentialVault();
+  vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
 });
 
-describe("provider-aware access", () => {
-  test.each(["chatgpt", "claude", "kimi", "cursor"] as const)(
-    "keeps browser-session connection and refresh eligibility in permission parity for %s",
-    async (providerId) => {
-      vi.spyOn(browser.permissions, "contains")
-        .mockResolvedValueOnce(true as never)
-        .mockResolvedValueOnce(true as never)
-        .mockResolvedValueOnce(false as never)
-        .mockResolvedValueOnce(false as never);
-
-      await expect(isProviderConnected(providerId)).resolves.toBe(true);
-      await expect(isProviderRefreshEligible(providerId)).resolves.toBe(true);
-      await expect(isProviderConnected(providerId)).resolves.toBe(false);
-      await expect(isProviderRefreshEligible(providerId)).resolves.toBe(false);
-    },
-  );
-
-  test("does not connect an API-key provider from host permission alone", async () => {
-    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
-
-    await expect(isProviderConnected("elevenlabs")).resolves.toBe(false);
-    await expect(isProviderRefreshEligible("elevenlabs")).resolves.toBe(false);
-  });
-
-  test("connects and refreshes an API-key provider only with permission and an active key", async () => {
-    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
-    await saveProviderApiKey("elevenlabs", "active-test-key");
-
-    await expect(isProviderConnected("elevenlabs")).resolves.toBe(true);
-    await expect(isProviderRefreshEligible("elevenlabs")).resolves.toBe(true);
-  });
-
-  test("checks the exact stored New API instance before scheduling refresh", async () => {
-    const contains = vi
-      .spyOn(browser.permissions, "contains")
-      .mockResolvedValue(true as never);
-    await saveProviderApiKey(
-      "newapi",
-      "sk-active-test-key",
-      "active",
-      "https://api.example.com/gateway/v1",
-    );
-
-    await expect(isProviderRefreshEligible("newapi")).resolves.toBe(true);
-    expect(contains).toHaveBeenCalledWith({
-      origins: ["https://api.example.com/*"],
+describe("provider instance access", () => {
+  test("treats a browser-session instance as connected and eligible with exact permission", async () => {
+    await expect(isProviderConnected(browserSession())).resolves.toBe(true);
+    await expect(isProviderRefreshEligible(browserSession())).resolves.toBe(true);
+    expect(browser.permissions.contains).toHaveBeenCalledWith({
+      origins: ["https://chatgpt.com/*"],
     });
   });
 
-  test("keeps a rejected-key provider connected while stopping requests", async () => {
-    vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
-    await saveProviderApiKey("elevenlabs", "rejected-test-key");
-    await markProviderCredentialRejected("elevenlabs");
-
-    await expect(isProviderConnected("elevenlabs")).resolves.toBe(true);
-    await expect(isProviderRefreshEligible("elevenlabs")).resolves.toBe(false);
+  test("fails closed when instance permission is absent", async () => {
+    vi.mocked(browser.permissions.contains).mockResolvedValue(false as never);
+    await expect(isProviderConnected(newApi(FIRST))).resolves.toBe(false);
+    await expect(isProviderRefreshEligible(newApi(FIRST))).resolves.toBe(false);
   });
 
-  test.each(["chatgpt", "elevenlabs"] as const)(
-    "keeps a locally disconnected %s provider ineligible until explicit suppression clearing",
-    async (providerId) => {
-      vi.spyOn(browser.permissions, "contains").mockResolvedValue(true as never);
-      if (providerId === "elevenlabs") {
-        await saveProviderApiKey(providerId, "active-test-key");
-      }
-      await setProviderConnectionSuppressed(providerId, true);
+  test("requires an active credential for refresh but retains rejected connection identity", async () => {
+    const saved = await saveApiKeyIfCurrent(
+      FIRST,
+      "rejected-secret",
+      () => true,
+      "rejected",
+    );
+    expect(saved.saved).toBe(true);
 
-      await expect(isProviderConnected(providerId)).resolves.toBe(false);
-      await expect(isProviderRefreshEligible(providerId)).resolves.toBe(false);
+    await expect(isProviderConnected(newApi(FIRST))).resolves.toBe(true);
+    await expect(isProviderRefreshEligible(newApi(FIRST))).resolves.toBe(false);
+  });
 
-      await setProviderConnectionSuppressed(providerId, false);
-      await expect(isProviderConnected(providerId)).resolves.toBe(true);
-      await expect(isProviderRefreshEligible(providerId)).resolves.toBe(true);
-    },
-  );
+  test("keeps same-kind sibling credentials isolated", async () => {
+    await saveApiKeyIfCurrent(FIRST, "active-secret", () => true);
+    await saveApiKeyIfCurrent(SECOND, "rejected-secret", () => true, "rejected");
+
+    await expect(isProviderRefreshEligible(newApi(FIRST))).resolves.toBe(true);
+    await expect(isProviderRefreshEligible(newApi(SECOND))).resolves.toBe(false);
+  });
 });

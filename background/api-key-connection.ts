@@ -1,23 +1,14 @@
 import type {
-  AppState,
-  ProviderRefreshOutcome,
-  RefreshReport,
-} from "../domain/model";
-import type { ApiKeyProviderId } from "../providers/catalog";
-import { legacyProviderAdapterRegistry } from "../providers/registry";
-import type { CollectionContext } from "../providers/types";
-import {
-  markProviderCredentialRejectedIfRevision,
-  restoreProviderCredentialIfRevision,
-  saveProviderApiKeyIfCurrent,
-} from "../storage/credentials";
-import { ensureState } from "../storage/repository";
-import {
-  collectProviderOutcome,
-  commitProviderOutcome,
-} from "./coordinator";
-
-const MAX_API_KEY_LENGTH = 4_096;
+  ProviderInstanceId,
+  ProviderInstanceRecord,
+} from "../domain/instances";
+import type { ProviderRefreshOutcome } from "../domain/model";
+import type {
+  ProviderPackage,
+  ProviderRuntimeServices,
+} from "../providers/types";
+import { markCredentialRejectedIfRevision } from "../storage/credential-vault";
+import { collectProviderOutcome } from "./coordinator";
 
 export type ApiKeyConnectionStatus =
   | "connected"
@@ -26,22 +17,22 @@ export type ApiKeyConnectionStatus =
   | "invalid_site"
   | "temporary_error";
 
-export interface ApiKeyConnectionResult {
-  state: AppState;
-  report: RefreshReport;
+export interface ApiKeyConnectionValidation {
+  outcome: ProviderRefreshOutcome;
+  finishedAt: number;
   result: ApiKeyConnectionStatus;
 }
 
 export interface ApiKeyConnectionLifecycle {
   connect(
-    providerId: ApiKeyProviderId,
+    instance: ProviderInstanceRecord,
+    providerPackage: ProviderPackage,
     apiKey: string,
-    context: Omit<CollectionContext, "credential" | "signal">,
+    services: Omit<ProviderRuntimeServices, "signal">,
     clock?: () => number,
     isAllowed?: () => boolean,
-    baseUrl?: string,
-  ): Promise<ApiKeyConnectionResult>;
-  invalidateProvider(providerId: ApiKeyProviderId): void;
+  ): Promise<ApiKeyConnectionValidation>;
+  invalidateInstance(instanceId: ProviderInstanceId): void;
   invalidateAll(): void;
 }
 
@@ -50,176 +41,81 @@ interface ActiveConnection {
   generation: number;
 }
 
-export function createApiKeyConnectionLifecycle(): ApiKeyConnectionLifecycle {
-  const activeConnections = new Map<ApiKeyProviderId, ActiveConnection>();
-  const generations = new Map<ApiKeyProviderId, number>();
+function connectionStatus(
+  outcome: ProviderRefreshOutcome,
+): ApiKeyConnectionStatus {
+  if (outcome.kind === "success") return "connected";
+  if (outcome.kind === "failure") {
+    if (outcome.category === "credential_invalid") return "invalid_key";
+    if (outcome.category === "credential_scope_required") {
+      return "insufficient_scope";
+    }
+    if (outcome.category === "provider_changed") return "invalid_site";
+  }
+  return "temporary_error";
+}
 
-  const invalidateProvider = (providerId: ApiKeyProviderId): void => {
-    const generation = (generations.get(providerId) ?? 0) + 1;
-    generations.set(providerId, generation);
-    activeConnections.get(providerId)?.controller.abort();
-    activeConnections.delete(providerId);
+export function createApiKeyConnectionLifecycle(): ApiKeyConnectionLifecycle {
+  const activeConnections = new Map<ProviderInstanceId, ActiveConnection>();
+  const generations = new Map<ProviderInstanceId, number>();
+
+  const invalidateInstance = (instanceId: ProviderInstanceId): void => {
+    const generation = (generations.get(instanceId) ?? 0) + 1;
+    generations.set(instanceId, generation);
+    activeConnections.get(instanceId)?.controller.abort();
+    activeConnections.delete(instanceId);
   };
 
   return {
     async connect(
-      providerId,
+      instance,
+      providerPackage,
       apiKey,
-      context,
+      services,
       clock = Date.now,
       isAllowed = () => true,
-      baseUrl,
     ) {
-      invalidateProvider(providerId);
-      const generation = generations.get(providerId) ?? 0;
+      invalidateInstance(instance.id);
+      const generation = generations.get(instance.id) ?? 0;
       const controller = new AbortController();
-      activeConnections.set(providerId, { controller, generation });
+      activeConnections.set(instance.id, { controller, generation });
       const isCurrent = () =>
-        activeConnections.get(providerId)?.generation === generation &&
-        generations.get(providerId) === generation &&
+        activeConnections.get(instance.id)?.generation === generation &&
+        generations.get(instance.id) === generation &&
+        !controller.signal.aborted &&
         isAllowed();
-
       try {
-        return await connectApiKeyProvider(
-          providerId,
-          apiKey,
-          { ...context, signal: controller.signal },
-          isCurrent,
+        const collected = await collectProviderOutcome(
+          providerPackage,
+          instance,
+          { ...services, signal: controller.signal },
+          "connect",
+          { kind: "api-key", value: apiKey },
           clock,
-          baseUrl,
         );
+        const outcome = isCurrent()
+          ? collected.outcome
+          : ({ kind: "skipped", reason: "superseded" } as const);
+        return {
+          outcome,
+          finishedAt: collected.finishedAt,
+          result: connectionStatus(outcome),
+        };
       } finally {
-        if (isCurrent()) {
-          activeConnections.delete(providerId);
-        }
+        if (isCurrent()) activeConnections.delete(instance.id);
       }
     },
-    invalidateProvider,
+    invalidateInstance,
     invalidateAll() {
-      for (const providerId of [...activeConnections.keys()]) {
-        invalidateProvider(providerId);
+      for (const instanceId of [...activeConnections.keys()]) {
+        invalidateInstance(instanceId);
       }
     },
   };
 }
 
-function connectionStatus(
-  providerId: ApiKeyProviderId,
-  outcome: ProviderRefreshOutcome,
-): ApiKeyConnectionStatus {
-  if (outcome.kind === "success") {
-    return "connected";
-  }
-
-  if (outcome.kind === "failure") {
-    if (outcome.category === "credential_invalid") {
-      return "invalid_key";
-    }
-    if (outcome.category === "credential_scope_required") {
-      return "insufficient_scope";
-    }
-    if (providerId === "newapi" && outcome.category === "provider_changed") {
-      return "invalid_site";
-    }
-  }
-
-  return "temporary_error";
-}
-
-export async function connectApiKeyProvider(
-  providerId: ApiKeyProviderId,
-  apiKey: string,
-  context: Omit<CollectionContext, "credential">,
-  shouldCommit: () => boolean = () => true,
-  clock: () => number = Date.now,
-  baseUrl?: string,
-): Promise<ApiKeyConnectionResult> {
-  try {
-    const normalizedApiKey = apiKey.trim();
-    if (
-      normalizedApiKey.length === 0 ||
-      apiKey.length > MAX_API_KEY_LENGTH
-    ) {
-      throw new Error("Invalid API key.");
-    }
-
-    const adapter = legacyProviderAdapterRegistry[providerId];
-    const collected = await collectProviderOutcome(
-      adapter,
-      {
-        ...context,
-        ...(baseUrl ? { baseUrl } : {}),
-        credential: {
-          kind: "api-key",
-          value: normalizedApiKey,
-        },
-      },
-      "connect",
-      clock,
-    );
-    let outcome = collected.outcome;
-
-    if (!shouldCommit()) {
-      outcome = { kind: "skipped", reason: "superseded" };
-    } else if (outcome.kind === "success") {
-      const saveResult = await saveProviderApiKeyIfCurrent(
-        providerId,
-        normalizedApiKey,
-        shouldCommit,
-        "active",
-        baseUrl,
-      );
-      if (!saveResult.saved) {
-        outcome = { kind: "skipped", reason: "superseded" };
-      } else {
-        try {
-          outcome = await commitProviderOutcome(
-            adapter,
-            outcome,
-            "connect",
-            context.now,
-            collected.finishedAt,
-            shouldCommit,
-          );
-          if (
-            outcome.kind === "skipped" &&
-            outcome.reason === "superseded"
-          ) {
-            await restoreProviderCredentialIfRevision(
-              providerId,
-              saveResult.revision,
-              saveResult.previous,
-            );
-          }
-        } catch (error) {
-          await restoreProviderCredentialIfRevision(
-            providerId,
-            saveResult.revision,
-            saveResult.previous,
-          );
-          throw error;
-        }
-      }
-    }
-
-    const state = await ensureState(collected.finishedAt);
-    return {
-      state,
-      report: {
-        trigger: "connect",
-        startedAt: context.now,
-        finishedAt: collected.finishedAt,
-        providers: { [providerId]: outcome },
-      },
-      result: connectionStatus(providerId, outcome),
-    };
-  } catch {
-    throw new Error("API key connection failed.");
-  }
-}
-
 export async function markStoredApiKeyRejectedForOutcome(
-  providerId: ApiKeyProviderId,
+  instanceId: ProviderInstanceId,
   expectedRevision: string,
   outcome: ProviderRefreshOutcome,
 ): Promise<void> {
@@ -227,9 +123,6 @@ export async function markStoredApiKeyRejectedForOutcome(
     outcome.kind === "failure" &&
     outcome.category === "credential_invalid"
   ) {
-    await markProviderCredentialRejectedIfRevision(
-      providerId,
-      expectedRevision,
-    );
+    await markCredentialRejectedIfRevision(instanceId, expectedRevision);
   }
 }

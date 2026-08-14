@@ -1,31 +1,46 @@
-import type { ConnectableProviderId } from "../providers/registry";
+import {
+  isProviderInstanceId,
+  type ProviderInstanceConfig,
+  type ProviderInstanceId,
+} from "../domain/instances";
 import type { DisplayMode } from "../domain/model";
 import {
   isApiKeyProviderId,
   isProviderId,
-  type ApiKeyProviderId,
+  type ApiKeyProviderKind,
+  type BrowserSessionProviderKind,
 } from "../providers/catalog";
-import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
+import { normalizeProviderConfig } from "../providers/package-factories";
 
 const MAX_API_KEY_LENGTH = 4_096;
+const MAX_LABEL_LENGTH = 128;
 
-export type ApiKeyConnectionIntent = "permission-grant" | "replacement";
+export interface ConnectApiKeyProviderCommand {
+  type: "CONNECT_API_KEY_PROVIDER";
+  providerKind: ApiKeyProviderKind;
+  instanceId?: ProviderInstanceId;
+  userLabel?: string;
+  config: ProviderInstanceConfig;
+  apiKey: string;
+}
 
 export type RuntimeCommand =
   | { type: "REFRESH_ALL" }
   | {
-      type: "CONNECT_API_KEY_PROVIDER";
-      providerId: ApiKeyProviderId;
-      apiKey: string;
-      baseUrl?: string;
-      connectionIntent: ApiKeyConnectionIntent;
+      type: "CONNECT_BROWSER_PROVIDER";
+      providerKind: BrowserSessionProviderKind;
     }
-  | { type: "COLLECT_PROVIDER"; providerId: ConnectableProviderId }
-  | { type: "REFRESH_PROVIDER"; providerId: ConnectableProviderId }
+  | ConnectApiKeyProviderCommand
+  | { type: "REFRESH_INSTANCE"; instanceId: ProviderInstanceId }
+  | {
+      type: "RENAME_INSTANCE";
+      instanceId: ProviderInstanceId;
+      userLabel?: string;
+    }
+  | { type: "DISCONNECT_INSTANCE"; instanceId: ProviderInstanceId }
   | { type: "GET_STATE" }
   | { type: "SET_DISPLAY_MODE"; mode: DisplayMode }
   | { type: "SET_AUTO_REFRESH"; enabled: boolean }
-  | { type: "DISCONNECT_PROVIDER"; providerId: ConnectableProviderId }
   | { type: "DELETE_LOCAL_DATA" };
 
 export type ProviderOperation =
@@ -35,7 +50,7 @@ export type ProviderOperation =
 
 export interface ProviderOperationEvent {
   type: "PROVIDER_OPERATION";
-  providerId: "kimi";
+  instanceId: ProviderInstanceId;
   operation: "waiting_for_session";
 }
 
@@ -44,100 +59,141 @@ export interface RuntimeCommandFailure {
   error: "command_failed";
 }
 
-function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function hasAllowedKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  const allowed = new Set([...required, ...optional]);
   return (
-    Object.keys(value).length === keys.length &&
-    keys.every((key) => Object.hasOwn(value, key))
+    required.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => allowed.has(key))
+  );
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  return hasAllowedKeys(value, keys) && Object.keys(value).length === keys.length;
+}
+
+function isLabel(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= MAX_LABEL_LENGTH &&
+    value.trim().length <= MAX_LABEL_LENGTH &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
+}
+
+function isExactProviderConfig(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value.kind === "fixed") return hasExactKeys(value, ["kind"]);
+  return (
+    value.kind === "dynamic-origin" &&
+    hasExactKeys(value, ["kind", "baseUrl"]) &&
+    typeof value.baseUrl === "string"
   );
 }
 
 export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
-  if (!value || typeof value !== "object") {
-    return false;
+  if (!isRecord(value)) return false;
+
+  if (value.type === "CONNECT_BROWSER_PROVIDER") {
+    return (
+      hasExactKeys(value, ["type", "providerKind"]) &&
+      isProviderId(value.providerKind) &&
+      !isApiKeyProviderId(value.providerKind)
+    );
   }
 
-  const command = value as Record<string, unknown>;
-  if (command.type === "CONNECT_API_KEY_PROVIDER") {
-    const expectedKeys =
-      command.providerId === "newapi"
-        ? ["type", "providerId", "apiKey", "baseUrl", "connectionIntent"]
-        : ["type", "providerId", "apiKey", "connectionIntent"];
-    return (
-      hasExactKeys(command, expectedKeys) &&
-      isApiKeyProviderId(command.providerId) &&
-      typeof command.apiKey === "string" &&
-      command.apiKey.trim().length > 0 &&
-      command.apiKey.length <= MAX_API_KEY_LENGTH &&
-      (command.providerId !== "newapi" ||
-        normalizeNewApiBaseUrl(command.baseUrl) !== undefined) &&
-      (command.connectionIntent === "permission-grant" ||
-        command.connectionIntent === "replacement")
-    );
+  if (value.type === "CONNECT_API_KEY_PROVIDER") {
+    if (
+      !hasAllowedKeys(
+        value,
+        ["type", "providerKind", "config", "apiKey"],
+        ["instanceId", "userLabel"],
+      ) ||
+      !isApiKeyProviderId(value.providerKind) ||
+      typeof value.apiKey !== "string" ||
+      value.apiKey.trim().length === 0 ||
+      value.apiKey.length > MAX_API_KEY_LENGTH ||
+      (Object.hasOwn(value, "instanceId") &&
+        (!isProviderInstanceId(value.instanceId) ||
+          !value.instanceId.startsWith(`${value.providerKind}:`))) ||
+      (Object.hasOwn(value, "userLabel") && !isLabel(value.userLabel)) ||
+      !isExactProviderConfig(value.config)
+    ) {
+      return false;
+    }
+    return normalizeProviderConfig(value.providerKind, value.config) !== undefined;
   }
 
   if (
-    command.type === "COLLECT_PROVIDER" ||
-    command.type === "REFRESH_PROVIDER" ||
-    command.type === "DISCONNECT_PROVIDER"
+    value.type === "REFRESH_INSTANCE" ||
+    value.type === "DISCONNECT_INSTANCE"
   ) {
     return (
-      hasExactKeys(command, ["type", "providerId"]) &&
-      isProviderId(command.providerId)
+      hasExactKeys(value, ["type", "instanceId"]) &&
+      isProviderInstanceId(value.instanceId)
     );
   }
 
-  if (command.type === "SET_DISPLAY_MODE") {
+  if (value.type === "RENAME_INSTANCE") {
     return (
-      hasExactKeys(command, ["type", "mode"]) &&
-      (command.mode === "used" || command.mode === "left")
+      hasAllowedKeys(value, ["type", "instanceId"], ["userLabel"]) &&
+      isProviderInstanceId(value.instanceId) &&
+      (!Object.hasOwn(value, "userLabel") || isLabel(value.userLabel))
     );
   }
 
-  if (command.type === "SET_AUTO_REFRESH") {
+  if (value.type === "SET_DISPLAY_MODE") {
     return (
-      hasExactKeys(command, ["type", "enabled"]) &&
-      typeof command.enabled === "boolean"
+      hasExactKeys(value, ["type", "mode"]) &&
+      (value.mode === "used" || value.mode === "left")
     );
   }
-
+  if (value.type === "SET_AUTO_REFRESH") {
+    return (
+      hasExactKeys(value, ["type", "enabled"]) &&
+      typeof value.enabled === "boolean"
+    );
+  }
   return (
-    (command.type === "REFRESH_ALL" ||
-      command.type === "GET_STATE" ||
-      command.type === "DELETE_LOCAL_DATA") &&
-    hasExactKeys(command, ["type"])
+    (value.type === "REFRESH_ALL" ||
+      value.type === "GET_STATE" ||
+      value.type === "DELETE_LOCAL_DATA") &&
+    hasExactKeys(value, ["type"])
   );
 }
 
 export function isProviderOperationEvent(
   value: unknown,
 ): value is ProviderOperationEvent {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const event = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
   return (
-    hasExactKeys(event, ["type", "providerId", "operation"]) &&
-    event.type === "PROVIDER_OPERATION" &&
-    event.providerId === "kimi" &&
-    event.operation === "waiting_for_session"
+    hasExactKeys(value, ["type", "instanceId", "operation"]) &&
+    value.type === "PROVIDER_OPERATION" &&
+    isProviderInstanceId(value.instanceId) &&
+    value.operation === "waiting_for_session"
   );
 }
 
 export interface RuntimeCommandHandlers {
   refreshAll(): unknown;
-  connectApiKeyProvider(
-    providerId: ApiKeyProviderId,
-    apiKey: string,
-    connectionIntent: ApiKeyConnectionIntent,
-    baseUrl?: string,
-  ): unknown;
-  collectProvider(providerId: ConnectableProviderId): unknown;
-  refreshProvider(providerId: ConnectableProviderId): unknown;
+  connectBrowserProvider(providerKind: BrowserSessionProviderKind): unknown;
+  connectApiKeyProvider(command: ConnectApiKeyProviderCommand): unknown;
+  refreshInstance(instanceId: ProviderInstanceId): unknown;
+  renameInstance(instanceId: ProviderInstanceId, userLabel?: string): unknown;
+  disconnectInstance(instanceId: ProviderInstanceId): unknown;
   getState(): unknown;
   setDisplayMode(mode: DisplayMode): unknown;
   setAutoRefresh(enabled: boolean): unknown;
-  disconnectProvider(providerId: ConnectableProviderId): unknown;
   deleteLocalData(): unknown;
 }
 
@@ -151,17 +207,11 @@ export function createChromeRuntimeMessageListener(
     _sender: Browser.runtime.MessageSender,
     sendResponse: (response?: unknown) => void,
   ): boolean => {
-    if (!isRuntimeCommand(message)) {
-      return false;
-    }
-
+    if (!isRuntimeCommand(message)) return false;
     void Promise.resolve()
       .then(() => handleCommand(message))
       .then(sendResponse, () =>
-        sendResponse({
-          ok: false,
-          error: "command_failed",
-        } satisfies RuntimeCommandFailure),
+        sendResponse({ ok: false, error: "command_failed" } satisfies RuntimeCommandFailure),
       );
     return true;
   };
@@ -169,32 +219,26 @@ export function createChromeRuntimeMessageListener(
 
 export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
   return (value: unknown): unknown => {
-    if (!isRuntimeCommand(value)) {
-      return undefined;
-    }
-
+    if (!isRuntimeCommand(value)) return undefined;
     switch (value.type) {
       case "REFRESH_ALL":
         return handlers.refreshAll();
+      case "CONNECT_BROWSER_PROVIDER":
+        return handlers.connectBrowserProvider(value.providerKind);
       case "CONNECT_API_KEY_PROVIDER":
-        return handlers.connectApiKeyProvider(
-          value.providerId,
-          value.apiKey,
-          value.connectionIntent,
-          value.baseUrl,
-        );
-      case "COLLECT_PROVIDER":
-        return handlers.collectProvider(value.providerId);
-      case "REFRESH_PROVIDER":
-        return handlers.refreshProvider(value.providerId);
+        return handlers.connectApiKeyProvider(value);
+      case "REFRESH_INSTANCE":
+        return handlers.refreshInstance(value.instanceId);
+      case "RENAME_INSTANCE":
+        return handlers.renameInstance(value.instanceId, value.userLabel);
+      case "DISCONNECT_INSTANCE":
+        return handlers.disconnectInstance(value.instanceId);
       case "GET_STATE":
         return handlers.getState();
       case "SET_DISPLAY_MODE":
         return handlers.setDisplayMode(value.mode);
       case "SET_AUTO_REFRESH":
         return handlers.setAutoRefresh(value.enabled);
-      case "DISCONNECT_PROVIDER":
-        return handlers.disconnectProvider(value.providerId);
       case "DELETE_LOCAL_DATA":
         return handlers.deleteLocalData();
     }

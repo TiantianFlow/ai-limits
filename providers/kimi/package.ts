@@ -31,7 +31,7 @@ interface KimiPackageDependencies {
     signal: AbortSignal,
   ): Promise<string | undefined>;
   cleanupAbandonedRecovery(): Promise<void>;
-  announceRecovery(): void;
+  announceRecovery(instanceId: string): void;
   retryAfterChangedToken?(
     result: CollectionResult,
     context: CollectionContext,
@@ -91,6 +91,7 @@ export function createKimiPackage(
   };
 
   const recoverAfterStartup = (
+    instanceId: string,
     rejectedToken: string | undefined,
     services: ProviderRuntimeServices,
   ): Promise<string | undefined> => {
@@ -99,7 +100,7 @@ export function createKimiPackage(
       signal: services.signal,
       recoverAccessToken: (token) => {
         if (services.signal.aborted) return Promise.resolve(undefined);
-        dependencies.announceRecovery();
+        dependencies.announceRecovery(instanceId);
         return dependencies.recoverAccessToken(token, services.signal);
       },
     })(rejectedToken).catch(() => undefined);
@@ -147,7 +148,9 @@ export function createKimiPackage(
             deferred: { reason: "session_required" },
           };
         }
-        token = normalizedToken(await recoverAfterStartup(undefined, services));
+        token = normalizedToken(
+          await recoverAfterStartup(instance.id, undefined, services),
+        );
         if (!token) return recoveryFailure();
         const result = await dependencies.adapter.collect({
           fetch: services.fetch,
@@ -172,7 +175,7 @@ export function createKimiPackage(
       if (changedToken === token) changedToken = undefined;
       if (!changedToken && services.interaction === "allowed") {
         changedToken = normalizedToken(
-          await recoverAfterStartup(token, services),
+          await recoverAfterStartup(instance.id, token, services),
         );
         if (changedToken === token) changedToken = undefined;
       }
@@ -240,11 +243,11 @@ function productionDependencies(): KimiPackageDependencies {
         getTab: (tabId) => browser.tabs.get(tabId),
         removeTab: (tabId) => browser.tabs.remove(tabId),
       }),
-    announceRecovery() {
+    announceRecovery(instanceId) {
       void browser.runtime
         .sendMessage({
           type: "PROVIDER_OPERATION",
-          providerId: "kimi",
+          instanceId,
           operation: "waiting_for_session",
         })
         .catch(() => undefined);

@@ -4,6 +4,7 @@ import type {
   ProviderInstanceRecord,
 } from "../domain/instances";
 import type { DisplayMode } from "../domain/model";
+import { providerCatalog } from "../providers/catalog";
 import {
   createEmptyInstanceAppState,
   normalizeInstanceAppState,
@@ -52,6 +53,40 @@ export async function loadInstanceAppState(): Promise<InstanceAppState> {
   return readNormalizedState(Date.now());
 }
 
+function createInstanceIfCurrent(
+  instance: ProviderInstanceRecord,
+  isCurrent: () => boolean,
+): Promise<boolean> {
+  return mutateState(async (state, now) => {
+    if (!isCurrent()) return false;
+    const normalizedCandidate = normalizeInstanceAppState(
+      {
+        version: 5,
+        preferences: state.preferences,
+        instances: [instance],
+      },
+      now,
+    ).instances[0];
+    const duplicateId = state.instances.some(
+      (candidate) => candidate.id === instance.id,
+    );
+    const singletonConflict = state.instances.some(
+      (candidate) =>
+        candidate.providerKind === instance.providerKind &&
+        providerCatalog[instance.providerKind].cardinality === "single",
+    );
+    if (!normalizedCandidate || duplicateId || singletonConflict) {
+      throw new Error("Provider instance cannot be created.");
+    }
+    if (!isCurrent()) return false;
+    await writeNormalizedState(
+      { ...state, instances: [...state.instances, normalizedCandidate] },
+      now,
+    );
+    return true;
+  });
+}
+
 export const connectionRepository = {
   async list(): Promise<ProviderInstanceRecord[]> {
     return (await loadInstanceAppState()).instances;
@@ -66,30 +101,50 @@ export const connectionRepository = {
   },
 
   create(instance: ProviderInstanceRecord): Promise<void> {
+    return createInstanceIfCurrent(instance, () => true).then(() => undefined);
+  },
+
+  createIfCurrent(
+    instance: ProviderInstanceRecord,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    return createInstanceIfCurrent(instance, isCurrent);
+  },
+
+  replace(
+    id: ProviderInstanceId,
+    updater: (instance: ProviderInstanceRecord) => ProviderInstanceRecord,
+  ): Promise<boolean> {
     return mutateState(async (state, now) => {
+      const index = state.instances.findIndex((instance) => instance.id === id);
+      if (index < 0) return false;
+      const current = state.instances[index]!;
+      const immutable = {
+        id: current.id,
+        providerKind: current.providerKind,
+        createdAt: current.createdAt,
+      };
+      const requested = updater(current);
       const normalizedCandidate = normalizeInstanceAppState(
         {
           version: 5,
           preferences: state.preferences,
-          instances: [instance],
+          instances: [
+            {
+              ...requested,
+              id: immutable.id,
+              providerKind: immutable.providerKind,
+              createdAt: immutable.createdAt,
+            },
+          ],
         },
         now,
       ).instances[0];
-      const duplicateId = state.instances.some(
-        (candidate) => candidate.id === instance.id,
-      );
-      const singletonConflict = state.instances.some(
-        (candidate) =>
-          candidate.providerKind === instance.providerKind &&
-          instance.providerKind !== "newapi",
-      );
-      if (!normalizedCandidate || duplicateId || singletonConflict) {
-        throw new Error("Provider instance cannot be created.");
-      }
-      await writeNormalizedState(
-        { ...state, instances: [...state.instances, normalizedCandidate] },
-        now,
-      );
+      if (!normalizedCandidate) return false;
+      const instances = [...state.instances];
+      instances[index] = normalizedCandidate;
+      await writeNormalizedState({ ...state, instances }, now);
+      return true;
     });
   },
 
