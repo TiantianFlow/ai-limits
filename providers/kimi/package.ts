@@ -117,7 +117,14 @@ export function createKimiPackage(
             permissions: ["cookies", "scripting"],
           }
         : undefined,
-    startup: ensureStartup,
+    async startup(): Promise<void> {
+      try {
+        await ensureStartup();
+      } catch {
+        // The rejected cleanup state still gates recovery, but startup is safe
+        // for the background worker's fire-and-forget lifecycle hook.
+      }
+    },
     async collect(instance, services): Promise<CollectionResult> {
       if (instance.providerKind !== "kimi" || !fixedConfig(instance.config)) {
         return { ok: false, health: { kind: "provider_changed" } };

@@ -244,7 +244,7 @@ describe("Kimi provider package", () => {
     expect(recoverAccessToken).not.toHaveBeenCalled();
   });
 
-  test("failed startup cleanup does not announce or begin recovery", async () => {
+  test("public startup contains cleanup failure while collection remains gated", async () => {
     const rawError = "startup-cleanup-secret";
     const recoverAccessToken = vi.fn();
     const announceRecovery = vi.fn();
@@ -258,6 +258,8 @@ describe("Kimi provider package", () => {
         .mockRejectedValue(new Error(rawError)),
       announceRecovery,
     });
+
+    await expect(providerPackage.startup?.()).resolves.toBeUndefined();
 
     const result = await providerPackage.collect(
       instance,
