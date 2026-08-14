@@ -228,17 +228,87 @@ function decodeZipEntryName(nameBytes, usesUtf8) {
   }
 }
 
+const ZIP_LOCAL_HEADER_SIGNATURE = 0x04034b50;
+const ZIP64_END_RECORD_SIGNATURE = 0x06064b50;
+const ZIP64_END_LOCATOR_SIGNATURE = 0x07064b50;
+const ZIP_FLAG_ENCRYPTED = 0x0001;
+const ZIP_FLAG_DATA_DESCRIPTOR = 0x0008;
+const ZIP_FLAG_UTF8 = 0x0800;
+const ZIP_SUPPORTED_FLAGS = ZIP_FLAG_UTF8;
+const ZIP_SUPPORTED_METHODS = new Set([0, 8]);
+
+function validateZipFlags(flags, name, location) {
+  if ((flags & ZIP_FLAG_ENCRYPTED) !== 0) {
+    throw new Error(`Encrypted ZIP entries are unsupported: ${name}.`);
+  }
+  if ((flags & ZIP_FLAG_DATA_DESCRIPTOR) !== 0) {
+    throw new Error(`ZIP data descriptors are unsupported: ${name}.`);
+  }
+  if ((flags & ~ZIP_SUPPORTED_FLAGS) !== 0) {
+    throw new Error(
+      `ZIP entry has unsupported general-purpose flags in its ${location} header: ${name}.`,
+    );
+  }
+}
+
+function validateZipExtraFields(bytes, view, offset, length, location, name) {
+  if (length === 0) return;
+  const end = offset + length;
+  if (end > bytes.length) {
+    throw new Error(`ZIP ${location} extra fields exceed their bounds: ${name}.`);
+  }
+  let cursor = offset;
+  let hasZip64 = false;
+  while (cursor < end) {
+    if (cursor + 4 > end) {
+      throw new Error(`ZIP ${location} extra field is truncated: ${name}.`);
+    }
+    const headerId = view.getUint16(cursor, true);
+    const dataLength = view.getUint16(cursor + 2, true);
+    cursor += 4;
+    if (cursor + dataLength > end) {
+      throw new Error(`ZIP ${location} extra field exceeds its bounds: ${name}.`);
+    }
+    if (headerId === 0x0001) hasZip64 = true;
+    cursor += dataLength;
+  }
+  if (hasZip64) {
+    throw new Error(`ZIP64 extra fields are unsupported: ${name}.`);
+  }
+  throw new Error(`ZIP ${location} extra fields are unsupported: ${name}.`);
+}
+
+function equalBytes(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((byte, index) => byte === right[index])
+  );
+}
+
 export function readReleaseZipCentralDirectoryNames(value) {
   const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
   if (bytes.length < 22) throw new Error("ZIP archive is truncated.");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const endOffset = findZipEndOfCentralDirectory(bytes, view);
+  if (
+    endOffset >= 20 &&
+    view.getUint32(endOffset - 20, true) === ZIP64_END_LOCATOR_SIGNATURE
+  ) {
+    throw new Error("ZIP64 end-of-central-directory locators are unsupported.");
+  }
+  if (
+    endOffset >= 56 &&
+    view.getUint32(endOffset - 56, true) === ZIP64_END_RECORD_SIGNATURE
+  ) {
+    throw new Error("ZIP64 end-of-central-directory records are unsupported.");
+  }
   const diskNumber = view.getUint16(endOffset + 4, true);
   const centralDirectoryDisk = view.getUint16(endOffset + 6, true);
   const diskEntries = view.getUint16(endOffset + 8, true);
   const totalEntries = view.getUint16(endOffset + 10, true);
   const centralDirectorySize = view.getUint32(endOffset + 12, true);
   const centralDirectoryOffset = view.getUint32(endOffset + 16, true);
+  const archiveCommentLength = view.getUint16(endOffset + 20, true);
   if (
     diskNumber !== 0 ||
     centralDirectoryDisk !== 0 ||
@@ -253,11 +323,14 @@ export function readReleaseZipCentralDirectoryNames(value) {
   ) {
     throw new Error("ZIP64 release archives are not supported.");
   }
+  if (archiveCommentLength !== 0) {
+    throw new Error("ZIP archive comments are unsupported.");
+  }
   if (centralDirectoryOffset + centralDirectorySize !== endOffset) {
     throw new Error("ZIP central-directory bounds are invalid.");
   }
 
-  const names = [];
+  const records = [];
   let offset = centralDirectoryOffset;
   for (let index = 0; index < totalEntries; index += 1) {
     if (
@@ -266,33 +339,211 @@ export function readReleaseZipCentralDirectoryNames(value) {
     ) {
       throw new Error("ZIP central-directory entry is truncated or invalid.");
     }
+    const versionNeeded = view.getUint16(offset + 6, true);
     const flags = view.getUint16(offset + 8, true);
+    const method = view.getUint16(offset + 10, true);
+    const crc = view.getUint32(offset + 16, true);
+    const compressedSize = view.getUint32(offset + 20, true);
+    const uncompressedSize = view.getUint32(offset + 24, true);
     const nameLength = view.getUint16(offset + 28, true);
     const extraLength = view.getUint16(offset + 30, true);
     const commentLength = view.getUint16(offset + 32, true);
+    const diskStart = view.getUint16(offset + 34, true);
+    const localOffset = view.getUint32(offset + 42, true);
     const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
     if (nextOffset > endOffset) {
       throw new Error("ZIP central-directory entry exceeds its bounds.");
     }
-    names.push(
-      decodeZipEntryName(
-        bytes.subarray(offset + 46, offset + 46 + nameLength),
-        (flags & 0x0800) !== 0,
-      ),
+    const nameBytes = bytes.subarray(offset + 46, offset + 46 + nameLength);
+    const name = decodeZipEntryName(
+      nameBytes,
+      (flags & ZIP_FLAG_UTF8) !== 0,
     );
+    if (
+      compressedSize === 0xffffffff ||
+      uncompressedSize === 0xffffffff ||
+      localOffset === 0xffffffff ||
+      diskStart === 0xffff
+    ) {
+      throw new Error(`ZIP64 per-entry sentinels are unsupported: ${name}.`);
+    }
+    if (diskStart !== 0) {
+      throw new Error(`Multi-disk ZIP entries are unsupported: ${name}.`);
+    }
+    if (versionNeeded >= 45) {
+      throw new Error(`ZIP64 entry versions are unsupported: ${name}.`);
+    }
+    if (versionNeeded > 20) {
+      throw new Error(`ZIP entry requires an unsupported version: ${name}.`);
+    }
+    validateZipFlags(flags, name, "central");
+    if (!ZIP_SUPPORTED_METHODS.has(method)) {
+      throw new Error(
+        `ZIP entry uses an unsupported compression method: ${name}.`,
+      );
+    }
+    validateZipExtraFields(
+      bytes,
+      view,
+      offset + 46 + nameLength,
+      extraLength,
+      "central",
+      name,
+    );
+    if (commentLength !== 0) {
+      throw new Error(`ZIP entry comments are unsupported: ${name}.`);
+    }
+    records.push({
+      name,
+      nameBytes,
+      versionNeeded,
+      flags,
+      method,
+      crc,
+      compressedSize,
+      uncompressedSize,
+      localOffset,
+    });
     offset = nextOffset;
   }
   if (offset !== endOffset) {
     throw new Error("ZIP central-directory inventory is inconsistent.");
   }
 
-  const seen = new Set();
+  const names = records.map(({ name }) => name);
+  const seenNames = new Set();
   for (const name of names) {
-    if (seen.has(name)) throw new Error(`Duplicate ZIP entry name: ${name}.`);
-    seen.add(name);
+    if (seenNames.has(name)) {
+      throw new Error(`Duplicate ZIP entry name: ${name}.`);
+    }
+    seenNames.add(name);
   }
   const unsafeName = validateReleaseEntryNames(names)[0];
   if (unsafeName) throw new Error(unsafeName);
+
+  const seenLocalOffsets = new Set();
+  const localSpans = [];
+  for (const record of records) {
+    if (seenLocalOffsets.has(record.localOffset)) {
+      throw new Error(`Duplicate local-header offset: ${record.localOffset}.`);
+    }
+    seenLocalOffsets.add(record.localOffset);
+    if (
+      record.localOffset + 30 > centralDirectoryOffset ||
+      record.localOffset + 30 > bytes.length
+    ) {
+      throw new Error(`ZIP local header exceeds its bounds: ${record.name}.`);
+    }
+    if (
+      view.getUint32(record.localOffset, true) !== ZIP_LOCAL_HEADER_SIGNATURE
+    ) {
+      throw new Error(`ZIP local-header signature is invalid: ${record.name}.`);
+    }
+    const localVersionNeeded = view.getUint16(record.localOffset + 4, true);
+    const localFlags = view.getUint16(record.localOffset + 6, true);
+    const localMethod = view.getUint16(record.localOffset + 8, true);
+    const localCrc = view.getUint32(record.localOffset + 14, true);
+    const localCompressedSize = view.getUint32(record.localOffset + 18, true);
+    const localUncompressedSize = view.getUint32(record.localOffset + 22, true);
+    const localNameLength = view.getUint16(record.localOffset + 26, true);
+    const localExtraLength = view.getUint16(record.localOffset + 28, true);
+    if (
+      localCompressedSize === 0xffffffff ||
+      localUncompressedSize === 0xffffffff
+    ) {
+      throw new Error(
+        `ZIP64 per-entry sentinels are unsupported: ${record.name}.`,
+      );
+    }
+    const localNameOffset = record.localOffset + 30;
+    const localExtraOffset = localNameOffset + localNameLength;
+    const dataOffset = localExtraOffset + localExtraLength;
+    if (
+      localExtraOffset > centralDirectoryOffset ||
+      dataOffset > centralDirectoryOffset ||
+      dataOffset > bytes.length
+    ) {
+      throw new Error(`ZIP local header exceeds its bounds: ${record.name}.`);
+    }
+    const localNameBytes = bytes.subarray(
+      localNameOffset,
+      localNameOffset + localNameLength,
+    );
+    const localName = decodeZipEntryName(
+      localNameBytes,
+      (localFlags & ZIP_FLAG_UTF8) !== 0,
+    );
+    const unsafeLocalName = validateReleaseEntryNames([localName])[0];
+    if (unsafeLocalName) throw new Error(`Local ZIP ${unsafeLocalName}`);
+    validateZipFlags(localFlags, localName, "local");
+    validateZipExtraFields(
+      bytes,
+      view,
+      localExtraOffset,
+      localExtraLength,
+      "local",
+      localName,
+    );
+    if (
+      !equalBytes(localNameBytes, record.nameBytes) ||
+      localName !== record.name
+    ) {
+      throw new Error(`ZIP local-central name mismatch: ${record.name}.`);
+    }
+    if (localVersionNeeded !== record.versionNeeded) {
+      throw new Error(`ZIP local-central version mismatch: ${record.name}.`);
+    }
+    if (localFlags !== record.flags) {
+      throw new Error(`ZIP local-central flags mismatch: ${record.name}.`);
+    }
+    if (localMethod !== record.method) {
+      throw new Error(`ZIP local-central method mismatch: ${record.name}.`);
+    }
+    if (localCrc !== record.crc) {
+      throw new Error(`ZIP local-central CRC mismatch: ${record.name}.`);
+    }
+    if (localCompressedSize !== record.compressedSize) {
+      throw new Error(
+        `ZIP local-central compressed size mismatch: ${record.name}.`,
+      );
+    }
+    if (localUncompressedSize !== record.uncompressedSize) {
+      throw new Error(
+        `ZIP local-central uncompressed size mismatch: ${record.name}.`,
+      );
+    }
+    if (
+      record.method === 0 &&
+      record.compressedSize !== record.uncompressedSize
+    ) {
+      throw new Error(`Stored ZIP entry sizes are inconsistent: ${record.name}.`);
+    }
+    const dataEnd = dataOffset + record.compressedSize;
+    if (dataEnd > centralDirectoryOffset || dataEnd > bytes.length) {
+      throw new Error(`ZIP compressed data exceeds its bounds: ${record.name}.`);
+    }
+    localSpans.push({
+      start: record.localOffset,
+      end: dataEnd,
+      name: record.name,
+    });
+  }
+
+  localSpans.sort((left, right) => left.start - right.start);
+  for (let index = 0; index < localSpans.length; index += 1) {
+    const current = localSpans[index];
+    const expectedStart = index === 0 ? 0 : localSpans[index - 1].end;
+    if (current.start < expectedStart) {
+      throw new Error(`ZIP local entry spans overlap: ${current.name}.`);
+    }
+    if (current.start !== expectedStart) {
+      throw new Error(`ZIP local entry layout contains an unsupported gap.`);
+    }
+  }
+  const finalLocalEnd = localSpans.at(-1)?.end ?? 0;
+  if (finalLocalEnd !== centralDirectoryOffset) {
+    throw new Error("ZIP local entries do not end at the central directory.");
+  }
   return names;
 }
 
