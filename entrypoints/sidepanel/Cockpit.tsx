@@ -57,7 +57,7 @@ import {
 import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
 import { balanceMetrics, counterMetrics, quotaMetrics } from "./metrics";
-import { instanceLabel, instanceLabels } from "./instance-label";
+import { instanceLabels } from "./instance-label";
 
 export interface ApiKeySubmission {
   providerKind: ApiKeyProviderKind;
@@ -279,7 +279,7 @@ export function providerView(
   provider: ProviderInstanceView,
   mode: DisplayMode,
   now: number,
-  resolvedInstanceLabel = instanceLabel(provider),
+  resolvedInstanceLabel = instanceLabels([provider]).get(provider.id)!,
 ): ProviderCardProps {
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
@@ -475,7 +475,7 @@ export function Cockpit({
       instance,
       mode,
       now,
-      labelsByInstance.get(instance.id),
+      labelsByInstance.get(instance.id)!,
     );
     const failureCategory =
       instance.lastAttempt?.outcome.kind === "failure"
@@ -495,7 +495,7 @@ export function Cockpit({
   const previousScreen = navigation.backStack.at(-1);
   const labelForInstance = (instanceId: ProviderInstanceId): string => {
     const instance = state.instances.find((candidate) => candidate.id === instanceId);
-    return instance ? labelsByInstance.get(instance.id) ?? instanceLabel(instance) : "Provider";
+    return instance ? labelsByInstance.get(instance.id)! : "Provider";
   };
   const historyBackLabel =
     previousScreen?.name === "provider"
@@ -527,7 +527,12 @@ export function Cockpit({
         )
       : undefined;
   const detailProvider = detailRecord
-    ? providerView(detailRecord, mode, now)
+    ? providerView(
+        detailRecord,
+        mode,
+        now,
+        labelsByInstance.get(detailRecord.id)!,
+      )
     : undefined;
   const activeHistoryInstanceId =
     historySelection.instanceId ??
@@ -551,7 +556,7 @@ export function Cockpit({
         activeHistoryRecord,
         mode,
         now,
-        labelsByInstance.get(activeHistoryRecord.id),
+        labelsByInstance.get(activeHistoryRecord.id)!,
       )
     : undefined;
   const activeHistoryQuota = activeHistoryView?.usageGroups

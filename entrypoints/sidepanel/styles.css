@@ -2183,10 +2183,22 @@ section[aria-labelledby="overview-title"] .provider-list {
 
 .settings-provider-actions {
   display: flex;
+  min-width: 0;
   flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.settings-provider-list li.settings-provider-row--renaming {
+  flex-wrap: wrap;
+}
+
+.settings-provider-row--renaming .settings-provider-actions {
+  width: calc(100% - 32px);
+  flex: 1 1 100%;
+  margin-left: 32px;
+  justify-content: flex-start;
 }
 
 .settings-provider-actions > button {

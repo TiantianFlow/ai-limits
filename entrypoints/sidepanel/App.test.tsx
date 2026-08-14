@@ -15,7 +15,7 @@ import type {
   ProviderRefreshOutcome,
   RefreshReport,
 } from "../../domain/model";
-import type { AppViewState } from "../../background/view-state";
+import type { AppViewState } from "../../domain/public-protocol";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
 import { providerRegistry } from "../../providers/registry";
@@ -143,6 +143,44 @@ function toPublicState(state: AppState): AppViewState {
         : {}),
       ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
     })),
+  };
+}
+
+function twoBlankSameOriginInstances(): AppViewState {
+  return {
+    preferences: { displayMode: "used", autoRefresh: true },
+    instances: [
+      {
+        id: "newapi:11111111-1111-4111-8111-111111111111",
+        providerKind: "newapi",
+        baseUrl: "https://relay.example",
+        origin: "https://relay.example",
+        access: "granted",
+        createdAt: NOW - 2_000,
+        history: [],
+        snapshot: {
+          providerKind: "newapi",
+          source: "api-key",
+          fetchedAt: NOW,
+          metrics: [],
+        },
+      },
+      {
+        id: "newapi:22222222-2222-4222-8222-222222222222",
+        providerKind: "newapi",
+        baseUrl: "https://relay.example/gateway",
+        origin: "https://relay.example",
+        access: "granted",
+        createdAt: NOW - 1_000,
+        history: [],
+        snapshot: {
+          providerKind: "newapi",
+          source: "api-key",
+          fetchedAt: NOW,
+          metrics: [],
+        },
+      },
+    ],
   };
 }
 
@@ -827,6 +865,28 @@ describe("side-panel App", () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  test("applies an earlier valid initial GET_STATE after a later storage reload fails", async () => {
+    const state = createFixtureState(NOW);
+    let finishInitial: ((value: unknown) => void) | undefined;
+    const sendMessage = vi
+      .spyOn(browser.runtime, "sendMessage")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishInitial = resolve;
+          }) as never,
+      )
+      .mockRejectedValueOnce(new Error("newer storage reload failed"));
+
+    render(<App />);
+    await act(async () => saveState(state, NOW));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+
+    await act(async () => finishInitial?.(toPublicState(state)));
+    expect(await screen.findByText("ChatGPT")).toBeVisible();
+    expect(screen.queryByText("Couldn’t load usage.")).not.toBeInTheDocument();
+  });
+
   test("ignores an older initial GET_STATE reply after a storage reload finishes", async () => {
     const stale = createFixtureState(NOW);
     stale.preferences.displayMode = "used";
@@ -1167,6 +1227,126 @@ describe("side-panel App", () => {
     );
   });
 
+  test("uses collision-resolved instance labels in refresh and disconnect feedback", async () => {
+    const state = twoBlankSameOriginInstances();
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        const command = message as { type?: string };
+        if (
+          command.type === "REFRESH_INSTANCE" ||
+          command.type === "DISCONNECT_INSTANCE"
+        ) {
+          throw new Error("secret worker detail");
+        }
+        return state as never;
+      },
+    );
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Refresh relay.example · 11111111",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t confirm the relay.example · 11111111 refresh result. Check the latest usage before retrying.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Disconnect relay.example · 22222222",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t disconnect relay.example · 22222222.",
+    );
+    expect(document.body).not.toHaveTextContent("secret worker detail");
+  });
+
+  test("uses collision-resolved instance labels in rename and replace feedback", async () => {
+    const state = twoBlankSameOriginInstances();
+    const workId = state.instances[1]!.id;
+    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        const command = message as Record<string, unknown>;
+        switch (command.type) {
+          case "RENAME_INSTANCE":
+            throw new Error("secret worker detail");
+          case "PREPARE_PROVIDER_PERMISSION":
+            return {
+              state,
+              permissionIntentId: TEST_PERMISSION_INTENT,
+              instanceId: workId,
+              permissions: { origins: ["https://relay.example/*"] },
+            } as never;
+          case "CONNECT_API_KEY_PROVIDER":
+            return {
+              state,
+              report: {
+                trigger: "connect",
+                startedAt: NOW,
+                finishedAt: NOW + 1,
+                results: [
+                  {
+                    instanceId: workId,
+                    outcome: {
+                      kind: "success",
+                      snapshot: state.instances[1]!.snapshot!,
+                    },
+                  },
+                ],
+              },
+              result: "connected",
+            } as never;
+          default:
+            return state as never;
+        }
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("relay.example · 11111111");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Rename relay.example · 22222222",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Instance label"), {
+      target: { value: "Work relay" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Save label for relay.example · 22222222",
+      }),
+    );
+    expect(
+      await screen.findByText("Couldn’t rename relay.example · 22222222."),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Cancel renaming relay.example · 22222222",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Replace relay.example · 22222222 API key",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "replacement" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & replace" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Connected relay.example · 22222222.",
+    );
+    expect(document.body).not.toHaveTextContent("secret worker detail");
+  });
+
   test("uses confirmation-failure copy when connect transport fails", async () => {
     const state = createInitialState();
     const commands: Record<string, unknown>[] = [];
@@ -1251,6 +1431,47 @@ describe("side-panel App", () => {
     expect(screen.getByRole("radio", { name: "Left" })).not.toBeChecked();
     expect(document.body).not.toHaveTextContent("secret worker detail");
     expect(commands.filter(({ type }) => type === "GET_STATE")).toHaveLength(2);
+  });
+
+  test("applies a valid display rollback after a later storage GET_STATE fails", async () => {
+    const state = createFixtureState(NOW);
+    state.preferences.displayMode = "used";
+    let finishRollback: ((value: unknown) => void) | undefined;
+    let getStateCount = 0;
+    const sendMessage = vi
+      .spyOn(browser.runtime, "sendMessage")
+      .mockImplementation(async (message: unknown) => {
+        const command = message as { type?: string };
+        if (command.type === "SET_DISPLAY_MODE") {
+          throw new Error("display mutation failed");
+        }
+        if (command.type === "GET_STATE") {
+          getStateCount += 1;
+          if (getStateCount === 1) return toPublicState(state) as never;
+          if (getStateCount === 2) {
+            return new Promise((resolve) => {
+              finishRollback = resolve;
+            }) as never;
+          }
+          throw new Error("newer storage reload failed");
+        }
+        throw new Error("Unexpected command");
+      });
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("radio", { name: "Left" }));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(3));
+
+    await act(async () => saveState(state, NOW));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(4));
+    await act(async () => finishRollback?.(toPublicState(state)));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t update the display mode.",
+    );
+    expect(screen.getByRole("radio", { name: "Used" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Left" })).not.toBeChecked();
   });
 
   test("disables auto-refresh control until authoritative state returns", async () => {

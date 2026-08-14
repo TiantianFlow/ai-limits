@@ -29,6 +29,19 @@ describe("store artwork copy", () => {
     });
   });
 
+  it.each(["unlabeled-collision", "rename-failure"] as const)(
+    "accepts the deterministic %s fidelity state",
+    (state) => {
+      const request = parseFidelityRequest(
+        new URLSearchParams(
+          `fidelity=1&screen=settings&state=${state}&mode=used&theme=dark&panelWidth=340&dataSource=fixture&fixedClock=${encodeURIComponent(FIDELITY_FIXED_CLOCK)}&locale=en-US`,
+        ),
+      );
+
+      expect(request?.state).toBe(state);
+    },
+  );
+
   it("keeps store artwork separate and rejects nondeterministic fidelity inputs", () => {
     expect(parseFidelityRequest(new URLSearchParams("view=overview"))).toBeNull();
     expect(() =>

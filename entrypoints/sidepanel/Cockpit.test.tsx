@@ -11,10 +11,12 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AppState } from "../../domain/model";
-import type { AppViewState } from "../../background/view-state";
-import type { ProviderInstanceView } from "../../background/view-state";
 import type { ProviderId } from "../../domain/model";
-import type { ProviderOperation } from "../../background/messages";
+import type {
+  AppViewState,
+  ProviderInstanceView,
+  ProviderOperation,
+} from "../../domain/public-protocol";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
 import {
@@ -315,6 +317,21 @@ describe("Cockpit", () => {
     ).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", {
+        name: `Open ${personalLabel} details`,
+      }),
+    );
+    expect(
+      screen.getByRole("region", { name: `${personalLabel} detail` }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: personalLabel, level: 1 }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: `Refresh ${personalLabel}` }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(
+      screen.getByRole("button", {
         name: `Open ${personalLabel} history for API key quota`,
       }),
     );
@@ -509,9 +526,13 @@ describe("Cockpit", () => {
   });
 
   it("keeps a failed rename draft and shows only sanitized inline feedback", async () => {
-    const onRenameInstance = vi.fn(async () => {
-      throw new Error("secret backend detail");
-    });
+    let failRename: ((error: Error) => void) | undefined;
+    const onRenameInstance = vi.fn(
+      () =>
+        new Promise<boolean>((_resolve, reject) => {
+          failRename = reject;
+        }),
+    );
     render(
       <InstanceCockpit
         state={twoNewApiInstances()}
@@ -527,9 +548,15 @@ describe("Cockpit", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rename Work relay" }));
     const input = screen.getByLabelText("Instance label");
     fireEvent.change(input, { target: { value: "Still here" } });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Save label for Work relay" }),
-    );
+    const save = screen.getByRole("button", {
+      name: "Save label for Work relay",
+    });
+    save.focus();
+    fireEvent.click(save);
+
+    expect(save).toBeDisabled();
+    expect(onRenameInstance).toHaveBeenCalledTimes(1);
+    await act(async () => failRename?.(new Error("secret backend detail")));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Couldn’t rename this connection. Try again.",
@@ -539,6 +566,7 @@ describe("Cockpit", () => {
     expect(
       screen.getByRole("button", { name: "Save label for Work relay" }),
     ).toBeEnabled();
+    expect(input).toHaveFocus();
     expect(document.body).not.toHaveTextContent("secret backend detail");
     expect(
       screen.queryByRole("button", { name: "Rename Work relay" }),

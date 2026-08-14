@@ -34,7 +34,7 @@ import {
 } from "../../providers/package-factories";
 import { Cockpit } from "./Cockpit";
 import type { ApiKeySubmission } from "./Cockpit";
-import { instanceLabel } from "./instance-label";
+import { instanceLabels } from "./instance-label";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface Announcement {
@@ -46,7 +46,19 @@ interface AutoRefreshGuard {
   priorValue: boolean;
 }
 
+interface RequestedViewState {
+  sequence: number;
+  state: AppViewState;
+}
+
 type ProviderOperations = Partial<Record<ProviderInstanceId, ProviderOperation>>;
+
+function presentationLabel(
+  state: AppViewState | undefined,
+  instanceId: ProviderInstanceId,
+): string | undefined {
+  return state ? instanceLabels(state.instances).get(instanceId) : undefined;
+}
 
 function manualSummary(report: RefreshReport, state: AppViewState): string {
   const attempted = report.results.filter(
@@ -92,6 +104,7 @@ export function App() {
   const [viewState, setViewState] = useState<AppViewState>();
   const viewStateRef = useRef<AppViewState | undefined>(undefined);
   const stateRequestSequence = useRef(0);
+  const appliedStateRequestSequence = useRef(0);
   const displayMutationSequence = useRef(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -111,24 +124,35 @@ export function App() {
     setViewState(next);
   };
 
-  const requestViewState = async (): Promise<AppViewState | undefined> => {
+  const requestViewState = async (): Promise<RequestedViewState> => {
     const sequence = ++stateRequestSequence.current;
-    const next = parseAppViewState(
-      await browser.runtime.sendMessage({ type: "GET_STATE" }),
-    );
-    return sequence === stateRequestSequence.current ? next : undefined;
+    return {
+      sequence,
+      state: parseAppViewState(
+        await browser.runtime.sendMessage({ type: "GET_STATE" }),
+      ),
+    };
+  };
+
+  const applyRequestedViewState = (
+    requested: RequestedViewState,
+    project: (state: AppViewState) => AppViewState = (state) => state,
+  ): boolean => {
+    if (requested.sequence <= appliedStateRequestSequence.current) return false;
+    appliedStateRequestSequence.current = requested.sequence;
+    commitViewState(project(requested.state));
+    return true;
   };
 
   useEffect(() => {
     let mounted = true;
 
     const reloadView = async () => {
-      const next = await requestViewState();
-      if (mounted && next) {
+      const requested = await requestViewState();
+      if (mounted && applyRequestedViewState(requested)) {
         setLoadFailed(false);
-        commitViewState(next);
       }
-      return next;
+      return requested;
     };
 
     void reloadView().catch(() => {
@@ -142,15 +166,14 @@ export function App() {
       if (areaName !== "local") return;
       const guardAtEvent = autoRefreshGuard.current;
       void requestViewState()
-        .then((nextState) => {
+        .then((requested) => {
           if (
-            !nextState ||
             !mounted ||
             guardAtEvent !== autoRefreshGuard.current
           )
             return;
           const activeGuard = autoRefreshGuard.current;
-          commitViewState(
+          applyRequestedViewState(requested, (nextState) =>
             activeGuard
               ? {
                   ...nextState,
@@ -223,9 +246,9 @@ export function App() {
       .catch(async () => {
         if (mutation !== displayMutationSequence.current) return;
         try {
-          const authoritative = await requestViewState();
-          if (authoritative && mutation === displayMutationSequence.current) {
-            commitViewState(authoritative);
+          const requested = await requestViewState();
+          if (mutation === displayMutationSequence.current) {
+            applyRequestedViewState(requested);
           }
         } catch {
           const current = viewStateRef.current;
@@ -372,6 +395,10 @@ export function App() {
       instanceId,
       userLabel,
     } = submission;
+    const submittedLabel =
+      (instanceId
+        ? presentationLabel(viewStateRef.current, instanceId)
+        : userLabel?.trim()) || providerNames[providerKind];
     const config = normalizeProviderConfig(
       providerKind,
       providerKind === "newapi"
@@ -389,7 +416,7 @@ export function App() {
         userLabel,
       );
     } catch {
-      announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
+      announce(`${submittedLabel} could not be validated right now. Try again later.`);
       return "temporary_error";
     }
     setProviderOperation(prepared.instanceId, "requesting_permission");
@@ -397,12 +424,12 @@ export function App() {
     try {
       granted = await requestPreparedPermission(prepared);
     } catch {
-      announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
+      announce(`${submittedLabel} could not be validated right now. Try again later.`);
       setProviderOperation(prepared.instanceId);
       return "temporary_error";
     }
     if (!granted) {
-      announce(`${providerNames[providerKind]} access was not changed.`);
+      announce(`${submittedLabel} access was not changed.`);
       setProviderOperation(prepared.instanceId);
       return "permission_declined";
     }
@@ -423,7 +450,9 @@ export function App() {
       commitViewState(response.state);
       switch (response.result) {
         case "connected":
-          announce(`Connected ${userLabel?.trim() || providerNames[providerKind]}.`);
+          announce(
+            `Connected ${presentationLabel(response.state, prepared.instanceId) ?? submittedLabel}.`,
+          );
           break;
         case "invalid_key":
           announce(`Enter a valid ${providerNames[providerKind]} API key.`);
@@ -439,13 +468,13 @@ export function App() {
           announce("This site did not return compatible New API status and usage data.");
           break;
         case "temporary_error":
-          announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
+          announce(`${submittedLabel} could not be validated right now. Try again later.`);
           break;
       }
       return response.result;
     } catch {
       await abandonPermissionIntent(prepared.permissionIntentId);
-      announce(`${providerNames[providerKind]} could not be validated right now. Try again later.`);
+      announce(`${submittedLabel} could not be validated right now. Try again later.`);
       return "temporary_error";
     } finally {
       setProviderOperation(prepared.instanceId);
@@ -457,7 +486,7 @@ export function App() {
       (candidate) => candidate.id === instanceId,
     );
     if (!instance) return;
-    const label = instanceLabel(instance);
+    const label = presentationLabel(viewStateRef.current, instanceId);
     clearAnnouncement();
     setProviderOperation(instanceId, "fetching");
     try {
@@ -524,8 +553,8 @@ export function App() {
     } catch {
       if (autoRefreshGuard.current === guard) autoRefreshGuard.current = undefined;
       try {
-        const authoritative = await requestViewState();
-        if (authoritative) commitViewState(authoritative);
+        const requested = await requestViewState();
+        applyRequestedViewState(requested);
       } catch {
         // The prior rendered view remains authoritative enough for recovery.
       }
@@ -540,7 +569,7 @@ export function App() {
       (candidate) => candidate.id === instanceId,
     );
     if (!instance) return;
-    const label = instanceLabel(instance);
+    const label = presentationLabel(viewStateRef.current, instanceId)!;
     clearAnnouncement();
     try {
       const response = parseDisconnectResponse(
@@ -568,6 +597,7 @@ export function App() {
       (candidate) => candidate.id === instanceId,
     );
     if (!current) return false;
+    const currentLabel = presentationLabel(viewStateRef.current, instanceId)!;
     clearAnnouncement();
     try {
       const next = parseAppViewState(
@@ -578,11 +608,12 @@ export function App() {
         } satisfies RuntimeCommand),
       );
       commitViewState(next);
-      const renamed = next.instances.find((instance) => instance.id === instanceId);
-      announce(`Renamed connection to ${renamed ? instanceLabel(renamed) : providerNames[current.providerKind]}.`);
+      announce(
+        `Renamed connection to ${presentationLabel(next, instanceId) ?? currentLabel}.`,
+      );
       return true;
     } catch {
-      announce(`Couldn’t rename ${instanceLabel(current)}.`);
+      announce(`Couldn’t rename ${currentLabel}.`);
       return false;
     }
   };

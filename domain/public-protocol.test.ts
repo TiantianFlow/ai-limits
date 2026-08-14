@@ -109,4 +109,41 @@ describe("public side-panel protocol", () => {
       }),
     ).toThrow("Missing application state");
   });
+
+  test("rejects instance fields inherited from a prototype", () => {
+    const inheritedId = Object.assign(
+      Object.create({
+        id: "newapi:11111111-1111-4111-8111-111111111111",
+      }) as Record<string, unknown>,
+      {
+        providerKind: "newapi",
+        baseUrl: "https://relay.example",
+        origin: "https://relay.example",
+        access: "granted",
+        createdAt: 10,
+        history: [],
+      },
+    );
+    const inheritedOptional = Object.assign(
+      Object.create({ userLabel: "Inherited relay" }) as Record<string, unknown>,
+      {
+        id: "newapi:22222222-2222-4222-8222-222222222222",
+        providerKind: "newapi",
+        baseUrl: "https://relay.example/gateway",
+        origin: "https://relay.example",
+        access: "granted",
+        createdAt: 11,
+        history: [],
+      },
+    );
+
+    for (const instance of [inheritedId, inheritedOptional]) {
+      expect(() =>
+        parseAppViewState({
+          preferences: { displayMode: "used", autoRefresh: true },
+          instances: [instance],
+        }),
+      ).toThrow("Missing application state");
+    }
+  });
 });

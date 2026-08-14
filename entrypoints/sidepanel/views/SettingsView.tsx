@@ -9,7 +9,7 @@ import {
   providerNames,
   providerPresentation,
 } from "../../../providers/catalog";
-import { instanceLabel, instanceLabels } from "../instance-label";
+import { instanceLabels } from "../instance-label";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
@@ -80,6 +80,8 @@ export function SettingsView({
     Partial<Record<ProviderInstanceId, HTMLButtonElement | null>>
   >({});
   const restoreRenameFocus = useRef<ProviderInstanceId | undefined>(undefined);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const restoreRenameInputFocus = useRef(false);
   const labelsByInstance = instanceLabels(instances);
 
   useEffect(() => {
@@ -96,6 +98,13 @@ export function SettingsView({
       renameTriggerRefs.current[instanceId]?.focus();
     }
   }, [renamingInstanceId]);
+
+  useEffect(() => {
+    if (!renamePending && renameError && restoreRenameInputFocus.current) {
+      restoreRenameInputFocus.current = false;
+      renameInputRef.current?.focus();
+    }
+  }, [renameError, renamePending]);
 
   return (
     <section className="screen settings-panel" aria-label="Provider settings">
@@ -157,7 +166,7 @@ export function SettingsView({
             <ul className="settings-provider-list">
               {instances.map((instance) => {
                 const name = providerNames[instance.providerKind];
-                const label = labelsByInstance.get(instance.id) ?? instanceLabel(instance);
+                const label = labelsByInstance.get(instance.id)!;
                 const presentation = providerPresentation(instance.providerKind);
                 const connectionMethod =
                   providerCatalog[instance.providerKind].connection.kind === "api-key"
@@ -166,7 +175,11 @@ export function SettingsView({
                 const editing = renamingInstanceId === instance.id;
                 const inputId = `settings-label-${instance.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
                 return (
-                  <li key={instance.id} aria-label={`${label} settings`}>
+                  <li
+                    key={instance.id}
+                    className={editing ? "settings-provider-row--renaming" : undefined}
+                    aria-label={`${label} settings`}
+                  >
                     <ProviderMark providerId={instance.providerKind} size="sm" />
                     <div className="settings-provider-copy">
                       <p
@@ -199,6 +212,7 @@ export function SettingsView({
                         <div className="settings-rename" role="group" aria-label={`Rename ${label}`}>
                           <label htmlFor={inputId}>Instance label</label>
                           <input
+                            ref={renameInputRef}
                             id={inputId}
                             type="text"
                             maxLength={128}
@@ -225,6 +239,7 @@ export function SettingsView({
                               )
                                 .then((success) => {
                                   if (!success) {
+                                    restoreRenameInputFocus.current = true;
                                     setRenameError(
                                       "Couldn’t rename this connection. Try again.",
                                     );
@@ -234,6 +249,7 @@ export function SettingsView({
                                   setRenamingInstanceId(undefined);
                                 })
                                 .catch(() => {
+                                  restoreRenameInputFocus.current = true;
                                   setRenameError(
                                     "Couldn’t rename this connection. Try again.",
                                   );
@@ -248,6 +264,7 @@ export function SettingsView({
                             aria-label={`Cancel renaming ${label}`}
                             disabled={renamePending}
                             onClick={() => {
+                              restoreRenameInputFocus.current = false;
                               setRenameError("");
                               restoreRenameFocus.current = instance.id;
                               setRenamingInstanceId(undefined);
@@ -274,6 +291,7 @@ export function SettingsView({
                           aria-label={`Rename ${label}`}
                           data-focus-key={`settings-rename-${instance.id}`}
                           onClick={() => {
+                            restoreRenameInputFocus.current = false;
                             setRenameError("");
                             setLabelDraft(instance.userLabel ?? "");
                             setRenamingInstanceId(instance.id);

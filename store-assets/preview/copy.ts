@@ -22,7 +22,9 @@ export type FidelityState =
   | "refresh-pending"
   | "partial-refresh"
   | "kimi-interaction"
-  | "delete-confirmation";
+  | "delete-confirmation"
+  | "unlabeled-collision"
+  | "rename-failure";
 export type FidelityMode = "used" | "left";
 export type FidelityTheme = "light" | "dark";
 export type FidelityPanelWidth = 340 | 400 | 460;
@@ -69,6 +71,8 @@ const FIDELITY_STATES = new Set<FidelityState>([
   "partial-refresh",
   "kimi-interaction",
   "delete-confirmation",
+  "unlabeled-collision",
+  "rename-failure",
 ]);
 const FIDELITY_MODES = new Set<FidelityMode>(["used", "left"]);
 const FIDELITY_THEMES = new Set<FidelityTheme>(["light", "dark"]);
