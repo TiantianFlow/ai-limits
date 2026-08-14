@@ -1,19 +1,17 @@
 import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
-import type { ProviderId, ProviderRecord } from "../../../domain/model";
+import type { ProviderKind } from "../../../providers/catalog";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { ProviderConnectRow } from "../components/ProviderConnectRow";
 
 export interface FirstRunViewProps {
-  providers: ProviderRecord[];
-  providerOperations: Partial<Record<ProviderId, ProviderOperation>>;
-  onConnectProvider: (providerId: ProviderId) => void;
+  providers: Array<{ providerKind: ProviderKind; operation?: ProviderOperation }>;
+  onConnectProvider: (providerKind: ProviderKind) => void;
 }
 
 export function FirstRunView({
   providers,
-  providerOperations,
   onConnectProvider,
 }: FirstRunViewProps) {
   return (
@@ -34,11 +32,11 @@ export function FirstRunView({
       <div className="screen-body screen-body--connections">
         <h2 className="section-label">Supported providers · {providers.length}</h2>
         <div className="provider-list">
-          {providers.map((provider) => (
+          {providers.map(({ providerKind, operation }) => (
             <ProviderConnectRow
-              key={provider.providerId}
-              providerId={provider.providerId}
-              operation={providerOperations[provider.providerId]}
+              key={providerKind}
+              providerKind={providerKind}
+              operation={operation}
               onConnect={onConnectProvider}
             />
           ))}

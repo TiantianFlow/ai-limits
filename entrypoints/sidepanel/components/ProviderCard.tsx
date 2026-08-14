@@ -3,11 +3,12 @@ import React from "react";
 import type { ProviderOperation } from "../../../background/messages";
 import type {
   DisplayMode,
-  ProviderId,
-  ProviderRecord,
   QuotaMetric,
   UsageHistoryObservation,
 } from "../../../domain/model";
+import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ProviderInstanceView } from "../../../background/view-state";
+import type { ProviderKind } from "../../../providers/catalog";
 import type { PaceKind } from "../../../domain/quota";
 import { Icon } from "./Icon";
 import { InteractionBanner } from "./InteractionBanner";
@@ -45,7 +46,9 @@ export interface UsageGroupView {
 }
 
 export interface ProviderCardProps {
-  providerId: ProviderId;
+  instanceId: ProviderInstanceId;
+  instanceLabel: string;
+  providerId: ProviderKind;
   name: string;
   plan?: string;
   mode: DisplayMode;
@@ -53,7 +56,7 @@ export interface ProviderCardProps {
   usageGroups: UsageGroupView[];
   freshness?: string;
   stale: boolean;
-  access: ProviderRecord["access"];
+  access: ProviderInstanceView["access"];
   operation?: ProviderOperation;
   attemptMessage?: string;
   hasSnapshot: boolean;
@@ -84,6 +87,8 @@ const operationLabels: Record<ProviderOperation, string> = {
 
 export function ProviderCard({
   providerId,
+  instanceId,
+  instanceLabel,
   name,
   plan,
   mode,
@@ -104,6 +109,8 @@ export function ProviderCard({
   onOpenDetails,
   onOpenHistory,
 }: ProviderCardProps) {
+  const identitySuffix = instanceId.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const headingId = `provider-name-${identitySuffix}`;
   const quotaGroups = usageGroups.filter((group) => group.quotas.length > 0);
   const statusLabel = operation
     ? operationLabels[operation]
@@ -122,12 +129,17 @@ export function ProviderCard({
       <ProviderMark providerId={providerId} size="sm" />
       <span
         className="provider-card__name"
-        id={`provider-${name}`}
+        id={headingId}
         role="heading"
         aria-level={headingLevel}
       >
         {name}
       </span>
+      {instanceLabel !== name ? (
+        <span className="provider-card__instance">
+          {instanceLabel}
+        </span>
+      ) : null}
       {plan ? <span className="provider-card__plan">{plan}</span> : null}
       <span className="provider-card__status">
         <StatusChip
@@ -139,13 +151,16 @@ export function ProviderCard({
   );
 
   return (
-    <article className="provider-card" aria-labelledby={`provider-${name}`}>
+    <article
+      className="provider-card"
+      aria-label={instanceLabel === name ? name : `${name} ${instanceLabel}`}
+    >
       <header className="provider-card__header">
         {onOpenDetails ? (
           <button
             className="provider-card__details provider-card__identity"
             type="button"
-            aria-label={`Open ${name} details`}
+            aria-label={`Open ${instanceLabel} details`}
             data-focus-key={openDetailsFocusKey}
             onClick={onOpenDetails}
           >
@@ -204,8 +219,8 @@ export function ProviderCard({
                   key={quota.id}
                   {...quota}
                   mode={mode}
-                  historyLabel={`Open ${name} history for ${quota.label}`}
-                  historyFocusKey={`provider-history-${providerId}-${quota.id}`}
+                  historyLabel={`Open ${instanceLabel} history for ${quota.label}`}
+                  historyFocusKey={`provider-history-${instanceId}-${quota.id}`}
                   onOpenHistory={onOpenHistory}
                 />
               ))}

@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 
 import type {
   DisplayMode,
-  ProviderId,
-  ProviderRecord,
 } from "../../../domain/model";
+import type { ProviderInstanceView } from "../../../background/view-state";
+import type { ProviderInstanceId } from "../../../domain/instances";
 import { providerNames } from "../../../providers/catalog";
+import { instanceLabel } from "../instance-label";
 import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageHeader } from "../components/PageHeader";
@@ -13,17 +14,17 @@ import type { QuotaView } from "../components/ProviderCard";
 import { QuotaBars } from "../components/QuotaBars";
 
 export interface HistoryViewProps {
-  providers: ProviderRecord[];
-  providerId: ProviderId;
+  instances: ProviderInstanceView[];
+  instanceId: ProviderInstanceId;
   metricId?: string;
-  metricIdsByProvider: Partial<Record<ProviderId, string>>;
+  metricIdsByInstance: Partial<Record<ProviderInstanceId, string>>;
   currentQuota?: QuotaView;
   mode: DisplayMode;
   now: number;
   backLabel: string;
   onBack: () => void;
   onDisplayModeChange: (mode: DisplayMode) => void;
-  onSelectionChange: (providerId: ProviderId, metricId: string) => void;
+  onSelectionChange: (instanceId: ProviderInstanceId, metricId: string) => void;
 }
 
 const RANGE_OPTIONS = [
@@ -33,10 +34,10 @@ const RANGE_OPTIONS = [
 ] as const;
 
 export function HistoryView({
-  providers,
-  providerId,
+  instances,
+  instanceId,
   metricId,
-  metricIdsByProvider,
+  metricIdsByInstance,
   currentQuota,
   mode,
   now,
@@ -45,25 +46,25 @@ export function HistoryView({
   onDisplayModeChange,
   onSelectionChange,
 }: HistoryViewProps) {
-  const eligibleProviders = providers.filter(
-    (provider) =>
-      provider.access === "granted" &&
-      provider.snapshot !== undefined &&
-      quotaMetrics(provider.snapshot).length > 0,
+  const eligibleInstances = instances.filter(
+    (instance) =>
+      instance.access === "granted" &&
+      instance.snapshot !== undefined &&
+      quotaMetrics(instance.snapshot).length > 0,
   );
-  const provider = eligibleProviders.find(
-    (candidate) => candidate.providerId === providerId,
+  const instance = eligibleInstances.find(
+    (candidate) => candidate.id === instanceId,
   );
-  const metrics = provider?.snapshot ? quotaMetrics(provider.snapshot) : [];
+  const metrics = instance?.snapshot ? quotaMetrics(instance.snapshot) : [];
   const selectedMetric =
     metrics.find((metric) => metric.id === metricId) ?? metrics[0];
   const [rangeHours, setRangeHours] = useState<number>(48);
 
   useEffect(() => {
     setRangeHours(48);
-  }, [providerId, selectedMetric?.id]);
+  }, [instanceId, selectedMetric?.id]);
 
-  if (!provider || !selectedMetric) {
+  if (!instance || !selectedMetric) {
     return (
       <section className="screen" aria-label="History unavailable">
         <PageHeader
@@ -76,45 +77,48 @@ export function HistoryView({
     );
   }
 
-  const providerName = providerNames[provider.providerId];
+  const providerName = providerNames[instance.providerKind];
+  const label = instanceLabel(instance);
 
   return (
-    <section className="screen" aria-label={`${providerName} history`}>
+    <section className="screen" aria-label={`${label} history`}>
       <PageHeader
-        title={`${providerName} history`}
-        subtitle="Local quota observations · 30-day retention on this device"
+        title={`${label} history`}
+        subtitle={`${providerName} · Local quota observations · 30-day retention on this device`}
         backLabel={backLabel}
         onBack={onBack}
       />
 
       <div className="history-screen screen-body">
-        {eligibleProviders.length > 1 ? (
+        {eligibleInstances.length > 1 ? (
           <label className="compact-select">
             <span>Provider</span>
             <select
               aria-label="History provider"
-              value={provider.providerId}
+              value={instance.id}
               onChange={(event) => {
-                const nextProvider = eligibleProviders.find(
-                  (candidate) => candidate.providerId === event.currentTarget.value,
+                const nextInstance = eligibleInstances.find(
+                  (candidate) => candidate.id === event.currentTarget.value,
                 );
-                const nextMetrics = nextProvider?.snapshot
-                  ? quotaMetrics(nextProvider.snapshot)
+                const nextMetrics = nextInstance?.snapshot
+                  ? quotaMetrics(nextInstance.snapshot)
                   : [];
-                const savedMetricId = nextProvider
-                  ? metricIdsByProvider[nextProvider.providerId]
+                const savedMetricId = nextInstance
+                  ? metricIdsByInstance[nextInstance.id]
                   : undefined;
                 const nextMetric =
                   nextMetrics.find((metric) => metric.id === savedMetricId) ??
                   nextMetrics[0];
-                if (nextProvider && nextMetric) {
-                  onSelectionChange(nextProvider.providerId, nextMetric.id);
+                if (nextInstance && nextMetric) {
+                  onSelectionChange(nextInstance.id, nextMetric.id);
                 }
               }}
             >
-              {eligibleProviders.map((candidate) => (
-                <option key={candidate.providerId} value={candidate.providerId}>
-                  {providerNames[candidate.providerId]}
+              {eligibleInstances.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {instanceLabel(candidate) === providerNames[candidate.providerKind]
+                    ? providerNames[candidate.providerKind]
+                    : `${providerNames[candidate.providerKind]} · ${instanceLabel(candidate)}`}
                 </option>
               ))}
             </select>
@@ -127,7 +131,7 @@ export function HistoryView({
             aria-label="Quota metric"
             value={selectedMetric.id}
             onChange={(event) =>
-              onSelectionChange(provider.providerId, event.currentTarget.value)
+              onSelectionChange(instance.id, event.currentTarget.value)
             }
           >
             {metrics.map((metric) => (
@@ -182,10 +186,10 @@ export function HistoryView({
             <span>{selectedMetric.scope} quota</span>
           </div>
           <HistoryChart
-            providerName={providerName}
+            providerName={label}
             mode={mode}
             metrics={[selectedMetric]}
-            history={provider.history}
+            history={instance.history}
             now={now}
             rangeHours={rangeHours}
           />

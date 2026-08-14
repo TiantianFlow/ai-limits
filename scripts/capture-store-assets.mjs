@@ -112,7 +112,7 @@ async function prepareStoreAsset(page, asset) {
   if (asset.view === "pacing") {
     const pacingGeometry = await page.evaluate(() => {
       const frame = document.querySelector("[data-panel-frame]");
-      const heading = document.getElementById("provider-Kimi");
+      const heading = document.getElementById("provider-name-kimi-default");
       const card = heading?.closest(".provider-card");
       const stickyHeader = document.querySelector(".app-header");
       if (!(frame instanceof HTMLElement) || !(card instanceof HTMLElement)) {
@@ -518,7 +518,7 @@ async function fidelityMeasurements(page, asset) {
       let wideIdentityCount = 0;
       let wideIdentityVerified = true;
       if (innerWidth > 380) {
-        const claudeName = root.querySelector("#provider-Claude");
+        const claudeName = root.querySelector("#provider-name-claude-default");
         const claudeCard = claudeName?.closest(".provider-card");
         const plan = claudeCard?.querySelector(".provider-card__plan");
         const details = claudeCard?.querySelector(".provider-card__details");

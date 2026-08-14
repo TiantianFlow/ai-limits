@@ -10,13 +10,130 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AppState } from "../../domain/model";
+import type { AppViewState } from "../../background/view-state";
+import type { ProviderInstanceView } from "../../background/view-state";
+import type { ProviderId } from "../../domain/model";
+import type { ProviderOperation } from "../../background/messages";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
-import { Cockpit, providerView } from "./Cockpit";
+import {
+  Cockpit as InstanceCockpit,
+  providerView as instanceProviderView,
+} from "./Cockpit";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
+const PERSONAL_NEW_API_ID =
+  "newapi:11111111-1111-4111-8111-111111111111";
+const WORK_NEW_API_ID =
+  "newapi:22222222-2222-4222-8222-222222222222";
 
 afterEach(cleanup);
+
+function toInstance(
+  provider: AppState["providers"][number],
+): ProviderInstanceView {
+  const snapshot = provider.snapshot
+    ? (() => {
+        const { accountLabel: _accountLabel, ...rest } = provider.snapshot;
+        return rest;
+      })()
+    : undefined;
+  return {
+    id: `${provider.providerId}:default`,
+    providerKind: provider.providerId,
+    access: provider.access,
+    createdAt: NOW,
+    history: provider.history,
+    ...(snapshot ? { snapshot } : {}),
+    ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
+  };
+}
+
+function toViewState(state: AppState | AppViewState): AppViewState {
+  return "instances" in state
+    ? state
+    : {
+        preferences: state.preferences,
+        instances: state.providers
+          .filter(
+            (provider) =>
+              provider.access === "granted" ||
+              provider.snapshot !== undefined ||
+              provider.history.length > 0 ||
+              provider.lastAttempt !== undefined,
+          )
+          .map(toInstance),
+      };
+}
+
+type TestCockpitProps = Omit<
+  React.ComponentProps<typeof InstanceCockpit>,
+  "state" | "providerOperations" | "onSubmitApiKey"
+> & {
+  state: AppState | AppViewState;
+  providerOperations?: Partial<Record<ProviderId | string, ProviderOperation>>;
+  onRefreshProvider?: (providerId: ProviderId) => void;
+  onDisconnectProvider?: (providerId: ProviderId) => void;
+  onSubmitApiKey?: (
+    providerId: ProviderId,
+    apiKey: string,
+    baseUrl?: string,
+  ) => Promise<"connected" | "invalid_key" | "insufficient_scope" | "invalid_site" | "temporary_error" | "permission_declined">;
+};
+
+function Cockpit({
+  state,
+  providerOperations,
+  onRefreshProvider,
+  onDisconnectProvider,
+  onSubmitApiKey,
+  ...props
+}: TestCockpitProps) {
+  return (
+    <InstanceCockpit
+      {...props}
+      state={toViewState(state)}
+      providerOperations={Object.fromEntries(
+        Object.entries(providerOperations ?? {}).map(([key, operation]) => [
+          key.includes(":") ? key : `${key}:default`,
+          operation,
+        ]),
+      )}
+      onRefreshInstance={
+        props.onRefreshInstance ??
+        (onRefreshProvider
+          ? (instanceId) =>
+              onRefreshProvider(instanceId.slice(0, instanceId.indexOf(":")) as ProviderId)
+          : undefined)
+      }
+      onDisconnectInstance={
+        props.onDisconnectInstance ??
+        (onDisconnectProvider
+          ? (instanceId) =>
+              onDisconnectProvider(instanceId.slice(0, instanceId.indexOf(":")) as ProviderId)
+          : undefined)
+      }
+      onSubmitApiKey={
+        onSubmitApiKey
+          ? (submission) =>
+              onSubmitApiKey(
+                submission.providerKind,
+                submission.apiKey,
+                submission.baseUrl,
+              )
+          : undefined
+      }
+    />
+  );
+}
+
+function providerView(
+  provider: AppState["providers"][number],
+  mode: AppState["preferences"]["displayMode"],
+  now: number,
+) {
+  return instanceProviderView(toInstance(provider), mode, now);
+}
 
 function renderCockpit(
   state: AppState = createFixtureState(NOW),
@@ -39,7 +156,246 @@ function renderCockpit(
   return { onDisplayModeChange };
 }
 
+function twoNewApiInstances(): AppViewState {
+  const metrics = [
+    {
+      type: "quota" as const,
+      id: "relay-key-quota",
+      label: "API key quota",
+      scope: "feature" as const,
+      usedRatio: 0.2,
+    },
+    {
+      type: "quota" as const,
+      id: "daily-relay-quota",
+      label: "Daily relay quota",
+      scope: "feature" as const,
+      usedRatio: 0.6,
+    },
+  ];
+  return {
+    preferences: { displayMode: "used", autoRefresh: true },
+    instances: [
+      {
+        id: PERSONAL_NEW_API_ID,
+        providerKind: "newapi",
+        userLabel: "Personal relay",
+        origin: "https://relay.example",
+        access: "granted",
+        createdAt: NOW - 2_000,
+        history: [],
+        snapshot: {
+          providerKind: "newapi",
+          source: "api-key",
+          fetchedAt: NOW,
+          metrics,
+        },
+      },
+      {
+        id: WORK_NEW_API_ID,
+        providerKind: "newapi",
+        userLabel: "Work relay",
+        origin: "https://relay.example",
+        access: "granted",
+        createdAt: NOW - 1_000,
+        history: [],
+        snapshot: {
+          providerKind: "newapi",
+          source: "api-key",
+          fetchedAt: NOW,
+          metrics: metrics.map((metric) => ({
+            ...metric,
+            usedRatio: metric.usedRatio + 0.1,
+          })),
+        },
+      },
+    ],
+  };
+}
+
 describe("Cockpit", () => {
+  it("renders and operates same-origin New API instances by instance identity", () => {
+    const onRefreshInstance = vi.fn();
+    const state = twoNewApiInstances();
+
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onRefreshInstance={onRefreshInstance}
+      />,
+    );
+
+    expect(screen.getByText("Personal relay")).toBeVisible();
+    expect(screen.getByText("Work relay")).toBeVisible();
+    expect(
+      screen.getByRole("article", { name: "New API Personal relay" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("article", { name: "New API Work relay" }),
+    ).toBeVisible();
+    const ids = [...document.querySelectorAll<HTMLElement>("[id]")].map(
+      (element) => element.id,
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    const personalRefresh = screen.getByRole("button", {
+      name: "Refresh Personal relay",
+    });
+    const workRefresh = screen.getByRole("button", {
+      name: "Refresh Work relay",
+    });
+    expect(personalRefresh).toHaveAttribute(
+      "data-focus-key",
+      `overview-refresh-${PERSONAL_NEW_API_ID}`,
+    );
+    expect(workRefresh).toHaveAttribute(
+      "data-focus-key",
+      `overview-refresh-${WORK_NEW_API_ID}`,
+    );
+
+    fireEvent.click(personalRefresh);
+    expect(onRefreshInstance).toHaveBeenCalledWith(
+      PERSONAL_NEW_API_ID,
+    );
+    expect(onRefreshInstance).not.toHaveBeenCalledWith(
+      WORK_NEW_API_ID,
+    );
+
+    const personalDetails = screen.getByRole("button", {
+      name: "Open Personal relay details",
+    });
+    personalDetails.focus();
+    fireEvent.click(personalDetails);
+    expect(
+      screen.getByRole("region", { name: "Personal relay detail" }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(
+      screen.getByRole("button", { name: "Open Personal relay details" }),
+    ).toHaveFocus();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Work relay details" }),
+    );
+    expect(
+      screen.getByRole("region", { name: "Work relay detail" }),
+    ).toBeVisible();
+  });
+
+  it("keeps same-kind operations and History metric selection independent per instance", () => {
+    render(
+      <InstanceCockpit
+        state={twoNewApiInstances()}
+        now={NOW}
+        providerOperations={{ [PERSONAL_NEW_API_ID]: "fetching" }}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    const personalCard = screen.getByRole("article", {
+      name: "New API Personal relay",
+    });
+    const workCard = screen.getByRole("article", {
+      name: "New API Work relay",
+    });
+    expect(within(personalCard).getByText("Fetching usage…")).toBeVisible();
+    expect(
+      within(personalCard).queryByRole("button", { name: "Refresh Personal relay" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(workCard).getByRole("button", { name: "Refresh Work relay" }),
+    ).toBeVisible();
+
+    fireEvent.click(
+      within(workCard).getByRole("button", {
+        name: "Open Work relay history for API key quota",
+      }),
+    );
+    const instanceSelect = screen.getByRole("combobox", {
+      name: "History provider",
+    });
+    const metricSelect = screen.getByRole("combobox", { name: "Quota metric" });
+    expect(instanceSelect).toHaveValue(WORK_NEW_API_ID);
+    fireEvent.change(metricSelect, { target: { value: "daily-relay-quota" } });
+    fireEvent.change(instanceSelect, { target: { value: PERSONAL_NEW_API_ID } });
+    expect(metricSelect).toHaveValue("relay-key-quota");
+    fireEvent.change(instanceSelect, { target: { value: WORK_NEW_API_ID } });
+    expect(metricSelect).toHaveValue("daily-relay-quota");
+  });
+
+  it("targets exact same-kind Settings actions and restores rename focus", async () => {
+    const onDisconnectInstance = vi.fn();
+    const onRenameInstance = vi.fn();
+    const onSubmitApiKey = vi.fn(async () => "invalid_key" as const);
+    render(
+      <InstanceCockpit
+        state={twoNewApiInstances()}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDisconnectInstance={onDisconnectInstance}
+        onRenameInstance={onRenameInstance}
+        onSubmitApiKey={onSubmitApiKey}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+      screen.getByRole("heading", { name: "New API · Personal relay" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "New API · Work relay" }),
+    ).toBeVisible();
+    const personalRename = screen.getByRole("button", {
+      name: "Rename Personal relay",
+    });
+    personalRename.focus();
+    fireEvent.click(personalRename);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel renaming Personal relay" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Rename Personal relay" }),
+    ).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Work relay" }));
+    fireEvent.change(screen.getByLabelText("Instance label"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save label for Work relay" }),
+    );
+    expect(onRenameInstance).toHaveBeenCalledWith(WORK_NEW_API_ID, undefined);
+    expect(onRenameInstance).not.toHaveBeenCalledWith(PERSONAL_NEW_API_ID, undefined);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Replace Work relay API key" }),
+    );
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "replacement" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Validate & replace" }));
+    await waitFor(() =>
+      expect(onSubmitApiKey).toHaveBeenCalledWith({
+        providerKind: "newapi",
+        instanceId: WORK_NEW_API_ID,
+        userLabel: "Work relay",
+        baseUrl: "https://relay.example",
+        apiKey: "replacement",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Work relay" }));
+    expect(onDisconnectInstance).toHaveBeenCalledWith(WORK_NEW_API_ID);
+    expect(onDisconnectInstance).not.toHaveBeenCalledWith(PERSONAL_NEW_API_ID);
+  });
+
   it("renders unlimited New API usage without offering quota history", () => {
     const state = createInitialState();
     state.providers[5] = {
@@ -624,13 +980,13 @@ describe("Cockpit", () => {
     const windowSelect = screen.getByRole("combobox", { name: "Quota metric" });
 
     fireEvent.change(windowSelect, { target: { value: "weekly" } });
-    fireEvent.change(providerSelect, { target: { value: "kimi" } });
+    fireEvent.change(providerSelect, { target: { value: "kimi:default" } });
     expect(windowSelect).toHaveValue("five-hour");
     fireEvent.change(windowSelect, { target: { value: "weekly" } });
 
-    fireEvent.change(providerSelect, { target: { value: "chatgpt" } });
+    fireEvent.change(providerSelect, { target: { value: "chatgpt:default" } });
     expect(windowSelect).toHaveValue("weekly");
-    fireEvent.change(providerSelect, { target: { value: "kimi" } });
+    fireEvent.change(providerSelect, { target: { value: "kimi:default" } });
     expect(windowSelect).toHaveValue("weekly");
   });
 
@@ -647,7 +1003,7 @@ describe("Cockpit", () => {
     });
     fireEvent.change(
       screen.getByRole("combobox", { name: "History provider" }),
-      { target: { value: "claude" } },
+      { target: { value: "claude:default" } },
     );
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
 
@@ -659,7 +1015,7 @@ describe("Cockpit", () => {
 
     expect(
       screen.getByRole("combobox", { name: "History provider" }),
-    ).toHaveValue("chatgpt");
+    ).toHaveValue("chatgpt:default");
     expect(
       screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("five-hour");
@@ -726,7 +1082,9 @@ describe("Cockpit", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Open ChatGPT details" }),
     );
-    const settings = screen.getByRole("button", { name: "Settings" });
+    const settings = screen.getByRole("button", {
+      name: "Settings for ChatGPT",
+    });
     settings.focus();
     fireEvent.click(settings);
 
@@ -738,7 +1096,9 @@ describe("Cockpit", () => {
     fireEvent.click(screen.getByRole("button", { name: "ChatGPT" }));
 
     expect(screen.getByRole("article", { name: "ChatGPT" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Settings" })).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Settings for ChatGPT" }),
+    ).toHaveFocus();
   });
 
   it("shows a truthful unavailable screen if the active provider disconnects", () => {
@@ -805,13 +1165,41 @@ describe("Cockpit", () => {
     expect(screen.getByText(/Connect asks for permission for that provider only/)).toBeVisible();
   });
 
-  it("shows an honest Add Provider empty state when all providers are connected", () => {
+  it("keeps New API available when every singleton provider is connected", () => {
     renderCockpit();
 
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
-    expect(screen.getByText("All supported providers are connected.")).toBeVisible();
-    expect(screen.queryByRole("button", { name: /^Connect / })).not.toBeInTheDocument();
+    expect(screen.getByText("Available · 1")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect New API" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Connect ChatGPT" })).not.toBeInTheDocument();
+  });
+
+  it("keeps an ungranted singleton available until it is connected", () => {
+    const state: AppViewState = {
+      preferences: { displayMode: "used", autoRefresh: true },
+      instances: [
+        {
+          id: "chatgpt:default",
+          providerKind: "chatgpt",
+          access: "required",
+          createdAt: NOW,
+          history: [],
+        },
+      ],
+    };
+
+    render(
+      <InstanceCockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Connect ChatGPT" })).toBeVisible();
   });
 
   it("keeps connect actions provider-scoped and disables only the active provider", () => {

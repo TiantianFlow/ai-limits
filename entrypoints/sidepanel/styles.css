@@ -1054,6 +1054,16 @@ section[aria-labelledby="overview-title"] .provider-list {
   white-space: nowrap;
 }
 
+.provider-card__instance {
+  min-width: 0;
+  flex: 1 1 120px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .provider-card__plan {
   min-width: 0;
   flex: 1 1 auto;
@@ -2154,6 +2164,13 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-size: 10px;
 }
 
+.settings-provider-copy__instance {
+  display: block;
+  margin-top: 1px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .settings-provider-list li > button {
   min-width: 44px;
   min-height: 44px;
@@ -2181,8 +2198,63 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-weight: 650;
 }
 
+.settings-provider-actions > button > span,
+.settings-rename button > span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-muted) 55%, var(--surface));
+}
+
 .settings-provider-actions > button:last-child {
   color: #be123c;
+}
+
+.settings-rename {
+  display: grid;
+  width: min(100%, 260px);
+  min-width: 0;
+  grid-template-columns: minmax(112px, 1fr) auto auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.settings-rename label {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.settings-rename input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.settings-rename input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.settings-rename button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
 }
 
 .api-key-guide {
@@ -2373,6 +2445,7 @@ section[aria-labelledby="overview-title"] .provider-list {
     display: grid;
     grid-template-areas:
       "mark name chevron"
+      "mark instance chevron"
       "mark plan chevron"
       "mark status chevron";
     grid-template-columns: 24px minmax(0, 1fr) 14px;
@@ -2392,6 +2465,10 @@ section[aria-labelledby="overview-title"] .provider-list {
 
   .provider-card__identity > .provider-card__plan {
     grid-area: plan;
+  }
+
+  .provider-card__identity > .provider-card__instance {
+    grid-area: instance;
   }
 
   .provider-card__identity > .provider-card__status {
@@ -2438,8 +2515,14 @@ section[aria-labelledby="overview-title"] .provider-list {
     flex-wrap: wrap;
   }
 
-  .settings-provider-list li > button {
+  .settings-provider-actions {
+    width: calc(100% - 32px);
     margin-left: 32px;
+    justify-content: flex-start;
+  }
+
+  .settings-rename {
+    width: 100%;
   }
 }
 

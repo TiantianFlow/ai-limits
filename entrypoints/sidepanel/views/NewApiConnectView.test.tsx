@@ -21,14 +21,38 @@ function renderView(
 }
 
 describe("NewApiConnectView", () => {
-  it("documents the supported one-instance relay-key mode and its limits", () => {
+  it("submits an optional trimmed instance label and clears a blank label", async () => {
+    const onSubmit = vi.fn(async () => "invalid_key" as const);
+    renderView({ onSubmit });
+
+    fireEvent.change(screen.getByLabelText("Instance label (optional)"), {
+      target: { value: "  Personal relay  " },
+    });
+    fireEvent.change(screen.getByLabelText("New API site URL"), {
+      target: { value: "https://relay.example" },
+    });
+    fireEvent.change(screen.getByLabelText("New API relay key"), {
+      target: { value: "candidate" },
+    });
+    fireEvent.submit(within(screen.getByRole("form")).getByRole("button"));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        "https://relay.example",
+        "candidate",
+        "Personal relay",
+      ),
+    );
+  });
+
+  it("documents independent multi-instance relay-key behavior and its limits", () => {
     renderView();
 
     expect(screen.getByRole("heading", { level: 1, name: "Connect New API" })).toBeVisible();
-    expect(screen.getByText(/one New API instance and one relay key/i)).toBeVisible();
+    expect(screen.getByText(/each New API connection keeps its own relay key, label, usage, and history/i)).toBeVisible();
     expect(screen.getByText(/key-specific granted, used, and remaining quota/i)).toBeVisible();
     expect(screen.getByText(/unlimited keys show absolute usage/i)).toBeVisible();
-    expect(screen.getByText(/does not read account wallet, subscriptions, admin data, or multiple instances/i)).toBeVisible();
+    expect(screen.getByText(/does not read account wallet, subscriptions, admin data, or other relay keys/i)).toBeVisible();
     expect(screen.getByText(/request is read-only, but the relay key itself may still call models/i)).toBeVisible();
   });
 

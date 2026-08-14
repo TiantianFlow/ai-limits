@@ -2,9 +2,8 @@ import type { Ref } from "react";
 import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
-import type { ProviderId } from "../../../domain/model";
-import type { ApiKeyProviderId } from "../../../providers/catalog";
-import { providerNames } from "../../../providers/catalog";
+import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ApiKeyProviderKind, ProviderKind } from "../../../providers/catalog";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import {
   ProviderCard,
@@ -12,20 +11,24 @@ import {
 } from "../components/ProviderCard";
 
 export interface OverviewProvider {
-  providerId: ProviderId;
-  card: Omit<ProviderCardProps, "providerId" | "operation" | "action">;
+  instanceId: ProviderInstanceId;
+  providerKind: ProviderKind;
+  card: Omit<ProviderCardProps, "operation" | "action">;
   needsApiKeyReplacement?: boolean;
 }
 
 export interface OverviewViewProps {
   providers: OverviewProvider[];
-  providerOperations: Partial<Record<ProviderId, ProviderOperation>>;
+  providerOperations: Partial<Record<ProviderInstanceId, ProviderOperation>>;
   addProviderButtonRef: Ref<HTMLButtonElement>;
   onAddProvider: (invoker: HTMLButtonElement) => void;
-  onRefreshProvider: (providerId: ProviderId) => void;
-  onOpenProvider: (providerId: ProviderId) => void;
-  onOpenHistory: (providerId: ProviderId, metricId: string) => void;
-  onReplaceApiKey: (providerId: ApiKeyProviderId) => void;
+  onRefreshInstance: (instanceId: ProviderInstanceId) => void;
+  onOpenProvider: (instanceId: ProviderInstanceId) => void;
+  onOpenHistory: (instanceId: ProviderInstanceId, metricId: string) => void;
+  onReplaceApiKey: (
+    providerKind: ApiKeyProviderKind,
+    instanceId: ProviderInstanceId,
+  ) => void;
 }
 
 export function OverviewView({
@@ -33,7 +36,7 @@ export function OverviewView({
   providerOperations,
   addProviderButtonRef,
   onAddProvider,
-  onRefreshProvider,
+  onRefreshInstance,
   onOpenProvider,
   onOpenHistory,
   onReplaceApiKey,
@@ -44,35 +47,39 @@ export function OverviewView({
         Overview
       </h2>
       <div className="provider-list">
-        {providers.map(({ providerId, card, needsApiKeyReplacement }) => {
-          const operation = providerOperations[providerId];
+        {providers.map(({ instanceId, providerKind, card, needsApiKeyReplacement }) => {
+          const operation = providerOperations[instanceId];
           return (
             <ProviderCard
-              key={providerId}
+              key={instanceId}
               {...card}
-              providerId={providerId}
               operation={operation}
-              openDetailsFocusKey={`overview-provider-${providerId}`}
-              onOpenDetails={() => onOpenProvider(providerId)}
+              openDetailsFocusKey={`overview-provider-${instanceId}`}
+              onOpenDetails={() => onOpenProvider(instanceId)}
               onOpenHistory={
                 card.hasSnapshot
-                  ? (metricId) => onOpenHistory(providerId, metricId)
+                  ? (metricId) => onOpenHistory(instanceId, metricId)
                   : undefined
               }
               action={
                 operation
                   ? undefined
-                  : needsApiKeyReplacement && providerId === "elevenlabs"
+                  : needsApiKeyReplacement
                     ? {
                         label: "Replace key",
-                        accessibleLabel: "Replace ElevenLabs API key",
-                        focusKey: "overview-replace-api-key-elevenlabs",
-                        onClick: () => onReplaceApiKey("elevenlabs"),
+                        accessibleLabel: `Replace ${card.instanceLabel} API key`,
+                        focusKey: `overview-replace-api-key-${instanceId}`,
+                        onClick: () =>
+                          onReplaceApiKey(
+                            providerKind as ApiKeyProviderKind,
+                            instanceId,
+                          ),
                       }
                   : {
                       label: "Refresh",
-                      accessibleLabel: `Refresh ${providerNames[providerId]}`,
-                      onClick: () => onRefreshProvider(providerId),
+                      accessibleLabel: `Refresh ${card.instanceLabel}`,
+                      focusKey: `overview-refresh-${instanceId}`,
+                      onClick: () => onRefreshInstance(instanceId),
                     }
               }
             />

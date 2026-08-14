@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
-import type { ProviderId } from "../../../domain/model";
+import type { ProviderKind } from "../../../providers/catalog";
 import {
   providerCatalog,
   providerNames,
@@ -10,9 +10,9 @@ import {
 import { ProviderMark } from "./ProviderMark";
 
 export interface ProviderConnectRowProps {
-  providerId: ProviderId;
+  providerKind: ProviderKind;
   operation?: ProviderOperation;
-  onConnect: (providerId: ProviderId) => void;
+  onConnect: (providerKind: ProviderKind) => void;
 }
 
 const operationLabels: Record<ProviderOperation, string> = {
@@ -22,23 +22,23 @@ const operationLabels: Record<ProviderOperation, string> = {
 };
 
 export function ProviderConnectRow({
-  providerId,
+  providerKind,
   operation,
   onConnect,
 }: ProviderConnectRowProps) {
-  const name = providerNames[providerId];
-  const presentation = providerPresentation(providerId);
+  const name = providerNames[providerKind];
+  const presentation = providerPresentation(providerKind);
   const connectionMethod =
-    providerCatalog[providerId].connection.kind === "api-key"
+    providerCatalog[providerKind].connection.kind === "api-key"
       ? "API key"
       : "Browser session";
-  const headingId = `connect-${providerId}`;
+  const headingId = `connect-${providerKind}`;
 
   return (
     <article className="provider-connect-row" aria-labelledby={headingId}>
       <div className="provider-connect-row__top">
         <div className="provider-connect-row__identity">
-          <ProviderMark providerId={providerId} size="md" />
+          <ProviderMark providerId={providerKind} size="md" />
           <div>
             <h3 id={headingId}>{name}</h3>
             <p>Can show: {presentation.capabilities.join(" · ")}</p>
@@ -48,10 +48,10 @@ export function ProviderConnectRow({
           className="provider-connect-row__action"
           type="button"
           aria-label={presentation.connectionLabel}
-          data-focus-key={`connect-provider-${providerId}`}
+          data-focus-key={`connect-provider-${providerKind}`}
           aria-busy={operation !== undefined}
           disabled={operation !== undefined}
-          onClick={() => onConnect(providerId)}
+          onClick={() => onConnect(providerKind)}
           style={{ minHeight: 44 }}
         >
           <span

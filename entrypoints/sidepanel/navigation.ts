@@ -1,16 +1,17 @@
-import type { ProviderId } from "../../domain/model";
-import type { ApiKeyProviderId } from "../../providers/catalog";
+import type { ProviderInstanceId } from "../../domain/instances";
+import type { ApiKeyProviderKind } from "../../providers/catalog";
 
 export type CockpitScreen =
   | { name: "overview" }
-  | { name: "provider"; providerId: ProviderId }
-  | { name: "history"; providerId: ProviderId; metricId?: string }
+  | { name: "provider"; instanceId: ProviderInstanceId }
+  | { name: "history"; instanceId: ProviderInstanceId; metricId?: string }
   | { name: "settings" }
   | { name: "add-provider" }
   | {
       name: "api-key-connect";
-      providerId: ApiKeyProviderId;
+      providerKind: ApiKeyProviderKind;
       mode: "connect" | "replace";
+      instanceId?: ProviderInstanceId;
     };
 
 export interface CockpitNavigationState {
@@ -29,17 +30,21 @@ function sameScreen(left: CockpitScreen, right: CockpitScreen): boolean {
   }
 
   if (left.name === "provider" && right.name === "provider") {
-    return left.providerId === right.providerId;
+    return left.instanceId === right.instanceId;
   }
 
   if (left.name === "history" && right.name === "history") {
     return (
-      left.providerId === right.providerId && left.metricId === right.metricId
+      left.instanceId === right.instanceId && left.metricId === right.metricId
     );
   }
 
   if (left.name === "api-key-connect" && right.name === "api-key-connect") {
-    return left.providerId === right.providerId && left.mode === right.mode;
+    return (
+      left.providerKind === right.providerKind &&
+      left.mode === right.mode &&
+      left.instanceId === right.instanceId
+    );
   }
 
   return true;

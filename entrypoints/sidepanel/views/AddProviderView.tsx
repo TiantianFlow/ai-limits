@@ -1,21 +1,19 @@
 import React from "react";
 
 import type { ProviderOperation } from "../../../background/messages";
-import type { ProviderId, ProviderRecord } from "../../../domain/model";
+import type { ProviderKind } from "../../../providers/catalog";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderConnectRow } from "../components/ProviderConnectRow";
 
 export interface AddProviderViewProps {
-  providers: ProviderRecord[];
-  providerOperations: Partial<Record<ProviderId, ProviderOperation>>;
+  providers: Array<{ providerKind: ProviderKind; operation?: ProviderOperation }>;
   origin: "overview" | "settings";
   onBack: () => void;
-  onConnectProvider: (providerId: ProviderId) => void;
+  onConnectProvider: (providerKind: ProviderKind) => void;
 }
 
 export function AddProviderView({
   providers,
-  providerOperations,
   origin,
   onBack,
   onConnectProvider,
@@ -32,11 +30,11 @@ export function AddProviderView({
         <h2 className="section-label">Available · {providers.length}</h2>
         {providers.length ? (
           <div className="provider-list">
-            {providers.map((provider) => (
+            {providers.map(({ providerKind, operation }) => (
               <ProviderConnectRow
-                key={provider.providerId}
-                providerId={provider.providerId}
-                operation={providerOperations[provider.providerId]}
+                key={providerKind}
+                providerKind={providerKind}
+                operation={operation}
                 onConnect={onConnectProvider}
               />
             ))}
