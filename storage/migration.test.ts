@@ -372,6 +372,92 @@ describe("published 0.2.3 storage migration", () => {
     ]);
   });
 
+  test("treats a broad granted HTTPS pattern as covering a fixed provider origin", () => {
+    const result = migrateLegacyStorage(
+      legacyInput({
+        aiLimitsConnectionSuppressions: ["claude", "kimi", "cursor"],
+      }),
+      now,
+      { origins: ["https://*/*"] },
+    );
+
+    expect(result.state.instances).toEqual([
+      {
+        id: "chatgpt:default",
+        providerKind: "chatgpt",
+        config: { kind: "fixed" },
+        access: "granted",
+        createdAt: now,
+        history: [],
+      },
+    ]);
+  });
+
+  test("treats a broad granted HTTPS pattern as covering a dynamic New API origin", () => {
+    const result = migrateLegacyStorage(
+      legacyInput({
+        aiLimitsConnectionSuppressions: ["chatgpt", "claude", "kimi", "cursor"],
+        aiLimitsCredentials: {
+          version: 1,
+          providers: {
+            newapi: {
+              kind: "api-key",
+              value: "synthetic-relay-key",
+              baseUrl: "https://relay.example/v1/messages",
+              status: "active",
+              revision: "relay-revision",
+            },
+          },
+        },
+      }),
+      now,
+      { origins: ["https://*/*"] },
+    );
+
+    expect(result.state.instances).toEqual([
+      {
+        id: "newapi:default",
+        providerKind: "newapi",
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example",
+        },
+        access: "granted",
+        createdAt: now,
+        history: [],
+      },
+    ]);
+  });
+
+  test("fails closed when a granted origin is not a valid match pattern", () => {
+    const result = migrateLegacyStorage(
+      legacyInput({
+        aiLimitsState: releasedState([releasedProvider("chatgpt")]),
+        aiLimitsCredentials: {
+          version: 1,
+          providers: {
+            newapi: {
+              kind: "api-key",
+              value: "synthetic-relay-key",
+              baseUrl: "https://relay.example/v1/messages",
+              status: "active",
+              revision: "relay-revision",
+            },
+          },
+        },
+      }),
+      now,
+      { origins: ["https://*/broken"] },
+    );
+
+    expect(
+      result.state.instances.map(({ id, access }) => ({ id, access })),
+    ).toEqual([
+      { id: "chatgpt:default", access: "required" },
+      { id: "newapi:default", access: "required" },
+    ]);
+  });
+
   test("is byte-equivalent when normalized V5 state is migrated again", () => {
     const first = migrateLegacyStorage(
       legacyInput({ aiLimitsState: releasedState([releasedProvider("chatgpt")]) }),

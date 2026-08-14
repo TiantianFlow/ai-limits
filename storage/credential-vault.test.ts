@@ -257,6 +257,35 @@ describe("instance credential vault V2", () => {
     });
   });
 
+  test("rejects delete-one before initialization without deleting sibling credentials", async () => {
+    const stored = {
+      version: 2,
+      credentials: {
+        "newapi:550e8400-e29b-41d4-a716-446655440000": {
+          kind: "api-key",
+          value: "personal-key",
+          status: "active",
+          revision: "personal-revision",
+        },
+        "newapi:0c5f2af7-21d4-4cd1-bcd8-09005c65e45f": {
+          kind: "api-key",
+          value: "work-key",
+          status: "active",
+          revision: "work-revision",
+        },
+      },
+    };
+    await browser.storage.local.set({ aiLimitsCredentials: stored });
+
+    await expect(
+      vault.deleteCredential(
+        "newapi:550e8400-e29b-41d4-a716-446655440000",
+      ),
+    ).rejects.toThrow(/^Credential storage is unavailable\.$/);
+    await expect(browser.storage.local.get("aiLimitsCredentials"))
+      .resolves.toEqual({ aiLimitsCredentials: stored });
+  });
+
   test("fails closed on malformed V2 records and does not expose secret values in errors", async () => {
     await vault.initializeCredentialVault();
     await browser.storage.local.set({

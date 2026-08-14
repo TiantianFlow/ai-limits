@@ -154,17 +154,31 @@ export const usageRepository = {
       const index = state.instances.findIndex((instance) => instance.id === id);
       if (index < 0) return false;
       const current = state.instances[index]!;
+      const immutable = {
+        id: current.id,
+        providerKind: current.providerKind,
+        userLabel: current.userLabel,
+        config:
+          current.config.kind === "fixed"
+            ? ({ kind: "fixed" } as const)
+            : ({
+                kind: "dynamic-origin",
+                baseUrl: current.config.baseUrl,
+              } as const),
+        access: current.access,
+        createdAt: current.createdAt,
+      };
       const requested = updater(current);
       const candidate: ProviderInstanceRecord = {
         ...requested,
-        id: current.id,
-        providerKind: current.providerKind,
-        ...(current.userLabel === undefined
+        id: immutable.id,
+        providerKind: immutable.providerKind,
+        ...(immutable.userLabel === undefined
           ? { userLabel: undefined }
-          : { userLabel: current.userLabel }),
-        config: current.config,
-        access: current.access,
-        createdAt: current.createdAt,
+          : { userLabel: immutable.userLabel }),
+        config: immutable.config,
+        access: immutable.access,
+        createdAt: immutable.createdAt,
       };
       const instances = [...state.instances];
       instances[index] = candidate;

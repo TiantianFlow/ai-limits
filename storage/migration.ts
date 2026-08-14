@@ -103,12 +103,106 @@ function normalizedSuppressions(value: unknown): Set<ProviderKind> {
   );
 }
 
+interface ParsedOriginPattern {
+  scheme: "*" | "http" | "https";
+  host: string;
+  subdomainWildcard: boolean;
+  port?: string;
+}
+
+function validExactHost(host: string): boolean {
+  if (host.length === 0 || host.includes("*")) return false;
+  try {
+    const parsed = new URL(`https://${host}`);
+    return (
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.pathname === "/" &&
+      parsed.hostname.toLowerCase() === host.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+}
+
+function parseOriginPattern(value: unknown): ParsedOriginPattern | undefined {
+  if (typeof value !== "string" || !value.endsWith("/*")) return undefined;
+  const match = /^(\*|https?):\/\/([^/]+)\/\*$/.exec(value);
+  if (!match) return undefined;
+  const scheme = match[1] as ParsedOriginPattern["scheme"];
+  const authority = match[2]!;
+  const separator = authority.lastIndexOf(":");
+  const hasPort = separator > 0 && authority.indexOf(":") === separator;
+  const hostWithWildcard = hasPort
+    ? authority.slice(0, separator)
+    : authority;
+  const port = hasPort ? authority.slice(separator + 1) : undefined;
+  if (port !== undefined && !/^\d{1,5}$/.test(port)) return undefined;
+  if (
+    port !== undefined &&
+    (Number(port) < 1 || Number(port) > 65_535)
+  ) {
+    return undefined;
+  }
+  if (hostWithWildcard === "*") {
+    return { scheme, host: "*", subdomainWildcard: false, ...(port ? { port } : {}) };
+  }
+  const subdomainWildcard = hostWithWildcard.startsWith("*.");
+  const host = subdomainWildcard
+    ? hostWithWildcard.slice(2)
+    : hostWithWildcard;
+  if (!validExactHost(host)) return undefined;
+  return {
+    scheme,
+    host: host.toLowerCase(),
+    subdomainWildcard,
+    ...(port ? { port } : {}),
+  };
+}
+
+function grantedOriginCoversRequired(
+  granted: unknown,
+  required: string,
+): boolean {
+  const grantedPattern = parseOriginPattern(granted);
+  const requiredPattern = parseOriginPattern(required);
+  if (
+    !grantedPattern ||
+    !requiredPattern ||
+    requiredPattern.scheme === "*" ||
+    requiredPattern.host === "*" ||
+    requiredPattern.subdomainWildcard
+  ) {
+    return false;
+  }
+  if (
+    grantedPattern.scheme !== "*" &&
+    grantedPattern.scheme !== requiredPattern.scheme
+  ) {
+    return false;
+  }
+  if (
+    grantedPattern.port !== undefined &&
+    grantedPattern.port !== requiredPattern.port
+  ) {
+    return false;
+  }
+  if (grantedPattern.host === "*") return true;
+  if (grantedPattern.subdomainWildcard) {
+    return (
+      requiredPattern.host === grantedPattern.host ||
+      requiredPattern.host.endsWith(`.${grantedPattern.host}`)
+    );
+  }
+  return grantedPattern.host === requiredPattern.host;
+}
+
 function hasGrantedPermission(
   providerKind: ProviderKind,
   credential: LegacyCredential | undefined,
   grantedPermissions: Browser.permissions.Permissions,
 ): boolean {
-  const origins = new Set(grantedPermissions.origins ?? []);
+  const origins = grantedPermissions.origins ?? [];
   const permissions = new Set(
     (grantedPermissions.permissions ?? []) as readonly string[],
   );
@@ -121,7 +215,11 @@ function hasGrantedPermission(
       : [...catalog.optionalOrigins];
   if (requiredOrigins.length === 0) return false;
   return (
-    requiredOrigins.every((origin) => origins.has(origin)) &&
+    requiredOrigins.every((requiredOrigin) =>
+      origins.some((grantedOrigin) =>
+        grantedOriginCoversRequired(grantedOrigin, requiredOrigin),
+      ),
+    ) &&
     catalog.optionalPermissions.every((permission) =>
       permissions.has(permission),
     )
