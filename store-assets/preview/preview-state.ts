@@ -1,5 +1,6 @@
 import { parseAppViewState, type AppViewState } from "../../domain/public-protocol";
-import type { AppState } from "../../domain/model";
+import type { AppState, DisplayMode } from "../../domain/model";
+import type { ProviderInstanceId } from "../../domain/instances";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
 import type { FidelityRequest, FidelityScenario } from "./copy";
@@ -125,5 +126,63 @@ export function updatePreviewState(
   current: AppViewState,
   update: (state: AppViewState) => unknown,
 ): AppViewState {
-  return parsePreviewState(update(current));
+  return parsePreviewState(update(parsePreviewState(current)));
+}
+
+export type FidelityPreviewTransition =
+  | { type: "display-mode"; mode: DisplayMode }
+  | { type: "auto-refresh"; autoRefresh: boolean }
+  | { type: "refresh-status"; instanceId?: ProviderInstanceId }
+  | { type: "disconnect"; instanceId: ProviderInstanceId }
+  | {
+      type: "rename";
+      instanceId: ProviderInstanceId;
+      userLabel?: string;
+      succeeds: boolean;
+    };
+
+export function applyFidelityPreviewTransition(
+  current: AppViewState,
+  transition: FidelityPreviewTransition,
+): AppViewState {
+  return updatePreviewState(current, (state) => {
+    if (transition.type === "display-mode") {
+      return {
+        ...state,
+        preferences: { ...state.preferences, displayMode: transition.mode },
+      };
+    }
+    if (transition.type === "auto-refresh") {
+      return {
+        ...state,
+        preferences: { ...state.preferences, autoRefresh: transition.autoRefresh },
+      };
+    }
+    if (transition.type === "refresh-status") {
+      return state;
+    }
+    if (transition.type === "disconnect") {
+      return {
+        ...state,
+        instances: state.instances.map((instance) => {
+          if (instance.id !== transition.instanceId) return instance;
+          const { snapshot: _snapshot, ...disconnected } = instance;
+          return { ...disconnected, access: "required" as const, history: [] };
+        }),
+      };
+    }
+    return {
+      ...state,
+      instances: state.instances.map((instance) => {
+        if (instance.id !== transition.instanceId || !transition.succeeds) {
+          return instance;
+        }
+        if (transition.userLabel === undefined) {
+          const { userLabel: _userLabel, ...unlabeled } = instance;
+          return unlabeled;
+        }
+        return { ...instance, userLabel: transition.userLabel };
+      }),
+    };
+  });
 }
