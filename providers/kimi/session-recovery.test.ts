@@ -6,7 +6,7 @@ import {
   createKimiRecoveryAfterStartupCleanup,
   findKimiPageAccessToken,
   refreshKimiAccessTokenInTemporaryTab,
-} from "./kimi-session";
+} from "./session-recovery";
 
 type Tab = {
   id?: number;

@@ -1,0 +1,235 @@
+import { KIMI_RECOVERY_GUIDANCE } from "../../domain/model";
+import type { ProviderInstanceConfig } from "../../domain/instances";
+import type {
+  CollectionContext,
+  CollectionResult,
+  ProviderAdapter,
+  ProviderPackage,
+  ProviderRuntimeServices,
+} from "../types";
+import {
+  kimiAdapter,
+  retryKimiAdapterAfterChangedToken,
+} from "./adapter";
+import { readKimiPageAccessToken } from "./page-session";
+import {
+  cleanupAbandonedKimiRecoveryTab,
+  createKimiRecoveryAfterStartupCleanup,
+  findKimiPageAccessToken,
+  refreshKimiAccessTokenInTemporaryTab,
+} from "./session-recovery";
+
+const KIMI_URL = "https://www.kimi.com/";
+const KIMI_ORIGIN_PATTERN = "https://www.kimi.com/*";
+
+interface KimiPackageDependencies {
+  adapter: ProviderAdapter<"kimi">;
+  getCookieToken(): Promise<string | undefined>;
+  findPageAccessToken(): Promise<string | undefined>;
+  recoverAccessToken(
+    rejectedToken: string | undefined,
+    signal: AbortSignal,
+  ): Promise<string | undefined>;
+  cleanupAbandonedRecovery(): Promise<void>;
+  announceRecovery(): void;
+  retryAfterChangedToken?(
+    result: CollectionResult,
+    context: CollectionContext,
+  ): Promise<CollectionResult>;
+}
+
+function normalizedToken(value: string | undefined): string | undefined {
+  const token = value?.trim();
+  return token ? token : undefined;
+}
+
+function fixedConfig(value: unknown): ProviderInstanceConfig | undefined {
+  return typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "fixed"
+    ? { kind: "fixed" }
+    : undefined;
+}
+
+function recoveryFailure(): CollectionResult {
+  return {
+    ok: false,
+    health: {
+      kind: "temporary_error",
+      message: KIMI_RECOVERY_GUIDANCE,
+    },
+  };
+}
+
+function requiresSession(result: CollectionResult): boolean {
+  return (
+    !result.ok &&
+    "deferred" in result &&
+    result.deferred.reason === "session_required"
+  );
+}
+
+export function createKimiPackage(
+  dependencies: KimiPackageDependencies,
+): ProviderPackage {
+  let startupCleanup: Promise<void> | undefined;
+  const ensureStartup = (): Promise<void> => {
+    startupCleanup ??= Promise.resolve()
+      .then(() => dependencies.cleanupAbandonedRecovery())
+      .catch(() => undefined);
+    return startupCleanup;
+  };
+
+  const recoverAfterStartup = (
+    rejectedToken: string | undefined,
+    services: ProviderRuntimeServices,
+  ): Promise<string | undefined> => {
+    dependencies.announceRecovery();
+    return createKimiRecoveryAfterStartupCleanup({
+      startupCleanup: ensureStartup(),
+      signal: services.signal,
+      recoverAccessToken: (token) =>
+        dependencies.recoverAccessToken(token, services.signal),
+    })(rejectedToken).catch(() => undefined);
+  };
+
+  return {
+    kind: "kimi",
+    cardinality: "single",
+    credentialKind: "none",
+    normalizeConfig: fixedConfig,
+    requiredPermissions: (config) =>
+      fixedConfig(config)
+        ? {
+            origins: [KIMI_ORIGIN_PATTERN],
+            permissions: ["cookies", "scripting"],
+          }
+        : undefined,
+    startup: ensureStartup,
+    async collect(instance, services): Promise<CollectionResult> {
+      if (instance.providerKind !== "kimi" || !fixedConfig(instance.config)) {
+        return { ok: false, health: { kind: "provider_changed" } };
+      }
+      if (services.signal.aborted) {
+        return { ok: false, health: { kind: "temporary_error" } };
+      }
+
+      let token = normalizedToken(await dependencies.getCookieToken());
+      if (!token) {
+        token = normalizedToken(await dependencies.findPageAccessToken());
+      }
+
+      if (!token) {
+        if (services.interaction === "forbidden") {
+          return {
+            ok: false,
+            deferred: { reason: "session_required" },
+          };
+        }
+        token = normalizedToken(await recoverAfterStartup(undefined, services));
+        if (!token) return recoveryFailure();
+        const result = await dependencies.adapter.collect({
+          fetch: services.fetch,
+          now: services.now,
+          signal: services.signal,
+          accessToken: token,
+        });
+        return requiresSession(result) ? recoveryFailure() : result;
+      }
+
+      const firstResult = await dependencies.adapter.collect({
+        fetch: services.fetch,
+        now: services.now,
+        signal: services.signal,
+        accessToken: token,
+      });
+      if (!requiresSession(firstResult)) return firstResult;
+
+      let changedToken = normalizedToken(
+        await dependencies.findPageAccessToken(),
+      );
+      if (changedToken === token) changedToken = undefined;
+      if (!changedToken && services.interaction === "allowed") {
+        changedToken = normalizedToken(
+          await recoverAfterStartup(token, services),
+        );
+        if (changedToken === token) changedToken = undefined;
+      }
+      if (!changedToken) {
+        return services.interaction === "forbidden"
+          ? firstResult
+          : recoveryFailure();
+      }
+
+      const retryContext = {
+        fetch: services.fetch,
+        now: services.now,
+        signal: services.signal,
+        accessToken: changedToken,
+      };
+      const retryResult = await (
+        dependencies.retryAfterChangedToken ??
+        ((_result, context) => dependencies.adapter.collect(context))
+      )(firstResult, retryContext);
+      return requiresSession(retryResult) && services.interaction === "allowed"
+        ? recoveryFailure()
+        : retryResult;
+    },
+  };
+}
+
+function productionDependencies(): KimiPackageDependencies {
+  const readPageToken = (tabId: number) =>
+    readKimiPageAccessToken(tabId, (details) =>
+      browser.scripting.executeScript(details),
+    );
+
+  return {
+    adapter: kimiAdapter,
+    async getCookieToken() {
+      return (await browser.cookies.get({ url: KIMI_URL, name: "kimi-auth" }))
+        ?.value;
+    },
+    findPageAccessToken: () =>
+      findKimiPageAccessToken({
+        queryTabs: () => browser.tabs.query({ url: KIMI_ORIGIN_PATTERN }),
+        readAccessToken: readPageToken,
+      }),
+    recoverAccessToken: (rejectedToken, signal) =>
+      refreshKimiAccessTokenInTemporaryTab({
+        rejectedToken,
+        createTab: (details) => browser.tabs.create(details),
+        getTab: (tabId) => browser.tabs.get(tabId),
+        readAccessToken: readPageToken,
+        removeTab: (tabId) => browser.tabs.remove(tabId),
+        addUpdatedListener: (listener) => {
+          browser.tabs.onUpdated.addListener(listener);
+          return () => browser.tabs.onUpdated.removeListener(listener);
+        },
+        addRemovedListener: (listener) => {
+          browser.tabs.onRemoved.addListener(listener);
+          return () => browser.tabs.onRemoved.removeListener(listener);
+        },
+        storageSession: browser.storage.session,
+        signal,
+      }),
+    cleanupAbandonedRecovery: () =>
+      cleanupAbandonedKimiRecoveryTab({
+        storageSession: browser.storage.session,
+        getTab: (tabId) => browser.tabs.get(tabId),
+        removeTab: (tabId) => browser.tabs.remove(tabId),
+      }),
+    announceRecovery() {
+      void browser.runtime
+        .sendMessage({
+          type: "PROVIDER_OPERATION",
+          providerId: "kimi",
+          operation: "waiting_for_session",
+        })
+        .catch(() => undefined);
+    },
+    retryAfterChangedToken: retryKimiAdapterAfterChangedToken,
+  };
+}
+
+export const kimiPackage = createKimiPackage(productionDependencies());

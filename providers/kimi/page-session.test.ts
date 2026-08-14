@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   readKimiAccessTokenAtExpectedOrigin,
   readKimiPageAccessToken,
-} from "./kimi-page";
+} from "./page-session";
 
 describe("Kimi page credential isolation", () => {
   test("reads the exact key only when the executing page is still on Kimi", () => {

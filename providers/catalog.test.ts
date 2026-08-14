@@ -4,6 +4,7 @@ import { isRuntimeCommand } from "../background/messages";
 import * as catalog from "./catalog";
 import {
   assertProviderCatalogPermissionSafety,
+  canCreateProviderInstance,
   isApiKeyProviderId,
   isProviderId,
   providerCatalog,
@@ -30,6 +31,31 @@ describe("provider catalog", () => {
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
     expect(allKinds).toEqual(providerIds);
+  });
+
+  test("allows multiple New API instances and only one of every other kind", () => {
+    expect(
+      providerIds.map((providerKind) => [
+        providerKind,
+        providerCatalog[providerKind].cardinality,
+      ]),
+    ).toEqual([
+      ["chatgpt", "single"],
+      ["claude", "single"],
+      ["kimi", "single"],
+      ["cursor", "single"],
+      ["elevenlabs", "single"],
+      ["newapi", "multiple"],
+    ]);
+
+    const existing = [
+      { providerKind: "chatgpt" as const },
+      { providerKind: "newapi" as const },
+      { providerKind: "newapi" as const },
+    ];
+    expect(canCreateProviderInstance("chatgpt", existing)).toBe(false);
+    expect(canCreateProviderInstance("claude", existing)).toBe(true);
+    expect(canCreateProviderInstance("newapi", existing)).toBe(true);
   });
 
   test("provides complete local presentation metadata for every supported provider", () => {
@@ -192,7 +218,7 @@ describe("provider catalog", () => {
   test("keeps registry, initial state, and runtime commands catalog-complete", () => {
     expect(Object.keys(providerRegistry)).toEqual(providerIds);
     expect(
-      providerIds.map((providerId) => providerRegistry[providerId].id),
+      providerIds.map((providerId) => providerRegistry[providerId].kind),
     ).toEqual(providerIds);
     expect(
       createInitialState().providers.map(({ providerId }) => providerId),

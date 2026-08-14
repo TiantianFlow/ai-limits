@@ -5,16 +5,15 @@ import type {
   ProviderRefreshOutcome,
   UsageSnapshot,
 } from "../domain/model";
+import type {
+  ProviderInstanceConfig,
+  ProviderInstanceRecord,
+} from "../domain/instances";
+import type { ProviderKind } from "./catalog";
 
 export interface ProviderCredential {
   kind: "api-key";
   value: string;
-  baseUrl?: string;
-}
-
-export interface KimiSessionResolver {
-  findAvailableAccessToken(): Promise<string | undefined>;
-  recoverAccessToken(rejectedToken?: string): Promise<string | undefined>;
 }
 
 export interface CollectionContext {
@@ -22,12 +21,8 @@ export interface CollectionContext {
   now: number;
   signal: AbortSignal;
   credential?: ProviderCredential;
-  getCookie?: (details: {
-    url: string;
-    name: string;
-  }) => Promise<{ value: string } | null>;
-  interaction?: "allowed" | "forbidden";
-  kimiSessionResolver?: KimiSessionResolver;
+  baseUrl?: string;
+  accessToken?: string;
 }
 
 export type CollectionResult =
@@ -45,4 +40,27 @@ export type RefreshCollector<T extends ProviderId = ProviderId> = (
 export interface ProviderAdapter<T extends ProviderId = ProviderId> {
   readonly id: T;
   collect(context: CollectionContext): Promise<CollectionResult>;
+}
+
+export interface ProviderRuntimeServices {
+  fetch: typeof globalThis.fetch;
+  now: number;
+  signal: AbortSignal;
+  interaction: "allowed" | "forbidden";
+}
+
+export interface ProviderPackage {
+  readonly kind: ProviderKind;
+  readonly cardinality: "single" | "multiple";
+  readonly credentialKind: "none" | "api-key";
+  normalizeConfig(value: unknown): ProviderInstanceConfig | undefined;
+  requiredPermissions(
+    config: ProviderInstanceConfig,
+  ): Browser.permissions.Permissions | undefined;
+  collect(
+    instance: ProviderInstanceRecord,
+    services: ProviderRuntimeServices,
+    credentialOverride?: ProviderCredential,
+  ): Promise<CollectionResult>;
+  startup?(): Promise<void>;
 }

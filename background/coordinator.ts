@@ -12,10 +12,7 @@ import type {
   ProviderAdapter,
 } from "../providers/types";
 import { normalizeUsageSnapshot } from "../providers/initial-state";
-import {
-  providerRegistry,
-  type ConnectableProviderId,
-} from "../providers/registry";
+import type { ConnectableProviderId } from "../providers/registry";
 import { providerCatalog } from "../providers/catalog";
 import { readProviderCredential } from "../storage/credentials";
 import {

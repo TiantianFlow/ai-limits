@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { kimiAdapter } from "./adapter";
+import {
+  kimiAdapter as rawKimiAdapter,
+  retryKimiAdapterAfterChangedToken,
+} from "./adapter";
+import { createKimiPackage } from "./package";
 
 const NOW = 1_800_000_000_000;
 const MONTHLY_RESET = "2030-02-01T00:00:00.000Z";
@@ -83,25 +87,98 @@ function subscriptionFixture(title = "Kimi Coding Ultra") {
 
 function context(
   fetch: typeof globalThis.fetch,
-  getCookie = vi.fn(),
-  findAvailableAccessToken = vi.fn(),
-  recoverAccessToken = vi.fn(),
-  interaction: "allowed" | "forbidden" = "allowed",
+  _getCookie = vi.fn(),
+  _findAvailableAccessToken = vi.fn(),
+  _recoverAccessToken = vi.fn(),
+  _interaction: "allowed" | "forbidden" = "allowed",
 ) {
   return {
     fetch,
-    getCookie,
-    interaction,
-    kimiSessionResolver: {
-      findAvailableAccessToken,
-      recoverAccessToken,
-    },
+    getCookie: _getCookie,
+    interaction: _interaction,
+    findAvailableAccessToken: _findAvailableAccessToken,
+    recoverAccessToken: _recoverAccessToken,
     now: NOW,
     signal: new AbortController().signal,
   };
 }
 
+const kimiInstance = {
+  id: "kimi:default",
+  providerKind: "kimi" as const,
+  config: { kind: "fixed" as const },
+  access: "granted" as const,
+  createdAt: 1,
+  history: [],
+};
+
+const kimiAdapter = {
+  async collect(testContext: ReturnType<typeof context>) {
+    const providerPackage = createKimiPackage({
+      adapter: rawKimiAdapter,
+      getCookieToken: async () =>
+        (await testContext.getCookie({
+          url: "https://www.kimi.com/",
+          name: "kimi-auth",
+        }))?.value,
+      findPageAccessToken: testContext.findAvailableAccessToken,
+      recoverAccessToken: testContext.recoverAccessToken,
+      cleanupAbandonedRecovery: async () => undefined,
+      announceRecovery: () => undefined,
+      retryAfterChangedToken: retryKimiAdapterAfterChangedToken,
+    });
+    return providerPackage.collect(kimiInstance, {
+      fetch: testContext.fetch,
+      now: testContext.now,
+      signal: testContext.signal,
+      interaction: testContext.interaction,
+    });
+  },
+};
+
 describe("Kimi adapter", () => {
+  test("uses only the provider-owned access token supplied by its package", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(statsFixture()))
+      .mockResolvedValueOnce(response(subscriptionFixture()));
+
+    const result = await rawKimiAdapter.collect({
+      fetch,
+      now: NOW,
+      signal: new AbortController().signal,
+      accessToken: "package-token",
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer package-token",
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("package-token");
+  });
+
+  test("returns session_required without making a request when its package supplies no token", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+
+    await expect(
+      rawKimiAdapter.collect({
+        fetch,
+        now: NOW,
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      deferred: { reason: "session_required" },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test("normalizes current monthly, five-hour, and weekly usage stats", async () => {
     const getCookie = vi.fn().mockResolvedValue({ value: "secret-cookie" });
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
@@ -554,7 +631,10 @@ describe("Kimi adapter", () => {
       snapshot: { providerKind: "kimi", planLabel: "Kimi Coding Ultra" },
     });
     expect(recoverAccessToken).toHaveBeenCalledOnce();
-    expect(recoverAccessToken).toHaveBeenCalledWith(undefined);
+    expect(recoverAccessToken).toHaveBeenCalledWith(
+      undefined,
+      expect.any(AbortSignal),
+    );
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       expect.any(String),
@@ -668,7 +748,10 @@ describe("Kimi adapter", () => {
       snapshot: { providerKind: "kimi", planLabel: "Kimi Coding Ultra" },
     });
     expect(recoverAccessToken).toHaveBeenCalledOnce();
-    expect(recoverAccessToken).toHaveBeenCalledWith("stale-page-token");
+    expect(recoverAccessToken).toHaveBeenCalledWith(
+      "stale-page-token",
+      expect.any(AbortSignal),
+    );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       expect.any(String),
@@ -862,7 +945,10 @@ describe("Kimi adapter", () => {
     });
     expect(findAvailableAccessToken).toHaveBeenCalledOnce();
     expect(recoverAccessToken).toHaveBeenCalledOnce();
-    expect(recoverAccessToken).toHaveBeenCalledWith("stale-cookie");
+    expect(recoverAccessToken).toHaveBeenCalledWith(
+      "stale-cookie",
+      expect.any(AbortSignal),
+    );
     expect(fetch).toHaveBeenNthCalledWith(
       3,
       "https://www.kimi.com/apiv2/kimi.gateway.billing.v1.BillingService/GetUsages",

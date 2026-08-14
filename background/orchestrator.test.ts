@@ -5,7 +5,7 @@ import type {
   ProviderRefreshOutcome,
   UsageSnapshot,
 } from "../domain/model";
-import { readKimiPageAccessToken } from "./kimi-page";
+import { readKimiPageAccessToken } from "../providers/kimi/page-session";
 import {
   createRefreshOrchestrator as createProductionRefreshOrchestrator,
   deriveRefreshPolicy,
