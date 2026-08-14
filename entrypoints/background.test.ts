@@ -2366,6 +2366,36 @@ describe("credential-aware background lifecycle", () => {
     });
   });
 
+  test("delegates scheduled Kimi resolver failures through its package without opening a tab", async () => {
+    const rawCookieError = "raw-cookie-resolver-secret";
+    const rawPageError = "raw-tabs-query-secret";
+    const cookie = vi
+      .spyOn(browser.cookies, "get")
+      .mockRejectedValue(new Error(rawCookieError));
+    const query = vi
+      .spyOn(browser.tabs, "query")
+      .mockRejectedValue(new Error(rawPageError));
+    const create = vi.spyOn(browser.tabs, "create");
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+
+    const outcome = await background.collectProvider(
+      "kimi",
+      deriveRefreshPolicy("scheduled"),
+      () => true,
+      new AbortController().signal,
+    );
+
+    expect(outcome).toEqual({
+      kind: "deferred",
+      reason: "session_required",
+    });
+    expect(cookie).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledOnce();
+    expect(create).not.toHaveBeenCalled();
+    expect(JSON.stringify(outcome)).not.toContain(rawCookieError);
+    expect(JSON.stringify(outcome)).not.toContain(rawPageError);
+  });
+
   test("does not inject or send a rejected stored key", async () => {
     await credentials.initializeCredentialStorage();
     await credentials.saveProviderApiKey("elevenlabs", STORED_KEY, "rejected");

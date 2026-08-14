@@ -43,6 +43,16 @@ function normalizedToken(value: string | undefined): string | undefined {
   return token ? token : undefined;
 }
 
+async function safelyResolveToken(
+  resolver: () => Promise<string | undefined>,
+): Promise<string | undefined> {
+  try {
+    return normalizedToken(await resolver());
+  } catch {
+    return undefined;
+  }
+}
+
 function fixedConfig(value: unknown): ProviderInstanceConfig | undefined {
   return typeof value === "object" &&
     value !== null &&
@@ -74,9 +84,9 @@ export function createKimiPackage(
 ): ProviderPackage {
   let startupCleanup: Promise<void> | undefined;
   const ensureStartup = (): Promise<void> => {
-    startupCleanup ??= Promise.resolve()
-      .then(() => dependencies.cleanupAbandonedRecovery())
-      .catch(() => undefined);
+    startupCleanup ??= Promise.resolve().then(() =>
+      dependencies.cleanupAbandonedRecovery(),
+    );
     return startupCleanup;
   };
 
@@ -84,12 +94,14 @@ export function createKimiPackage(
     rejectedToken: string | undefined,
     services: ProviderRuntimeServices,
   ): Promise<string | undefined> => {
-    dependencies.announceRecovery();
     return createKimiRecoveryAfterStartupCleanup({
       startupCleanup: ensureStartup(),
       signal: services.signal,
-      recoverAccessToken: (token) =>
-        dependencies.recoverAccessToken(token, services.signal),
+      recoverAccessToken: (token) => {
+        if (services.signal.aborted) return Promise.resolve(undefined);
+        dependencies.announceRecovery();
+        return dependencies.recoverAccessToken(token, services.signal);
+      },
     })(rejectedToken).catch(() => undefined);
   };
 
@@ -114,9 +126,11 @@ export function createKimiPackage(
         return { ok: false, health: { kind: "temporary_error" } };
       }
 
-      let token = normalizedToken(await dependencies.getCookieToken());
+      let token = await safelyResolveToken(() => dependencies.getCookieToken());
       if (!token) {
-        token = normalizedToken(await dependencies.findPageAccessToken());
+        token = await safelyResolveToken(() =>
+          dependencies.findPageAccessToken(),
+        );
       }
 
       if (!token) {
@@ -145,8 +159,8 @@ export function createKimiPackage(
       });
       if (!requiresSession(firstResult)) return firstResult;
 
-      let changedToken = normalizedToken(
-        await dependencies.findPageAccessToken(),
+      let changedToken = await safelyResolveToken(
+        () => dependencies.findPageAccessToken(),
       );
       if (changedToken === token) changedToken = undefined;
       if (!changedToken && services.interaction === "allowed") {

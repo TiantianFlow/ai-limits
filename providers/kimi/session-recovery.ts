@@ -131,7 +131,7 @@ function waitForStartupCleanup(
 
     void startupCleanup.then(
       () => finish(true),
-      () => finish(true),
+      () => finish(false),
     );
   });
 }
