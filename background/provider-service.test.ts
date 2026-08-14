@@ -156,6 +156,10 @@ describe("generic provider instance service", () => {
     expect(prepared).toEqual({
       permissionIntentId: "550e8400-e29b-41d4-a716-446655440000",
       instanceId: "newapi:550e8400-e29b-41d4-a716-446655440099",
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example/gateway",
+      },
       permissions: { origins: ["https://relay.example/*"] },
     });
     expect(await browser.storage.session.get(null)).toEqual({});
@@ -422,11 +426,23 @@ describe("generic provider instance service", () => {
     await seed(newApiInstance(FIRST), "first-secret");
     await connectionRepository.create(newApiInstance(SECOND));
     await rejectBoundCredential(SECOND, "second-secret");
+
+    vi.resetModules();
+    const [{ initializeCredentialVault: initializeRestartedVault, readCredentialWithRevision: readRestartedCredential }, { connectionRepository: restartedRepository }, { providerRegistry: restartedRegistry }, { createProviderService: createRestartedService }, { projectAppViewState: projectRestartedView }] = await Promise.all([
+      import("../storage/credentials"),
+      import("../storage/repository"),
+      import("../providers/registry"),
+      import("./provider-service"),
+      import("./view-state"),
+    ]);
+    await initializeRestartedVault();
     const collect = vi.fn(async () => success("newapi"));
 
-    // A fresh service object represents a service-worker restart over durable state.
-    const restarted = createProviderService({
-      packages: registryWith({ newapi: { ...providerRegistry.newapi, collect } }),
+    const restarted = createRestartedService({
+      packages: {
+        ...restartedRegistry,
+        newapi: { ...restartedRegistry.newapi, collect },
+      },
       clock: () => NOW,
     });
     await restarted.setAutoRefresh(true);
@@ -449,11 +465,15 @@ describe("generic provider instance service", () => {
     const state = await restarted.getState();
     expect(state.instances.find(({ id }) => id === FIRST)?.history).toHaveLength(1);
     expect(state.instances.find(({ id }) => id === SECOND)?.history).toHaveLength(0);
-    await expect(readCredentialWithRevision(SECOND)).resolves.toMatchObject({
+    await expect(readRestartedCredential(SECOND)).resolves.toMatchObject({
       status: "rejected",
       value: "second-secret",
     });
-    const publicView = projectAppViewState(state);
+    await expect(restartedRepository.get(FIRST)).resolves.toMatchObject({
+      id: FIRST,
+      connectionRevision: expect.any(String),
+    });
+    const publicView = projectRestartedView(state);
     expect(JSON.stringify({ report, state, publicView })).not.toMatch(
       /first-secret|second-secret/,
     );
@@ -854,11 +874,7 @@ describe("generic provider instance service", () => {
       },
       connectionRevision: oldRevision,
     });
-    await expect(readCredentialWithRevision(FIRST)).resolves.toMatchObject({
-      value: "replacement-secret",
-      status: "active",
-      revision: expect.not.stringMatching(oldRevision),
-    });
+    await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
 
     collect.mockClear();
     const restarted = createProviderService({

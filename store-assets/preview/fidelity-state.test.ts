@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { AppViewState } from "../../domain/public-protocol";
 import { parseAppViewState } from "../../domain/public-protocol";
+import { createEmptyFixtureState } from "../../providers/fixtures";
 import { prepareFidelityViewState } from "./fidelity-state";
 
 const state: AppViewState = {
   preferences: { displayMode: "used", autoRefresh: true },
+  providers: createEmptyFixtureState().providers,
   instances: [
     {
       id: "newapi:11111111-1111-4111-8111-111111111111",

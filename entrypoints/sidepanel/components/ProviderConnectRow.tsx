@@ -1,16 +1,16 @@
 import React from "react";
 
-import type { ProviderOperation } from "../../../domain/public-protocol";
-import type { ProviderKind } from "../../../providers/catalog";
 import {
-  providerCatalog,
   providerNames,
   providerPresentation,
-} from "../../../providers/catalog";
+  type ProviderKind,
+  type ProviderOperation,
+} from "../../../domain/public-protocol";
 import { ProviderMark } from "./ProviderMark";
 
 export interface ProviderConnectRowProps {
   providerKind: ProviderKind;
+  credentialKind: "none" | "api-key";
   operation?: ProviderOperation;
   onConnect: (providerKind: ProviderKind) => void;
 }
@@ -23,13 +23,14 @@ const operationLabels: Record<ProviderOperation, string> = {
 
 export function ProviderConnectRow({
   providerKind,
+  credentialKind,
   operation,
   onConnect,
 }: ProviderConnectRowProps) {
   const name = providerNames[providerKind];
   const presentation = providerPresentation(providerKind);
   const connectionMethod =
-    providerCatalog[providerKind].connection.kind === "api-key"
+    credentialKind === "api-key"
       ? "API key"
       : "Browser session";
   const headingId = `connect-${providerKind}`;

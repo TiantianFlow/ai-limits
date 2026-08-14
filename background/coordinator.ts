@@ -69,6 +69,9 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
             result.health.message,
           ),
         }),
+    ...(result.health.guidance === undefined
+      ? {}
+      : { guidance: result.health.guidance }),
     ...(retryAt === undefined ? {} : { retryAt }),
   };
 }

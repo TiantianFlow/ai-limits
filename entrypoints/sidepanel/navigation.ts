@@ -1,5 +1,7 @@
-import type { ProviderInstanceId } from "../../domain/model";
-import type { ApiKeyProviderKind } from "../../providers/catalog";
+import type {
+  ApiKeyProviderKind,
+  ProviderInstanceId,
+} from "../../domain/public-protocol";
 
 export type CockpitScreen =
   | { name: "overview" }

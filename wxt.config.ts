@@ -1,7 +1,7 @@
 import { defineConfig } from "wxt";
-import { providerCatalog } from "./providers/catalog";
+import { providerDefinitions } from "./providers/definitions";
 
-const providers = Object.values(providerCatalog);
+const providers = Object.values(providerDefinitions);
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],

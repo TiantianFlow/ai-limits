@@ -1,12 +1,15 @@
 import React from "react";
 
-import type { ProviderOperation } from "../../../domain/public-protocol";
-import type { ProviderKind } from "../../../providers/catalog";
+import type { ProviderKind, ProviderOperation } from "../../../domain/public-protocol";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { ProviderConnectRow } from "../components/ProviderConnectRow";
 
 export interface FirstRunViewProps {
-  providers: Array<{ providerKind: ProviderKind; operation?: ProviderOperation }>;
+  providers: Array<{
+    providerKind: ProviderKind;
+    credentialKind: "none" | "api-key";
+    operation?: ProviderOperation;
+  }>;
   onConnectProvider: (providerKind: ProviderKind) => void;
 }
 
@@ -32,10 +35,11 @@ export function FirstRunView({
       <div className="screen-body screen-body--connections">
         <h2 className="section-label">Supported providers · {providers.length}</h2>
         <div className="provider-list">
-          {providers.map(({ providerKind, operation }) => (
+          {providers.map(({ providerKind, credentialKind, operation }) => (
             <ProviderConnectRow
               key={providerKind}
               providerKind={providerKind}
+              credentialKind={credentialKind}
               operation={operation}
               onConnect={onConnectProvider}
             />

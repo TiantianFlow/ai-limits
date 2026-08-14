@@ -1,6 +1,8 @@
 import { parseAppViewState, type AppViewState } from "../../domain/public-protocol";
-import type { DisplayMode } from "../../domain/model";
-import type { ProviderInstanceId } from "../../domain/model";
+import type {
+  DisplayMode,
+  ProviderInstanceId,
+} from "../../domain/public-protocol";
 import {
   createEmptyFixtureState,
   createFixtureState,
@@ -15,6 +17,7 @@ function parsePreviewState(candidate: unknown): AppViewState {
 function fixtureViewState(state: AppViewState, now: number): AppViewState {
   return parsePreviewState({
     preferences: state.preferences,
+    providers: state.providers,
     instances: state.instances.flatMap((provider) => {
       const instance = {
         ...provider,

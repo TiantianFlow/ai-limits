@@ -84,6 +84,7 @@ function toPublicControlResponse(
         : providerKind === "newapi"
           ? TEST_NEW_API_INSTANCE
           : `${providerKind}:default`,
+    config,
     permissions: config
       ? providerRegistry[providerKind].requiredPermissions(config) ?? {}
       : {},
@@ -126,6 +127,7 @@ function toPublicState(state: AppViewState): AppViewState {
 function twoBlankSameOriginInstances(): AppViewState {
   return {
     preferences: { displayMode: "used", autoRefresh: true },
+    providers: createEmptyFixtureState().providers,
     instances: [
       {
         id: "newapi:11111111-1111-4111-8111-111111111111",
@@ -309,6 +311,7 @@ describe("side-panel App", () => {
     const workId = "newapi:22222222-2222-4222-8222-222222222222";
     const state: AppViewState = {
       preferences: { displayMode: "used", autoRefresh: true },
+      providers: createEmptyFixtureState().providers,
       instances: [
         {
           id: personalId,
@@ -1261,6 +1264,10 @@ describe("side-panel App", () => {
               state,
               permissionIntentId: TEST_PERMISSION_INTENT,
               instanceId: workId,
+              config: {
+                kind: "dynamic-origin",
+                baseUrl: "https://relay.example",
+              },
               permissions: { origins: ["https://relay.example/*"] },
             } as never;
           case "CONNECT_API_KEY_PROVIDER":

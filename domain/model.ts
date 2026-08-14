@@ -1,9 +1,9 @@
 import {
   isProviderKind,
   type ProviderKind,
-} from "../providers/catalog";
+} from "./provider-kind";
 
-export type { ProviderKind } from "../providers/catalog";
+export type { ProviderKind } from "./provider-kind";
 
 export type DisplayMode = "used" | "left";
 
@@ -164,6 +164,8 @@ export type FailureCategory =
   | "provider_changed"
   | "temporary_error";
 
+export type FailureGuidance = "retry_session";
+
 export type ProviderRefreshOutcome =
   | { kind: "success"; snapshot: UsageSnapshot }
   | { kind: "deferred"; reason: DeferredReason; retryAt?: number }
@@ -171,6 +173,7 @@ export type ProviderRefreshOutcome =
       kind: "failure";
       category: FailureCategory;
       message?: string;
+      guidance?: FailureGuidance;
       retryAt?: number;
     }
   | {
@@ -178,20 +181,10 @@ export type ProviderRefreshOutcome =
       reason: "permission_required" | "auto_refresh_disabled" | "superseded";
     };
 
-export const KIMI_RECOVERY_GUIDANCE =
-  "Kimi was still starting. Try Refresh once more, or open or reload Kimi.";
-
 export function sanitizedFailureMessage(
   category: FailureCategory,
-  requestedMessage?: string,
+  _requestedMessage?: string,
 ): string {
-  if (
-    category === "temporary_error" &&
-    requestedMessage === KIMI_RECOVERY_GUIDANCE
-  ) {
-    return KIMI_RECOVERY_GUIDANCE;
-  }
-
   switch (category) {
     case "signed_out":
       return "Sign in to the provider and try again.";
@@ -231,6 +224,7 @@ export interface ProviderAttempt {
         kind: "failure";
         category: FailureCategory;
         message?: string;
+        guidance?: FailureGuidance;
         retryAt?: number;
       };
 }
@@ -239,9 +233,9 @@ export type ProviderHealth =
   | { kind: "permission_required" }
   | { kind: "connecting" }
   | { kind: "connected" }
-  | { kind: "signed_out"; message?: string }
-  | { kind: "credential_invalid"; message?: string }
-  | { kind: "credential_scope_required"; message?: string }
-  | { kind: "challenge_blocked"; message?: string }
-  | { kind: "provider_changed"; message?: string }
-  | { kind: "temporary_error"; message?: string; retryAt?: number };
+  | { kind: "signed_out"; message?: string; guidance?: FailureGuidance }
+  | { kind: "credential_invalid"; message?: string; guidance?: FailureGuidance }
+  | { kind: "credential_scope_required"; message?: string; guidance?: FailureGuidance }
+  | { kind: "challenge_blocked"; message?: string; guidance?: FailureGuidance }
+  | { kind: "provider_changed"; message?: string; guidance?: FailureGuidance }
+  | { kind: "temporary_error"; message?: string; guidance?: FailureGuidance; retryAt?: number };

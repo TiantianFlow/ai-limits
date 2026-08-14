@@ -57,6 +57,7 @@ function providerPackage(
     kind: "newapi",
     cardinality: "multiple",
     credentialKind: "api-key",
+    configKind: "dynamic-origin",
     normalizeConfig: (value) => value as ProviderInstanceRecord["config"],
     requiredPermissions: () => undefined,
     collect,

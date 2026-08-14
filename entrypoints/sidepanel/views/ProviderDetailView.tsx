@@ -1,10 +1,10 @@
 import React from "react";
 
-import type { ProviderOperation } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/model";
 import {
   providerPresentation,
-} from "../../../providers/catalog";
+  type ProviderInstanceId,
+  type ProviderOperation,
+} from "../../../domain/public-protocol";
 import { Icon } from "../components/Icon";
 import { InteractionBanner } from "../components/InteractionBanner";
 import { PageHeader } from "../components/PageHeader";

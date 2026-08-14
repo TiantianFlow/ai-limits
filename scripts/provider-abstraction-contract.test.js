@@ -57,7 +57,7 @@ describe("provider abstraction contract", () => {
 
   it("keeps mutable provider-kind maps out of central runtime and storage", () => {
     const failures = ["background", "storage", "domain"].flatMap(executableSources).filter((file) => {
-      if (file === "storage/migration.ts") return false;
+      if (file === "storage/migration.ts" || file === "domain/provider-presentation.ts") return false;
       return /\b(?:Map|Record|Partial\s*<\s*Record)\s*<\s*(?:ProviderKind|ApiKeyProviderKind)\b/.test(
         source(file),
       );
@@ -77,8 +77,37 @@ describe("provider abstraction contract", () => {
   it("keeps central runtime and storage behavior on the package registry boundary", () => {
     const failures = ["background", "storage", "domain"]
       .flatMap(executableSources)
-      .filter((file) => file !== "storage/migration.ts" && /\bproviderCatalog\s*\[/.test(source(file)));
+      .filter((file) =>
+        file !== "storage/migration.ts" &&
+        file !== "domain/provider-presentation.ts" &&
+        /\bproviderCatalog\s*\[/.test(source(file)),
+      );
     expect(failures).toEqual([]);
+  });
+
+  it("keeps package behavior out of the presentation catalog", () => {
+    expect(source("providers/catalog.ts")).not.toMatch(
+      /\b(?:cardinality|optionalOrigins|optionalPermissions|scheduledRefresh)\s*:/,
+    );
+    expect(source("providers/package-factories.ts")).not.toMatch(
+      /\bproviderCatalog\b/,
+    );
+  });
+
+  it("keeps provider-specific recovery policy out of shared state and orchestration", () => {
+    const centralFiles = [
+      "domain/model.ts",
+      "storage/state-codec.ts",
+      "background/coordinator.ts",
+      "background/orchestrator.ts",
+      "background/provider-service.ts",
+    ];
+    expect(
+      centralFiles.filter((file) => /\bKimi\b|KIMI_RECOVERY/i.test(source(file))),
+    ).toEqual([]);
+    expect(source("providers/kimi/package.ts")).toMatch(
+      /guidance:\s*["']retry_session["']/,
+    );
   });
 
   it("keeps every static package behavior-complete", () => {

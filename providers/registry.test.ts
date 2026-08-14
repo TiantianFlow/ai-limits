@@ -1,11 +1,57 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { providerCatalog } from "./catalog";
+import type {
+  ProviderInstanceConfig,
+  ProviderInstanceRecord,
+} from "../domain/model";
+import { chatGptAdapter } from "./chatgpt/adapter";
+import { claudeAdapter } from "./claude/adapter";
+import { cursorAdapter } from "./cursor/adapter";
+import { providerDefinitions } from "./definitions";
+import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { createFixtureState } from "./fixtures";
-import { providerRegistry, providerKinds } from "./registry";
+import { kimiAdapter } from "./kimi/adapter";
+import { newApiAdapter } from "./newapi/adapter";
+import { providerKinds, providerRegistry } from "./registry";
+import type {
+  ProviderCollector,
+  ProviderCredential,
+  ProviderRuntimeServices,
+} from "./types";
+
+afterEach(() => vi.restoreAllMocks());
+
+const fixed = { kind: "fixed" } as const;
+const dynamic = {
+  kind: "dynamic-origin",
+  baseUrl: "https://relay.example/private/path?secret=no",
+} as const;
+
+function instance(
+  providerKind: (typeof providerKinds)[number],
+  config: ProviderInstanceConfig,
+): ProviderInstanceRecord {
+  return {
+    id: `${providerKind}:default`,
+    providerKind,
+    config,
+    access: "granted",
+    createdAt: 1,
+    history: [],
+  };
+}
+
+const services: ProviderRuntimeServices = {
+  fetch: vi.fn() as unknown as typeof fetch,
+  now: 123,
+  signal: new AbortController().signal,
+  interaction: "forbidden",
+};
+
+const apiKey: ProviderCredential = { kind: "api-key", value: " secret " };
 
 describe("provider registry", () => {
-  test("contains every catalog provider with exact grants", () => {
+  test("is exhaustive and owns exact cardinality, config, credentials, and permissions", () => {
     expect(providerKinds).toEqual([
       "chatgpt",
       "claude",
@@ -14,60 +60,203 @@ describe("provider registry", () => {
       "elevenlabs",
       "newapi",
     ]);
+    expect(Object.keys(providerRegistry)).toEqual(providerKinds);
+
     expect(
-      providerKinds.map((providerId) => [
-        providerId,
-        providerCatalog[providerId].optionalOrigins,
-        providerCatalog[providerId].optionalPermissions,
-      ]),
+      providerKinds.map((kind) => ({
+        kind,
+        cardinality: providerRegistry[kind].cardinality,
+        credentialKind: providerRegistry[kind].credentialKind,
+        configKind: providerRegistry[kind].configKind,
+        accepted: providerRegistry[kind].normalizeConfig(
+          kind === "newapi" ? dynamic : fixed,
+        ),
+        rejected: providerRegistry[kind].normalizeConfig(
+          kind === "newapi" ? fixed : dynamic,
+        ),
+        permissions: providerRegistry[kind].requiredPermissions(
+          kind === "newapi" ? dynamic : fixed,
+        ),
+      })),
     ).toEqual([
-      ["chatgpt", ["https://chatgpt.com/*"], []],
-      ["claude", ["https://claude.ai/*"], []],
-      ["kimi", ["https://www.kimi.com/*"], ["cookies", "scripting"]],
-      ["cursor", ["https://cursor.com/*"], []],
-      ["elevenlabs", ["https://api.elevenlabs.io/*"], []],
-      [
-        "newapi",
-        ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
-        [],
-      ],
+      {
+        kind: "chatgpt",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://chatgpt.com/*"] },
+      },
+      {
+        kind: "claude",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://claude.ai/*"] },
+      },
+      {
+        kind: "kimi",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: {
+          origins: ["https://www.kimi.com/*"],
+          permissions: ["cookies", "scripting"],
+        },
+      },
+      {
+        kind: "cursor",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://cursor.com/*"] },
+      },
+      {
+        kind: "elevenlabs",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.elevenlabs.io/*"] },
+      },
+      {
+        kind: "newapi",
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        accepted: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example/private/path",
+        },
+        rejected: undefined,
+        permissions: { origins: ["https://relay.example/*"] },
+      },
     ]);
-    expect(
-      providerKinds.map((providerId) => providerRegistry[providerId].kind),
-    ).toEqual(providerKinds);
+
+    expect(providerRegistry.newapi.normalizeConfig({
+      kind: "dynamic-origin",
+      baseUrl: "javascript:alert(1)",
+    })).toBeUndefined();
   });
 
-  test("owns cardinality, configuration, credentials, and exact permissions", () => {
-    expect(providerRegistry.newapi.cardinality).toBe("multiple");
-    expect(providerRegistry.newapi.credentialKind).toBe("api-key");
-    expect(providerRegistry.chatgpt.cardinality).toBe("single");
-    expect(providerRegistry.chatgpt.credentialKind).toBe("none");
-    expect(
-      providerRegistry.newapi.normalizeConfig({
-        kind: "dynamic-origin",
-        baseUrl: "https://relay.example/path?secret=no",
-      }),
-    ).toEqual({
-      kind: "dynamic-origin",
-      baseUrl: "https://relay.example/path",
+  test("keeps manifest requirements exhaustive without making presentation metadata behavioral", () => {
+    expect(Object.keys(providerDefinitions)).toEqual(providerKinds);
+    expect(providerDefinitions).toEqual({
+      chatgpt: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: ["https://chatgpt.com/*"],
+        optionalPermissions: [],
+      },
+      claude: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: ["https://claude.ai/*"],
+        optionalPermissions: [],
+      },
+      kimi: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: ["https://www.kimi.com/*"],
+        optionalPermissions: ["cookies", "scripting"],
+      },
+      cursor: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: ["https://cursor.com/*"],
+        optionalPermissions: [],
+      },
+      elevenlabs: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.elevenlabs.io/*"],
+        optionalPermissions: [],
+      },
+      newapi: {
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        optionalOrigins: [
+          "https://*/*",
+          "http://localhost/*",
+          "http://127.0.0.1/*",
+        ],
+        optionalPermissions: [],
+      },
     });
-    expect(
-      providerRegistry.newapi.requiredPermissions({
-        kind: "dynamic-origin",
-        baseUrl: "https://relay.example/private/path?secret=no",
-      }),
-    ).toEqual({ origins: ["https://relay.example/*"] });
-    expect(
-      providerRegistry.chatgpt.requiredPermissions({
-        kind: "dynamic-origin",
-        baseUrl: "https://wrong.example",
-      }),
-    ).toBeUndefined();
-    expect(
-      providerRegistry.kimi.requiredPermissions({ kind: "fixed" }),
-    ).toEqual({
-      origins: ["https://www.kimi.com/*"],
-      permissions: ["cookies", "scripting"],
+  });
+
+  test("delegates collection through every package with normalized context", async () => {
+    const adapters: Record<string, ProviderCollector> = {
+      chatgpt: chatGptAdapter,
+      claude: claudeAdapter,
+      kimi: kimiAdapter,
+      cursor: cursorAdapter,
+      elevenlabs: elevenLabsAdapter,
+      newapi: newApiAdapter,
+    };
+    const adapterSpies = Object.fromEntries(
+      Object.entries(adapters).map(([kind, adapter]) => [
+        kind,
+        vi.spyOn(adapter, "collect").mockResolvedValue({
+          ok: false,
+          health: { kind: "signed_out" },
+        }),
+      ]),
+    );
+    vi.spyOn(browser.cookies, "get").mockResolvedValue({
+      value: "browser-token",
+    } as never);
+
+    for (const kind of providerKinds) {
+      const config = kind === "newapi" ? dynamic : fixed;
+      const credential = providerRegistry[kind].credentialKind === "api-key"
+        ? apiKey
+        : undefined;
+      await providerRegistry[kind].collect(
+        instance(kind, config),
+        services,
+        credential,
+      );
+      expect(adapterSpies[kind]).toHaveBeenCalledTimes(1);
+    }
+
+    expect(adapterSpies.chatgpt).toHaveBeenCalledWith({
+      fetch: services.fetch,
+      now: 123,
+      signal: services.signal,
+    });
+    expect(adapterSpies.kimi).toHaveBeenCalledWith({
+      fetch: services.fetch,
+      now: 123,
+      signal: services.signal,
+      accessToken: "browser-token",
+    });
+    expect(adapterSpies.elevenlabs).toHaveBeenCalledWith({
+      fetch: services.fetch,
+      now: 123,
+      signal: services.signal,
+      credential: { kind: "api-key", value: "secret" },
+    });
+    expect(adapterSpies.newapi).toHaveBeenCalledWith({
+      fetch: services.fetch,
+      now: 123,
+      signal: services.signal,
+      credential: { kind: "api-key", value: "secret" },
+      baseUrl: "https://relay.example/private/path",
     });
   });
 

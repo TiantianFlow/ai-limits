@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { PaceKind } from "../../../domain/quota";
+import type { PaceKind } from "../../../domain/public-protocol";
 import { Icon } from "./Icon";
 
 export interface PaceSignalProps {

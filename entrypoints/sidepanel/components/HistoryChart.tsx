@@ -3,12 +3,10 @@ import React, { useEffect, useId, useState } from "react";
 import {
   quotaHistorySegments,
   type MetricHistoryPoint,
-} from "../../../domain/history";
-import type {
-  DisplayMode,
-  QuotaMetric,
-  UsageHistoryObservation,
-} from "../../../domain/model";
+  type DisplayMode,
+  type QuotaMetric,
+  type UsageHistoryObservation,
+} from "../../../domain/public-protocol";
 
 export interface HistoryChartProps {
   providerName: string;

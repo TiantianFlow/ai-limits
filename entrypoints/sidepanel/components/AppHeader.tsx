@@ -1,7 +1,7 @@
 import type { Ref } from "react";
 import React from "react";
 
-import type { DisplayMode } from "../../../domain/model";
+import type { DisplayMode } from "../../../domain/public-protocol";
 import { Icon } from "./Icon";
 
 export interface AppHeaderProps {

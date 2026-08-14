@@ -1,8 +1,4 @@
-import {
-  isConnectionRevision,
-  type InstanceAppState,
-  type ProviderInstanceRecord,
-} from "../domain/model";
+import type { InstanceAppState, ProviderInstanceRecord } from "../domain/model";
 import type {
   DisplayMode,
   MetricCycle,
@@ -10,8 +6,9 @@ import type {
   UsageHistoryObservation,
 } from "../domain/model";
 import type { ProviderKind, ApiKeyProviderKind } from "../providers/catalog";
-import { isApiKeyProviderKind, isProviderKind, providerCatalog, providerKinds } from "../providers/catalog";
-import { normalizeNewApiBaseUrl, newApiPermissionOrigin } from "../providers/newapi/url";
+import { isApiKeyProviderKind, isProviderKind, providerKinds } from "../providers/catalog";
+import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
+import { providerRegistry } from "../providers/registry";
 import {
   CREDENTIAL_STORAGE_KEY,
   emptyCredentialStateV2,
@@ -209,20 +206,15 @@ function grantedOriginCoversRequired(
 
 function hasGrantedPermission(
   providerKind: ProviderKind,
-  credential: LegacyCredential | undefined,
+  config: ProviderInstanceRecord["config"],
   grantedPermissions: Browser.permissions.Permissions,
 ): boolean {
   const origins = grantedPermissions.origins ?? [];
   const permissions = new Set(
     (grantedPermissions.permissions ?? []) as readonly string[],
   );
-  const catalog = providerCatalog[providerKind];
-  const requiredOrigins =
-    providerKind === "newapi"
-      ? [newApiPermissionOrigin(credential?.baseUrl)].filter(
-          (origin): origin is string => origin !== undefined,
-        )
-      : [...catalog.optionalOrigins];
+  const required = providerRegistry[providerKind].requiredPermissions(config);
+  const requiredOrigins = required?.origins ?? [];
   if (requiredOrigins.length === 0) return false;
   return (
     requiredOrigins.every((requiredOrigin) =>
@@ -230,7 +222,7 @@ function hasGrantedPermission(
         grantedOriginCoversRequired(grantedOrigin, requiredOrigin),
       ),
     ) &&
-    catalog.optionalPermissions.every((permission) =>
+    ((required?.permissions ?? []) as readonly string[]).every((permission) =>
       permissions.has(permission),
     )
   );
@@ -291,13 +283,6 @@ function migrateReleasedV4(
     const credential = isApiKeyProviderKind(providerKind)
       ? credentials[providerKind]
       : undefined;
-    const permissionGranted = hasGrantedPermission(
-      providerKind,
-      credential,
-      grantedPermissions,
-    );
-    const browserSession =
-      providerCatalog[providerKind].connection.kind === "browser-session";
     const id = `${providerKind}:default`;
     const config =
       providerKind === "newapi"
@@ -306,6 +291,13 @@ function migrateReleasedV4(
           : undefined
         : { kind: "fixed" as const };
     if (!config) continue;
+    const permissionGranted = hasGrantedPermission(
+      providerKind,
+      config,
+      grantedPermissions,
+    );
+    const browserSession =
+      providerRegistry[providerKind].credentialKind === "none";
     const released = isRecord(storedProvider)
       ? convertReleasedV4ProviderWire(storedProvider, providerKind)
       : {};
@@ -381,49 +373,19 @@ export function migrateLegacyStorage(
     const normalizedCredentials = normalizeCredentialStateV2(
       input.aiLimitsCredentials,
     );
-    const rawInstances = Array.isArray(input.aiLimitsState.instances)
-      ? input.aiLimitsState.instances
-      : [];
-    const invalidExplicitBindings = new Set(
-      rawInstances.flatMap((candidate) =>
-        isRecord(candidate) &&
-        typeof candidate.id === "string" &&
-        isApiKeyProviderKind(candidate.providerKind) &&
-        Object.hasOwn(candidate, "connectionRevision") &&
-        !isConnectionRevision(candidate.connectionRevision)
-          ? [candidate.id]
-          : [],
-      ),
-    );
     const state = normalizeInstanceAppState(
-      {
-        ...input.aiLimitsState,
-        instances: rawInstances.map((candidate) => {
-          if (
-            !isRecord(candidate) ||
-            typeof candidate.id !== "string" ||
-            !isApiKeyProviderKind(candidate.providerKind) ||
-            Object.hasOwn(candidate, "connectionRevision")
-          ) {
-            return candidate;
-          }
-          const credential = normalizedCredentials.credentials[candidate.id];
-          return credential
-            ? { ...candidate, connectionRevision: credential.revision }
-            : candidate;
-        }),
-      },
+      input.aiLimitsState,
       now,
     );
-    const activeApiKeyInstances = new Set(
+    const boundApiKeyInstances = new Map(
       state.instances
         .filter(({ providerKind }) => isApiKeyProviderKind(providerKind))
-        .map(({ id }) => id),
+        .map(({ id, connectionRevision }) => [id, connectionRevision]),
     );
     const credentials = Object.fromEntries(
-      Object.entries(normalizedCredentials.credentials).filter(([instanceId]) =>
-        activeApiKeyInstances.has(instanceId) &&
-        !invalidExplicitBindings.has(instanceId),
+      Object.entries(normalizedCredentials.credentials).filter(
+        ([instanceId, credential]) =>
+          boundApiKeyInstances.get(instanceId) === credential.revision,
       ),
     );
     return {
