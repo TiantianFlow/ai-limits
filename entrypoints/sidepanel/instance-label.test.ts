@@ -120,4 +120,79 @@ describe("instanceLabel", () => {
     expect(reversed.get(second.id)).toBe("Shared relay · 22222222");
     expect(instanceLabels([second]).get(second.id)).toBe("Shared relay");
   });
+
+  it("keeps generated labels globally unique from literal and chained labels", () => {
+    const first = { ...baseInstance, userLabel: "Shared relay" };
+    const second: ProviderInstanceView = {
+      ...baseInstance,
+      id: "newapi:22222222-2222-4222-8222-222222222222",
+      userLabel: "Shared relay",
+    };
+    const generatedCandidate = "Shared relay · 11111111";
+    const fullIdCandidate = `${generatedCandidate} · ${first.id}`;
+    const countedCandidate = `${fullIdCandidate} · 2`;
+    const literalCandidate: ProviderInstanceView = {
+      ...baseInstance,
+      id: "newapi:33333333-3333-4333-8333-333333333333",
+      userLabel: generatedCandidate,
+    };
+    const literalFullId: ProviderInstanceView = {
+      ...baseInstance,
+      id: "newapi:44444444-4444-4444-8444-444444444444",
+      userLabel: fullIdCandidate,
+    };
+    const literalCounter: ProviderInstanceView = {
+      ...baseInstance,
+      id: "newapi:55555555-5555-4555-8555-555555555555",
+      userLabel: countedCandidate,
+    };
+    const instances = [
+      first,
+      second,
+      literalCandidate,
+      literalFullId,
+      literalCounter,
+    ];
+    const expected = new Map([
+      [first.id, `${fullIdCandidate} · 3`],
+      [second.id, "Shared relay · 22222222"],
+      [literalCandidate.id, generatedCandidate],
+      [literalFullId.id, fullIdCandidate],
+      [literalCounter.id, countedCandidate],
+    ]);
+
+    for (const ordered of [instances, [...instances].reverse()]) {
+      const labels = instanceLabels(ordered);
+      for (const [instanceId, label] of expected) {
+        expect(labels.get(instanceId)).toBe(label);
+      }
+      expect(new Set(labels.values()).size).toBe(instances.length);
+    }
+
+    const afterDeletion = instanceLabels([
+      first,
+      literalCandidate,
+      literalFullId,
+      literalCounter,
+    ]);
+    expect(afterDeletion.get(first.id)).toBe("Shared relay");
+    expect(new Set(afterDeletion.values()).size).toBe(4);
+  });
+
+  it("lengthens duplicate short UUID prefixes deterministically", () => {
+    const first = { ...baseInstance, userLabel: "Shared prefix" };
+    const second: ProviderInstanceView = {
+      ...baseInstance,
+      id: "newapi:11111111-2222-4222-8222-222222222222",
+      userLabel: "Shared prefix",
+    };
+
+    const forward = instanceLabels([first, second]);
+    const reversed = instanceLabels([second, first]);
+
+    expect(forward.get(first.id)).toBe("Shared prefix · 11111111-1");
+    expect(forward.get(second.id)).toBe("Shared prefix · 11111111-2");
+    expect(reversed.get(first.id)).toBe("Shared prefix · 11111111-1");
+    expect(reversed.get(second.id)).toBe("Shared prefix · 11111111-2");
+  });
 });
