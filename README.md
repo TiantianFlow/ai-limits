@@ -39,19 +39,20 @@ ElevenLabs, the New API project, or their affiliates.
   not offer the same zero-setup web-session route used by the other providers.
   The extension sends that key only to the ElevenLabs API for its read-only
   subscription request.
-- New API uses one user-provided instance URL and relay key. AI Limits reads
-  only that key's usage endpoint; it supports capped and unlimited keys, but
-  not account wallet, subscriptions, admin data, or multiple instances yet.
-- The latest normalized quota, credit, plan, refresh-status, and preference data
-  is stored in Chrome extension storage on the local browser profile.
-- After each successful normalized refresh, quota observations are stored
-  locally for up to 30 days for the History graphs, subject to a
-  1,024-observation per-provider safety cap. Within that cap, observations from
-  the newest 48 hours are kept at collection resolution; older retained history
-  keeps only the latest value in each UTC hour. On upgrade, one valid current
-  snapshot can become the first observation at its original fetch time; the
-  extension does not reconstruct earlier provider history and does not store
-  credit-balance history.
+- AI Limits supports multiple New API instances. Each instance keeps its own
+  normalized base URL, label, relay key, current usage, refresh state, and
+  History. Capped keys show quota; unlimited keys show an absolute counter.
+  Account wallet, subscriptions, admin data, and other relay keys are not read.
+- The latest normalized quota, counter or spend, balance, plan, refresh-status,
+  and preference data is stored in Chrome extension storage on the local
+  browser profile.
+- After each successful normalized refresh, quota, counter or spend, and
+  balance observations are stored per instance for up to 30 days, subject to a
+  1,024-observation per-instance safety cap. The newest 48 hours stay at
+  collection resolution; older retained observations keep the latest value in
+  each UTC hour. Version 0.3.0 graphs quota metrics only. It does not graph the
+  retained counters or balances, reconstruct earlier provider history, or
+  store raw provider responses or credentials in History.
 - Browser-session cookies and access credentials are used only for the current
   provider collection attempt and are not saved in persistent extension
   storage. Successfully validated ElevenLabs and New API keys are stored separately in
@@ -61,13 +62,11 @@ ElevenLabs, the New API project, or their affiliates.
   while at least one connected provider remains. It can be disabled in
   Settings.
 
-Kimi may require extra recovery during an interactive Connect or Refresh. The
-extension checks the legacy Kimi cookie first, then the exact `access_token`
-entry in an already-open Kimi page. If no credential is available or Kimi
-rejects it, interactive recovery may create one inactive Kimi homepage tab.
-Recovery stops waiting for a credential after 10 seconds and then attempts
-best-effort cleanup of the tab it owns; browser shutdown or API errors can
-delay or prevent that cleanup. Scheduled refresh never creates a Kimi tab.
+Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh
+may open at most one inactive temporary Kimi tab, waits up to 10 seconds for
+recovery, and closes only the tab it created. The extension checks the legacy
+Kimi cookie first, then the exact `access_token` entry in an already-open Kimi
+page. Browser shutdown or API errors can delay or prevent best-effort cleanup.
 
 ElevenLabs setup opens its official API-keys page in a normal tab. If you need
 to sign in first, the guide remains open and lets you reopen that page. It asks
@@ -92,7 +91,9 @@ scheduled refresh, and its interface. Provider origins are optional and are
 requested one at a time when you click **Connect** or validate an API-key
 connection. New API declares dynamic optional host capability because it can be
 self-hosted, but Chrome is asked only for the exact instance origin entered in
-onboarding. The optional `cookies` and `scripting` permissions are
+onboarding. Same-origin New API instances share that browser-global grant only;
+their credentials, labels, usage, and History remain independent. The optional
+`cookies` and `scripting` permissions are
 requested only for Kimi session access and interactive recovery. ElevenLabs
 receives only optional access to `https://api.elevenlabs.io/*`; the public
 setup page is opened normally and does not receive extension host access. The
@@ -140,7 +141,7 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.2.3-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.3.0-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility

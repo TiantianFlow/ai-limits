@@ -103,7 +103,7 @@ describe("provider catalog", () => {
         markPath: "/provider-marks/fallback.svg",
         connectionLabel: "Connect New API",
         connectionDisclosure:
-          "Uses one relay key and one New API instance URL you provide, stores both locally, and refreshes key-specific usage about every 15 minutes.",
+          "Supports multiple independent connections. Each stores its own New API instance URL, relay key, label, usage, and History locally; same-origin connections share only Chrome's host permission.",
         capabilities: ["API key quota", "Unlimited-key usage"],
       },
     ]);

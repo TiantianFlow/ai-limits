@@ -68,6 +68,33 @@ function encodedPng(width, height) {
 }
 
 describe("store assets", () => {
+  it("targets final instance-keyed provider card headings for marketing captures", () => {
+    const selector = storeAssetContract.marketingProviderHeadingSelector;
+
+    expect(selector).toBeTypeOf("function");
+    if (!selector) return;
+    expect(selector("kimi:default")).toBe("#provider-name-kimi-default");
+    expect(selector("cursor:default")).toBe("#provider-name-cursor-default");
+  });
+
+  it("targets quota History actions by instance and stable metric identity", () => {
+    const selector = storeAssetContract.marketingQuotaHistorySelector;
+
+    expect(selector).toBeTypeOf("function");
+    if (!selector) return;
+    expect(selector("chatgpt:default", "five-hour")).toBe(
+      '[data-focus-key="provider-history-chatgpt:default-five-hour"]',
+    );
+  });
+
+  it("requires both nonpersonal New API instances in the privacy capture", () => {
+    const labels = storeAssetContract.marketingPrivacyRequiredLabels;
+
+    expect(labels).toBeTypeOf("function");
+    if (!labels) return;
+    expect(labels()).toEqual(["Demo relay A", "Demo relay B"]);
+  });
+
   it("waits for document fonts before capturing store artwork", async () => {
     let fontsReady = false;
     const originalFonts = document.fonts;

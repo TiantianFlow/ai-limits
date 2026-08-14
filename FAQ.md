@@ -58,9 +58,11 @@ Kimi automatic refresh is best-effort and may not always work; a manual Connect
 or Refresh may briefly open an inactive Kimi tab in the background to recover
 the session.
 
-Kimi's scheduled refresh deliberately never opens a tab. It can use the legacy
-Kimi cookie or read an `access_token` from an already-open Kimi page. If neither
-is available, automatic refresh defers until a later refresh, preserves the last
+Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may
+open at most one inactive temporary Kimi tab, waits up to 10 seconds for
+recovery, and closes only the tab it created. It can use the legacy Kimi cookie
+or read an `access_token` from an already-open Kimi page. If neither is
+available, automatic refresh defers until a later refresh, preserves the last
 good data, and adds no history observation.
 
 A manual **Connect** or **Refresh** is interactive and may use that inactive
@@ -97,17 +99,31 @@ extension DevTools, or profile files may be able to inspect it.
 If ElevenLabs later rejects the saved key, AI Limits stops scheduled
 ElevenLabs requests and shows **Replace key** while preserving the last good
 normalized usage and History. A failed replacement leaves the prior key
-unchanged. Disconnecting ElevenLabs, removing its host permission, choosing
-**Delete all local data**, uninstalling the extension, or clearing extension
-storage deletes the saved key.
+unchanged. Disconnecting ElevenLabs, choosing **Delete all local data**,
+uninstalling the extension, or clearing extension storage deletes the saved
+key. External host-permission removal instead marks ElevenLabs as requiring
+permission and retains its local configuration, saved key, normalized usage,
+refresh status, and History until reconnect or explicit disconnect/delete.
 
 ## What does New API support, and what URL should I enter?
 
-AI Limits currently supports one New API instance and one relay key. It reads
-only that key's `/api/usage/token/` response: capped keys show granted, used,
-and remaining quota, while unlimited keys show absolute usage without an
-invented percentage. It does not yet read account wallet, subscriptions,
-admin data, or multiple instances.
+AI Limits supports multiple independent New API instances. Each connection has
+its own normalized base URL, optional label, relay key, current usage, refresh
+state, replacement/rejection status, and History. It reads only that key's
+`/api/usage/token/` response: capped keys show granted, used, and remaining
+quota, while unlimited keys show absolute usage without an invented
+percentage. It does not read account wallet, subscriptions, or admin data.
+
+Two New API instances on the same origin share only Chrome's browser-global
+origin permission; they never share a relay key, label, usage state, or
+History. Disconnecting one instance deletes only that instance's key,
+configuration, usage, refresh status, and History before permission cleanup.
+The shared grant remains while a sibling still owns it; disconnecting the final
+owner removes it best-effort and keeps durable cleanup evidence for retry.
+Externally removing the grant instead marks every affected instance as needing
+permission while retaining its nonsecret configuration, saved key, normalized
+usage, refresh status, and History until reconnect or explicit
+disconnect/delete.
 
 You can paste the site homepage, a dashboard URL, `/v1`, `/v1/messages`, or
 `/api/usage/token/`. AI Limits removes those known suffixes, preserves any
@@ -131,17 +147,22 @@ New API setup and refresh do not open provider tabs.
 
 ## What does History store, and for how long?
 
-History stores successful normalized quota observations only. It does not store
-credit-balance history, raw provider responses, credentials, or reconstructed
-provider history. Failed, deferred, skipped, or malformed refreshes do not add
-History observations; AI Limits separately stores only the latest sanitized
-refresh status.
+History stores successful normalized quota, counter or spend, and balance
+observations per instance. Currency-denominated spend counters and balances are
+normalized usage data, not raw payment transaction history. Version 0.3.0
+graphs quota metrics only; counter/spend and balance observations remain stored
+but are not graphed. History never stores credentials, raw provider responses,
+or reconstructed provider history. Failed, deferred, skipped, or malformed
+refreshes do not add History observations; AI Limits separately stores only the
+latest sanitized refresh status.
 
 Observations are retained locally for up to 30 days, subject to a
-1,024-observation safety cap for each provider. Within that cap, observations
+1,024-observation safety cap for each instance. Within that cap, observations
 from the newest 48 hours stay at collection resolution; older retained history
-keeps the latest observation in each UTC hour. Disconnecting a provider,
-revoking its permission, or deleting all local data removes its history.
+keeps the latest observation in each UTC hour. Disconnecting an instance or
+deleting all local data removes its History. External permission removal
+retains History but pauses refresh until permission is restored or the instance
+is explicitly disconnected/deleted.
 
 ## Why does the graph say it needs another successful refresh?
 
@@ -165,10 +186,10 @@ the stored observation.
 
 ## What should I do before switching provider accounts?
 
-Disconnect that provider in AI Limits before changing accounts. History is
-scoped to the provider and quota-window identifier, not a persistent provider
-account identifier. Disconnecting clears the old provider history and prevents
-same-plan accounts from being combined.
+Disconnect that provider instance in AI Limits before changing accounts.
+History is scoped to the provider instance and stable metric identifier, not a
+persistent provider account identifier. Disconnecting clears that instance's
+history and prevents same-plan accounts from being combined.
 
 For data handling details, see [Privacy](PRIVACY.md). To report a problem, use
 [GitHub Issues](https://github.com/TiantianFlow/ai-limits/issues) without including

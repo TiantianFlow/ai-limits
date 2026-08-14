@@ -13,6 +13,9 @@ import {
   buildFidelityPreviewQuery,
   createFidelityCaptureMatrix,
   fidelityScreenHasModeControl,
+  marketingProviderHeadingSelector,
+  marketingPrivacyRequiredLabels,
+  marketingQuotaHistorySelector,
   pacingCardScrollTop,
   waitForDocumentFonts,
 } from "./store-assets-contract.mjs";
@@ -110,9 +113,10 @@ async function prepareStoreAsset(page, asset) {
   }
 
   if (asset.view === "pacing") {
-    const pacingGeometry = await page.evaluate(() => {
+    const kimiHeadingSelector = marketingProviderHeadingSelector("kimi:default");
+    const pacingGeometry = await page.evaluate((headingSelector) => {
       const frame = document.querySelector("[data-panel-frame]");
-      const heading = document.getElementById("provider-name-kimi-default");
+      const heading = document.querySelector(headingSelector);
       const card = heading?.closest(".provider-card");
       const stickyHeader = document.querySelector(".app-header");
       if (!(frame instanceof HTMLElement) || !(card instanceof HTMLElement)) {
@@ -137,13 +141,23 @@ async function prepareStoreAsset(page, asset) {
         scrollHeight: frame.scrollHeight,
         clientHeight: frame.clientHeight,
       };
-    });
+    }, kimiHeadingSelector);
     const scrollTop = pacingCardScrollTop(pacingGeometry);
     await page.locator("[data-panel-frame]").evaluate((frame, targetScrollTop) => {
       frame.scrollTop = targetScrollTop;
     }, scrollTop);
 
-    await page.evaluate(() => {
+    const featuredProviders = [
+      {
+        name: "Kimi",
+        selector: marketingProviderHeadingSelector("kimi:default"),
+      },
+      {
+        name: "Cursor",
+        selector: marketingProviderHeadingSelector("cursor:default"),
+      },
+    ];
+    await page.evaluate((providers) => {
       const frame = document.querySelector("[data-panel-frame]");
       const stickyHeader = document.querySelector(".app-header");
       if (!(frame instanceof HTMLElement)) {
@@ -154,10 +168,8 @@ async function prepareStoreAsset(page, asset) {
           ? stickyHeader.getBoundingClientRect().bottom
           : frame.getBoundingClientRect().top;
 
-      for (const name of ["Kimi", "Cursor"]) {
-        const featuredCard = document
-          .getElementById(`provider-${name}`)
-          ?.closest(".provider-card");
+      for (const { name, selector } of providers) {
+        const featuredCard = document.querySelector(selector)?.closest(".provider-card");
         if (!(featuredCard instanceof HTMLElement)) {
           throw new Error(`Pacing capture could not find the ${name} card.`);
         }
@@ -172,16 +184,15 @@ async function prepareStoreAsset(page, asset) {
           );
         }
       }
-    });
+    }, featuredProviders);
   }
 
   if (asset.view === "history") {
     await page
-      .getByRole("button", {
-        name: "Open ChatGPT history for 5-hour messages",
-      })
+      .locator(marketingQuotaHistorySelector("chatgpt:default", "five-hour"))
       .click();
-    await page.getByRole("heading", { name: "ChatGPT history" }).waitFor();
+    await page.locator(".history-surface").waitFor();
+    await page.locator(".current-cycle-surface").waitFor();
     await page
       .getByRole("img", { name: /ChatGPT .* usage history/ })
       .waitFor();
@@ -227,35 +238,33 @@ async function prepareStoreAsset(page, asset) {
   if (asset.view === "privacy") {
     await page.getByRole("button", { name: "Settings" }).click();
     await page.getByRole("heading", { name: "Settings" }).waitFor();
-    await page.locator("[data-panel-frame]").evaluate((frame) => {
-      const elevenLabs = [...document.querySelectorAll("strong")].find(
-        (element) => element.textContent === "ElevenLabs",
-      )?.closest("li");
-      const deleteButton = [...document.querySelectorAll("button")].find(
-        (element) => element.textContent === "Delete all local data",
-      );
+    const requiredLabels = marketingPrivacyRequiredLabels();
+    await page.locator("[data-panel-frame]").evaluate((frame, labels) => {
+      const instanceRows = labels.map((label) => ({
+        label,
+        element: [...document.querySelectorAll("li")].find(
+          (candidate) =>
+            candidate.getAttribute("aria-label") === `${label} settings`,
+        ),
+      }));
       if (
         !(frame instanceof HTMLElement) ||
-        !(elevenLabs instanceof HTMLElement) ||
-        !(deleteButton instanceof HTMLElement)
+        instanceRows.some(({ element }) => !(element instanceof HTMLElement))
       ) {
         throw new Error(
-          "Privacy capture could not find the ElevenLabs row and local-data action.",
+          "Privacy capture could not find both New API instance rows.",
         );
       }
 
       const frameBounds = frame.getBoundingClientRect();
-      const deleteBounds = deleteButton.getBoundingClientRect();
+      const lastRowBounds = instanceRows.at(-1).element.getBoundingClientRect();
       frame.scrollTop = Math.min(
-        frame.scrollTop + deleteBounds.bottom - frameBounds.bottom + 12,
+        frame.scrollTop + lastRowBounds.bottom - frameBounds.bottom + 12,
         frame.scrollHeight - frame.clientHeight,
       );
 
       const visibleFrameBounds = frame.getBoundingClientRect();
-      for (const [label, element] of [
-        ["ElevenLabs", elevenLabs],
-        ["Delete all local data", deleteButton],
-      ]) {
+      for (const { label, element } of instanceRows) {
         const bounds = element.getBoundingClientRect();
         if (
           bounds.top < visibleFrameBounds.top ||
@@ -266,7 +275,7 @@ async function prepareStoreAsset(page, asset) {
           );
         }
       }
-    });
+    }, requiredLabels);
   }
 }
 

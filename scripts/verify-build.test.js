@@ -12,7 +12,7 @@ function validManifest() {
     manifest_version: 3,
     name: "AI Limits",
     description: EXPECTED_DESCRIPTION,
-    version: "0.2.3",
+    version: "0.3.0",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
     optional_permissions: ["cookies", "scripting"],
@@ -33,7 +33,7 @@ describe("built Chrome artifact contract", () => {
   it("accepts the static and dynamic optional provider origins and the store description", () => {
     expect(EXPECTED_DESCRIPTION.length).toBeLessThanOrEqual(132);
     expect(EXPECTED_OPTIONAL_ORIGINS).toHaveLength(8);
-    expect(validateBuildManifest(validManifest(), "0.2.3")).toEqual([]);
+    expect(validateBuildManifest(validManifest(), "0.3.0")).toEqual([]);
   });
 
   it("rejects missing API access, broad ElevenLabs webpage access, and tabs", () => {
@@ -41,19 +41,19 @@ describe("built Chrome artifact contract", () => {
     missingApi.optional_host_permissions = missingApi.optional_host_permissions.filter(
       (origin) => origin !== "https://api.elevenlabs.io/*",
     );
-    expect(validateBuildManifest(missingApi, "0.2.3")).toContain(
+    expect(validateBuildManifest(missingApi, "0.3.0")).toContain(
       "Expected the exact static and dynamic optional provider origins.",
     );
 
     const broadPage = validManifest();
     broadPage.optional_host_permissions.push("https://elevenlabs.io/*");
-    expect(validateBuildManifest(broadPage, "0.2.3")).toContain(
+    expect(validateBuildManifest(broadPage, "0.3.0")).toContain(
       "Expected the exact static and dynamic optional provider origins.",
     );
 
     const tabs = validManifest();
     tabs.permissions.push("tabs");
-    expect(validateBuildManifest(tabs, "0.2.3")).toContain(
+    expect(validateBuildManifest(tabs, "0.3.0")).toContain(
       "Expected permissions to be exactly alarms, sidePanel, storage.",
     );
   });

@@ -78,10 +78,9 @@ and Cursor cards below the real sticky side-panel header at production scale.
 The History image follows the real ChatGPT quota action into the dedicated
 History screen and verifies that its chart and current-cycle surface fit inside
 the panel frame. The privacy image opens the real Settings view through its real
-button, then verifies that the
-ElevenLabs **API key saved** row and **Delete all local data** control both fit
-inside the panel frame. The overview provider line lists all six supported
-providers.
+button, then verifies that the nonpersonal **Demo relay A** and **Demo relay B**
+New API instance rows and their per-instance actions both fit inside the panel
+frame. The overview provider line lists all six supported providers.
 
 Never generate store artwork from a browser profile, extension storage,
 provider website, network credential, or live provider response. Representative

@@ -188,13 +188,16 @@ describe("store artwork copy", () => {
     expect(previewContent.en.history.title).toMatch(/history/i);
     expect(previewContent.en.history.description).toMatch(/local/i);
     expect(previewContent.en.history.description).toMatch(/refresh/i);
+    expect(previewContent.en.history.description).toContain(
+      "Quota graphs use per-instance typed history",
+    );
   });
 
   it("gives GitHub sharing a concise product and trust story", () => {
     expect(previewContent.en.social).toEqual({
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "ChatGPT · Claude · Kimi · Cursor",
+      description: "6 providers · Multiple New API instances",
     });
     expect(previewContent.en.socialNotes).toEqual([
       "Used or Left · Reset timing · Pace · Local history",
@@ -208,6 +211,15 @@ describe("store artwork copy", () => {
     );
     expect(previewContent.zh_CN.providerLine).toBe(
       "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
+    );
+  });
+
+  it("makes multi-instance New API support visible in both overview languages", () => {
+    expect(previewContent.en.overview.description).toContain(
+      "multiple independent New API instances",
+    );
+    expect(previewContent.zh_CN.overview.description).toContain(
+      "多个相互独立的 New API 实例",
     );
   });
 

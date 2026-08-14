@@ -30,33 +30,67 @@ must use synthetic data.
 
 ## Adding or changing a provider
 
-- Add stable provider identity, display name, ordering, and optional Chrome
-  access to `providers/catalog.ts`. Keep provider endpoints, response schemas,
-  and normalization inside that provider's adapter directory.
-- Grant exact HTTPS hosts without explicit ports. Wildcard hosts, explicit
-  ports, or other overlapping host patterns require a separate
-  permission-lifecycle design review before they can enter the catalog.
-- Register the adapter in `providers/registry.ts`. Catalog and registry tests
-  must prove that initial state, runtime commands, permissions, and UI naming
-  include every provider in the same order.
-- Emit a `QuotaWindow` only for a bounded allowance that can be represented by
-  an honest canonical `usedRatio` from 0 through 1. Keep stable window IDs
-  independent from localized or provider-controlled display labels.
-- Emit point-in-time absolute or currency-denominated balances as
-  `CreditBalance`. Credit balances are intentionally excluded from local
-  History; do not invent a denominator merely to create a percentage graph.
-- Do not persist browser-session credentials, request-local account
-  identifiers, or raw provider responses. A reviewed API-key provider must keep
-  its key in the dedicated trusted-context credential store, outside
-  application state and History, and must add cleanup, bundle-boundary,
-  release-scan, privacy, and guided-onboarding tests. OAuth interaction,
-  multiple account/workspace scopes, or another custom recovery flow requires
-  an explicit architecture and privacy review before implementation.
-- Resolve historical-series identity before supporting account or workspace
-  switching. A plan label is presentation text, not a stable account boundary.
-- Keep build and ZIP permission allowlists independent from the catalog. They
-  are security checks that should fail when provider access expands until the
-  new access has been deliberately reviewed.
+Every provider is one `ProviderPackage`, registered exhaustively in
+`providers/registry.ts`. The package owns provider behavior; central
+orchestration, storage, permissions, and history code stay provider-agnostic.
+Adding a provider must not require a provider-kind branch in those central
+modules.
+
+A package must define and own:
+
+- a stable `ProviderKind`, presentation metadata, and `single` or `multiple`
+  cardinality;
+- its connection and credential mode;
+- strict normalization of all nonsecret instance configuration;
+- exact Chrome origins and API permissions derived from that normalized
+  configuration;
+- its connection driver, credential/session resolution, validation, recovery,
+  and collection behavior; and
+- adapter normalization into metrics with stable IDs.
+
+Keep provider endpoints, response schemas, and response normalization inside
+the provider directory. Grant exact HTTPS hosts without explicit ports.
+Wildcard hosts, explicit ports, overlapping patterns, OAuth interaction, new
+account/workspace switching, or a custom recovery flow requires an explicit
+permission, identity, and privacy review.
+
+Metric meaning must be explicit:
+
+- `quota` is a bounded allowance with an honest canonical `usedRatio` from 0
+  through 1 and may include absolute used/limit values and cycle timing;
+- `counter` is cumulative `consumed` or `spent` usage with a value and unit;
+  an optional limit does not turn it into a quota; and
+- `balance` is a remaining amount with a value and unit; do not invent a
+  denominator or reinterpret it as consumption.
+
+Stable metric IDs identify History series within one provider instance. Keep
+them independent from localized or provider-controlled labels. Successful
+quota, counter/spend, and balance observations may be retained; the 0.3.0 graph
+selects quota metrics only.
+
+Do not persist browser-session credentials, request-local account identifiers,
+or raw provider responses. A reviewed API-key package keeps one key per instance
+in the dedicated trusted-context credential vault, outside application state
+and History, and binds it to the matching configuration revision. Same-origin
+instances may share a Chrome grant but must never share credentials or state.
+
+Provider work must add or update behavior tests at every owned boundary:
+
+- adapter schema and normalization tests, including malformed responses and
+  exact quota/counter/balance semantics;
+- package tests for cardinality, config acceptance/rejection, exact permission
+  derivation, credential mode, driver behavior, and collection delegation;
+- exhaustive registry/catalog tests;
+- History retention and quota-graph selection tests for each new metric shape;
+- permission ownership, connect/replace/reject/disconnect, restart, and
+  instance-isolation tests appropriate to the connection mode;
+- released-state migration tests when a durable schema changes; and
+- publication, privacy, built-bundle, store-asset, and ZIP allowlist tests when
+  access, data handling, copy, or packaging changes.
+
+Keep build and ZIP permission allowlists independent from package definitions.
+They are release security gates and must fail on any access expansion until the
+new surface is deliberately reviewed.
 
 ## Verification
 

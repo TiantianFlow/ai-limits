@@ -1,9 +1,9 @@
 # Privacy Policy
 
-Last updated: August 12, 2026
+Last updated: August 14, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
-describes version 0.2.3.
+describes version 0.3.0.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
 or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, ElevenLabs, the New
@@ -17,11 +17,14 @@ extension reads and normalizes:
 
 - provider and access status;
 - plan, subscription, or organization labels;
-- quota-window labels, usage or remaining ratios and amounts, limit units,
-  window start times, reset times, and durations;
-- quota history made from successful normalized observations of those
-  quota-window fields;
-- credit balances, limits, usage, units, and reset times; and
+- quota labels, usage or remaining ratios and amounts, limit units, window
+  start times, reset times, durations, and segments;
+- cumulative counters or spend with their value, semantic, unit, optional
+  limit, and cycle;
+- remaining balances with their value, unit, optional original limit, and
+  cycle;
+- per-instance History made from successful normalized observations of those
+  quota, counter/spend, and balance fields; and
 - refresh timestamps and sanitized success, retry, sign-in, challenge,
   temporary-error, or response-change status.
 
@@ -37,11 +40,13 @@ does not retain invoices, payment attempts, coupons, payment identifiers, or
 currency overage fields. It does not read prompts, conversations, generated
 responses, or rendered provider page content.
 
-For New API, the extension retains the normalized instance URL, relay-key
-name, instance display name, and key-specific granted, used, and remaining
-quota. Unlimited keys retain absolute used quota without an invented limit or
-ratio. It does not retain model-limit maps or key expiry as a quota reset and
-does not read account wallet, subscriptions, usage logs, or admin data.
+For each New API instance, the extension retains an opaque instance ID, the
+normalized base URL, optional user label, relay-key name, instance display
+name, independent access/refresh state, and key-specific granted, used, and
+remaining quota. Unlimited keys retain an absolute consumed counter without an
+invented limit or ratio. It does not retain model-limit maps or key expiry as a
+quota reset and does not read account wallet, subscriptions, usage logs, admin
+data, or other relay keys.
 
 ## Provider authentication and requests
 
@@ -86,77 +91,86 @@ the developer or any other provider. Only the user's explicit setup or reopen
 action opens the ElevenLabs API-keys page; manual and scheduled refresh do not
 open or inspect provider tabs.
 
-New API uses a user-provided instance URL and relay key rather than a browser
-session. AI Limits removes recognized console and API suffixes, validates the
-normalized instance with its public `/api/status` response, then sends the key
-as an Authorization Bearer header only to that same instance's read-only
-`/api/usage/token/` endpoint. The request AI Limits makes is read-only, but the
-relay key itself may still authorize model calls; AI Limits cannot reduce the
-key's server-side authority. Current support is limited to one instance and
-one relay key and does not use management PAT or admin APIs.
+Each New API instance uses a user-provided URL and relay key rather than a
+browser session. AI Limits removes recognized console and API suffixes,
+validates the normalized base URL with its public `/api/status` response, then
+sends that instance's key as an Authorization Bearer header only to the same
+base URL's read-only `/api/usage/token/` endpoint. The request AI Limits makes
+is read-only, but the relay key itself may still authorize model calls; AI
+Limits cannot reduce the key's server-side authority. Multiple instances,
+including same-origin instances with different keys and labels, remain
+independent. AI Limits does not use management PAT or admin APIs.
 
 ## Local storage and retention
 
 AI Limits stores one application-state record in `chrome.storage.local`. It
-contains display and automatic-refresh preferences, provider permission state,
-the normalized usage fields listed above, and sanitized refresh-attempt
-metadata. It does not contain provider cookies, browser-session credentials,
-or the ElevenLabs or New API key. The normalized New API instance URL is stored
-with its key in the separate credential record.
+contains display and automatic-refresh preferences, per-instance nonsecret
+configuration such as a normalized New API base URL and label, provider
+permission state, the normalized usage fields listed above, History, and
+sanitized refresh-attempt metadata. It does not contain provider cookies,
+browser-session credentials, or ElevenLabs/New API keys.
 
-ElevenLabs and New API keys are stored separately in chrome.storage.local, which AI
-Limits restricts to trusted extension contexts through Chrome's storage access
-level. Ordinary websites, other extensions, and this extension's content
-scripts cannot read that record through Chrome extension APIs. The saved key
-is not OS-keychain encrypted and may be inspectable by someone with access to
-the unlocked Chrome profile, extension DevTools, or profile files. The saved
-key is never included in usage state, quota history, screenshots, reports,
-logs, analytics, or a developer backend.
+ElevenLabs and New API keys are stored separately in chrome.storage.local,
+which AI Limits restricts to trusted extension contexts through Chrome's
+storage access level. Each New API instance has one separately keyed credential
+record; same-origin instances never share it. Ordinary websites, other
+extensions, and this extension's content scripts cannot read that record
+through Chrome extension APIs. The saved key is not OS-keychain encrypted and
+may be inspectable by someone with access to the unlocked Chrome profile,
+extension DevTools, or profile files. The saved key is never included in usage
+state, History, screenshots, reports, logs, analytics, or a developer backend.
 
-Successful normalized quota observations are stored locally for up to 30 days,
-subject to a 1,024-observation per-provider safety cap. Within that cap,
-observations from the newest 48 hours are kept at collection resolution. Older
-retained history is compacted to the latest observation in each UTC hour until
-it ages out. This history contains quota-window usage only: it does not retain
-credit balances, limits, usage, or reset times. Failed, deferred, skipped, or
+Disconnect, Delete all local data, uninstall, or clearing extension storage
+deletes the saved API key. If Chrome cannot revoke a final-owner host
+permission, local instance deletion remains authoritative and durable cleanup
+evidence is retained for retry.
+
+Successful normalized quota, counter or spend, and balance observations are
+stored per instance for up to 30 days, subject to a 1,024-observation
+per-instance safety cap. Within that cap, the newest 48 hours remain at
+collection resolution and older retained observations are compacted to the
+latest observation in each UTC hour. In version 0.3.0, History graphs plot
+quota metrics only; counter or spend and balance observations remain stored but
+are not graphed. Currency-denominated spend counters and balances are
+normalized usage data, not raw payment transaction history. History never
+stores credentials or raw provider responses. Failed, deferred, skipped, or
 malformed refresh results do not add observations.
 When existing extension state is upgraded for this feature, one valid normalized
 current snapshot can become the first observation at its original `fetchedAt`
 time. The extension does not query a provider to reconstruct or backfill any
 earlier history.
 
-The local records remain in the current Chrome profile until you disconnect a
-provider, choose **Delete all local data**, uninstall the extension, or clear
-the extension's browser storage. Disconnect, external permission removal,
-Delete all local data, uninstall, or clearing extension storage deletes the
-saved API key. A successful **Replace key** overwrites the prior key
-only after the new key validates; a failed replacement leaves the prior key
-unchanged.
+The local records remain in the current Chrome profile until you disconnect an
+instance, choose **Delete all local data**, uninstall the extension, or clear
+the extension's browser storage. Those actions delete affected saved API keys.
+External permission removal does not delete instance data or saved API keys;
+it prevents their use until access is restored or the instance is explicitly
+disconnected/deleted. A successful **Replace key** overwrites only that
+instance's prior key after the new key validates; a failed replacement leaves
+the prior key unchanged.
 
 - **Disconnect** invalidates active work and unconditionally deletes that
-  provider's saved credential, snapshot, quota history, and refresh-attempt
-  history before separately attempting permission cleanup. If Chrome cannot
-  revoke the host permission, local key and usage deletion remains
-  authoritative; the provider stays locally suppressed until explicit
-  reconnect or later successful permission removal. The extension also reports
-  that cleanup problem.
+  instance's saved credential, nonsecret configuration, snapshot, History, and
+  refresh-attempt metadata before separately attempting permission cleanup.
+  Disconnect deletes that instance's credential, configuration, usage, refresh
+  status, and History before permission cleanup; a shared origin remains
+  granted while another active instance owns it, and final-owner removal is
+  best-effort with durable retry evidence. If Chrome cannot revoke the final
+  permission, local deletion remains authoritative and the extension reports
+  and retries that cleanup problem.
 - **Delete all local data** stops refresh work, clears the refresh alarm,
   attempts to revoke every provider permission, removes saved usage, and writes
-  a clean default settings record with no quota history. It also deletes the
+  a clean default settings record with no History. It also deletes the
   credential record. If any permission cannot be revoked, local usage,
-  credentials, and quota history are still removed, affected providers remain
+  credentials, and History are still removed, affected providers remain
   locally suppressed, and automatic refresh remains off.
-- An exact provider-permission removal event first invalidates that provider's
-  active refresh and unconditionally clears its local credential, snapshot,
-  quota history, and refresh-attempt history. Only then does AI Limits sample
-  authoritative permission state to set the final access flag. A rapid regrant
-  can therefore restore browser-session access, but it cannot restore deleted
-  usage history or a saved API key.
-  If permission is revoked while the background worker is asleep, the next
-  reconciliation clears data when a stored grant is authoritatively absent; it
-  also clears any legacy permission-required record that still contains a
-  snapshot or history. Empty never-connected permission-required records remain
-  unchanged.
+- Externally removing a permission marks every affected instance
+  permission-required while retaining its nonsecret configuration, normalized
+  usage, refresh status, and History. Saved API keys also remain stored but are
+  not used without permission. Active work is invalidated immediately. If the
+  background worker is asleep, startup reconciliation applies the same access
+  state. Reconnect can restore access; explicit Disconnect/Delete all performs
+  the deletion lifecycle above.
 
 ## Automatic refresh
 
@@ -178,7 +192,7 @@ share it with the developer, advertisers, data brokers, or unrelated third
 parties. Provider requests go only to the provider service you selected, which
 processes those requests under its own terms and privacy policy.
 
-Quota history remains in the local Chrome profile and is never transmitted to
+History remains in the local Chrome profile and is never transmitted to
 the developer.
 
 The extension does not log session credentials or saved usage data. Opening a

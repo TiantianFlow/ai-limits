@@ -12,21 +12,25 @@ History 只保存在当前 Chrome 配置文件中。
 | Kimi | 浏览器会话及定向凭据恢复 | 订阅总用量和 Kimi Code 限制 | 可能读取名称完全匹配的旧版 `kimi-auth` Cookie 或 `localStorage.access_token`。手动 Connect 或 Refresh 可能短暂打开一个非活动 Kimi 标签页，让 Kimi 自己刷新会话。自动刷新绝不会打开标签页；没有可用会话时可能延后。 |
 | Cursor | 浏览器登录会话 | Cursor 模型和其他模型的独立月度限制，以及服务商报告的按量支出 | 使用未公开的网站会话接口。服务商分别报告两个月度模型池时，AI Limits 会保持分开显示。 |
 | ElevenLabs | 用户创建的 API 密钥 | 订阅 Credits 和语音容量限制 | 指南建议使用 **User → Read**。AI Limits 调用有文档的订阅接口并在本地保存验证成功的密钥，不复用浏览器会话。 |
-| New API | 实例网址及一个 Relay Key | 该密钥的总额、已用和剩余配额；无限额密钥则显示绝对用量 | AI Limits 调用 `/api/status` 和只读的 `/api/usage/token/` 接口。请求本身只读，但 Relay Key 本身仍可能具备调用模型的能力。 |
+| New API | 每个连接各自使用实例网址、标签和一个 Relay Key；支持多个连接 | 每个密钥的总额、已用和剩余配额；无限额密钥则显示绝对用量 | AI Limits 调用 `/api/status` 和只读的 `/api/usage/token/` 接口。请求本身只读，但每个 Relay Key 仍可能具备调用模型的能力。 |
 
 ## New API 连接模式
 
-当前 AI Limits 只实现 [New API 项目](https://github.com/QuantumNous/new-api)
-支持的最小普通用户模式：
+AI Limits 实现 [New API 项目](https://github.com/QuantumNous/new-api)
+支持的普通用户 Relay Key 模式：
 
-- 一个 New API 实例；
-- 该实例的一个 Relay Key；
+- 多个相互独立配置的 New API 实例；
+- 每个实例各自拥有一个标准化基础网址、可选标签和 Relay Key；
 - 有上限密钥的配额，或无限额密钥的绝对用量；
 - 连接后的手动和后台自动刷新。
 
+New API 支持多个相互独立的实例。每个已配置实例分别拥有自己的标准化基础网址、标签、Relay Key、用量、History、刷新状态、替换、拒绝和删除生命周期。
+
+同一来源的实例只共享 Chrome 的浏览器全局来源授权；凭据、标签、用量状态和 History 始终相互独立。
+
 New API 还提供账号钱包、订阅、用量历史和管理员 API。AI Limits 目前**不会**
-使用这些接口，不会要求管理用 Personal Access Token，不会读取管理员数据，也不
-支持在同一个浏览器配置中连接多个 New API 实例。
+使用这些接口，不会要求管理用 Personal Access Token，也不会读取管理员数据或
+其他 Relay Key。
 
 ### 可接受的 New API 网址
 
@@ -46,7 +50,15 @@ https://new-api.example.com/api/usage/token/
 `http://localhost` 和 `http://127.0.0.1` 外，必须使用 HTTPS。
 
 由于 New API 可以部署在任意主机，扩展清单会声明可选的动态主机能力；提交
-设置表单时，Chrome 实际只会请求标准化后那个实例的精确来源权限。
+设置表单时，Chrome 实际只会请求标准化后那个实例的精确来源权限。断开一个
+同来源实例时，只要另一个活动实例仍拥有该授权，授权就会保留；断开最后一个
+所有者时，会先删除本地数据，再尽力移除授权。从外部移除授权会把所有受影响
+实例标记为需要权限，但保留非机密配置、标准化用量、刷新状态和 History，直到
+重新连接或明确断开或删除。
+
+成功的配额、计数或支出以及余额观测会按实例遵循统一的留存规则：最近 48 小时
+保留原始采集粒度，更早数据按小时压缩，最多 30 天且每个实例最多 1,024 条。
+0.3.0 只绘制配额指标。History 不包含凭据或服务商原始响应。
 
 ## 兼容性边界
 
