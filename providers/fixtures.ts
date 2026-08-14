@@ -1,10 +1,12 @@
 import { observationFromUsage } from "../domain/history";
 import type {
-  AppState,
-  ProviderRecord,
   QuotaMetric,
   UsageSnapshot,
 } from "../domain/model";
+import type {
+  AppViewState,
+  ProviderInstanceView,
+} from "../domain/public-protocol";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -50,7 +52,10 @@ function quota(
   };
 }
 
-export function createFixtureState(now: number): AppState {
+export function createFixtureState(
+  now: number,
+  options: { includeAccountLabels?: boolean } = {},
+): AppViewState {
   const fiveHours = 5 * HOUR;
   const week = 7 * DAY;
   const fixtureDate = new Date(now);
@@ -60,10 +65,12 @@ export function createFixtureState(now: number): AppState {
   const rollingWeek = { cadence: "rolling" as const, startedAt: now - 5 * DAY, resetsAt: now + 2 * DAY, durationMs: week };
   const calendarMonth = { cadence: "calendar" as const, startedAt: monthStart, resetsAt: monthReset, durationMs: monthReset - monthStart };
 
-  const providers: ProviderRecord[] = [
+  const instances: ProviderInstanceView[] = [
     {
-      providerId: "chatgpt",
+      id: "chatgpt:default",
+      providerKind: "chatgpt",
       access: "granted",
+      createdAt: now - DAY,
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "chatgpt",
@@ -77,8 +84,10 @@ export function createFixtureState(now: number): AppState {
       }, now),
     },
     {
-      providerId: "claude",
+      id: "claude:default",
+      providerKind: "claude",
       access: "granted",
+      createdAt: now - DAY,
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "claude",
@@ -92,8 +101,10 @@ export function createFixtureState(now: number): AppState {
       }, now),
     },
     {
-      providerId: "kimi",
+      id: "kimi:default",
+      providerKind: "kimi",
       access: "granted",
+      createdAt: now - DAY,
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "kimi",
@@ -107,8 +118,10 @@ export function createFixtureState(now: number): AppState {
       }, now),
     },
     {
-      providerId: "cursor",
+      id: "cursor:default",
+      providerKind: "cursor",
       access: "granted",
+      createdAt: now - DAY,
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "cursor",
@@ -122,8 +135,10 @@ export function createFixtureState(now: number): AppState {
       }, now),
     },
     {
-      providerId: "elevenlabs",
+      id: "elevenlabs:default",
+      providerKind: "elevenlabs",
       access: "granted",
+      createdAt: now - DAY,
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "elevenlabs",
@@ -139,8 +154,13 @@ export function createFixtureState(now: number): AppState {
       }, now),
     },
     {
-      providerId: "newapi",
+      id: "newapi:default",
+      providerKind: "newapi",
+      userLabel: "Personal relay",
+      baseUrl: "https://relay.example/gateway",
+      origin: "https://relay.example",
       access: "granted",
+      createdAt: now - DAY,
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "newapi",
@@ -152,13 +172,22 @@ export function createFixtureState(now: number): AppState {
     },
   ];
 
-  for (const provider of providers) {
-    provider.history = provider.snapshot ? fixtureHistory(provider.snapshot) : [];
+  for (const instance of instances) {
+    instance.history = instance.snapshot ? fixtureHistory(instance.snapshot) : [];
+    if (instance.snapshot && !options.includeAccountLabels) {
+      delete instance.snapshot.accountLabel;
+    }
   }
 
   return {
-    version: 4,
     preferences: { displayMode: "used", autoRefresh: true },
-    providers,
+    instances,
+  };
+}
+
+export function createEmptyFixtureState(): AppViewState {
+  return {
+    preferences: { displayMode: "used", autoRefresh: true },
+    instances: [],
   };
 }

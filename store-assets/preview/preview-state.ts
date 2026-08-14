@@ -1,8 +1,10 @@
 import { parseAppViewState, type AppViewState } from "../../domain/public-protocol";
-import type { AppState, DisplayMode } from "../../domain/model";
-import type { ProviderInstanceId } from "../../domain/instances";
-import { createFixtureState } from "../../providers/fixtures";
-import { createInitialState } from "../../providers/initial-state";
+import type { DisplayMode } from "../../domain/model";
+import type { ProviderInstanceId } from "../../domain/model";
+import {
+  createEmptyFixtureState,
+  createFixtureState,
+} from "../../providers/fixtures";
 import type { FidelityRequest, FidelityScenario } from "./copy";
 import { prepareFidelityViewState } from "./fidelity-state";
 
@@ -10,34 +12,15 @@ function parsePreviewState(candidate: unknown): AppViewState {
   return parseAppViewState(candidate);
 }
 
-function fixtureViewState(state: AppState, now: number): AppViewState {
-  const connectedInstances = state.providers.filter(
-    (provider) =>
-      provider.access === "granted" ||
-      provider.snapshot !== undefined ||
-      provider.history.length > 0 ||
-      provider.lastAttempt !== undefined,
-  );
+function fixtureViewState(state: AppViewState, now: number): AppViewState {
   return parsePreviewState({
     preferences: state.preferences,
-    instances: connectedInstances.flatMap((provider) => {
+    instances: state.instances.flatMap((provider) => {
       const instance = {
-        id: `${provider.providerId}:default`,
-        providerKind: provider.providerId,
-        access: provider.access,
+        ...provider,
         createdAt: now - 2_000,
-        history: provider.history,
-        ...(provider.providerId === "newapi"
-          ? {
-              userLabel: "Personal relay",
-              baseUrl: "https://relay.example/gateway",
-              origin: "https://relay.example",
-            }
-          : {}),
-        ...(provider.snapshot ? { snapshot: provider.snapshot } : {}),
-        ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
       } satisfies AppViewState["instances"][number];
-      if (provider.providerId !== "newapi") return [instance];
+      if (provider.providerKind !== "newapi") return [instance];
 
       const second = {
         ...structuredClone(instance),
@@ -64,15 +47,15 @@ export function createStorePreviewState(
   parameters: URLSearchParams,
   now: number,
 ): AppViewState {
-  const fixture = createFixtureState(now);
+  const fixture = createFixtureState(now, { includeAccountLabels: true });
 
   if (parameters.get("providers") === "none") {
-    return fixtureViewState(createInitialState(), now);
+    return fixtureViewState(createEmptyFixtureState(), now);
   }
 
   if (parameters.get("providers") === "partial") {
-    const initial = createInitialState();
-    initial.providers[0] = fixture.providers[0]!;
+    const initial = createEmptyFixtureState();
+    initial.instances = fixture.instances.slice(0, 1);
     return fixtureViewState(initial, now);
   }
 
@@ -83,14 +66,16 @@ export function createFidelityPreviewState(
   request: FidelityRequest,
   scenario: FidelityScenario,
 ): AppViewState {
-  const fixture = createFixtureState(request.now);
-  let state: AppState;
+  const fixture = createFixtureState(request.now, {
+    includeAccountLabels: true,
+  });
+  let state: AppViewState;
 
   if (scenario.fixtureVariant === "empty") {
-    state = createInitialState();
+    state = createEmptyFixtureState();
   } else if (scenario.fixtureVariant === "partial") {
-    state = createInitialState();
-    state.providers[0] = fixture.providers[0]!;
+    state = createEmptyFixtureState();
+    state.instances = fixture.instances.slice(0, 1);
   } else {
     state = fixture;
   }
@@ -104,8 +89,8 @@ export function createFidelityPreviewState(
     request.state === "partial-refresh" ||
     request.state === "kimi-interaction"
   ) {
-    const kimi = state.providers.find(
-      (provider) => provider.providerId === "kimi",
+    const kimi = state.instances.find(
+      (provider) => provider.providerKind === "kimi",
     );
     if (kimi) {
       kimi.lastAttempt = {

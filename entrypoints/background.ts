@@ -11,10 +11,10 @@ import {
   type ProviderService,
 } from "../background/provider-service";
 import { projectAppViewState } from "../background/view-state";
-import type { InstanceAppState } from "../domain/instances";
+import type { InstanceAppState } from "../domain/model";
 import { providerRegistry } from "../providers/registry";
 import type { ProviderPackage } from "../providers/types";
-import { initializeCredentialVault } from "../storage/credential-vault";
+import { initializeCredentialVault } from "../storage/credentials";
 import { migrateLegacyStorageInPlace } from "../storage/migration";
 import { PERMISSION_INTENT_SWEEP_ALARM } from "../background/permission-intents";
 

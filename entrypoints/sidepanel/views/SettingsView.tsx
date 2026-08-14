@@ -2,7 +2,7 @@ import type { Ref } from "react";
 import React, { useEffect, useRef, useState } from "react";
 
 import type { ProviderInstanceView } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ProviderInstanceId } from "../../../domain/model";
 import {
   type ApiKeyProviderKind,
   providerCatalog,

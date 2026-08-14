@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ProviderInstanceId } from "../../domain/instances";
+import type { ProviderInstanceId } from "../../domain/model";
 import {
   navigateCockpit,
   type CockpitNavigationState,

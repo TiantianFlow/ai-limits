@@ -1,4 +1,4 @@
-import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderInstanceRecord } from "../domain/model";
 import type { ProviderKind } from "../providers/catalog";
 import { providerRegistry } from "../providers/registry";
 import type { ProviderPackage } from "../providers/types";

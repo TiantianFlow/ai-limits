@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderInstanceRecord } from "../domain/model";
 import {
   PERMISSION_INTENT_SWEEP_ALARM,
   createPermissionIntentStore,

@@ -2,7 +2,7 @@ import type { Ref } from "react";
 import React from "react";
 
 import type { ProviderOperation } from "../../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../../domain/instances";
+import type { ProviderInstanceId } from "../../../domain/model";
 import type { ApiKeyProviderKind, ProviderKind } from "../../../providers/catalog";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import {

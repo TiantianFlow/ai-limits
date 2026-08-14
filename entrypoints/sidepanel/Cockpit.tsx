@@ -5,7 +5,7 @@ import type {
   ProviderInstanceView,
   ProviderOperation,
 } from "../../domain/public-protocol";
-import type { ProviderInstanceId } from "../../domain/instances";
+import type { ProviderInstanceId } from "../../domain/model";
 import { sanitizedFailureMessage } from "../../domain/model";
 import type {
   BalanceMetric,
@@ -23,9 +23,9 @@ import {
   type ApiKeyProviderKind,
   type ProviderKind,
   canCreateProviderInstance,
-  isApiKeyProviderId,
+  isApiKeyProviderKind,
   providerCatalog,
-  providerIds,
+  providerKinds,
   providerNames,
   providerPresentation,
 } from "../../providers/catalog";
@@ -448,7 +448,7 @@ export function Cockpit({
   };
 
   const connectProvider = (providerKind: ProviderKind) => {
-    if (isApiKeyProviderId(providerKind)) {
+    if (isApiKeyProviderKind(providerKind)) {
       openApiKeyConnect(providerKind, "connect");
       return;
     }
@@ -460,7 +460,7 @@ export function Cockpit({
     (instance) => instance.access === "granted",
   );
   const labelsByInstance = instanceLabels(state.instances);
-  const availableProviderKinds = providerIds.filter((providerKind) =>
+  const availableProviderKinds = providerKinds.filter((providerKind) =>
     canCreateProviderInstance(providerKind, connectedInstances),
   );
   const availableProviders = availableProviderKinds.map((providerKind) => ({

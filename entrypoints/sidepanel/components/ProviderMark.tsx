@@ -1,21 +1,21 @@
 import React from "react";
 
 import {
-  isProviderId,
+  isProviderKind,
   providerPresentation,
-  type ProviderId,
+  type ProviderKind,
 } from "../../../providers/catalog";
 
 export interface ProviderMarkProps {
-  providerId: ProviderId;
+  providerId: ProviderKind;
   size: "sm" | "md";
 }
 
 const fallbackMarkPath = "/provider-marks/fallback.svg";
 
 export function ProviderMark({ providerId, size }: ProviderMarkProps) {
-  const resolvedProviderId = isProviderId(providerId) ? providerId : "fallback";
-  const presentation = isProviderId(providerId)
+  const resolvedProviderId = isProviderKind(providerId) ? providerId : "fallback";
+  const presentation = isProviderKind(providerId)
     ? providerPresentation(providerId)
     : undefined;
   const markPath = presentation?.markPath ?? fallbackMarkPath;

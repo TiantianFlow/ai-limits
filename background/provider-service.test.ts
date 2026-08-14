@@ -3,24 +3,25 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type {
   ProviderInstanceId,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import type { CollectionResult, ProviderPackage } from "../providers/types";
 import { providerRegistry } from "../providers/registry";
 import {
   initializeCredentialVault,
   readCredentialWithRevision,
   saveApiKeyIfCurrent,
-} from "../storage/credential-vault";
+} from "../storage/credentials";
 import {
   connectionRepository,
   loadInstanceAppState,
-} from "../storage/instance-repository";
+} from "../storage/repository";
 import { migrateLegacyStorageInPlace } from "../storage/migration";
 import {
   createProviderService,
   type ConnectApiKeyProviderRequest,
   type ProviderService,
 } from "./provider-service";
+import { projectAppViewState } from "./view-state";
 
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
@@ -78,6 +79,21 @@ async function seed(instance: ProviderInstanceRecord, apiKey?: string) {
       connectionRevision: result.revision,
     }));
   }
+}
+
+async function rejectBoundCredential(instanceId: ProviderInstanceId, apiKey: string) {
+  const result = await saveApiKeyIfCurrent(
+    instanceId,
+    apiKey,
+    () => true,
+    "rejected",
+  );
+  expect(result.saved).toBe(true);
+  if (!result.saved) throw new Error("fixture save failed");
+  await connectionRepository.replace(instanceId, (current) => ({
+    ...current,
+    connectionRevision: result.revision,
+  }));
 }
 
 async function authorizedApiRequest(
@@ -400,6 +416,48 @@ describe("generic provider instance service", () => {
 
     expect(report.results.map(({ instanceId }) => instanceId)).toEqual([FIRST, SECOND]);
     expect(collect.mock.calls.map(([instance]) => instance.id)).toEqual([FIRST, SECOND]);
+  });
+
+  test("scheduled restart refreshes an active same-origin sibling while its rejected sibling stays fail-closed and secret-free", async () => {
+    await seed(newApiInstance(FIRST), "first-secret");
+    await connectionRepository.create(newApiInstance(SECOND));
+    await rejectBoundCredential(SECOND, "second-secret");
+    const collect = vi.fn(async () => success("newapi"));
+
+    // A fresh service object represents a service-worker restart over durable state.
+    const restarted = createProviderService({
+      packages: registryWith({ newapi: { ...providerRegistry.newapi, collect } }),
+      clock: () => NOW,
+    });
+    await restarted.setAutoRefresh(true);
+
+    const report = await restarted.refreshAll("scheduled");
+
+    expect(collect).toHaveBeenCalledTimes(1);
+    expect(collect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: FIRST }),
+      expect.objectContaining({ interaction: "forbidden" }),
+      { kind: "api-key", value: "first-secret" },
+    );
+    expect(report.results).toEqual([
+      { instanceId: FIRST, outcome: expect.objectContaining({ kind: "success" }) },
+      {
+        instanceId: SECOND,
+        outcome: { kind: "skipped", reason: "permission_required" },
+      },
+    ]);
+    const state = await restarted.getState();
+    expect(state.instances.find(({ id }) => id === FIRST)?.history).toHaveLength(1);
+    expect(state.instances.find(({ id }) => id === SECOND)?.history).toHaveLength(0);
+    await expect(readCredentialWithRevision(SECOND)).resolves.toMatchObject({
+      status: "rejected",
+      value: "second-secret",
+    });
+    const publicView = projectAppViewState(state);
+    expect(JSON.stringify({ report, state, publicView })).not.toMatch(
+      /first-secret|second-secret/,
+    );
+    expect(publicView.instances.map(({ id }) => id)).toEqual([FIRST, SECOND]);
   });
 
   test("credential rejection marks only the selected instance revision", async () => {
@@ -1067,6 +1125,55 @@ describe("generic provider instance service", () => {
       origins: ["https://relay.example/*"],
     });
     expect(events.at(-1)).toBe("permission");
+  });
+
+  test("delete-all clears every instance credential, state, history, intent, and permission union while preserving unrelated storage", async () => {
+    await browser.storage.local.set({ unrelated: "keep" });
+    await seed({
+      ...newApiInstance(FIRST),
+      history: [{ observedAt: NOW, metrics: [{ type: "quota", metricId: "primary", usedRatio: 0.1 }] }],
+    }, "first-secret");
+    await seed({
+      ...newApiInstance(SECOND),
+      history: [{ observedAt: NOW, metrics: [{ type: "counter", metricId: "spend", semantic: "spent", value: 2, unit: "USD" }] }],
+    }, "second-secret");
+    await seed({
+      id: "kimi:default",
+      providerKind: "kimi",
+      config: { kind: "fixed" },
+      access: "granted",
+      createdAt: NOW,
+      history: [{ observedAt: NOW, metrics: [{ type: "balance", metricId: "credits", value: 3, unit: "credits" }] }],
+    });
+    let permissionPresent = true;
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi.spyOn(browser.permissions, "remove").mockImplementation(
+      async () => {
+        expect((await loadInstanceAppState()).instances).toEqual([]);
+        await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
+        await expect(readCredentialWithRevision(SECOND)).resolves.toBeUndefined();
+        permissionPresent = false;
+        return true as never;
+      },
+    );
+    const service = createProviderService({ clock: () => NOW });
+
+    await expect(service.deleteAllLocalData()).resolves.toEqual({
+      result: "deleted",
+    });
+
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://relay.example/*", "https://www.kimi.com/*"],
+      permissions: ["cookies", "scripting"],
+    });
+    await expect(browser.storage.local.get("unrelated")).resolves.toEqual({
+      unrelated: "keep",
+    });
+    expect(JSON.stringify(await browser.storage.local.get(null))).not.toMatch(
+      /first-secret|second-secret/,
+    );
   });
 
   test("external removal marks all owning siblings required without deleting their data", async () => {

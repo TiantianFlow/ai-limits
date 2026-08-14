@@ -11,15 +11,16 @@ import React from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type {
-  AppState,
+  ProviderKind,
   ProviderRefreshOutcome,
   RefreshReport,
 } from "../../domain/model";
 import type { AppViewState } from "../../domain/public-protocol";
-import { createFixtureState } from "../../providers/fixtures";
-import { createInitialState } from "../../providers/initial-state";
+import {
+  createEmptyFixtureState,
+  createFixtureState,
+} from "../../providers/fixtures";
 import { providerRegistry } from "../../providers/registry";
-import { saveState } from "../../storage/repository";
 import { App } from "./App";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
@@ -90,14 +91,14 @@ function toPublicControlResponse(
 }
 
 function report(
-  providers: Partial<Record<AppState["providers"][number]["providerId"], ProviderRefreshOutcome>>,
+  instances: Partial<Record<ProviderKind, ProviderRefreshOutcome>>,
   trigger: RefreshReport["trigger"] = "manual_all",
 ): RefreshReport {
   return {
     trigger,
     startedAt: NOW,
     finishedAt: NOW + 1_000,
-    results: Object.entries(providers).map(([providerKind, outcome]) => ({
+    results: Object.entries(instances).map(([providerKind, outcome]) => ({
       instanceId: `${providerKind}:default`,
       outcome: outcome!,
     })),
@@ -105,11 +106,11 @@ function report(
 }
 
 function successfulOutcomes(
-  state: AppState,
-): Partial<Record<AppState["providers"][number]["providerId"], ProviderRefreshOutcome>> {
+  state: AppViewState,
+): Partial<Record<ProviderKind, ProviderRefreshOutcome>> {
   return Object.fromEntries(
-    state.providers.map((provider) => [
-      provider.providerId,
+    state.instances.map((provider) => [
+      provider.providerKind,
       {
         kind: "success",
         snapshot: provider.snapshot!,
@@ -118,32 +119,8 @@ function successfulOutcomes(
   );
 }
 
-function toPublicState(state: AppState): AppViewState {
-  return {
-    preferences: state.preferences,
-    instances: state.providers.filter(
-      (provider) =>
-        provider.access === "granted" ||
-        provider.snapshot !== undefined ||
-        provider.history.length > 0 ||
-        provider.lastAttempt !== undefined,
-    ).map((provider) => ({
-      id: `${provider.providerId}:default`,
-      providerKind: provider.providerId,
-      access: provider.access,
-      createdAt: NOW,
-      history: provider.history,
-      ...(provider.snapshot
-        ? {
-            snapshot: (() => {
-              const { accountLabel: _accountLabel, ...rest } = provider.snapshot;
-              return rest;
-            })(),
-          }
-        : {}),
-      ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
-    })),
-  };
+function toPublicState(state: AppViewState): AppViewState {
+  return structuredClone(state);
 }
 
 function twoBlankSameOriginInstances(): AppViewState {
@@ -186,15 +163,15 @@ function twoBlankSameOriginInstances(): AppViewState {
 
 function toPublicResponse(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
-  if ("version" in value && value.version === 4) {
-    return toPublicState(value as AppState);
+  if ("preferences" in value && "instances" in value) {
+    return toPublicState(value as AppViewState);
   }
   if ("state" in value && value.state && typeof value.state === "object") {
     return {
       ...value,
       state:
-        "version" in value.state && value.state.version === 4
-          ? toPublicState(value.state as AppState)
+        "preferences" in value.state && "instances" in value.state
+          ? toPublicState(value.state as AppViewState)
           : value.state,
     };
   }
@@ -203,10 +180,15 @@ function toPublicResponse(value: unknown): unknown {
 
 describe("side-panel App", () => {
   test("keeps New API add mode instance-free after an existing instance", async () => {
-    const initial = createInitialState();
-    initial.providers[5] = {
-      providerId: "newapi",
+    const initial = createEmptyFixtureState();
+    initial.instances[0] = {
+      id: "newapi:default",
+      providerKind: "newapi",
+      userLabel: "Personal relay",
+      baseUrl: "https://relay.example",
+      origin: "https://relay.example",
       access: "granted",
+      createdAt: NOW,
       history: [],
       snapshot: {
         providerKind: "newapi",
@@ -267,7 +249,7 @@ describe("side-panel App", () => {
   });
 
   test("requests only the normalized New API instance and sends one candidate command", async () => {
-    const initial = createInitialState();
+    const initial = createEmptyFixtureState();
     const commands: Record<string, unknown>[] = [];
     const requestPermission = vi
       .spyOn(browser.permissions, "request")
@@ -533,7 +515,7 @@ describe("side-panel App", () => {
   });
 
   test("opens the ElevenLabs setup page without requesting API access", async () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
     const sendMessage = vi
       .spyOn(browser.runtime, "sendMessage")
       .mockResolvedValue(toPublicState(state) as never);
@@ -559,7 +541,7 @@ describe("side-panel App", () => {
   });
 
   test("requests exact access from Validate and sends exactly one candidate command", async () => {
-    const initial = createInitialState();
+    const initial = createEmptyFixtureState();
     const secret = "not-a-real-elevenlabs-key";
     const commands: unknown[] = [];
     const requestPermission = vi
@@ -632,7 +614,7 @@ describe("side-panel App", () => {
   });
 
   test("does not send the API key command when optional access is declined", async () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
     const commands: unknown[] = [];
     vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
     vi.spyOn(browser.permissions, "request").mockResolvedValue(false as never);
@@ -683,7 +665,7 @@ describe("side-panel App", () => {
   ] as const)(
     "keeps the guide open after %s",
     async (result, expected) => {
-      const state = createInitialState();
+      const state = createEmptyFixtureState();
       vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
       vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
       installMessageHandler((message, respond) => {
@@ -714,7 +696,7 @@ describe("side-panel App", () => {
   );
 
   test("treats the fixed command-failure envelope as temporary", async () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
     vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
     vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
     installMessageHandler((message, respond) => {
@@ -742,7 +724,7 @@ describe("side-panel App", () => {
   });
 
   test("commits the authoritative state and returns to Overview only on connected", async () => {
-    const initial = createInitialState();
+    const initial = createEmptyFixtureState();
     const connected = createFixtureState(NOW);
     vi.spyOn(browser.tabs, "create").mockResolvedValue({ id: 7 } as never);
     vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
@@ -780,8 +762,8 @@ describe("side-panel App", () => {
 
   test("keeps existing ElevenLabs usage visible after a failed replacement", async () => {
     const state = createFixtureState(NOW);
-    state.providers.find(
-      (provider) => provider.providerId === "elevenlabs",
+    state.instances.find(
+      (provider) => provider.providerKind === "elevenlabs",
     )!.lastAttempt = {
       trigger: "scheduled",
       startedAt: NOW - 1_000,
@@ -879,7 +861,7 @@ describe("side-panel App", () => {
       .mockRejectedValueOnce(new Error("newer storage reload failed"));
 
     render(<App />);
-    await act(async () => saveState(state, NOW));
+    await act(async () => browser.storage.local.set({ testReload: NOW }));
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
 
     await act(async () => finishInitial?.(toPublicState(state)));
@@ -904,7 +886,7 @@ describe("side-panel App", () => {
       .mockImplementation(async () => toPublicState(fresh) as never);
 
     render(<App />);
-    await act(async () => saveState(fresh, NOW));
+    await act(async () => browser.storage.local.set({ testReload: NOW + 1 }));
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole("radio", { name: "Left" })).toBeChecked();
 
@@ -997,7 +979,7 @@ describe("side-panel App", () => {
   });
 
   test("shows provider-scoped permission and fetch operations", async () => {
-    const initialState = createInitialState();
+    const initialState = createEmptyFixtureState();
     const connectedState = createFixtureState(NOW);
     let approvePermission: ((granted: boolean) => void) | undefined;
     let finishCollection: ((value: unknown) => void) | undefined;
@@ -1039,7 +1021,7 @@ describe("side-panel App", () => {
   });
 
   test("announces a declined permission decision", async () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
     vi.spyOn(browser.permissions, "request").mockResolvedValue(false as never);
     installMessageHandler((_message, respond) => respond(state));
 
@@ -1054,7 +1036,7 @@ describe("side-panel App", () => {
   });
 
   test("uses connect-specific recovery copy when permission request fails", async () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
     const commands: unknown[] = [];
     vi.spyOn(browser.permissions, "request").mockRejectedValue(
       new Error("permissions API unavailable") as never,
@@ -1124,7 +1106,7 @@ describe("side-panel App", () => {
 
   test("does not expose scheduled attempt state through an aria-live region", async () => {
     const state = createFixtureState(NOW);
-    state.providers[2]!.lastAttempt = {
+    state.instances[2]!.lastAttempt = {
       trigger: "scheduled",
       startedAt: NOW - 1_000,
       finishedAt: NOW,
@@ -1140,14 +1122,14 @@ describe("side-panel App", () => {
 
   test("re-announces identical provider refresh outcomes", async () => {
     const fixture = createFixtureState(0);
-    const kimi = fixture.providers[2]!;
+    const kimi = fixture.instances[2]!;
     kimi.lastAttempt = {
       trigger: "scheduled",
       startedAt: 1,
       finishedAt: 2,
       outcome: { kind: "deferred", reason: "session_required" },
     };
-    const state: AppState = { ...fixture, providers: [kimi] };
+    const state: AppViewState = { ...fixture, instances: [kimi] };
     installMessageHandler((message, respond) => {
       respond(
         message.type === "REFRESH_INSTANCE"
@@ -1202,14 +1184,14 @@ describe("side-panel App", () => {
 
   test("uses confirmation-failure copy when provider refresh transport fails", async () => {
     const fixture = createFixtureState(0);
-    const kimi = fixture.providers[2]!;
+    const kimi = fixture.instances[2]!;
     kimi.lastAttempt = {
       trigger: "scheduled",
       startedAt: 1,
       finishedAt: 2,
       outcome: { kind: "deferred", reason: "session_required" },
     };
-    const state: AppState = { ...fixture, providers: [kimi] };
+    const state: AppViewState = { ...fixture, instances: [kimi] };
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
       async (message: unknown) => {
         if ((message as { type?: string }).type === "REFRESH_INSTANCE") {
@@ -1348,7 +1330,7 @@ describe("side-panel App", () => {
   });
 
   test("uses confirmation-failure copy when connect transport fails", async () => {
-    const state = createInitialState();
+    const state = createEmptyFixtureState();
     const commands: Record<string, unknown>[] = [];
     vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
@@ -1463,7 +1445,7 @@ describe("side-panel App", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Left" }));
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(3));
 
-    await act(async () => saveState(state, NOW));
+    await act(async () => browser.storage.local.set({ testReload: NOW + 2 }));
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(4));
     await act(async () => finishRollback?.(toPublicState(state)));
 
@@ -1521,7 +1503,7 @@ describe("side-panel App", () => {
     const autoRefresh = screen.getByRole("switch", { name: "Automatic refresh" });
     fireEvent.click(autoRefresh);
 
-    await act(async () => saveState(disabledState, NOW));
+    await act(async () => browser.storage.local.set({ testReload: NOW + 3 }));
     await waitFor(() =>
       expect(
         commands.filter(({ type }) => type === "GET_STATE").length,
@@ -1538,11 +1520,7 @@ describe("side-panel App", () => {
   test("announces a completed provider disconnect", async () => {
     const state = createFixtureState(NOW);
     const disconnected = structuredClone(state);
-    disconnected.providers[0] = {
-      providerId: "chatgpt",
-      access: "required",
-      history: [],
-    };
+    disconnected.instances = disconnected.instances.slice(1);
     installMessageHandler((message, respond) => {
       respond(
         message.type === "DISCONNECT_INSTANCE"
@@ -1567,11 +1545,7 @@ describe("side-panel App", () => {
   test("announces local disconnect success when browser permission cleanup fails", async () => {
     const state = createFixtureState(NOW);
     const disconnected = structuredClone(state);
-    disconnected.providers[0] = {
-      providerId: "chatgpt",
-      access: "required",
-      history: [],
-    };
+    disconnected.instances = disconnected.instances.slice(1);
     installMessageHandler((message, respond) => {
       respond(
         message.type === "DISCONNECT_INSTANCE"
@@ -1607,7 +1581,7 @@ describe("side-panel App", () => {
       commands.push(message);
       respond(
         message.type === "DELETE_LOCAL_DATA"
-          ? { state: createInitialState(), result: "deleted" }
+          ? { state: createEmptyFixtureState(), result: "deleted" }
           : message.type === "DISCONNECT_INSTANCE"
             ? {
                 state,
@@ -1644,7 +1618,7 @@ describe("side-panel App", () => {
       respond(
         message.type === "DELETE_LOCAL_DATA"
           ? {
-              state: createInitialState(),
+              state: createEmptyFixtureState(),
               result: "deleted_with_permission_errors",
             }
           : state,

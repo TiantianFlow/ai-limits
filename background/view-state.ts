@@ -1,6 +1,6 @@
 import type {
   InstanceAppState,
-} from "../domain/instances";
+} from "../domain/model";
 import type {
   AppViewState,
   ProviderInstanceView,

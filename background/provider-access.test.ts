@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type {
   ProviderInstanceId,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import {
   initializeCredentialVault,
   saveApiKeyIfCurrent,
-} from "../storage/credential-vault";
+} from "../storage/credentials";
 import { isProviderConnected, isProviderRefreshEligible } from "./provider-access";
 
 const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";

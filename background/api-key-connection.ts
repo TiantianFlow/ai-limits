@@ -1,14 +1,14 @@
 import type {
   ProviderInstanceId,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import type { ProviderRefreshOutcome } from "../domain/model";
 import type { ApiKeyConnectionStatus } from "../domain/public-protocol";
 import type {
   ProviderPackage,
   ProviderRuntimeServices,
 } from "../providers/types";
-import { markCredentialRejectedIfRevision } from "../storage/credential-vault";
+import { markCredentialRejectedIfRevision } from "../storage/credentials";
 import { collectProviderOutcome } from "./coordinator";
 
 export type { ApiKeyConnectionStatus } from "../domain/public-protocol";

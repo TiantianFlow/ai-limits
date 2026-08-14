@@ -1,14 +1,12 @@
 import type {
   DeferredReason,
   ProviderHealth,
-  ProviderId,
-  ProviderRefreshOutcome,
   UsageSnapshot,
 } from "../domain/model";
 import type {
   ProviderInstanceConfig,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import type { ProviderKind } from "./catalog";
 
 export interface ProviderCredential {
@@ -33,11 +31,7 @@ export type CollectionResult =
       deferred: { reason: DeferredReason; retryAt?: number };
     };
 
-export type RefreshCollector<T extends ProviderId = ProviderId> = (
-  providerId: T,
-) => Promise<ProviderRefreshOutcome>;
-
-export interface ProviderAdapter<T extends ProviderId = ProviderId> {
+export interface ProviderCollector<T extends ProviderKind = ProviderKind> {
   readonly id: T;
   collect(context: CollectionContext): Promise<CollectionResult>;
 }

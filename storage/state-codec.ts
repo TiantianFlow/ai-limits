@@ -3,20 +3,24 @@ import {
   sanitizedFailureMessage,
   type MetricCycle,
   type MetricHistorySample,
+  type MetricSegment,
   type ProviderAttempt,
+  type UsageGroup,
   type UsageHistoryObservation,
+  type UsageMetric,
+  type UsageSnapshot,
 } from "../domain/model";
 import {
   isConnectionRevision,
   isProviderInstanceId,
   type InstanceAppState,
   type ProviderInstanceRecord,
-} from "../domain/instances";
-import { isProviderId, type ProviderKind } from "../providers/catalog";
-import { normalizeUsageSnapshot } from "../providers/initial-state";
+} from "../domain/model";
+import { isProviderKind, type ProviderKind } from "../providers/catalog";
 import { providerRegistry } from "../providers/registry";
 
 export const INSTANCE_STATE_VERSION = 5 as const;
+const SEGMENT_SUM_TOLERANCE = 1e-6;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -32,6 +36,10 @@ function optionalNonNegative(value: unknown): value is number | undefined {
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function optionalString(value: unknown): value is string | undefined {
+  return value === undefined || nonEmptyString(value);
 }
 
 function normalizeCycle(value: unknown): MetricCycle | undefined {
@@ -56,6 +64,209 @@ function normalizeCycle(value: unknown): MetricCycle | undefined {
     ...(value.startedAt === undefined ? {} : { startedAt: value.startedAt }),
     ...(value.resetsAt === undefined ? {} : { resetsAt: value.resetsAt }),
     ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
+  };
+}
+
+function normalizeSegments(
+  value: unknown,
+  totalUsedRatio: number,
+): MetricSegment[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const segments = value.map((segment): MetricSegment | undefined => {
+    if (
+      !isRecord(segment) ||
+      !nonEmptyString(segment.id) ||
+      !nonEmptyString(segment.label) ||
+      !isFiniteNonNegative(segment.usedRatio) ||
+      segment.usedRatio > 1
+    ) {
+      return undefined;
+    }
+    return { id: segment.id, label: segment.label, usedRatio: segment.usedRatio };
+  });
+  if (
+    segments.some((segment) => segment === undefined) ||
+    new Set(segments.map((segment) => segment?.id)).size !== segments.length
+  ) {
+    return undefined;
+  }
+  const normalized = segments as MetricSegment[];
+  const sum = normalized.reduce((total, segment) => total + segment.usedRatio, 0);
+  return Math.abs(sum - totalUsedRatio) <= SEGMENT_SUM_TOLERANCE
+    ? normalized
+    : undefined;
+}
+
+function normalizeMetric(value: unknown): UsageMetric | undefined {
+  if (
+    !isRecord(value) ||
+    !nonEmptyString(value.id) ||
+    !nonEmptyString(value.label) ||
+    !["general", "model", "feature", "product"].includes(value.scope as string)
+  ) {
+    return undefined;
+  }
+  const cycle = normalizeCycle(value.cycle);
+  if (value.cycle !== undefined && cycle === undefined) return undefined;
+  const base = {
+    id: value.id,
+    label: value.label,
+    scope: value.scope as UsageMetric["scope"],
+    ...(cycle === undefined ? {} : { cycle }),
+  };
+  if (value.type === "quota") {
+    if (
+      !isFiniteNonNegative(value.usedRatio) ||
+      value.usedRatio > 1 ||
+      !optionalNonNegative(value.used) ||
+      (value.limit !== undefined &&
+        (!isFiniteNonNegative(value.limit) || value.limit === 0)) ||
+      !optionalString(value.unit) ||
+      (typeof value.used === "number" &&
+        typeof value.limit === "number" &&
+        value.used > value.limit)
+    ) {
+      return undefined;
+    }
+    const segments = normalizeSegments(value.segments, value.usedRatio);
+    if (value.segments !== undefined && segments === undefined) return undefined;
+    return {
+      ...base,
+      type: "quota",
+      usedRatio: value.usedRatio,
+      ...(value.used === undefined ? {} : { used: value.used }),
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+      ...(value.unit === undefined ? {} : { unit: value.unit }),
+      ...(segments === undefined ? {} : { segments }),
+    };
+  }
+  if (value.type === "counter") {
+    if (
+      (value.semantic !== "consumed" && value.semantic !== "spent") ||
+      !isFiniteNonNegative(value.value) ||
+      !nonEmptyString(value.unit) ||
+      (value.limit !== undefined &&
+        (!isFiniteNonNegative(value.limit) || value.limit === 0))
+    ) {
+      return undefined;
+    }
+    return {
+      ...base,
+      type: "counter",
+      semantic: value.semantic,
+      value: value.value,
+      unit: value.unit,
+      ...(value.limit === undefined ? {} : { limit: value.limit }),
+    };
+  }
+  if (
+    value.type === "balance" &&
+    isFiniteNonNegative(value.value) &&
+    nonEmptyString(value.unit) &&
+    (value.initialLimit === undefined ||
+      (isFiniteNonNegative(value.initialLimit) && value.initialLimit > 0))
+  ) {
+    return {
+      ...base,
+      type: "balance",
+      value: value.value,
+      unit: value.unit,
+      ...(value.initialLimit === undefined
+        ? {}
+        : { initialLimit: value.initialLimit }),
+    };
+  }
+  return undefined;
+}
+
+function normalizeUsageGroups(
+  value: unknown,
+  metrics: readonly UsageMetric[],
+): UsageGroup[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const groups = value.map((group): UsageGroup | undefined => {
+    if (
+      !isRecord(group) ||
+      !nonEmptyString(group.id) ||
+      !nonEmptyString(group.label) ||
+      !optionalString(group.description) ||
+      !Array.isArray(group.metricIds) ||
+      group.metricIds.length === 0 ||
+      !group.metricIds.every(nonEmptyString)
+    ) {
+      return undefined;
+    }
+    return {
+      id: group.id,
+      label: group.label,
+      ...(group.description === undefined
+        ? {}
+        : { description: group.description }),
+      metricIds: group.metricIds,
+    };
+  });
+  if (
+    groups.some((group) => group === undefined) ||
+    new Set(groups.map((group) => group?.id)).size !== groups.length
+  ) {
+    return undefined;
+  }
+  const metricIds = new Set(metrics.map((metric) => metric.id));
+  const memberships = (groups as UsageGroup[]).flatMap((group) => group.metricIds);
+  if (
+    memberships.some((membership) => !metricIds.has(membership)) ||
+    new Set(memberships).size !== memberships.length ||
+    memberships.length !== metricIds.size
+  ) {
+    return undefined;
+  }
+  return groups as UsageGroup[];
+}
+
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+export function normalizeUsageSnapshot(
+  value: unknown,
+  providerKind: ProviderKind,
+): UsageSnapshot | undefined {
+  if (
+    !isRecord(value) ||
+    value.providerKind !== providerKind ||
+    !["web-session", "oauth", "api-key", "fixture"].includes(value.source as string) ||
+    !isFiniteNonNegative(value.fetchedAt) ||
+    !optionalString(value.accountLabel) ||
+    !optionalString(value.planLabel) ||
+    !Array.isArray(value.metrics) ||
+    value.metrics.length === 0
+  ) {
+    return undefined;
+  }
+  const metrics = value.metrics.map(normalizeMetric);
+  if (
+    metrics.some((metric) => metric === undefined) ||
+    new Set(metrics.map((metric) => metric?.id)).size !== metrics.length
+  ) {
+    return undefined;
+  }
+  const usageGroups = normalizeUsageGroups(
+    value.usageGroups,
+    metrics as UsageMetric[],
+  );
+  if (value.usageGroups !== undefined && usageGroups === undefined) return undefined;
+  return {
+    providerKind,
+    ...(value.accountLabel !== undefined && !looksLikeEmail(value.accountLabel)
+      ? { accountLabel: value.accountLabel }
+      : {}),
+    ...(value.planLabel === undefined ? {} : { planLabel: value.planLabel }),
+    source: value.source as UsageSnapshot["source"],
+    fetchedAt: value.fetchedAt,
+    metrics: metrics as UsageMetric[],
+    ...(usageGroups === undefined ? {} : { usageGroups }),
   };
 }
 
@@ -218,7 +429,7 @@ function normalizeInstance(
   if (
     !isRecord(value) ||
     !isProviderInstanceId(value.id) ||
-    !isProviderId(value.providerKind) ||
+    !isProviderKind(value.providerKind) ||
     !value.id.startsWith(`${value.providerKind}:`) ||
     (value.access !== "required" && value.access !== "granted") ||
     !isFiniteNonNegative(value.createdAt)

@@ -177,9 +177,6 @@ export function canCreateProviderInstance(
   );
 }
 
-/** @deprecated Temporary bridge removed in Task 7. */
-export type ProviderId = ProviderKind;
-
 export type BrowserSessionProviderKind = {
   [Kind in ProviderKind]: (typeof providerCatalog)[Kind]["connection"]["kind"] extends "browser-session"
     ? Kind
@@ -191,26 +188,23 @@ export type ApiKeyProviderKind = Exclude<
   BrowserSessionProviderKind
 >;
 
-/** @deprecated Temporary bridge removed in Task 7. */
-export type ApiKeyProviderId = ApiKeyProviderKind;
-
-export const providerIds = Object.keys(providerCatalog) as ProviderId[];
+export const providerKinds = Object.keys(providerCatalog) as ProviderKind[];
 
 export const providerNames = Object.fromEntries(
-  providerIds.map((providerId) => [
-    providerId,
-    providerCatalog[providerId].displayName,
+  providerKinds.map((providerKind) => [
+    providerKind,
+    providerCatalog[providerKind].displayName,
   ]),
-) as Record<ProviderId, string>;
+) as Record<ProviderKind, string>;
 
-export function providerPresentation(providerId: ProviderId): ProviderPresentation {
-  return providerCatalog[providerId].presentation;
+export function providerPresentation(providerKind: ProviderKind): ProviderPresentation {
+  return providerCatalog[providerKind].presentation;
 }
 
-export function isProviderId(value: unknown): value is ProviderId {
+export function isProviderKind(value: unknown): value is ProviderKind {
   return typeof value === "string" && Object.hasOwn(providerCatalog, value);
 }
 
-export function isApiKeyProviderId(value: unknown): value is ApiKeyProviderId {
-  return isProviderId(value) && providerCatalog[value].connection.kind === "api-key";
+export function isApiKeyProviderKind(value: unknown): value is ApiKeyProviderKind {
+  return isProviderKind(value) && providerCatalog[value].connection.kind === "api-key";
 }

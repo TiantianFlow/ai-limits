@@ -2,7 +2,7 @@ import {
   isProviderInstanceId,
   type ProviderInstanceConfig,
   type ProviderInstanceId,
-} from "../domain/instances";
+} from "../domain/model";
 import type { DisplayMode } from "../domain/model";
 import type {
   ConnectApiKeyProviderCommand,
@@ -11,8 +11,8 @@ import type {
   RuntimeCommandFailure,
 } from "../domain/public-protocol";
 import {
-  isApiKeyProviderId,
-  isProviderId,
+  isApiKeyProviderKind,
+  isProviderKind,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
   type ProviderKind,
@@ -90,8 +90,8 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   if (value.type === "CONNECT_BROWSER_PROVIDER") {
     return (
       hasExactKeys(value, ["type", "providerKind", "permissionIntentId"]) &&
-      isProviderId(value.providerKind) &&
-      !isApiKeyProviderId(value.providerKind) &&
+      isProviderKind(value.providerKind) &&
+      !isApiKeyProviderKind(value.providerKind) &&
       isPermissionIntentId(value.permissionIntentId)
     );
   }
@@ -103,7 +103,7 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
         ["type", "providerKind", "config"],
         ["instanceId", "userLabel"],
       ) &&
-      isProviderId(value.providerKind) &&
+      isProviderKind(value.providerKind) &&
       (!Object.hasOwn(value, "instanceId") ||
         (isProviderInstanceId(value.instanceId) &&
           value.instanceId.startsWith(`${value.providerKind}:`))) &&
@@ -142,7 +142,7 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
         ],
         ["instanceId", "userLabel"],
       ) ||
-      !isApiKeyProviderId(value.providerKind) ||
+      !isApiKeyProviderKind(value.providerKind) ||
       typeof value.apiKey !== "string" ||
       !isPermissionIntentId(value.permissionIntentId) ||
       value.apiKey.trim().length === 0 ||

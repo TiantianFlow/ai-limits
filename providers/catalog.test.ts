@@ -5,10 +5,10 @@ import * as catalog from "./catalog";
 import {
   assertProviderCatalogPermissionSafety,
   canCreateProviderInstance,
-  isApiKeyProviderId,
-  isProviderId,
+  isApiKeyProviderKind,
+  isProviderKind,
   providerCatalog,
-  providerIds,
+  providerKinds,
   providerNames,
 } from "./catalog";
 import type {
@@ -16,7 +16,6 @@ import type {
   BrowserSessionProviderKind,
   ProviderKind,
 } from "./catalog";
-import { createInitialState } from "./initial-state";
 import { providerRegistry } from "./registry";
 
 describe("provider catalog", () => {
@@ -30,12 +29,12 @@ describe("provider catalog", () => {
     const apiKeyKinds: ApiKeyProviderKind[] = ["elevenlabs", "newapi"];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
-    expect(allKinds).toEqual(providerIds);
+    expect(allKinds).toEqual(providerKinds);
   });
 
   test("allows multiple New API instances and only one of every other kind", () => {
     expect(
-      providerIds.map((providerKind) => [
+      providerKinds.map((providerKind) => [
         providerKind,
         providerCatalog[providerKind].cardinality,
       ]),
@@ -69,7 +68,7 @@ describe("provider catalog", () => {
     };
     const providerPresentation = (
       catalog as typeof catalog & {
-        providerPresentation?: (providerId: (typeof providerIds)[number]) => Presentation;
+        providerPresentation?: (providerId: (typeof providerKinds)[number]) => Presentation;
       }
     ).providerPresentation;
 
@@ -77,7 +76,7 @@ describe("provider catalog", () => {
     if (!providerPresentation) return;
 
     expect(
-      providerIds.map((providerId) => ({
+      providerKinds.map((providerId) => ({
         providerId,
         ...providerPresentation(providerId),
       })),
@@ -138,7 +137,7 @@ describe("provider catalog", () => {
   });
 
   test("is the ordered source of provider identity, connection, refresh, names, and permissions", () => {
-    expect(providerIds).toEqual([
+    expect(providerKinds).toEqual([
       "chatgpt",
       "claude",
       "kimi",
@@ -147,7 +146,7 @@ describe("provider catalog", () => {
       "newapi",
     ]);
     expect(
-      providerIds.map((providerId) => ({
+      providerKinds.map((providerId) => ({
         providerId,
         name: providerNames[providerId],
         origins: providerCatalog[providerId].optionalOrigins,
@@ -215,16 +214,13 @@ describe("provider catalog", () => {
     ]);
   });
 
-  test("keeps registry, initial state, and runtime commands catalog-complete", () => {
-    expect(Object.keys(providerRegistry)).toEqual(providerIds);
+  test("keeps registry and runtime commands catalog-complete", () => {
+    expect(Object.keys(providerRegistry)).toEqual(providerKinds);
     expect(
-      providerIds.map((providerId) => providerRegistry[providerId].kind),
-    ).toEqual(providerIds);
+      providerKinds.map((providerId) => providerRegistry[providerId].kind),
+    ).toEqual(providerKinds);
     expect(
-      createInitialState().providers.map(({ providerId }) => providerId),
-    ).toEqual(providerIds);
-    expect(
-      providerIds.every((providerKind) =>
+      providerKinds.every((providerKind) =>
         providerCatalog[providerKind].connection.kind === "browser-session"
           ? isRuntimeCommand({
               type: "CONNECT_BROWSER_PROVIDER",
@@ -249,18 +245,18 @@ describe("provider catalog", () => {
   });
 
   test("rejects unknown and non-string provider identifiers", () => {
-    expect(isProviderId("chatgpt")).toBe(true);
-    expect(isProviderId("antigravity")).toBe(false);
-    expect(isProviderId(undefined)).toBe(false);
-    expect(isProviderId({ providerId: "chatgpt" })).toBe(false);
+    expect(isProviderKind("chatgpt")).toBe(true);
+    expect(isProviderKind("antigravity")).toBe(false);
+    expect(isProviderKind(undefined)).toBe(false);
+    expect(isProviderKind({ providerId: "chatgpt" })).toBe(false);
   });
 
   test("derives API-key provider identities from the catalog", () => {
-    expect(isApiKeyProviderId("elevenlabs")).toBe(true);
-    expect(isApiKeyProviderId("newapi")).toBe(true);
-    expect(isApiKeyProviderId("chatgpt")).toBe(false);
-    expect(isApiKeyProviderId("unknown")).toBe(false);
-    expect(isApiKeyProviderId(undefined)).toBe(false);
+    expect(isApiKeyProviderKind("elevenlabs")).toBe(true);
+    expect(isApiKeyProviderKind("newapi")).toBe(true);
+    expect(isApiKeyProviderKind("chatgpt")).toBe(false);
+    expect(isApiKeyProviderKind("unknown")).toBe(false);
+    expect(isApiKeyProviderKind(undefined)).toBe(false);
   });
 
   test("keeps optional origins exact so shared access can be revoked safely", () => {

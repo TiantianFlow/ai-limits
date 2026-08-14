@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 
-import type { ProviderInstanceRecord } from "../domain/instances";
+import type { ProviderInstanceRecord } from "../domain/model";
 import {
   createApiKeyPackage,
   createBrowserSessionPackage,
 } from "./package-factories";
-import type { CollectionContext, ProviderAdapter } from "./types";
+import type { CollectionContext, ProviderCollector } from "./types";
 
 const services = {
   fetch: globalThis.fetch,
@@ -35,7 +35,7 @@ describe("provider package factories", () => {
       ok: false as const,
       health: { kind: "signed_out" as const },
     }));
-    const adapter: ProviderAdapter<"chatgpt"> = { id: "chatgpt", collect };
+    const adapter: ProviderCollector<"chatgpt"> = { id: "chatgpt", collect };
     const providerPackage = createBrowserSessionPackage({
       kind: "chatgpt",
       adapter,

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import type { ProviderInstanceId } from "../domain/instances";
+import type { ProviderInstanceId } from "../domain/model";
 import type { ProviderRefreshOutcome } from "../domain/model";
 import {
   createRefreshOrchestrator,

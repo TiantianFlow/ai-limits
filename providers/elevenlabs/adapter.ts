@@ -3,7 +3,7 @@ import { retryAtFromResponse } from "../retry-after";
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
 } from "../types";
 import {
   elevenLabsSubscriptionSchema,
@@ -259,7 +259,7 @@ async function collectElevenLabs({
   }
 }
 
-export const elevenLabsAdapter: ProviderAdapter<"elevenlabs"> = {
+export const elevenLabsAdapter: ProviderCollector<"elevenlabs"> = {
   id: "elevenlabs",
   collect: collectElevenLabs,
 };

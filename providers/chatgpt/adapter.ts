@@ -2,7 +2,7 @@ import type { BalanceMetric, ProviderHealth, QuotaMetric } from "../../domain/mo
 import type {
   CollectionContext,
   CollectionResult,
-  ProviderAdapter,
+  ProviderCollector,
 } from "../types";
 import { retryAtFromResponse } from "../retry-after";
 import {
@@ -200,7 +200,7 @@ async function collectChatGpt({
   }
 }
 
-export const chatGptAdapter: ProviderAdapter<"chatgpt"> = {
+export const chatGptAdapter: ProviderCollector<"chatgpt"> = {
   id: "chatgpt",
   collect: collectChatGpt,
 };

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import type { InstanceAppState } from "../domain/instances";
+import type { InstanceAppState } from "../domain/model";
 import { projectAppViewState } from "./view-state";
 
 describe("public app view state", () => {

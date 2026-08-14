@@ -3,7 +3,7 @@ import type {
   ProviderInstanceConfig,
   ProviderInstanceId,
   ProviderInstanceRecord,
-} from "../domain/instances";
+} from "../domain/model";
 import type {
   DisplayMode,
   ProviderRefreshOutcome,
@@ -29,14 +29,14 @@ import {
   readCredentialWithRevision,
   restoreCredentialIfRevision,
   saveApiKeyIfCurrent,
-} from "../storage/credential-vault";
+} from "../storage/credentials";
 import {
   connectionRepository,
   deleteAllInstanceData,
   loadInstanceAppState,
   preferencesRepository,
   usageRepository,
-} from "../storage/instance-repository";
+} from "../storage/repository";
 import {
   applyCollectedOutcome,
   refreshProviderInstance,
