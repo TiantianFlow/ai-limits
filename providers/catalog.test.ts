@@ -224,8 +224,24 @@ describe("provider catalog", () => {
       createInitialState().providers.map(({ providerId }) => providerId),
     ).toEqual(providerIds);
     expect(
-      providerIds.every((providerId) =>
-        isRuntimeCommand({ type: "COLLECT_PROVIDER", providerId }),
+      providerIds.every((providerKind) =>
+        providerCatalog[providerKind].connection.kind === "browser-session"
+          ? isRuntimeCommand({
+              type: "CONNECT_BROWSER_PROVIDER",
+              providerKind,
+            })
+          : isRuntimeCommand({
+              type: "CONNECT_API_KEY_PROVIDER",
+              providerKind,
+              config:
+                providerKind === "newapi"
+                  ? {
+                      kind: "dynamic-origin",
+                      baseUrl: "https://relay.example",
+                    }
+                  : { kind: "fixed" },
+              apiKey: "candidate",
+            }),
       ),
     ).toBe(true);
   });

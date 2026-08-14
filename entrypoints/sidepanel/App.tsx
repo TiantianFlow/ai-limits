@@ -1,45 +1,65 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import type {
+  ApiKeyConnectionStatus,
+} from "../../background/api-key-connection";
 import {
   isProviderOperationEvent,
   type ProviderOperation,
   type RuntimeCommand,
 } from "../../background/messages";
 import type {
-  ApiKeyConnectionResult,
-  ApiKeyConnectionStatus,
-} from "../../background/api-key-connection";
-import { requestProviderPermission } from "../../background/permissions";
-import type { DisconnectProviderResult } from "../../background/coordinator";
+  ConnectApiKeyProviderResult,
+  DisconnectInstanceResult,
+} from "../../background/provider-service";
 import type {
-  AppState,
+  AppViewState,
+  ProviderInstanceView,
+} from "../../background/view-state";
+import {
+  isProviderInstanceId,
+  type ProviderInstanceConfig,
+  type ProviderInstanceId,
+} from "../../domain/instances";
+import type {
   DisplayMode,
-  ProviderId,
   RefreshReport,
 } from "../../domain/model";
 import type { ConnectableProviderId } from "../../providers/registry";
 import {
+  isApiKeyProviderId,
+  isProviderId,
   type ApiKeyProviderId,
+  type BrowserSessionProviderKind,
+  type ProviderId,
   providerCatalog,
   providerNames,
 } from "../../providers/catalog";
-import { loadState } from "../../storage/repository";
+import {
+  normalizeProviderConfig,
+  requiredPermissionsForProviderConfig,
+} from "../../providers/package-factories";
 import { Cockpit } from "./Cockpit";
+import { projectLegacyInstanceState } from "./legacy-instance-adapter";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface RefreshResponse {
-  state: AppState;
+  state: AppViewState;
   report: RefreshReport;
 }
 
 interface DeleteResponse {
-  state: AppState;
+  state: AppViewState;
   result: "deleted" | "deleted_with_permission_errors";
 }
 
 interface DisconnectResponse {
-  state: AppState;
-  result: DisconnectProviderResult;
+  state: AppViewState;
+  result: DisconnectInstanceResult;
+}
+
+interface ApiKeyConnectionResponse extends ConnectApiKeyProviderResult {
+  state: AppViewState;
 }
 
 interface Announcement {
@@ -53,57 +73,112 @@ interface AutoRefreshGuard {
 
 type ProviderOperations = Partial<Record<ProviderId, ProviderOperation>>;
 
-function sendCommand(message: RuntimeCommand): void {
-  void browser.runtime.sendMessage(message).catch(() => undefined);
+const publicInstanceKeys = new Set([
+  "id",
+  "providerKind",
+  "userLabel",
+  "origin",
+  "access",
+  "createdAt",
+  "history",
+  "snapshot",
+  "lastAttempt",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
-function asAppState(value: unknown): AppState {
+function asProviderInstanceView(value: unknown): ProviderInstanceView {
   if (
-    !value ||
-    typeof value !== "object" ||
-    !("version" in value) ||
-    value.version !== 4 ||
-    !("preferences" in value) ||
-    !value.preferences ||
-    typeof value.preferences !== "object" ||
-    !("providers" in value) ||
-    !Array.isArray(value.providers)
+    !isRecord(value) ||
+    Object.keys(value).some((key) => !publicInstanceKeys.has(key)) ||
+    !isProviderInstanceId(value.id) ||
+    !isProviderId(value.providerKind) ||
+    (value.access !== "required" && value.access !== "granted") ||
+    typeof value.createdAt !== "number" ||
+    !Array.isArray(value.history) ||
+    (Object.hasOwn(value, "userLabel") &&
+      typeof value.userLabel !== "string") ||
+    (Object.hasOwn(value, "origin") && typeof value.origin !== "string")
+  ) {
+    throw new Error("Missing application state");
+  }
+  return value as unknown as ProviderInstanceView;
+}
+
+function asAppViewState(value: unknown): AppViewState {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length !== 2 ||
+    !Object.hasOwn(value, "preferences") ||
+    !Object.hasOwn(value, "instances") ||
+    !isRecord(value.preferences) ||
+    Object.keys(value.preferences).length !== 2 ||
+    (value.preferences.displayMode !== "used" &&
+      value.preferences.displayMode !== "left") ||
+    typeof value.preferences.autoRefresh !== "boolean" ||
+    !Array.isArray(value.instances)
   ) {
     throw new Error("Missing application state");
   }
 
-  return value as AppState;
+  const state: AppViewState = {
+    preferences: {
+      displayMode: value.preferences.displayMode,
+      autoRefresh: value.preferences.autoRefresh,
+    },
+    instances: value.instances.map(asProviderInstanceView),
+  };
+  projectLegacyInstanceState(state);
+  return state;
 }
 
-function manualSummary(report: RefreshReport): string {
-  const attempted = Object.entries(report.providers).filter(
-    ([, outcome]) =>
-      outcome &&
+function asRefreshReport(value: unknown): RefreshReport {
+  if (
+    !isRecord(value) ||
+    typeof value.startedAt !== "number" ||
+    typeof value.finishedAt !== "number" ||
+    !Array.isArray(value.results) ||
+    !value.results.every(
+      (result) =>
+        isRecord(result) &&
+        isProviderInstanceId(result.instanceId) &&
+        isRecord(result.outcome),
+    )
+  ) {
+    throw new Error("Missing refresh response");
+  }
+  return value as unknown as RefreshReport;
+}
+
+function manualSummary(report: RefreshReport, state: AppViewState): string {
+  const attempted = report.results.filter(
+    ({ outcome }) =>
       !(outcome.kind === "skipped" && outcome.reason === "permission_required"),
   );
   if (attempted.length === 0) {
     return "Connect a provider before refreshing.";
   }
 
-  const successes = attempted.filter(
-    ([, outcome]) => outcome?.kind === "success",
-  );
+  const successes = attempted.filter(({ outcome }) => outcome.kind === "success");
   if (successes.length === attempted.length) {
     return `Updated ${successes.length} provider${successes.length === 1 ? "" : "s"}.`;
   }
-
   if (successes.length === 0) {
     return "No providers updated. Existing data is unchanged.";
   }
 
   const nonSuccesses = attempted.filter(
-    ([, outcome]) => outcome?.kind !== "success",
+    ({ outcome }) => outcome.kind !== "success",
   );
+  const onlyNonSuccess = nonSuccesses[0];
   const kimiIsOnlyNonSuccess =
     nonSuccesses.length === 1 &&
-    nonSuccesses[0]?.[0] === "kimi" &&
-    nonSuccesses[0]?.[1]?.kind === "deferred" &&
-    nonSuccesses[0][1].reason === "session_required";
+    state.instances.find(({ id }) => id === onlyNonSuccess?.instanceId)
+      ?.providerKind === "kimi" &&
+    onlyNonSuccess?.outcome.kind === "deferred" &&
+    onlyNonSuccess.outcome.reason === "session_required";
 
   return `Updated ${successes.length} of ${attempted.length}. ${
     kimiIsOnlyNonSuccess
@@ -113,69 +188,47 @@ function manualSummary(report: RefreshReport): string {
 }
 
 function confirmationFailure(providerId?: ProviderId): string {
-  const subject = providerId
-    ? `${providerNames[providerId]} refresh`
-    : "refresh";
+  const subject = providerId ? `${providerNames[providerId]} refresh` : "refresh";
   return `Couldn’t confirm the ${subject} result. Check the latest usage before retrying.`;
 }
 
 function asRefreshResponse(value: unknown): RefreshResponse {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("state" in value) ||
-    !("report" in value)
-  ) {
+  if (!isRecord(value) || !("state" in value) || !("report" in value)) {
     throw new Error("Missing refresh response");
   }
-
-  const response = value as Record<string, unknown>;
   return {
-    state: asAppState(response.state),
-    report: response.report as RefreshReport,
+    state: asAppViewState(value.state),
+    report: asRefreshReport(value.report),
   };
 }
 
 function asDeleteResponse(value: unknown): DeleteResponse {
   if (
-    !value ||
-    typeof value !== "object" ||
+    !isRecord(value) ||
     !("state" in value) ||
-    !("result" in value) ||
     (value.result !== "deleted" &&
       value.result !== "deleted_with_permission_errors")
   ) {
     throw new Error("Missing delete response");
   }
-
-  return {
-    state: asAppState(value.state),
-    result: value.result,
-  };
+  return { state: asAppViewState(value.state), result: value.result };
 }
 
 function asDisconnectResponse(value: unknown): DisconnectResponse {
   if (
-    !value ||
-    typeof value !== "object" ||
+    !isRecord(value) ||
     !("state" in value) ||
-    !("result" in value) ||
-    !value.result ||
-    typeof value.result !== "object" ||
-    !("ok" in value.result) ||
-    !("localDataDeleted" in value.result) ||
+    !isRecord(value.result) ||
     value.result.localDataDeleted !== true ||
     (value.result.ok !== true &&
       (value.result.ok !== false ||
-        !("error" in value.result) ||
         value.result.error !== "permission_removal_failed"))
   ) {
     throw new Error("Missing disconnect response");
   }
-
   return {
-    state: asAppState(value.state),
-    result: value.result as DisconnectProviderResult,
+    state: asAppViewState(value.state),
+    result: value.result as unknown as DisconnectInstanceResult,
   };
 }
 
@@ -187,28 +240,26 @@ const apiKeyConnectionStatuses = new Set<ApiKeyConnectionStatus>([
   "temporary_error",
 ]);
 
-function asApiKeyConnectionResponse(value: unknown): ApiKeyConnectionResult {
+function asApiKeyConnectionResponse(value: unknown): ApiKeyConnectionResponse {
   if (
-    !value ||
-    typeof value !== "object" ||
+    !isRecord(value) ||
     !("state" in value) ||
     !("report" in value) ||
-    !("result" in value) ||
     typeof value.result !== "string" ||
     !apiKeyConnectionStatuses.has(value.result as ApiKeyConnectionStatus)
   ) {
     throw new Error("Missing API key connection response");
   }
-
   return {
-    state: asAppState(value.state),
-    report: value.report as RefreshReport,
+    state: asAppViewState(value.state),
+    report: asRefreshReport(value.report),
     result: value.result as ApiKeyConnectionStatus,
   };
 }
 
 export function App() {
-  const [state, setState] = useState<AppState>();
+  const [viewState, setViewState] = useState<AppViewState>();
+  const viewStateRef = useRef<AppViewState | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -222,43 +273,39 @@ export function App() {
   const [providerOperations, setProviderOperations] =
     useState<ProviderOperations>({});
 
+  const commitViewState = (next: AppViewState) => {
+    viewStateRef.current = next;
+    setViewState(next);
+  };
+
   useEffect(() => {
     let mounted = true;
 
-    void browser.runtime.sendMessage({ type: "GET_STATE" }).then(
-      (nextState) => {
-        if (mounted) {
-          try {
-            setState(asAppState(nextState));
-          } catch {
-            setLoadFailed(true);
-          }
-        }
-      },
-      () => {
-        if (mounted) {
-          setLoadFailed(true);
-        }
-      },
-    );
+    const reloadView = async () => {
+      const next = asAppViewState(
+        await browser.runtime.sendMessage({ type: "GET_STATE" }),
+      );
+      if (mounted) commitViewState(next);
+      return next;
+    };
+
+    void reloadView().catch(() => {
+      if (mounted) setLoadFailed(true);
+    });
 
     const handleStorageChange = (
       _changes: Record<string, Browser.storage.StorageChange>,
       areaName: string,
     ) => {
-      if (areaName !== "local") {
-        return;
-      }
-
+      if (areaName !== "local") return;
       const guardAtEvent = autoRefreshGuard.current;
-      void loadState().then((nextState) => {
-        if (mounted && nextState) {
+      void browser.runtime
+        .sendMessage({ type: "GET_STATE" })
+        .then(asAppViewState)
+        .then((nextState) => {
+          if (!mounted || guardAtEvent !== autoRefreshGuard.current) return;
           const activeGuard = autoRefreshGuard.current;
-          if (guardAtEvent && guardAtEvent !== activeGuard) {
-            return;
-          }
-
-          setState(
+          commitViewState(
             activeGuard
               ? {
                   ...nextState,
@@ -269,17 +316,18 @@ export function App() {
                 }
               : nextState,
           );
-        }
-      });
+        })
+        .catch(() => undefined);
     };
     const handleRuntimeMessage = (message: unknown) => {
-      if (!isProviderOperationEvent(message)) {
-        return false;
-      }
-
+      if (!isProviderOperationEvent(message)) return false;
+      const providerKind = viewStateRef.current?.instances.find(
+        ({ id }) => id === message.instanceId,
+      )?.providerKind;
+      if (!providerKind) return false;
       setProviderOperations((current) =>
-        current.kimi === "fetching"
-          ? { ...current, kimi: message.operation }
+        current[providerKind] === "fetching"
+          ? { ...current, [providerKind]: message.operation }
           : current,
       );
       return false;
@@ -288,7 +336,6 @@ export function App() {
     browser.storage.onChanged.addListener(handleStorageChange);
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
     const clock = window.setInterval(() => setNow(Date.now()), 60_000);
-
     return () => {
       mounted = false;
       browser.storage.onChanged.removeListener(handleStorageChange);
@@ -303,11 +350,8 @@ export function App() {
   ) => {
     setProviderOperations((current) => {
       const next = { ...current };
-      if (operation) {
-        next[providerId] = operation;
-      } else {
-        delete next[providerId];
-      }
+      if (operation) next[providerId] = operation;
+      else delete next[providerId];
       return next;
     });
   };
@@ -321,32 +365,42 @@ export function App() {
   };
 
   const handleDisplayModeChange = (mode: DisplayMode) => {
-    setState((current) =>
-      current
-        ? {
-            ...current,
-            preferences: { ...current.preferences, displayMode: mode },
-          }
-        : current,
-    );
-    sendCommand({ type: "SET_DISPLAY_MODE", mode });
+    if (viewStateRef.current) {
+      commitViewState({
+        ...viewStateRef.current,
+        preferences: { ...viewStateRef.current.preferences, displayMode: mode },
+      });
+    }
+    void browser.runtime
+      .sendMessage({ type: "SET_DISPLAY_MODE", mode } satisfies RuntimeCommand)
+      .then(asAppViewState)
+      .then(commitViewState)
+      .catch(() => undefined);
+  };
+
+  const requestPermission = async (
+    providerId: ProviderId,
+    config: ProviderInstanceConfig,
+  ) => {
+    const required = requiredPermissionsForProviderConfig(providerId, config);
+    return required ? Boolean(await browser.permissions.request(required)) : true;
   };
 
   const handleConnectProvider = async (providerId: ConnectableProviderId) => {
+    if (isApiKeyProviderId(providerId)) return;
     clearAnnouncement();
     setProviderOperation(providerId, "requesting_permission");
-
+    const config = normalizeProviderConfig(providerId, { kind: "fixed" });
     let granted: boolean;
     try {
-      granted = await requestProviderPermission(providerId);
-    } catch {
-      announce(
-        `Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`,
+      granted = Boolean(
+        config && (await requestPermission(providerId, config)),
       );
+    } catch {
+      announce(`Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`);
       setProviderOperation(providerId);
       return;
     }
-
     if (!granted) {
       announce(`${providerNames[providerId]} was not connected.`);
       setProviderOperation(providerId);
@@ -357,12 +411,12 @@ export function App() {
       setProviderOperation(providerId, "fetching");
       const response = asRefreshResponse(
         await browser.runtime.sendMessage({
-          type: "COLLECT_PROVIDER",
-          providerId,
+          type: "CONNECT_BROWSER_PROVIDER",
+          providerKind: providerId as BrowserSessionProviderKind,
         } satisfies RuntimeCommand),
       );
-      setState(response.state);
-      announce(manualSummary(response.report));
+      commitViewState(response.state);
+      announce(manualSummary(response.report, response.state));
     } catch {
       announce(confirmationFailure(providerId));
     } finally {
@@ -383,22 +437,27 @@ export function App() {
     apiKey: string,
     baseUrl?: string,
   ): Promise<ApiKeyConnectAttemptResult> => {
-    const connectionIntent =
-      state?.providers.find((provider) => provider.providerId === providerId)
-        ?.access === "granted"
-        ? "replacement"
-        : "permission-grant";
+    const config = normalizeProviderConfig(
+      providerId,
+      providerId === "newapi"
+        ? { kind: "dynamic-origin", baseUrl }
+        : { kind: "fixed" },
+    );
+    if (!config) return "invalid_site";
+    const projection = viewStateRef.current
+      ? projectLegacyInstanceState(viewStateRef.current)
+      : undefined;
+    const instanceId = projection?.instanceIds[providerId];
     clearAnnouncement();
     setProviderOperation(providerId, "requesting_permission");
     let granted: boolean;
     try {
-      granted = await requestProviderPermission(providerId, { baseUrl });
+      granted = await requestPermission(providerId, config);
     } catch {
       announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
       setProviderOperation(providerId);
       return "temporary_error";
     }
-
     if (!granted) {
       announce(`${providerNames[providerId]} access was not changed.`);
       setProviderOperation(providerId);
@@ -410,13 +469,13 @@ export function App() {
       const response = asApiKeyConnectionResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_API_KEY_PROVIDER",
-          providerId,
+          providerKind: providerId,
+          ...(instanceId ? { instanceId } : {}),
+          config,
           apiKey,
-          ...(baseUrl ? { baseUrl } : {}),
-          connectionIntent,
         } satisfies RuntimeCommand),
       );
-      setState(response.state);
+      commitViewState(response.state);
       switch (response.result) {
         case "connected":
           announce(`Connected ${providerNames[providerId]}.`);
@@ -448,17 +507,21 @@ export function App() {
   };
 
   const handleRefreshProvider = async (providerId: ConnectableProviderId) => {
+    const instanceId = viewStateRef.current
+      ? projectLegacyInstanceState(viewStateRef.current).instanceIds[providerId]
+      : undefined;
+    if (!instanceId) return;
     clearAnnouncement();
     setProviderOperation(providerId, "fetching");
     try {
       const response = asRefreshResponse(
         await browser.runtime.sendMessage({
-          type: "REFRESH_PROVIDER",
-          providerId,
+          type: "REFRESH_INSTANCE",
+          instanceId,
         } satisfies RuntimeCommand),
       );
-      setState(response.state);
-      announce(manualSummary(response.report));
+      commitViewState(response.state);
+      announce(manualSummary(response.report, response.state));
     } catch {
       announce(confirmationFailure(providerId));
     } finally {
@@ -467,28 +530,23 @@ export function App() {
   };
 
   const handleRefresh = async () => {
-    if (isRefreshing || !state) {
-      return;
-    }
-
+    const current = viewStateRef.current;
+    if (isRefreshing || !current) return;
     setIsRefreshing(true);
     clearAnnouncement();
     setProviderOperations(
       Object.fromEntries(
-        state.providers
-          .filter((provider) => provider.access === "granted")
-          .map((provider) => [provider.providerId, "fetching"] as const),
+        current.instances
+          .filter(({ access }) => access === "granted")
+          .map(({ providerKind }) => [providerKind, "fetching"] as const),
       ),
     );
-
     try {
       const response = asRefreshResponse(
-        await browser.runtime.sendMessage({
-          type: "REFRESH_ALL",
-        } satisfies RuntimeCommand),
+        await browser.runtime.sendMessage({ type: "REFRESH_ALL" } satisfies RuntimeCommand),
       );
-      setState(response.state);
-      announce(manualSummary(response.report));
+      commitViewState(response.state);
+      announce(manualSummary(response.report, response.state));
     } catch {
       announce(confirmationFailure());
     } finally {
@@ -498,32 +556,34 @@ export function App() {
   };
 
   const handleAutoRefreshChange = async (enabled: boolean) => {
-    if (!state || autoRefreshGuard.current) {
-      return;
-    }
-
-    const guard = { priorValue: state.preferences.autoRefresh };
+    const current = viewStateRef.current;
+    if (!current || autoRefreshGuard.current) return;
+    const guard = { priorValue: current.preferences.autoRefresh };
     autoRefreshGuard.current = guard;
     clearAnnouncement();
     setIsAutoRefreshPending(true);
     try {
-      const nextState = await browser.runtime.sendMessage({
-        type: "SET_AUTO_REFRESH",
-        enabled,
-      } satisfies RuntimeCommand);
-      const authoritative = asAppState(nextState);
+      const authoritative = asAppViewState(
+        await browser.runtime.sendMessage({
+          type: "SET_AUTO_REFRESH",
+          enabled,
+        } satisfies RuntimeCommand),
+      );
       if (autoRefreshGuard.current === guard) {
         autoRefreshGuard.current = undefined;
-        setState(authoritative);
+        commitViewState(authoritative);
       }
       announce(`Automatic refresh turned ${enabled ? "on" : "off"}.`);
     } catch {
-      if (autoRefreshGuard.current === guard) {
-        autoRefreshGuard.current = undefined;
-      }
-      const authoritative = await loadState().catch(() => undefined);
-      if (authoritative) {
-        setState(authoritative);
+      if (autoRefreshGuard.current === guard) autoRefreshGuard.current = undefined;
+      try {
+        commitViewState(
+          asAppViewState(
+            await browser.runtime.sendMessage({ type: "GET_STATE" }),
+          ),
+        );
+      } catch {
+        // The prior rendered view remains authoritative enough for recovery.
       }
       announce("Couldn’t update automatic refresh.");
     } finally {
@@ -532,15 +592,19 @@ export function App() {
   };
 
   const handleDisconnectProvider = async (providerId: ConnectableProviderId) => {
+    const instanceId = viewStateRef.current
+      ? projectLegacyInstanceState(viewStateRef.current).instanceIds[providerId]
+      : undefined;
+    if (!instanceId) return;
     clearAnnouncement();
     try {
       const response = asDisconnectResponse(
         await browser.runtime.sendMessage({
-          type: "DISCONNECT_PROVIDER",
-          providerId,
+          type: "DISCONNECT_INSTANCE",
+          instanceId,
         } satisfies RuntimeCommand),
       );
-      setState(response.state);
+      commitViewState(response.state);
       announce(
         response.result.ok
           ? `Disconnected ${providerNames[providerId]} and deleted its stored usage.`
@@ -559,7 +623,7 @@ export function App() {
           type: "DELETE_LOCAL_DATA",
         } satisfies RuntimeCommand),
       );
-      setState(response.state);
+      commitViewState(response.state);
       setProviderOperations({});
       announce(
         response.result === "deleted"
@@ -571,7 +635,7 @@ export function App() {
     }
   };
 
-  if (!state) {
+  if (!viewState) {
     if (loadFailed) {
       return (
         <main className="loading-state">
@@ -590,10 +654,10 @@ export function App() {
         </main>
       );
     }
-
     return <main className="loading-state">Loading usage…</main>;
   }
 
+  const { state } = projectLegacyInstanceState(viewState);
   return (
     <Cockpit
       state={state}
@@ -610,9 +674,7 @@ export function App() {
       onSubmitApiKey={handleSubmitApiKey}
       onRefreshProvider={(providerId) => void handleRefreshProvider(providerId)}
       onAutoRefreshChange={(enabled) => void handleAutoRefreshChange(enabled)}
-      onDisconnectProvider={(providerId) =>
-        void handleDisconnectProvider(providerId)
-      }
+      onDisconnectProvider={(providerId) => void handleDisconnectProvider(providerId)}
       onDeleteLocalData={() => void handleDeleteLocalData()}
     />
   );

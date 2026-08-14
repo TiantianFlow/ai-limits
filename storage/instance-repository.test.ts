@@ -65,6 +65,18 @@ describe("queued instance repositories", () => {
     );
   });
 
+  test("conditionally aborts instance creation inside the state mutation queue", async () => {
+    const candidate = newApiInstance(
+      "newapi:550e8400-e29b-41d4-a716-446655440000",
+      "Superseded relay",
+    );
+
+    await expect(
+      repository.connectionRepository.createIfCurrent(candidate, () => false),
+    ).resolves.toBe(false);
+    await expect(repository.connectionRepository.list()).resolves.toEqual([]);
+  });
+
   test("rejects duplicate IDs and singleton cardinality without leaking config", async () => {
     const chatgpt: ProviderInstanceRecord = {
       id: "chatgpt:default",
@@ -323,6 +335,59 @@ describe("queued instance repositories", () => {
       version: 5,
       preferences: { displayMode: "left", autoRefresh: false },
       instances: [second],
+    });
+  });
+
+  test("replaces one connection atomically while preserving identity and prior history", async () => {
+    const first = newApiInstance(
+      "newapi:550e8400-e29b-41d4-a716-446655440000",
+      "Personal relay",
+    );
+    first.history = [
+      {
+        observedAt: now - 1_000,
+        metrics: [
+          { type: "quota", metricId: "relay-key-quota", usedRatio: 0.2 },
+        ],
+      },
+    ];
+    await repository.connectionRepository.create(first);
+
+    await expect(
+      repository.connectionRepository.replace(first.id, (current) => ({
+        ...current,
+        id: "newapi:0c5f2af7-21d4-4cd1-bcd8-09005c65e45f",
+        providerKind: "elevenlabs",
+        createdAt: now + 10_000,
+        userLabel: "Work relay",
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://work.example/path",
+        },
+        access: "granted",
+        snapshot: {
+          providerKind: "newapi",
+          source: "api-key",
+          fetchedAt: now,
+          metrics: [],
+        },
+        history: [
+          ...current.history,
+          { observedAt: now, metrics: [{ type: "quota", metricId: "relay-key-quota", usedRatio: 0.3 }] },
+        ],
+      })),
+    ).resolves.toBe(true);
+
+    await expect(repository.connectionRepository.get(first.id)).resolves.toMatchObject({
+      id: first.id,
+      providerKind: "newapi",
+      createdAt: first.createdAt,
+      userLabel: "Work relay",
+      config: { kind: "dynamic-origin", baseUrl: "https://work.example/path" },
+      history: [
+        { observedAt: now - 1_000 },
+        { observedAt: now },
+      ],
     });
   });
 

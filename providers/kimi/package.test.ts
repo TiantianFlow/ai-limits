@@ -101,6 +101,7 @@ describe("Kimi provider package", () => {
       const rawError = `${rejectedResolver}-resolver-secret`;
       const collect = vi.fn().mockResolvedValue(successfulCollection());
       const recoverAccessToken = vi.fn().mockResolvedValue("fresh-token");
+      const announceRecovery = vi.fn();
       const providerPackage = createKimiPackage({
         adapter: adapterResult(collect),
         getCookieToken:
@@ -113,7 +114,7 @@ describe("Kimi provider package", () => {
             : vi.fn().mockResolvedValue(undefined),
         recoverAccessToken,
         cleanupAbandonedRecovery: vi.fn().mockResolvedValue(undefined),
-        announceRecovery: vi.fn(),
+        announceRecovery,
       });
 
       const result = await providerPackage.collect(
@@ -123,6 +124,7 @@ describe("Kimi provider package", () => {
 
       expect(result).toMatchObject({ ok: true });
       expect(recoverAccessToken).toHaveBeenCalledTimes(1);
+      expect(announceRecovery).toHaveBeenCalledWith(instance.id);
       expect(collect).toHaveBeenCalledTimes(1);
       expect(collect.mock.calls[0]?.[0].accessToken).toBe("fresh-token");
       expect(JSON.stringify(result)).not.toContain(rawError);

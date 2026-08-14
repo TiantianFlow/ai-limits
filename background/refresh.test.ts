@@ -1,128 +1,84 @@
-import { describe, expect, expectTypeOf, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import type {
-  ProviderId,
-  ProviderRefreshOutcome,
-  RefreshTrigger,
-} from "../domain/model";
-import type { RefreshCollector } from "../providers/types";
-import { refreshGrantedProviders } from "./refresh";
+import { refreshGrantedInstances } from "./refresh";
 
-describe("refreshGrantedProviders", () => {
-  test("requires production collectors to return a concrete outcome", () => {
-    expectTypeOf<RefreshCollector>()
-      .returns.resolves.toEqualTypeOf<ProviderRefreshOutcome>();
-  });
+const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
+const SECOND = "newapi:550e8400-e29b-41d4-a716-446655440001";
 
-  test("requires callers to identify the refresh trigger", () => {
-    expectTypeOf<Parameters<typeof refreshGrantedProviders>[3]>()
-      .toEqualTypeOf<RefreshTrigger>();
-  });
-
-  test("reports mixed refresh outcomes with the supplied timestamps", async () => {
-    const hasPermission = vi.fn(async (providerId: ProviderId) =>
-      providerId === "chatgpt" || providerId === "cursor",
-    );
-    const collect = vi.fn(
-      async (providerId: ProviderId): Promise<ProviderRefreshOutcome> => {
-        if (providerId === "cursor") throw new Error("unavailable");
-        return {
-          kind: "success",
-          snapshot: {
-            providerKind: providerId,
-            source: "fixture",
-            fetchedAt: 1_800_000_000_000,
-            metrics: [],
-          },
-        };
-      },
-    );
-    const clock = vi
-      .fn<() => number>()
-      .mockReturnValueOnce(1_800_000_000_000)
-      .mockReturnValueOnce(1_800_000_000_250);
-
-    const report = await refreshGrantedProviders(
-      ["chatgpt", "claude", "kimi", "cursor"],
-      hasPermission,
-      collect,
-      "manual_all",
-      clock,
-    );
-
-    expect(report).toEqual({
-      trigger: "manual_all",
-      startedAt: 1_800_000_000_000,
-      finishedAt: 1_800_000_000_250,
-      providers: {
-        chatgpt: {
-          kind: "success",
-          snapshot: {
-            providerKind: "chatgpt",
-            source: "fixture",
-            fetchedAt: 1_800_000_000_000,
-            metrics: [],
-          },
-        },
-        claude: { kind: "skipped", reason: "permission_required" },
-        kimi: { kind: "skipped", reason: "permission_required" },
-        cursor: { kind: "failure", category: "temporary_error" },
-      },
+describe("refreshing granted instances", () => {
+  test("preserves durable enumeration order when sibling work settles out of order", async () => {
+    let finishFirst: (() => void) | undefined;
+    const collect = vi.fn(async (instanceId: string) => {
+      if (instanceId === FIRST) {
+        await new Promise<void>((resolve) => {
+          finishFirst = resolve;
+        });
+      }
+      return { kind: "failure", category: "signed_out" } as const;
     });
-
-    expect(hasPermission).toHaveBeenCalledTimes(4);
-    expect(collect).toHaveBeenCalledTimes(2);
-    expect(collect).toHaveBeenCalledWith("chatgpt");
-    expect(collect).toHaveBeenCalledWith("cursor");
-  });
-
-  test("starts granted providers in parallel", async () => {
-    const started: ProviderId[] = [];
-    const resolvers = new Map<
-      ProviderId,
-      (outcome: ProviderRefreshOutcome) => void
-    >();
-    const collect = (providerId: ProviderId) => {
-      started.push(providerId);
-      return new Promise<ProviderRefreshOutcome>((resolve) => {
-        resolvers.set(providerId, resolve);
-      });
-    };
-
-    const refreshing = refreshGrantedProviders(
-      ["chatgpt", "claude"],
+    const pending = refreshGrantedInstances(
+      [FIRST, SECOND],
       async () => true,
       collect,
-      "scheduled",
-      () => 1_800_000_000_000,
+      "manual_all",
+      () => 10,
+    );
+    await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(2));
+    finishFirst?.();
+
+    const report = await pending;
+    expect(report.results.map(({ instanceId }) => instanceId)).toEqual([
+      FIRST,
+      SECOND,
+    ]);
+  });
+
+  test("skips only the sibling without permission", async () => {
+    const collect = vi.fn(async () => ({ kind: "failure", category: "signed_out" } as const));
+
+    const report = await refreshGrantedInstances(
+      [FIRST, SECOND],
+      async (instanceId) => instanceId === SECOND,
+      collect,
+      "manual_all",
+      () => 10,
     );
 
-    await vi.waitFor(() => expect(started).toEqual(["chatgpt", "claude"]));
-    resolvers.get("chatgpt")!({
-      kind: "success",
-      snapshot: {
-        providerKind: "chatgpt",
-        source: "fixture",
-        fetchedAt: 1_800_000_000_000,
-        metrics: [],
+    expect(report.results).toEqual([
+      {
+        instanceId: FIRST,
+        outcome: { kind: "skipped", reason: "permission_required" },
       },
-    });
-    resolvers.get("claude")!({
-      kind: "success",
-      snapshot: {
-        providerKind: "claude",
-        source: "fixture",
-        fetchedAt: 1_800_000_000_000,
-        metrics: [],
+      {
+        instanceId: SECOND,
+        outcome: { kind: "failure", category: "signed_out" },
       },
-    });
+    ]);
+    expect(collect).toHaveBeenCalledWith(SECOND);
+    expect(collect).not.toHaveBeenCalledWith(FIRST);
+  });
 
-    await expect(refreshing).resolves.toMatchObject({
-      trigger: "scheduled",
-      providers: {
-        chatgpt: { kind: "success" },
-        claude: { kind: "success" },
+  test("contains one instance failure without dropping later ordered results", async () => {
+    const report = await refreshGrantedInstances(
+      [FIRST, SECOND],
+      async () => true,
+      async (instanceId) => {
+        if (instanceId === FIRST) throw new Error("provider raw failure");
+        return { kind: "deferred", reason: "session_required" } as const;
       },
-    });
+      "scheduled",
+      () => 10,
+    );
+
+    expect(report.results).toEqual([
+      {
+        instanceId: FIRST,
+        outcome: { kind: "failure", category: "temporary_error" },
+      },
+      {
+        instanceId: SECOND,
+        outcome: { kind: "deferred", reason: "session_required" },
+      },
+    ]);
   });
 });

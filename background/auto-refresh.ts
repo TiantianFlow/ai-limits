@@ -1,15 +1,17 @@
-import type { AppState } from "../domain/model";
-
-export interface AutoRefreshTransactionDependencies {
-  readState(): Promise<AppState>;
-  writePreference(enabled: boolean): Promise<void>;
-  syncAlarm(state: AppState): Promise<void>;
+interface AutoRefreshState {
+  preferences: { autoRefresh: boolean };
 }
 
-export async function updateAutoRefreshTransaction(
+export interface AutoRefreshTransactionDependencies<TState extends AutoRefreshState> {
+  readState(): Promise<TState>;
+  writePreference(enabled: boolean): Promise<void>;
+  syncAlarm(state: TState): Promise<void>;
+}
+
+export async function updateAutoRefreshTransaction<TState extends AutoRefreshState>(
   enabled: boolean,
-  dependencies: AutoRefreshTransactionDependencies,
-): Promise<AppState> {
+  dependencies: AutoRefreshTransactionDependencies<TState>,
+): Promise<TState> {
   const previous = await dependencies.readState();
   await dependencies.writePreference(enabled);
 

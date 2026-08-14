@@ -15,6 +15,7 @@ import type {
   ProviderRefreshOutcome,
   RefreshReport,
 } from "../../domain/model";
+import type { AppViewState } from "../../background/view-state";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
 import { saveState } from "../../storage/repository";
@@ -43,20 +44,32 @@ function installMessageHandler(
   handler: (message: Record<string, unknown>, respond: (value: unknown) => void) => void,
 ) {
   messageListener = (message, _sender, sendResponse) => {
-    handler(message as Record<string, unknown>, sendResponse);
+    handler(message as Record<string, unknown>, (value) =>
+      sendResponse(toPublicResponse(value)),
+    );
     return true;
   };
   browser.runtime.onMessage.addListener(messageListener);
 }
 
 function report(
-  providers: RefreshReport["providers"],
+  providers: Partial<Record<AppState["providers"][number]["providerId"], ProviderRefreshOutcome>>,
   trigger: RefreshReport["trigger"] = "manual_all",
 ): RefreshReport {
-  return { trigger, startedAt: NOW, finishedAt: NOW + 1_000, providers };
+  return {
+    trigger,
+    startedAt: NOW,
+    finishedAt: NOW + 1_000,
+    results: Object.entries(providers).map(([providerKind, outcome]) => ({
+      instanceId: `${providerKind}:default`,
+      outcome: outcome!,
+    })),
+  };
 }
 
-function successfulOutcomes(state: AppState): RefreshReport["providers"] {
+function successfulOutcomes(
+  state: AppState,
+): Partial<Record<AppState["providers"][number]["providerId"], ProviderRefreshOutcome>> {
   return Object.fromEntries(
     state.providers.map((provider) => [
       provider.providerId,
@@ -66,6 +79,38 @@ function successfulOutcomes(state: AppState): RefreshReport["providers"] {
       } satisfies ProviderRefreshOutcome,
     ]),
   );
+}
+
+function toPublicState(state: AppState): AppViewState {
+  return {
+    preferences: state.preferences,
+    instances: state.providers.map((provider) => ({
+      id: `${provider.providerId}:default`,
+      providerKind: provider.providerId,
+      access: provider.access,
+      createdAt: NOW,
+      history: provider.history,
+      ...(provider.snapshot ? { snapshot: provider.snapshot } : {}),
+      ...(provider.lastAttempt ? { lastAttempt: provider.lastAttempt } : {}),
+    })),
+  };
+}
+
+function toPublicResponse(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  if ("version" in value && value.version === 4) {
+    return toPublicState(value as AppState);
+  }
+  if ("state" in value && value.state && typeof value.state === "object") {
+    return {
+      ...value,
+      state:
+        "version" in value.state && value.state.version === 4
+          ? toPublicState(value.state as AppState)
+          : value.state,
+    };
+  }
+  return value;
 }
 
 describe("side-panel App", () => {
@@ -107,10 +152,13 @@ describe("side-panel App", () => {
     await waitFor(() =>
       expect(commands).toContainEqual({
         type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "newapi",
+        providerKind: "newapi",
+        instanceId: "newapi:default",
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://api.example.com",
+        },
         apiKey: "sk-candidate",
-        baseUrl: "https://api.example.com/gateway",
-        connectionIntent: "permission-grant",
       }),
     );
     expect(requestPermission).toHaveBeenCalledWith({
@@ -125,7 +173,7 @@ describe("side-panel App", () => {
     const state = createInitialState();
     const sendMessage = vi
       .spyOn(browser.runtime, "sendMessage")
-      .mockResolvedValue(state as never);
+      .mockResolvedValue(toPublicState(state) as never);
     const requestPermission = vi.spyOn(browser.permissions, "request");
     const createTab = vi
       .spyOn(browser.tabs, "create")
@@ -198,9 +246,10 @@ describe("side-panel App", () => {
       { type: "GET_STATE" },
       {
         type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
+        providerKind: "elevenlabs",
+        instanceId: "elevenlabs:default",
+        config: { kind: "fixed" },
         apiKey: secret,
-        connectionIntent: "permission-grant",
       },
     ]);
     expect(document.body).not.toHaveTextContent(secret);
@@ -389,9 +438,10 @@ describe("side-panel App", () => {
     );
     expect(commands).toContainEqual({
       type: "CONNECT_API_KEY_PROVIDER",
-      providerId: "elevenlabs",
+      providerKind: "elevenlabs",
+      instanceId: "elevenlabs:default",
+      config: { kind: "fixed" },
       apiKey: "replacement",
-      connectionIntent: "replacement",
     });
   });
   test("offers a retry when the initial state load fails", async () => {
@@ -399,7 +449,7 @@ describe("side-panel App", () => {
     const sendMessage = vi
       .spyOn(browser.runtime, "sendMessage")
       .mockRejectedValueOnce(new Error("worker unavailable"))
-      .mockImplementationOnce(async () => state as never);
+      .mockImplementationOnce(async () => toPublicState(state) as never);
 
     render(<App />);
 
@@ -416,7 +466,7 @@ describe("side-panel App", () => {
     const sendMessage = vi
       .spyOn(browser.runtime, "sendMessage")
       .mockResolvedValueOnce(undefined)
-      .mockImplementationOnce(async () => state as never);
+      .mockImplementationOnce(async () => toPublicState(state) as never);
 
     render(<App />);
 
@@ -521,7 +571,7 @@ describe("side-panel App", () => {
         }) as never,
     );
     installMessageHandler((message, respond) => {
-      if (message.type === "COLLECT_PROVIDER") {
+      if (message.type === "CONNECT_BROWSER_PROVIDER") {
         finishCollection = respond;
         return;
       }
@@ -609,7 +659,7 @@ describe("side-panel App", () => {
     act(() => {
       void browser.runtime.sendMessage({
         type: "PROVIDER_OPERATION",
-        providerId: "kimi",
+        instanceId: "kimi:default",
         operation: "waiting_for_session",
       });
     });
@@ -652,7 +702,7 @@ describe("side-panel App", () => {
     const state: AppState = { ...fixture, providers: [kimi] };
     installMessageHandler((message, respond) => {
       respond(
-        message.type === "REFRESH_PROVIDER"
+        message.type === "REFRESH_INSTANCE"
           ? {
               state,
               report: report(
@@ -685,7 +735,7 @@ describe("side-panel App", () => {
         if ((message as { type?: string }).type === "REFRESH_ALL") {
           throw new Error("response channel closed");
         }
-        return state as never;
+        return toPublicState(state) as never;
       },
     );
 
@@ -711,10 +761,10 @@ describe("side-panel App", () => {
     const state: AppState = { ...fixture, providers: [kimi] };
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
       async (message: unknown) => {
-        if ((message as { type?: string }).type === "REFRESH_PROVIDER") {
+        if ((message as { type?: string }).type === "REFRESH_INSTANCE") {
           throw new Error("response channel closed");
         }
-        return state as never;
+        return toPublicState(state) as never;
       },
     );
 
@@ -731,10 +781,10 @@ describe("side-panel App", () => {
     vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
       async (message: unknown) => {
-        if ((message as { type?: string }).type === "COLLECT_PROVIDER") {
+        if ((message as { type?: string }).type === "CONNECT_BROWSER_PROVIDER") {
           throw new Error("response channel closed");
         }
-        return state as never;
+        return toPublicState(state) as never;
       },
     );
 
@@ -755,7 +805,7 @@ describe("side-panel App", () => {
         if ((message as { type?: string }).type === "SET_AUTO_REFRESH") {
           throw new Error("worker unavailable");
         }
-        return state as never;
+        return toPublicState(state) as never;
       },
     );
 
@@ -836,7 +886,7 @@ describe("side-panel App", () => {
     };
     installMessageHandler((message, respond) => {
       respond(
-        message.type === "DISCONNECT_PROVIDER"
+        message.type === "DISCONNECT_INSTANCE"
           ? {
               state: disconnected,
               result: { ok: true, localDataDeleted: true },
@@ -865,7 +915,7 @@ describe("side-panel App", () => {
     };
     installMessageHandler((message, respond) => {
       respond(
-        message.type === "DISCONNECT_PROVIDER"
+        message.type === "DISCONNECT_INSTANCE"
           ? {
               state: disconnected,
               result: {
@@ -899,7 +949,7 @@ describe("side-panel App", () => {
       respond(
         message.type === "DELETE_LOCAL_DATA"
           ? { state: createInitialState(), result: "deleted" }
-          : message.type === "DISCONNECT_PROVIDER"
+          : message.type === "DISCONNECT_INSTANCE"
             ? {
                 state,
                 result: { ok: true, localDataDeleted: true },
@@ -920,7 +970,7 @@ describe("side-panel App", () => {
       expect(commands).toEqual([
         { type: "GET_STATE" },
         { type: "SET_AUTO_REFRESH", enabled: false },
-        { type: "DISCONNECT_PROVIDER", providerId: "chatgpt" },
+        { type: "DISCONNECT_INSTANCE", instanceId: "chatgpt:default" },
         { type: "DELETE_LOCAL_DATA" },
       ]),
     );

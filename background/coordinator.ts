@@ -1,67 +1,46 @@
-import { sanitizedFailureMessage } from "../domain/model";
 import { appendUsageObservation } from "../domain/history";
 import type {
-  AppState,
-  ProviderAttempt,
-  ProviderRefreshOutcome,
-  RefreshTrigger,
+  ProviderInstanceId,
+  ProviderInstanceRecord,
+} from "../domain/instances";
+import {
+  sanitizedFailureMessage,
+  type ProviderAttempt,
+  type ProviderRefreshOutcome,
+  type RefreshTrigger,
 } from "../domain/model";
-import type {
-  CollectionContext,
-  CollectionResult,
-  ProviderAdapter,
-} from "../providers/types";
 import { normalizeUsageSnapshot } from "../providers/initial-state";
-import type { ConnectableProviderId } from "../providers/registry";
-import { providerCatalog } from "../providers/catalog";
-import { readProviderCredential } from "../storage/credentials";
-import {
-  disconnectProviderData,
-  mutateState,
-  reconcileProviderAccess,
-} from "../storage/repository";
-import {
-  permissionChangeAffectsProvider,
-  removeProviderPermission,
-  type ProviderPermissionContext,
-} from "./permissions";
-import { isProviderConnected } from "./provider-access";
+import type {
+  CollectionResult,
+  ProviderCredential,
+  ProviderPackage,
+  ProviderRuntimeServices,
+} from "../providers/types";
+import { usageRepository } from "../storage/instance-repository";
 
-let permissionReconciliationGeneration = 0;
 const DEFAULT_SCHEDULED_BACKOFF_MS = 15 * 60 * 1_000;
 
 function normalizeResult(
-  adapter: ProviderAdapter,
+  providerPackage: ProviderPackage,
   result: CollectionResult,
   finishedAt: number,
 ): CollectionResult {
-  if (!result.ok) {
-    return result;
-  }
-
+  if (!result.ok) return result;
   const snapshot = normalizeUsageSnapshot(
     {
       ...result.snapshot,
-      providerKind: adapter.id,
+      providerKind: providerPackage.kind,
       fetchedAt: finishedAt,
     },
-    adapter.id,
+    providerPackage.kind,
   );
-  if (!snapshot) {
-    return { ok: false, health: { kind: "provider_changed" } };
-  }
-
-  return {
-    ok: true,
-    snapshot,
-  };
+  return snapshot
+    ? { ok: true, snapshot }
+    : { ok: false, health: { kind: "provider_changed" } };
 }
 
 function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
-  if (result.ok) {
-    return { kind: "success", snapshot: result.snapshot };
-  }
-
+  if (result.ok) return { kind: "success", snapshot: result.snapshot };
   if ("deferred" in result) {
     return {
       kind: "deferred",
@@ -71,23 +50,14 @@ function refreshOutcome(result: CollectionResult): ProviderRefreshOutcome {
         : { retryAt: result.deferred.retryAt }),
     };
   }
-
   if (result.health.kind === "permission_required") {
     return { kind: "skipped", reason: "permission_required" };
   }
-
-  if (
-    result.health.kind === "connecting" ||
-    result.health.kind === "connected"
-  ) {
+  if (result.health.kind === "connecting" || result.health.kind === "connected") {
     return { kind: "failure", category: "temporary_error" };
   }
-
   const retryAt =
-    result.health.kind === "temporary_error"
-      ? result.health.retryAt
-      : undefined;
-
+    result.health.kind === "temporary_error" ? result.health.retryAt : undefined;
   return {
     kind: "failure",
     category: result.health.kind,
@@ -116,19 +86,16 @@ function withScheduledBackoff(
   ) {
     return outcome;
   }
-
-  return {
-    ...outcome,
-    retryAt: finishedAt + DEFAULT_SCHEDULED_BACKOFF_MS,
-  };
+  return { ...outcome, retryAt: finishedAt + DEFAULT_SCHEDULED_BACKOFF_MS };
 }
 
-function providerAttempt(
+function attemptFor(
   trigger: RefreshTrigger,
   startedAt: number,
   finishedAt: number,
   outcome: ProviderRefreshOutcome,
 ): ProviderAttempt | undefined {
+  if (outcome.kind === "skipped") return undefined;
   if (outcome.kind === "success") {
     return {
       trigger,
@@ -137,7 +104,6 @@ function providerAttempt(
       outcome: { kind: "success" },
     };
   }
-
   if (outcome.kind === "deferred") {
     return {
       trigger,
@@ -150,67 +116,39 @@ function providerAttempt(
       },
     };
   }
-
-  if (outcome.kind === "failure") {
-    return {
-      trigger,
-      startedAt,
-      finishedAt,
-      outcome: {
-        kind: "failure",
-        category: outcome.category,
-        ...(outcome.message === undefined ? {} : { message: outcome.message }),
-        ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
-      },
-    };
-  }
-
-  return undefined;
+  return {
+    trigger,
+    startedAt,
+    finishedAt,
+    outcome: {
+      kind: "failure",
+      category: outcome.category,
+      ...(outcome.message === undefined ? {} : { message: outcome.message }),
+      ...(outcome.retryAt === undefined ? {} : { retryAt: outcome.retryAt }),
+    },
+  };
 }
 
 function applyOutcome(
-  state: AppState,
-  adapter: ProviderAdapter,
+  instance: ProviderInstanceRecord,
   outcome: ProviderRefreshOutcome,
   trigger: RefreshTrigger,
   startedAt: number,
   finishedAt: number,
-): AppState {
-  const providers = state.providers.map((provider) => {
-    if (provider.providerId !== adapter.id) {
-      return provider;
-    }
-
-    if (outcome.kind === "skipped") {
-      return outcome.reason === "permission_required"
-        ? { ...provider, access: "required" as const }
-        : provider;
-    }
-
-    const lastAttempt = providerAttempt(
-      trigger,
-      startedAt,
-      finishedAt,
-      outcome,
-    );
-    if (!lastAttempt) {
-      return provider;
-    }
-
-    return {
-      ...provider,
-      ...(outcome.kind === "success"
-        ? {
-            access: "granted" as const,
-            snapshot: outcome.snapshot,
-            history: appendUsageObservation(provider.history, outcome.snapshot),
-          }
-        : {}),
-      lastAttempt,
-    };
-  });
-
-  return { ...state, providers };
+): ProviderInstanceRecord {
+  const lastAttempt = attemptFor(trigger, startedAt, finishedAt, outcome);
+  if (!lastAttempt) return instance;
+  return {
+    ...instance,
+    ...(outcome.kind === "success"
+      ? {
+          access: "granted" as const,
+          snapshot: outcome.snapshot,
+          history: appendUsageObservation(instance.history, outcome.snapshot),
+        }
+      : {}),
+    lastAttempt,
+  };
 }
 
 export interface CollectedProviderOutcome {
@@ -219,23 +157,23 @@ export interface CollectedProviderOutcome {
 }
 
 export async function collectProviderOutcome(
-  adapter: ProviderAdapter,
-  context: CollectionContext,
+  providerPackage: ProviderPackage,
+  instance: ProviderInstanceRecord,
+  services: ProviderRuntimeServices,
   trigger: RefreshTrigger,
+  credentialOverride?: ProviderCredential,
   clock: () => number = Date.now,
 ): Promise<CollectedProviderOutcome> {
   let result: CollectionResult;
-
   try {
-    result = await adapter.collect(context);
+    result = await providerPackage.collect(instance, services, credentialOverride);
   } catch {
     result = { ok: false, health: { kind: "temporary_error" } };
   }
-
-  const finishedAt = Math.max(context.now, clock());
+  const finishedAt = Math.max(services.now, clock());
   return {
     outcome: withScheduledBackoff(
-      refreshOutcome(normalizeResult(adapter, result, finishedAt)),
+      refreshOutcome(normalizeResult(providerPackage, result, finishedAt)),
       trigger,
       finishedAt,
     ),
@@ -244,129 +182,57 @@ export async function collectProviderOutcome(
 }
 
 export async function commitProviderOutcome(
-  adapter: ProviderAdapter,
+  instanceId: ProviderInstanceId,
   outcome: ProviderRefreshOutcome,
   trigger: RefreshTrigger,
   startedAt: number,
   finishedAt: number,
   shouldCommit: () => boolean,
 ): Promise<ProviderRefreshOutcome> {
-  let committed = false;
-
-  await mutateState(startedAt, (state) => {
-    if (!shouldCommit()) {
-      return state;
-    }
-
-    committed = true;
-    return applyOutcome(
-      state,
-      adapter,
-      outcome,
-      trigger,
-      startedAt,
-      finishedAt,
-    );
-  });
-  return committed ? outcome : { kind: "skipped", reason: "superseded" };
+  if (!shouldCommit()) return { kind: "skipped", reason: "superseded" };
+  const committed = await usageRepository.commit(instanceId, (instance) =>
+    shouldCommit()
+      ? applyOutcome(instance, outcome, trigger, startedAt, finishedAt)
+      : instance,
+  );
+  return committed && shouldCommit()
+    ? outcome
+    : { kind: "skipped", reason: "superseded" };
 }
 
-export async function refreshProvider(
-  adapter: ProviderAdapter,
-  context: CollectionContext,
+export async function refreshProviderInstance(
+  providerPackage: ProviderPackage,
+  instance: ProviderInstanceRecord,
+  services: ProviderRuntimeServices,
   trigger: RefreshTrigger,
   shouldCommit: () => boolean,
+  credentialOverride?: ProviderCredential,
   clock: () => number = Date.now,
 ): Promise<ProviderRefreshOutcome> {
-  const { outcome, finishedAt } = await collectProviderOutcome(
-    adapter,
-    context,
+  const collected = await collectProviderOutcome(
+    providerPackage,
+    instance,
+    services,
     trigger,
+    credentialOverride,
     clock,
   );
   return commitProviderOutcome(
-    adapter,
-    outcome,
+    instance.id,
+    collected.outcome,
     trigger,
-    context.now,
-    finishedAt,
+    services.now,
+    collected.finishedAt,
     shouldCommit,
   );
 }
 
-export async function reconcileProviderPermissions(
-  providerIds: readonly ConnectableProviderId[],
-): Promise<void> {
-  const generation = ++permissionReconciliationGeneration;
-  const access = await Promise.all(
-    providerIds.map(async (providerId) => [
-      providerId,
-      await isProviderConnected(providerId),
-    ] as const),
-  );
-
-  if (generation !== permissionReconciliationGeneration) {
-    return;
-  }
-  await reconcileProviderAccess(Object.fromEntries(access));
-}
-
-export async function reconcileRemovedProviderPermissions(
-  removed: Browser.permissions.Permissions,
-  providerIds: readonly ConnectableProviderId[],
-  invalidateProvider: (providerId: ConnectableProviderId) => void,
-): Promise<void> {
-  const affectedProviderIds = providerIds.filter((providerId) => {
-    return permissionChangeAffectsProvider(providerId, removed);
-  });
-  affectedProviderIds.forEach(invalidateProvider);
-  await Promise.all(
-    affectedProviderIds.map((providerId) =>
-      disconnectProviderData(providerId),
-    ),
-  );
-  await reconcileProviderPermissions(providerIds);
-}
-
-export type DisconnectProviderResult =
-  | { ok: true; localDataDeleted: true }
-  | {
-      ok: false;
-      error: "permission_removal_failed";
-      localDataDeleted: true;
-    };
-
-export async function disconnectProvider(
-  providerId: ConnectableProviderId,
-  remainingConnectedProviderIds: readonly ConnectableProviderId[],
-  permissionContext?: ProviderPermissionContext,
-): Promise<DisconnectProviderResult> {
-  const storedCredential = permissionContext
-    ? undefined
-    : await readProviderCredential(providerId);
-  await disconnectProviderData(providerId);
-
-  let removed = false;
-  try {
-    removed = await removeProviderPermission(
-      providerId,
-      remainingConnectedProviderIds.filter(
-        (remainingProviderId) => remainingProviderId !== providerId,
-      ),
-      providerCatalog,
-      permissionContext ?? { baseUrl: storedCredential?.baseUrl },
-    );
-  } catch {
-    // Local deletion above is authoritative even if Chrome permission cleanup fails.
-  }
-
-  if (!removed) {
-    return {
-      ok: false,
-      error: "permission_removal_failed",
-      localDataDeleted: true,
-    };
-  }
-
-  return { ok: true, localDataDeleted: true };
+export function applyCollectedOutcome(
+  instance: ProviderInstanceRecord,
+  outcome: ProviderRefreshOutcome,
+  trigger: RefreshTrigger,
+  startedAt: number,
+  finishedAt: number,
+): ProviderInstanceRecord {
+  return applyOutcome(instance, outcome, trigger, startedAt, finishedAt);
 }

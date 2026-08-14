@@ -1,11 +1,9 @@
+import type { ProviderInstanceId } from "../domain/instances";
 import type {
-  ProviderId,
   ProviderRefreshOutcome,
   RefreshReport,
   RefreshTrigger,
 } from "../domain/model";
-import type { ConnectableProviderId } from "../providers/registry";
-import { providerCatalog } from "../providers/catalog";
 
 const PROVIDER_DEADLINE_MS = 20_000;
 
@@ -18,11 +16,11 @@ export interface RefreshPolicy {
 
 export interface RefreshOrchestrator {
   refreshAll(trigger: "manual_all" | "scheduled"): Promise<RefreshReport>;
-  refreshProvider(
-    providerId: ConnectableProviderId,
+  refreshInstance(
+    instanceId: ProviderInstanceId,
     trigger: "connect" | "manual_provider",
   ): Promise<RefreshReport>;
-  invalidateProvider(providerId: ConnectableProviderId): void;
+  invalidateInstance(instanceId: ProviderInstanceId): void;
   invalidateAll(): void;
 }
 
@@ -33,17 +31,17 @@ export interface ProviderRunControl {
 }
 
 export interface RefreshOrchestratorDependencies {
-  providerIds: readonly ConnectableProviderId[];
+  listInstanceIds(): Promise<readonly ProviderInstanceId[]>;
   isAutoRefreshEnabled(): Promise<boolean>;
-  isProviderRefreshEligible(
-    providerId: ConnectableProviderId,
-  ): Promise<boolean>;
-  isScheduledRefreshEnabled?(providerId: ConnectableProviderId): boolean;
+  isInstanceRefreshEligible(instanceId: ProviderInstanceId): Promise<boolean>;
+  isScheduledRefreshEnabled?(
+    instanceId: ProviderInstanceId,
+  ): boolean | Promise<boolean>;
   getBackoffRetryAt(
-    providerId: ConnectableProviderId,
+    instanceId: ProviderInstanceId,
   ): Promise<number | undefined>;
   runProvider(
-    providerId: ConnectableProviderId,
+    instanceId: ProviderInstanceId,
     policy: RefreshPolicy,
     control: ProviderRunControl,
   ): Promise<ProviderRefreshOutcome>;
@@ -67,7 +65,6 @@ export function deriveRefreshPolicy(trigger: RefreshTrigger): RefreshPolicy {
       deadlineMs: PROVIDER_DEADLINE_MS,
     };
   }
-
   return {
     trigger,
     interaction: "allowed",
@@ -77,25 +74,22 @@ export function deriveRefreshPolicy(trigger: RefreshTrigger): RefreshPolicy {
 }
 
 function isStronger(candidate: RefreshPolicy, active: RefreshPolicy): boolean {
-  return (
-    candidate.interaction === "allowed" && active.interaction === "forbidden"
-  );
+  return candidate.interaction === "allowed" && active.interaction === "forbidden";
 }
 
 function needsInteractiveFollowUp(outcome: ProviderRefreshOutcome): boolean {
   return (
     (outcome.kind === "deferred" && outcome.reason === "session_required") ||
     (outcome.kind === "failure" && outcome.category === "temporary_error") ||
-    (outcome.kind === "skipped" &&
-      outcome.reason === "auto_refresh_disabled")
+    (outcome.kind === "skipped" && outcome.reason === "auto_refresh_disabled")
   );
 }
 
 export function createRefreshOrchestrator(
   dependencies: RefreshOrchestratorDependencies,
 ): RefreshOrchestrator {
-  const activeRuns = new Map<ProviderId, ActiveRun>();
-  const generations = new Map<ProviderId, number>();
+  const activeRuns = new Map<ProviderInstanceId, ActiveRun>();
+  const generations = new Map<ProviderInstanceId, number>();
   const clock = dependencies.clock ?? Date.now;
 
   function runWithinDeadline(
@@ -106,10 +100,11 @@ export function createRefreshOrchestrator(
     return new Promise((resolve) => {
       let settled = false;
       let timedOut = false;
+      let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
       const finish = (outcome: ProviderRefreshOutcome) => {
         if (settled) return;
         settled = true;
-        globalThis.clearTimeout(timeout);
+        if (timeout !== undefined) globalThis.clearTimeout(timeout);
         controller.signal.removeEventListener("abort", onAbort);
         resolve(outcome);
       };
@@ -119,11 +114,10 @@ export function createRefreshOrchestrator(
             ? { kind: "failure", category: "temporary_error" }
             : { kind: "skipped", reason: "superseded" },
         );
-      const timeout = globalThis.setTimeout(() => {
+      timeout = globalThis.setTimeout(() => {
         timedOut = true;
         controller.abort();
       }, deadlineMs);
-
       controller.signal.addEventListener("abort", onAbort, { once: true });
       if (controller.signal.aborted) {
         onAbort();
@@ -145,177 +139,137 @@ export function createRefreshOrchestrator(
   }
 
   function startRun(
-    providerId: ConnectableProviderId,
+    instanceId: ProviderInstanceId,
     policy: RefreshPolicy,
   ): Promise<ProviderRefreshOutcome> {
-    const generation = (generations.get(providerId) ?? 0) + 1;
-    generations.set(providerId, generation);
+    const generation = (generations.get(instanceId) ?? 0) + 1;
+    generations.set(instanceId, generation);
     const controller = new AbortController();
-
     const control: ProviderRunControl = {
       generation,
       signal: controller.signal,
       isCurrentGeneration: () =>
-        !controller.signal.aborted &&
-        generations.get(providerId) === generation,
+        !controller.signal.aborted && generations.get(instanceId) === generation,
     };
     const active = { policy, controller, invalidated: false } as ActiveRun;
     active.promise = runWithinDeadline(
       async () => {
-        if (control.signal.aborted || !control.isCurrentGeneration()) {
-          return { kind: "skipped", reason: "superseded" } as const;
+        if (!control.isCurrentGeneration()) {
+          return { kind: "skipped", reason: "superseded" };
         }
-
         if (policy.trigger === "scheduled") {
-          const autoRefreshEnabled =
-            await dependencies.isAutoRefreshEnabled();
-          if (control.signal.aborted || !control.isCurrentGeneration()) {
-            return { kind: "skipped", reason: "superseded" } as const;
+          const enabled = await dependencies.isAutoRefreshEnabled();
+          if (!control.isCurrentGeneration()) {
+            return { kind: "skipped", reason: "superseded" };
           }
-
-          if (!autoRefreshEnabled) {
-            return {
-              kind: "skipped",
-              reason: "auto_refresh_disabled",
-            } as const;
+          if (!enabled) {
+            return { kind: "skipped", reason: "auto_refresh_disabled" };
           }
         }
-
-        const isRefreshEligible =
-          await dependencies.isProviderRefreshEligible(providerId);
-        if (control.signal.aborted || !control.isCurrentGeneration()) {
-          return { kind: "skipped", reason: "superseded" } as const;
+        const eligible = await dependencies.isInstanceRefreshEligible(instanceId);
+        if (!control.isCurrentGeneration()) {
+          return { kind: "skipped", reason: "superseded" };
         }
-
-        if (!isRefreshEligible) {
-          return { kind: "skipped", reason: "permission_required" } as const;
+        if (!eligible) {
+          return { kind: "skipped", reason: "permission_required" };
         }
-
         if (!policy.bypassBackoff) {
-          const retryAt = await dependencies.getBackoffRetryAt(providerId);
-          if (control.signal.aborted || !control.isCurrentGeneration()) {
-            return { kind: "skipped", reason: "superseded" } as const;
+          const retryAt = await dependencies.getBackoffRetryAt(instanceId);
+          if (!control.isCurrentGeneration()) {
+            return { kind: "skipped", reason: "superseded" };
           }
-
           if (retryAt !== undefined && retryAt > clock()) {
-            return {
-              kind: "deferred",
-              reason: "backoff",
-              retryAt,
-            } as const;
+            return { kind: "deferred", reason: "backoff", retryAt };
           }
         }
-
-        return dependencies.runProvider(providerId, policy, control);
+        return dependencies.runProvider(instanceId, policy, control);
       },
       controller,
       policy.deadlineMs,
-    )
-      .finally(() => {
-        if (
-          activeRuns.get(providerId) === active &&
-          active.followUp === undefined
-        ) {
-          activeRuns.delete(providerId);
-        }
-      });
-    activeRuns.set(providerId, active);
+    ).finally(() => {
+      if (activeRuns.get(instanceId) === active && active.followUp === undefined) {
+        activeRuns.delete(instanceId);
+      }
+    });
+    activeRuns.set(instanceId, active);
     return active.promise;
   }
 
-  function requestProvider(
-    providerId: ConnectableProviderId,
+  function requestInstance(
+    instanceId: ProviderInstanceId,
     policy: RefreshPolicy,
   ): Promise<ProviderRefreshOutcome> {
-    const active = activeRuns.get(providerId);
-    if (!active) {
-      return startRun(providerId, policy);
-    }
-
-    if (!isStronger(policy, active.policy)) {
-      return active.promise;
-    }
+    const active = activeRuns.get(instanceId);
+    if (!active) return startRun(instanceId, policy);
+    if (!isStronger(policy, active.policy)) return active.promise;
 
     active.followUp ??= active.promise.then((outcome) => {
-      if (
-        active.invalidated ||
-        activeRuns.get(providerId) !== active
-      ) {
+      if (active.invalidated || activeRuns.get(instanceId) !== active) {
         return { kind: "skipped", reason: "superseded" } as const;
       }
-
-      if (needsInteractiveFollowUp(outcome)) {
-        return startRun(providerId, policy);
-      }
-
-      if (activeRuns.get(providerId) === active) {
-        activeRuns.delete(providerId);
-      }
+      if (needsInteractiveFollowUp(outcome)) return startRun(instanceId, policy);
+      if (activeRuns.get(instanceId) === active) activeRuns.delete(instanceId);
       return outcome;
     });
     return active.followUp;
   }
 
   function refresh(
-    providerIds: readonly ConnectableProviderId[],
+    instanceIds: readonly ProviderInstanceId[],
     trigger: RefreshTrigger,
   ): Promise<RefreshReport> {
     const policy = deriveRefreshPolicy(trigger);
     const startedAt = clock();
-    const runs = providerIds.map((providerId) => {
-      const run = requestProvider(providerId, policy);
-      return run.then(
-        (outcome) => [providerId, outcome] as const,
-        () =>
-          [
-            providerId,
-            { kind: "failure", category: "temporary_error" } as const,
-          ] as const,
-      );
-    });
-
-    return Promise.all(runs).then((results) => ({
+    return Promise.all(
+      instanceIds.map(async (instanceId) => {
+        try {
+          return { instanceId, outcome: await requestInstance(instanceId, policy) };
+        } catch {
+          return {
+            instanceId,
+            outcome: { kind: "failure", category: "temporary_error" } as const,
+          };
+        }
+      }),
+    ).then((results) => ({
       trigger,
       startedAt,
       finishedAt: clock(),
-      providers: Object.fromEntries(results) as Partial<
-        Record<ProviderId, ProviderRefreshOutcome>
-      >,
+      results,
     }));
   }
 
   return {
-    refreshAll(trigger) {
-      const providerIds =
-        trigger === "scheduled"
-          ? dependencies.providerIds.filter((providerId) =>
-              (dependencies.isScheduledRefreshEnabled ??
-                ((id: ConnectableProviderId) =>
-                  providerCatalog[id].scheduledRefresh))(providerId),
-            )
-          : dependencies.providerIds;
-      return refresh(providerIds, trigger);
+    async refreshAll(trigger) {
+      let instanceIds = [...(await dependencies.listInstanceIds())];
+      if (trigger === "scheduled" && dependencies.isScheduledRefreshEnabled) {
+        const enabled = await Promise.all(
+          instanceIds.map((instanceId) =>
+            dependencies.isScheduledRefreshEnabled!(instanceId),
+          ),
+        );
+        instanceIds = instanceIds.filter((_instanceId, index) => enabled[index]);
+      }
+      return refresh(instanceIds, trigger);
     },
-    refreshProvider(providerId, trigger) {
-      return refresh([providerId], trigger);
+    refreshInstance(instanceId, trigger) {
+      return refresh([instanceId], trigger);
     },
-    invalidateProvider(providerId) {
-      const active = activeRuns.get(providerId);
+    invalidateInstance(instanceId) {
+      const active = activeRuns.get(instanceId);
       if (active) {
         active.invalidated = true;
         active.controller.abort();
       }
-      generations.set(providerId, (generations.get(providerId) ?? 0) + 1);
-      activeRuns.delete(providerId);
+      generations.set(instanceId, (generations.get(instanceId) ?? 0) + 1);
+      activeRuns.delete(instanceId);
     },
     invalidateAll() {
-      activeRuns.forEach((active) => {
+      for (const [instanceId, active] of activeRuns) {
         active.invalidated = true;
         active.controller.abort();
-      });
-      dependencies.providerIds.forEach((providerId) => {
-        generations.set(providerId, (generations.get(providerId) ?? 0) + 1);
-      });
+        generations.set(instanceId, (generations.get(instanceId) ?? 0) + 1);
+      }
       activeRuns.clear();
     },
   };

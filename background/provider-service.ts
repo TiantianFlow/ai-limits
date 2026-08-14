@@ -1,0 +1,567 @@
+import type {
+  InstanceAppState,
+  ProviderInstanceConfig,
+  ProviderInstanceId,
+  ProviderInstanceRecord,
+} from "../domain/instances";
+import type {
+  DisplayMode,
+  ProviderRefreshOutcome,
+  RefreshReport,
+  RefreshTrigger,
+} from "../domain/model";
+import type {
+  ApiKeyProviderKind,
+  BrowserSessionProviderKind,
+  ProviderKind,
+} from "../providers/catalog";
+import { providerRegistry } from "../providers/registry";
+import type { ProviderPackage } from "../providers/types";
+import {
+  deleteAllCredentials,
+  deleteCredential,
+  markCredentialRejectedIfRevision,
+  readCredentialWithRevision,
+  restoreCredentialIfRevision,
+  saveApiKeyIfCurrent,
+} from "../storage/credential-vault";
+import {
+  connectionRepository,
+  deleteAllInstanceData,
+  loadInstanceAppState,
+  preferencesRepository,
+  usageRepository,
+} from "../storage/instance-repository";
+import {
+  applyCollectedOutcome,
+  refreshProviderInstance,
+} from "./coordinator";
+import {
+  createApiKeyConnectionLifecycle,
+  type ApiKeyConnectionStatus,
+} from "./api-key-connection";
+import {
+  createRefreshOrchestrator,
+  type RefreshPolicy,
+} from "./orchestrator";
+import {
+  hasInstancePermission,
+  permissionChangeAffectsInstance,
+  removeAllInstancePermissions,
+  removeUnusedInstancePermissions,
+} from "./permissions";
+import { isProviderRefreshEligible } from "./provider-access";
+import { createProviderOperationLane } from "./provider-operation-lane";
+
+export type ProviderPackageRegistry = {
+  [Kind in ProviderKind]: ProviderPackage;
+};
+
+export interface ConnectApiKeyProviderRequest {
+  providerKind: ApiKeyProviderKind;
+  instanceId?: ProviderInstanceId;
+  userLabel?: string;
+  config: ProviderInstanceConfig;
+  apiKey: string;
+}
+
+export interface ConnectApiKeyProviderResult {
+  report: RefreshReport;
+  result: ApiKeyConnectionStatus;
+}
+
+export type DisconnectInstanceResult =
+  | { ok: true; localDataDeleted: true }
+  | {
+      ok: false;
+      error: "permission_removal_failed";
+      localDataDeleted: true;
+    };
+
+export interface ProviderService {
+  connectBrowserProvider(
+    providerKind: BrowserSessionProviderKind,
+  ): Promise<RefreshReport>;
+  connectApiKeyProvider(
+    request: ConnectApiKeyProviderRequest,
+  ): Promise<ConnectApiKeyProviderResult>;
+  refreshInstance(
+    instanceId: ProviderInstanceId,
+    trigger: "connect" | "manual_provider",
+  ): Promise<RefreshReport>;
+  refreshAll(trigger: "manual_all" | "scheduled"): Promise<RefreshReport>;
+  renameInstance(instanceId: ProviderInstanceId, userLabel?: string): Promise<void>;
+  disconnectInstance(instanceId: ProviderInstanceId): Promise<DisconnectInstanceResult>;
+  reconcilePermissions(change?: Browser.permissions.Permissions): Promise<void>;
+  deleteAllLocalData(): Promise<{
+    result: "deleted" | "deleted_with_permission_errors";
+  }>;
+  getState(): Promise<InstanceAppState>;
+  setDisplayMode(mode: DisplayMode): Promise<void>;
+  setAutoRefresh(enabled: boolean): Promise<void>;
+}
+
+export interface ProviderServiceOptions {
+  packages?: ProviderPackageRegistry;
+  fetch?: typeof globalThis.fetch;
+  clock?: () => number;
+  randomUUID?: () => string;
+}
+
+function normalizedLabel(value: string | undefined): string | undefined {
+  const label = value?.trim();
+  return label ? label : undefined;
+}
+
+function backoffRetryAt(instance: ProviderInstanceRecord): number | undefined {
+  const outcome = instance.lastAttempt?.outcome;
+  if (
+    outcome?.kind === "failure" &&
+    outcome.category === "temporary_error"
+  ) {
+    return outcome.retryAt;
+  }
+  if (outcome?.kind === "deferred" && outcome.reason === "backoff") {
+    return outcome.retryAt;
+  }
+  return undefined;
+}
+
+function connectReport(
+  instanceId: ProviderInstanceId,
+  startedAt: number,
+  finishedAt: number,
+  outcome: ProviderRefreshOutcome,
+): RefreshReport {
+  return {
+    trigger: "connect",
+    startedAt,
+    finishedAt,
+    results: [{ instanceId, outcome }],
+  };
+}
+
+export function createProviderService(
+  options: ProviderServiceOptions = {},
+): ProviderService {
+  const packages = options.packages ?? providerRegistry;
+  const fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const clock = options.clock ?? Date.now;
+  const randomUUID = options.randomUUID ?? (() => globalThis.crypto.randomUUID());
+  const lanes = createProviderOperationLane();
+  const apiKeyConnections = createApiKeyConnectionLifecycle();
+  const pendingConnectionCandidates = new Set<ProviderInstanceRecord>();
+  let reconciliationGeneration = 0;
+  let lifecycleGeneration = 0;
+  let deleteAllDepth = 0;
+
+  const beginConnectionGeneration = (): number => {
+    if (deleteAllDepth > 0) throw new Error("Provider connection is unavailable.");
+    return lifecycleGeneration;
+  };
+  const isConnectionGenerationCurrent = (generation: number): boolean =>
+    deleteAllDepth === 0 && lifecycleGeneration === generation;
+
+  const orchestrator = createRefreshOrchestrator({
+    listInstanceIds: async () =>
+      (await connectionRepository.list()).map(({ id }) => id),
+    isAutoRefreshEnabled: async () =>
+      (await loadInstanceAppState()).preferences.autoRefresh,
+    isInstanceRefreshEligible: async (instanceId) => {
+      if (!lanes.canRefresh(instanceId)) return false;
+      const instance = await connectionRepository.get(instanceId);
+      return Boolean(
+        instance &&
+          instance.access === "granted" &&
+          (await isProviderRefreshEligible(instance, packages)),
+      );
+    },
+    getBackoffRetryAt: async (instanceId) => {
+      const instance = await connectionRepository.get(instanceId);
+      return instance ? backoffRetryAt(instance) : undefined;
+    },
+    runProvider: async (instanceId, policy, control) => {
+      const operation = lanes.beginRefresh(instanceId);
+      if (!operation) return { kind: "skipped", reason: "superseded" };
+      try {
+        const instance = await connectionRepository.get(instanceId);
+        if (!instance || !lanes.isCurrent(operation)) {
+          return { kind: "skipped", reason: "superseded" };
+        }
+        const providerPackage = packages[instance.providerKind];
+        const storedCredential =
+          providerPackage.credentialKind === "api-key"
+            ? await readCredentialWithRevision(instanceId)
+            : undefined;
+        if (!lanes.isCurrent(operation) || !control.isCurrentGeneration()) {
+          return { kind: "skipped", reason: "superseded" };
+        }
+        const outcome = await refreshProviderInstance(
+          providerPackage,
+          instance,
+          {
+            fetch,
+            now: clock(),
+            signal: control.signal,
+            interaction: policy.interaction,
+          },
+          policy.trigger,
+          () => lanes.isCurrent(operation) && control.isCurrentGeneration(),
+          storedCredential?.status === "active"
+            ? { kind: "api-key", value: storedCredential.value }
+            : undefined,
+          clock,
+        );
+        if (storedCredential) {
+          await markCredentialRejectedIfRevisionForOutcome(
+            instanceId,
+            storedCredential.revision,
+            outcome,
+          );
+        }
+        return outcome;
+      } finally {
+        lanes.finish(operation);
+      }
+    },
+    clock,
+  });
+
+  async function markCredentialRejectedIfRevisionForOutcome(
+    instanceId: ProviderInstanceId,
+    revision: string,
+    outcome: ProviderRefreshOutcome,
+  ): Promise<void> {
+    if (
+      outcome.kind === "failure" &&
+      outcome.category === "credential_invalid"
+    ) {
+      await markCredentialRejectedIfRevision(instanceId, revision);
+    }
+  }
+
+  async function connectBrowserProvider(
+    providerKind: BrowserSessionProviderKind,
+  ): Promise<RefreshReport> {
+    const lifecycle = beginConnectionGeneration();
+    const startedAt = clock();
+    const providerPackage = packages[providerKind];
+    if (providerPackage.credentialKind !== "none") {
+      throw new Error("Provider connection failed.");
+    }
+    const config = providerPackage.normalizeConfig({ kind: "fixed" });
+    if (!config) throw new Error("Provider connection failed.");
+    const instanceId = `${providerKind}:default`;
+    const existing = (await connectionRepository.list()).find(
+      (instance) => instance.providerKind === providerKind,
+    );
+    const candidate: ProviderInstanceRecord = existing ?? {
+      id: instanceId,
+      providerKind,
+      config,
+      access: "granted",
+      createdAt: clock(),
+      history: [],
+    };
+    if (!(await hasInstancePermission(candidate, packages))) {
+      throw new Error("Provider permission is required.");
+    }
+    if (!isConnectionGenerationCurrent(lifecycle)) {
+      return connectReport(candidate.id, startedAt, clock(), {
+        kind: "skipped",
+        reason: "superseded",
+      });
+    }
+    const operation = lanes.beginConnect(candidate.id);
+    if (!operation) throw new Error("Provider connection is unavailable.");
+    const isCurrent = () =>
+      lanes.isCurrent(operation) && isConnectionGenerationCurrent(lifecycle);
+    orchestrator.invalidateInstance(candidate.id);
+    let committed = false;
+    let operationWasCurrent = false;
+    try {
+      if (existing) {
+        committed = await connectionRepository.replace(existing.id, (current) =>
+          isCurrent() ? { ...current, access: "granted" } : current,
+        );
+      } else {
+        committed = await connectionRepository.createIfCurrent(candidate, isCurrent);
+      }
+      operationWasCurrent = isCurrent();
+    } finally {
+      lanes.finish(operation);
+    }
+    if (!committed || !operationWasCurrent) {
+      return connectReport(candidate.id, startedAt, clock(), {
+        kind: "skipped",
+        reason: "superseded",
+      });
+    }
+    return orchestrator.refreshInstance(candidate.id, "connect");
+  }
+
+  async function connectApiKeyProvider(
+    request: ConnectApiKeyProviderRequest,
+  ): Promise<ConnectApiKeyProviderResult> {
+    const lifecycle = beginConnectionGeneration();
+    const providerPackage = packages[request.providerKind];
+    if (providerPackage.credentialKind !== "api-key") {
+      throw new Error("API key connection failed.");
+    }
+    const config = providerPackage.normalizeConfig(request.config);
+    if (!config) throw new Error("API key connection failed.");
+    const currentInstances = await connectionRepository.list();
+    const existing = request.instanceId
+      ? currentInstances.find(({ id }) => id === request.instanceId)
+      : undefined;
+    if (
+      (request.instanceId &&
+        (!existing || existing.providerKind !== request.providerKind)) ||
+      (!request.instanceId &&
+        providerPackage.cardinality === "single" &&
+        currentInstances.some(
+          ({ providerKind }) => providerKind === request.providerKind,
+        ))
+    ) {
+      throw new Error("API key connection failed.");
+    }
+    const instanceId =
+      existing?.id ??
+      (providerPackage.cardinality === "single"
+        ? `${request.providerKind}:default`
+        : `${request.providerKind}:${randomUUID()}`);
+    const userLabel = normalizedLabel(request.userLabel);
+    const candidate: ProviderInstanceRecord = existing
+      ? {
+          ...existing,
+          config,
+          access: "granted",
+          ...(Object.hasOwn(request, "userLabel")
+            ? userLabel
+              ? { userLabel }
+              : { userLabel: undefined }
+            : {}),
+        }
+      : {
+          id: instanceId,
+          providerKind: request.providerKind,
+          ...(userLabel ? { userLabel } : {}),
+          config,
+          access: "granted",
+          createdAt: clock(),
+          history: [],
+        };
+    const operation = lanes.beginConnect(instanceId);
+    if (!operation) throw new Error("API key connection is unavailable.");
+    const isCurrent = () =>
+      lanes.isCurrent(operation) && isConnectionGenerationCurrent(lifecycle);
+    pendingConnectionCandidates.add(candidate);
+    orchestrator.invalidateInstance(instanceId);
+    const startedAt = clock();
+    try {
+      if (!(await hasInstancePermission(candidate, packages)) || !isCurrent()) {
+        throw new Error("Provider permission is required.");
+      }
+      const validation = await apiKeyConnections.connect(
+        candidate,
+        providerPackage,
+        request.apiKey.trim(),
+        { fetch, now: startedAt, interaction: "allowed" },
+        clock,
+        isCurrent,
+      );
+      let outcome = validation.outcome;
+      if (outcome.kind !== "success" || !isCurrent()) {
+        return {
+          report: connectReport(
+            instanceId,
+            startedAt,
+            validation.finishedAt,
+            outcome,
+          ),
+          result: validation.result,
+        };
+      }
+      const saved = await saveApiKeyIfCurrent(
+        instanceId,
+        request.apiKey,
+        isCurrent,
+      );
+      if (!saved.saved) {
+        outcome = { kind: "skipped", reason: "superseded" };
+      } else {
+        try {
+          const next = applyCollectedOutcome(
+            candidate,
+            outcome,
+            "connect",
+            startedAt,
+            validation.finishedAt,
+          );
+          const committed = existing
+            ? await connectionRepository.replace(instanceId, (current) =>
+                isCurrent() ? next : current,
+              )
+            : await connectionRepository.createIfCurrent(
+                next,
+                isCurrent,
+              );
+          if (!committed || !isCurrent()) {
+            await restoreCredentialIfRevision(
+              instanceId,
+              saved.revision,
+              saved.previous,
+            );
+            outcome = { kind: "skipped", reason: "superseded" };
+          }
+        } catch (error) {
+          await restoreCredentialIfRevision(
+            instanceId,
+            saved.revision,
+            saved.previous,
+          );
+          throw error;
+        }
+      }
+      if (existing && outcome.kind === "success") {
+        const remaining = await connectionRepository.list();
+        await removeUnusedInstancePermissions(existing, remaining, packages);
+      }
+      return {
+        report: connectReport(
+          instanceId,
+          startedAt,
+          validation.finishedAt,
+          outcome,
+        ),
+        result: outcome.kind === "success" ? "connected" : "temporary_error",
+      };
+    } finally {
+      pendingConnectionCandidates.delete(candidate);
+      try {
+        const remaining = [
+          ...(await connectionRepository.list()),
+          ...pendingConnectionCandidates,
+        ];
+        await removeUnusedInstancePermissions(candidate, remaining, packages);
+      } catch {
+        // Candidate cleanup is best effort; command results remain sanitized.
+      }
+      lanes.finish(operation);
+    }
+  }
+
+  async function reconcilePermissions(
+    change?: Browser.permissions.Permissions,
+  ): Promise<void> {
+    const generation = ++reconciliationGeneration;
+    const instances = await connectionRepository.list();
+    const externallyAffected = change
+      ? instances.filter((instance) =>
+          permissionChangeAffectsInstance(instance, change, packages),
+        )
+      : [];
+    const earlyCleanups = externallyAffected.map((instance) => {
+      const cleanup = lanes.beginCleanup(instance.id);
+      orchestrator.invalidateInstance(instance.id);
+      apiKeyConnections.invalidateInstance(instance.id);
+      return cleanup;
+    });
+    const earlyIds = new Set(externallyAffected.map(({ id }) => id));
+    try {
+      const authority = await Promise.all(
+        (change ? externallyAffected : instances).map(async (instance) => ({
+          instance,
+          granted: await hasInstancePermission(instance, packages),
+        })),
+      );
+      if (generation !== reconciliationGeneration) return;
+      for (const { instance, granted } of authority) {
+        if (generation !== reconciliationGeneration) return;
+        const access = granted ? "granted" : "required";
+        if (instance.access === access) continue;
+        if (granted) {
+          await connectionRepository.setAccess(instance.id, "granted");
+          continue;
+        }
+        const cleanup = earlyIds.has(instance.id)
+          ? undefined
+          : lanes.beginCleanup(instance.id);
+        orchestrator.invalidateInstance(instance.id);
+        apiKeyConnections.invalidateInstance(instance.id);
+        try {
+          await connectionRepository.setAccess(instance.id, "required");
+        } finally {
+          if (cleanup) lanes.endCleanup(cleanup);
+        }
+      }
+    } finally {
+      earlyCleanups.forEach((cleanup) => lanes.endCleanup(cleanup));
+    }
+  }
+
+  return {
+    connectBrowserProvider,
+    connectApiKeyProvider,
+    refreshInstance: (instanceId, trigger) =>
+      orchestrator.refreshInstance(instanceId, trigger),
+    refreshAll: (trigger) => orchestrator.refreshAll(trigger),
+    async renameInstance(instanceId, userLabel) {
+      if (!(await connectionRepository.get(instanceId))) {
+        throw new Error("Provider instance is unavailable.");
+      }
+      await connectionRepository.rename(instanceId, userLabel);
+    },
+    async disconnectInstance(instanceId) {
+      const instance = await connectionRepository.get(instanceId);
+      if (!instance) return { ok: true, localDataDeleted: true };
+      const cleanup = lanes.beginCleanup(instanceId);
+      orchestrator.invalidateInstance(instanceId);
+      apiKeyConnections.invalidateInstance(instanceId);
+      try {
+        await deleteCredential(instanceId);
+        await usageRepository.clear(instanceId);
+        await connectionRepository.delete(instanceId);
+        const remaining = await connectionRepository.list();
+        const removed = await removeUnusedInstancePermissions(
+          instance,
+          remaining,
+          packages,
+        );
+        return removed
+          ? { ok: true, localDataDeleted: true }
+          : {
+              ok: false,
+              error: "permission_removal_failed",
+              localDataDeleted: true,
+            };
+      } finally {
+        lanes.endCleanup(cleanup);
+      }
+    },
+    reconcilePermissions,
+    async deleteAllLocalData() {
+      lifecycleGeneration += 1;
+      deleteAllDepth += 1;
+      let cleanups: ReturnType<typeof lanes.beginCleanup>[] = [];
+      try {
+        const instances = await connectionRepository.list();
+        cleanups = instances.map(({ id }) => lanes.beginCleanup(id));
+        orchestrator.invalidateAll();
+        apiKeyConnections.invalidateAll();
+        await deleteAllCredentials();
+        await deleteAllInstanceData();
+        const removed = await removeAllInstancePermissions(instances, packages);
+        return {
+          result: removed ? "deleted" : "deleted_with_permission_errors",
+        };
+      } finally {
+        cleanups.forEach((cleanup) => lanes.endCleanup(cleanup));
+        deleteAllDepth = Math.max(0, deleteAllDepth - 1);
+      }
+    },
+    getState: loadInstanceAppState,
+    setDisplayMode: (mode) => preferencesRepository.setDisplayMode(mode),
+    setAutoRefresh: (enabled) => preferencesRepository.setAutoRefresh(enabled),
+  };
+}

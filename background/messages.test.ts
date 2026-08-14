@@ -4,259 +4,165 @@ import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
   isProviderOperationEvent,
+  isRuntimeCommand,
 } from "./messages";
 
-describe("runtime command router", () => {
-  test("dispatches only the exact fixed command shapes", async () => {
-    const refreshResult = {
-      state: { version: 2 },
-      report: { trigger: "manual_all" },
-    };
-    const providerRefreshResult = {
-      state: { version: 2 },
-      report: { trigger: "manual_provider" },
-    };
+const INSTANCE = "newapi:550e8400-e29b-41d4-a716-446655440000";
+
+describe("strict instance runtime protocol", () => {
+  test("dispatches every exact command shape with instance identity intact", async () => {
     const handlers = {
-      refreshAll: vi.fn(async () => refreshResult),
-      connectApiKeyProvider: vi.fn(async () => ({
-        state: { version: 4 },
-        report: { trigger: "connect" },
-        result: "connected",
-      })),
-      collectProvider: vi.fn(async () => ({
-        state: { version: 2 },
-        report: { trigger: "connect" },
-      })),
-      refreshProvider: vi.fn(async () => providerRefreshResult),
+      refreshAll: vi.fn(async () => "all"),
+      connectBrowserProvider: vi.fn(async () => "browser"),
+      connectApiKeyProvider: vi.fn(async () => "api"),
+      refreshInstance: vi.fn(async () => "one"),
+      renameInstance: vi.fn(async () => "renamed"),
+      disconnectInstance: vi.fn(async () => "disconnected"),
       getState: vi.fn(async () => "state"),
-      setDisplayMode: vi.fn(async () => "updated"),
-      setAutoRefresh: vi.fn(async () => "auto-updated"),
-      disconnectProvider: vi.fn(async () => "disconnected"),
+      setDisplayMode: vi.fn(async () => "display"),
+      setAutoRefresh: vi.fn(async () => "auto"),
       deleteLocalData: vi.fn(async () => "deleted"),
     };
     const handle = createRuntimeCommandHandler(handlers);
 
-    await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe(refreshResult);
+    await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe("all");
     await expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
-        apiKey: "synthetic-candidate-key",
-        connectionIntent: "permission-grant",
-      }),
-    ).resolves.toEqual({
-      state: { version: 4 },
-      report: { trigger: "connect" },
-      result: "connected",
-    });
+      handle({ type: "CONNECT_BROWSER_PROVIDER", providerKind: "kimi" }),
+    ).resolves.toBe("browser");
+    const apiCommand = {
+      type: "CONNECT_API_KEY_PROVIDER" as const,
+      providerKind: "newapi" as const,
+      instanceId: INSTANCE,
+      userLabel: "Work relay",
+      config: { kind: "dynamic-origin" as const, baseUrl: "https://relay.example/path" },
+      apiKey: "synthetic-candidate-key",
+    };
+    await expect(handle(apiCommand)).resolves.toBe("api");
     await expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "newapi",
-        apiKey: "sk-synthetic-key",
-        baseUrl: "https://new-api.example.com/v1",
-        connectionIntent: "permission-grant",
-      }),
-    ).resolves.toEqual({
-      state: { version: 4 },
-      report: { trigger: "connect" },
-      result: "connected",
-    });
+      handle({ type: "REFRESH_INSTANCE", instanceId: INSTANCE }),
+    ).resolves.toBe("one");
     await expect(
-      handle({ type: "COLLECT_PROVIDER", providerId: "chatgpt" }),
-    ).resolves.toMatchObject({ report: { trigger: "connect" } });
+      handle({ type: "RENAME_INSTANCE", instanceId: INSTANCE, userLabel: "Renamed" }),
+    ).resolves.toBe("renamed");
     await expect(
-      handle({ type: "COLLECT_PROVIDER", providerId: "claude" }),
-    ).resolves.toMatchObject({ report: { trigger: "connect" } });
+      handle({ type: "RENAME_INSTANCE", instanceId: INSTANCE }),
+    ).resolves.toBe("renamed");
     await expect(
-      handle({ type: "COLLECT_PROVIDER", providerId: "kimi" }),
-    ).resolves.toMatchObject({ report: { trigger: "connect" } });
-    await expect(
-      handle({ type: "COLLECT_PROVIDER", providerId: "cursor" }),
-    ).resolves.toEqual({
-      state: { version: 2 },
-      report: { trigger: "connect" },
-    });
-    await expect(
-      handle({ type: "REFRESH_PROVIDER", providerId: "kimi" }),
-    ).resolves.toBe(providerRefreshResult);
-    await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
-    await expect(
-      handle({ type: "SET_DISPLAY_MODE", mode: "used" }),
-    ).resolves.toBe("updated");
-    await expect(
-      handle({ type: "SET_DISPLAY_MODE", mode: "left" }),
-    ).resolves.toBe("updated");
-    await expect(
-      handle({ type: "SET_AUTO_REFRESH", enabled: false }),
-    ).resolves.toBe("auto-updated");
-    await expect(
-      handle({ type: "SET_AUTO_REFRESH", enabled: true }),
-    ).resolves.toBe("auto-updated");
-    await expect(
-      handle({ type: "DISCONNECT_PROVIDER", providerId: "kimi" }),
+      handle({ type: "DISCONNECT_INSTANCE", instanceId: INSTANCE }),
     ).resolves.toBe("disconnected");
+    await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
+    await expect(handle({ type: "SET_DISPLAY_MODE", mode: "left" })).resolves.toBe("display");
+    await expect(handle({ type: "SET_AUTO_REFRESH", enabled: false })).resolves.toBe("auto");
     await expect(handle({ type: "DELETE_LOCAL_DATA" })).resolves.toBe("deleted");
-    expect(handlers.collectProvider).toHaveBeenNthCalledWith(1, "chatgpt");
-    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
-      "elevenlabs",
-      "synthetic-candidate-key",
-      "permission-grant",
-      undefined,
-    );
-    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
-      "newapi",
-      "sk-synthetic-key",
-      "permission-grant",
-      "https://new-api.example.com/v1",
-    );
 
-    expect(handle({ type: "FETCH", url: "https://attacker.invalid" })).toBeUndefined();
-    expect(
-      handle({
-        type: "REFRESH_ALL",
-        url: "https://attacker.invalid",
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "COLLECT_PROVIDER", providerId: "antigravity" }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "chatgpt",
-        apiKey: "synthetic-candidate-key",
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
-        apiKey: "   ",
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
-        apiKey: "x".repeat(4_097),
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
-        apiKey: `${" ".repeat(4_096)}x`,
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
-        apiKey: "synthetic-candidate-key",
-        extra: true,
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "REFRESH_PROVIDER", providerId: "antigravity" }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "COLLECT_PROVIDER",
-        providerId: "claude",
-        extra: true,
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "SET_DISPLAY_MODE", mode: "remaining" }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "SET_DISPLAY_MODE", mode: "left", extra: true }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "SET_AUTO_REFRESH", enabled: "false" }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "SET_AUTO_REFRESH", enabled: false, extra: true }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "DISCONNECT_PROVIDER", providerId: "antigravity" }),
-    ).toBeUndefined();
-    expect(
-      handle({ type: "DELETE_LOCAL_DATA", providerId: "chatgpt" }),
-    ).toBeUndefined();
-    expect(handlers.refreshAll).toHaveBeenCalledTimes(1);
-    expect(handlers.connectApiKeyProvider).toHaveBeenCalledTimes(2);
-    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(
-      "elevenlabs",
-      "synthetic-candidate-key",
-      "permission-grant",
-      undefined,
-    );
-
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "newapi",
-        apiKey: "sk-synthetic-key",
-        connectionIntent: "permission-grant",
-      }),
-    ).toBeUndefined();
-    expect(
-      handle({
-        type: "CONNECT_API_KEY_PROVIDER",
-        providerId: "elevenlabs",
-        apiKey: "synthetic-candidate-key",
-        baseUrl: "https://attacker.invalid",
-        connectionIntent: "permission-grant",
-      }),
-    ).toBeUndefined();
-    expect(handlers.collectProvider).toHaveBeenCalledTimes(4);
-    expect(handlers.refreshProvider).toHaveBeenCalledTimes(1);
-    expect(handlers.refreshProvider).toHaveBeenCalledWith("kimi");
-    expect(handlers.getState).toHaveBeenCalledTimes(1);
-    expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(1, "used");
-    expect(handlers.setDisplayMode).toHaveBeenNthCalledWith(2, "left");
-    expect(handlers.setAutoRefresh).toHaveBeenNthCalledWith(1, false);
-    expect(handlers.setAutoRefresh).toHaveBeenNthCalledWith(2, true);
-    expect(handlers.disconnectProvider).toHaveBeenCalledWith("kimi");
-    expect(handlers.deleteLocalData).toHaveBeenCalledTimes(1);
+    expect(handlers.connectBrowserProvider).toHaveBeenCalledWith("kimi");
+    expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(apiCommand);
+    expect(handlers.refreshInstance).toHaveBeenCalledWith(INSTANCE);
+    expect(handlers.renameInstance).toHaveBeenNthCalledWith(1, INSTANCE, "Renamed");
+    expect(handlers.renameInstance).toHaveBeenNthCalledWith(2, INSTANCE, undefined);
+    expect(handlers.disconnectInstance).toHaveBeenCalledWith(INSTANCE);
   });
 
-  test("keeps the response channel open only for accepted async commands", async () => {
-    const handleCommand = vi.fn(async () => ({ demoMode: true }));
+  test.each([
+    { type: "REFRESH_ALL", apiKey: "secret" },
+    { type: "GET_STATE", credential: "secret" },
+    { type: "REFRESH_PROVIDER", providerId: "kimi" },
+    { type: "DISCONNECT_PROVIDER", providerId: "kimi" },
+    { type: "CONNECT_BROWSER_PROVIDER", providerKind: "elevenlabs" },
+    { type: "REFRESH_INSTANCE", instanceId: "newapi:not-a-uuid" },
+    { type: "REFRESH_INSTANCE", instanceId: INSTANCE, token: "secret" },
+    { type: "RENAME_INSTANCE", instanceId: INSTANCE, userLabel: "x".repeat(129) },
+    { type: "RENAME_INSTANCE", instanceId: INSTANCE, userLabel: "bad\u0000label" },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      apiKey: " ",
+    },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "http://public.example" },
+      apiKey: "secret",
+    },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "elevenlabs",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      apiKey: "secret",
+    },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      apiKey: "x".repeat(4_097),
+    },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      apiKey: "secret",
+      password: "unexpected-secret",
+    },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "newapi",
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example",
+        accessToken: "nested-secret",
+      },
+      apiKey: "secret",
+    },
+    {
+      type: "CONNECT_API_KEY_PROVIDER",
+      providerKind: "elevenlabs",
+      config: { kind: "fixed", password: "nested-secret" },
+      apiKey: "secret",
+    },
+  ])("rejects malformed, legacy, or secret-extended command %#", (command) => {
+    expect(isRuntimeCommand(command)).toBe(false);
+  });
+
+  test("normalizes command configuration only through the provider package contract", () => {
+    expect(
+      isRuntimeCommand({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerKind: "newapi",
+        config: { kind: "dynamic-origin", baseUrl: "https://relay.example/v1" },
+        apiKey: "synthetic-key",
+      }),
+    ).toBe(true);
+    expect(
+      isRuntimeCommand({
+        type: "CONNECT_API_KEY_PROVIDER",
+        providerKind: "elevenlabs",
+        config: { kind: "fixed" },
+        apiKey: "synthetic-key",
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps the response channel open only for accepted commands", async () => {
+    const handleCommand = vi.fn(async () => ({ version: 1 }));
     const sendResponse = vi.fn();
     const listener = createChromeRuntimeMessageListener(handleCommand);
 
-    expect(
-      listener(
-        { type: "GET_STATE" },
-        {} as Browser.runtime.MessageSender,
-        sendResponse,
-      ),
-    ).toBe(true);
-    await vi.waitFor(() =>
-      expect(sendResponse).toHaveBeenCalledWith({ demoMode: true }),
-    );
-    expect(handleCommand).toHaveBeenCalledWith({ type: "GET_STATE" });
+    expect(listener({ type: "GET_STATE" }, {} as never, sendResponse)).toBe(true);
+    await vi.waitFor(() => expect(sendResponse).toHaveBeenCalledWith({ version: 1 }));
 
     handleCommand.mockClear();
     sendResponse.mockClear();
     expect(
-      listener(
-        { type: "REFRESH_ALL", url: "https://attacker.invalid" },
-        {} as Browser.runtime.MessageSender,
-        sendResponse,
-      ),
+      listener({ type: "GET_STATE", token: "secret" }, {} as never, sendResponse),
     ).toBe(false);
-    await Promise.resolve();
     expect(handleCommand).not.toHaveBeenCalled();
     expect(sendResponse).not.toHaveBeenCalled();
   });
 
-  test("returns a fixed failure envelope without exposing handler errors", async () => {
+  test("returns a fixed failure envelope without echoing commands or internal errors", async () => {
     const handleCommand = vi.fn(async () => {
-      throw new Error("secret-bearing internal failure");
+      throw new Error("internal-secret");
     });
     const sendResponse = vi.fn();
     const listener = createChromeRuntimeMessageListener(handleCommand);
@@ -265,40 +171,33 @@ describe("runtime command router", () => {
       listener(
         {
           type: "CONNECT_API_KEY_PROVIDER",
-          providerId: "elevenlabs",
-          apiKey: "must-never-escape",
-          connectionIntent: "permission-grant",
+          providerKind: "elevenlabs",
+          config: { kind: "fixed" },
+          apiKey: "candidate-secret",
         },
-        {} as Browser.runtime.MessageSender,
+        {} as never,
         sendResponse,
       ),
     ).toBe(true);
     await vi.waitFor(() =>
-      expect(sendResponse).toHaveBeenCalledWith({
-        ok: false,
-        error: "command_failed",
-      }),
+      expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: "command_failed" }),
     );
-    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain(
-      "secret-bearing",
-    );
-    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain(
-      "must-never-escape",
-    );
+    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain("internal-secret");
+    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain("candidate-secret");
   });
 
-  test("accepts only the exact credential-free Kimi operation event", () => {
+  test("accepts only credential-free instance operation events", () => {
     expect(
       isProviderOperationEvent({
         type: "PROVIDER_OPERATION",
-        providerId: "kimi",
+        instanceId: "kimi:default",
         operation: "waiting_for_session",
       }),
     ).toBe(true);
     expect(
       isProviderOperationEvent({
         type: "PROVIDER_OPERATION",
-        providerId: "kimi",
+        instanceId: "kimi:default",
         operation: "waiting_for_session",
         accessToken: "secret",
       }),
@@ -306,15 +205,8 @@ describe("runtime command router", () => {
     expect(
       isProviderOperationEvent({
         type: "PROVIDER_OPERATION",
-        providerId: "claude",
+        instanceId: "kimi:not-valid",
         operation: "waiting_for_session",
-      }),
-    ).toBe(false);
-    expect(
-      isProviderOperationEvent({
-        type: "PROVIDER_OPERATION",
-        providerId: "kimi",
-        operation: "fetching",
       }),
     ).toBe(false);
   });
