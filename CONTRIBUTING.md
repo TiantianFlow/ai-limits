@@ -31,22 +31,31 @@ must use synthetic data.
 ## Adding or changing a provider
 
 Every provider is one `ProviderPackage`, registered exhaustively in
-`providers/registry.ts`. The package owns provider behavior; central
-orchestration, storage, permissions, and history code stay provider-agnostic.
-Adding a provider must not require a provider-kind branch in those central
-modules.
+`providers/registry.ts`. The package owns cardinality, nonsecret configuration
+normalization, exact permission requirements, and collection. Public
+presentation stays separate in the presentation catalog. Generic browser-session
+and API-key connection drivers remain central and are selected from the
+package's credential and configuration metadata. Central orchestration,
+storage, permission ownership, connection lifecycles, and History stay
+provider-agnostic; adding a provider must not require a provider-kind branch in
+those central modules.
 
 A package must define and own:
 
-- a stable `ProviderKind`, presentation metadata, and `single` or `multiple`
-  cardinality;
-- its connection and credential mode;
+- a stable `ProviderKind` and `single` or `multiple` cardinality;
+- credential and configuration metadata that select the central generic
+  connection driver;
 - strict normalization of all nonsecret instance configuration;
 - exact Chrome origins and API permissions derived from that normalized
   configuration;
-- its connection driver, credential/session resolution, validation, recovery,
-  and collection behavior; and
+- provider-specific validation or recovery needed by its collection path, and
+  its collection behavior; and
 - adapter normalization into metrics with stable IDs.
+
+User-facing names, descriptions, and connection guidance belong in the
+separate public presentation catalog, not in `ProviderPackage`. The central
+generic drivers own credential-vault and browser-session connection
+lifecycles; a package declares the metadata and behavior those drivers use.
 
 Keep provider endpoints, response schemas, and response normalization inside
 the provider directory. Grant exact HTTPS hosts without explicit ports.

@@ -67,6 +67,24 @@ function encodedPng(width, height) {
   ]);
 }
 
+function insertPngChunk(png, type, data = Buffer.alloc(0)) {
+  const iendOffset = png.length - 12;
+  const typeBytes = Buffer.from(type, "ascii");
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  typeBytes.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(
+    crc32(Buffer.concat([typeBytes, data])),
+    8 + data.length,
+  );
+  return Buffer.concat([
+    png.subarray(0, iendOffset),
+    chunk,
+    png.subarray(iendOffset),
+  ]);
+}
+
 describe("store assets", () => {
   it("targets final instance-keyed provider card headings for marketing captures", () => {
     const selector = storeAssetContract.marketingProviderHeadingSelector;
@@ -1088,6 +1106,40 @@ describe("store assets", () => {
     expect(() => readPngDimensions(badCrc)).toThrow();
     expect(() => readPngDimensions(valid.subarray(0, -12))).toThrow();
   });
+
+  it("requires the exact ten marketing PNG paths and rejects an extra PNG", () => {
+    const exactInventory = Object.keys(
+      storeAssetContract.REQUIRED_STORE_ASSET_DIMENSIONS,
+    );
+    expect(
+      storeAssetContract.validateMarketingPngInventory(exactInventory),
+    ).toEqual([]);
+    expect(
+      storeAssetContract.validateMarketingPngInventory([
+        ...exactInventory,
+        "chrome-web-store/unreviewed-extra.png",
+      ]),
+    ).toContain(
+      "Unexpected marketing PNG: chrome-web-store/unreviewed-extra.png.",
+    );
+  });
+
+  it.each(["tEXt", "eXIf"])(
+    "rejects the ancillary %s PNG chunk even with a valid CRC",
+    (type) => {
+      const mutated = insertPngChunk(
+        encodedPng(1280, 800),
+        type,
+        Buffer.from(
+          type === "tEXt" ? "comment\0not allowed" : "MM\0*",
+          "binary",
+        ),
+      );
+      expect(() => readPngDimensions(mutated)).toThrow(
+        `PNG contains forbidden ${type} chunk.`,
+      );
+    },
+  );
 
   it("rejects a wrong screenshot size", () => {
     const errors = validateStoreAssetDimensions({

@@ -36,7 +36,16 @@ function fixtureViewState(state: AppViewState, now: number): AppViewState {
             ...instance.snapshot,
             metrics: instance.snapshot.metrics.map((metric) =>
               metric.type === "quota"
-                ? { ...metric, usedRatio: Math.min(1, metric.usedRatio + 0.18) }
+                ? (() => {
+                    const usedRatio = Math.min(1, metric.usedRatio + 0.18);
+                    return {
+                      ...metric,
+                      usedRatio,
+                      ...(metric.used !== undefined && metric.limit !== undefined
+                        ? { used: metric.limit * usedRatio }
+                        : {}),
+                    };
+                  })()
                 : metric,
             ),
           }
@@ -152,11 +161,9 @@ export function applyFidelityPreviewTransition(
     if (transition.type === "disconnect") {
       return {
         ...state,
-        instances: state.instances.map((instance) => {
-          if (instance.id !== transition.instanceId) return instance;
-          const { snapshot: _snapshot, ...disconnected } = instance;
-          return { ...disconnected, access: "required" as const, history: [] };
-        }),
+        instances: state.instances.filter(
+          (instance) => instance.id !== transition.instanceId,
+        ),
       };
     }
     return {

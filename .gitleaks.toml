@@ -6,7 +6,20 @@ description = "Canonical New API instance IDs in storage contract tests"
 condition = "AND"
 regexTarget = "match"
 paths = [
-  '''^storage/(?:credential-vault|credentials|instance-repository|repository|state-codec)\.test\.ts$''',
+  '''^storage/(?:credentials|repository|state-codec)\.test\.ts$''',
+]
+regexes = [
+  '''\bnewapi:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b''',
+]
+
+[[allowlists]]
+description = "Canonical New API instance IDs in exact pre-rename commits"
+condition = "AND"
+regexTarget = "match"
+commits = [
+  "748806948496ec12ef53d6b6a1abba79e5fd39ca",
+  "8f23718971f841c1b733b3a98eba84ce71730ad6",
+  "b8856acf6b266ef09e5b97ddf887fb0e6ee189c3",
 ]
 regexes = [
   '''\bnewapi:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b''',

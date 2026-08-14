@@ -819,10 +819,13 @@ export function createProviderService(
           orchestrator.invalidateInstance(instanceId);
           apiKeyConnections.invalidateInstance(instanceId);
           try {
+            const permissionCleanup = await permissionIntents.queueCleanup(
+              instance,
+            );
             await deleteCredential(instanceId);
             await usageRepository.clear(instanceId);
             await connectionRepository.delete(instanceId);
-            const removed = await cleanupPermissionOwner(instance);
+            const removed = await completePermissionCleanup(permissionCleanup);
             return removed
               ? ({ ok: true, localDataDeleted: true } as const)
               : ({

@@ -40,6 +40,11 @@ Web Store screenshots, but they are not part of the current store submission.
 Chrome Web Store promotional tiles are not localized, so there is no separate
 Chinese promotional tile.
 
+The surrounding project copy in these four Chinese images is Simplified
+Chinese, while the embedded production extension UI remains in English. After
+runtime localization is implemented, regenerate them so both the surrounding
+copy and embedded UI are Chinese.
+
 ### GitHub repository artwork
 
 `github/social-preview-1280x640.png` is the repository's deterministic social
@@ -47,11 +52,6 @@ preview. It combines concise product copy with the same fixture-only production
 Cockpit used by the Store artwork. Upload it through the repository's
 **Settings → General → Social preview** control; it is not a Chrome Web Store
 asset.
-
-The surrounding project copy is in Simplified Chinese, while the embedded
-production extension UI remains in English. After runtime localization is
-implemented, regenerate these assets so both the surrounding copy and embedded
-UI are Chinese.
 
 ## Regenerate and verify
 

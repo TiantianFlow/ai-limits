@@ -4,6 +4,9 @@ import { strFromU8, unzipSync } from "fflate";
 
 import {
   validateBuildManifest,
+  readReleaseDirectoryEntries,
+  validateReleaseArtifactParity,
+  validateReleaseEntryNames,
   validateReleaseTextEntries,
   validateSidePanelAssetText,
 } from "./artifact-contract.mjs";
@@ -22,6 +25,25 @@ function assert(condition, message) {
 
 const archive = unzipSync(new Uint8Array(await readFile(archivePath)));
 const entries = Object.keys(archive);
+for (const error of validateReleaseEntryNames(entries)) {
+  throw new Error(error);
+}
+const archiveFiles = Object.fromEntries(
+  Object.entries(archive).filter(([entry]) => !entry.endsWith("/")),
+);
+const outputEntries = await readReleaseDirectoryEntries(
+  resolve(".output/chrome-mv3"),
+);
+const stagedEntries = await readReleaseDirectoryEntries(
+  resolve("dist/chrome-mv3"),
+);
+for (const error of validateReleaseArtifactParity({
+  zip: archiveFiles,
+  output: outputEntries,
+  dist: stagedEntries,
+})) {
+  throw new Error(error);
+}
 const manifestEntries = entries.filter(
   (entry) => entry === "manifest.json" || entry.endsWith("/manifest.json"),
 );

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -29,6 +30,16 @@ const genericApiKey = [
   "abcdef0123456789",
   "abcdef0123456789",
 ].join("");
+const knownStorageTestPaths = [
+  "storage/credentials.test.ts",
+  "storage/repository.test.ts",
+  "storage/state-codec.test.ts",
+];
+const historicalCanonicalIdCommits = [
+  "748806948496ec12ef53d6b6a1abba79e5fd39ca",
+  "8f23718971f841c1b733b3a98eba84ce71730ad6",
+  "b8856acf6b266ef09e5b97ddf887fb0e6ee189c3",
+];
 
 function scan(relativePath, contents) {
   const directory = mkdtempSync(path.join(os.tmpdir(), "ai-limits-gitleaks-"));
@@ -80,14 +91,22 @@ afterEach(() => {
 });
 
 describe("gitleaks repository contract", () => {
-  it("allows only canonical New API instance IDs in known storage tests", () => {
+  it("scopes renamed historical fixtures by exact commit without dead paths", () => {
+    const config = readFileSync(configPath, "utf8");
     expect(
-      scan(
-        "storage/repository.test.ts",
-        `const apiKey = "${canonicalNewApiId}";\n`,
-      ),
-    ).toBe(0);
+      [...config.matchAll(/\b[0-9a-f]{40}\b/gu)].map(([commit]) => commit).sort(),
+    ).toEqual([...historicalCanonicalIdCommits].sort());
+    expect(config).not.toMatch(/credential-vault|instance-repository/u);
   });
+
+  it.each(knownStorageTestPaths)(
+    "allows canonical New API instance IDs in current storage contract %s",
+    (relativePath) => {
+      expect(
+        scan(relativePath, `const apiKey = "${canonicalNewApiId}";\n`),
+      ).toBe(0);
+    },
+  );
 
   it("still rejects a non-UUID New API value in a known storage test", () => {
     expect(
@@ -107,12 +126,16 @@ describe("gitleaks repository contract", () => {
     ).toBe(1);
   });
 
-  it("does not allowlist canonical instance IDs outside known storage tests", () => {
-    expect(
-      scan(
-        "storage/unlisted.test.ts",
-        `const apiKey = "${canonicalNewApiId}";\n`,
-      ),
-    ).toBe(1);
-  });
+  it.each([
+    "storage/credential-vault.test.ts",
+    "storage/instance-repository.test.ts",
+    "storage/unlisted.test.ts",
+  ])(
+    "does not allowlist canonical instance IDs in noncurrent path %s",
+    (relativePath) => {
+      expect(
+        scan(relativePath, `const apiKey = "${canonicalNewApiId}";\n`),
+      ).toBe(1);
+    },
+  );
 });

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  validateReleaseTextEntries,
-} from "./artifact-contract.mjs";
+import * as artifactContract from "./artifact-contract.mjs";
 
 const knownSyntheticCredentialLiterals = [
   "active-test-key",
@@ -25,7 +23,7 @@ const knownSyntheticCredentialLiterals = [
 describe("release ZIP credential scan", () => {
   it("accepts product prose and code-level header names without a value", () => {
     expect(
-      validateReleaseTextEntries({
+      artifactContract.validateReleaseTextEntries({
         "background.js":
           'const headerName="xi-api-key"; const endpoint="https://api.elevenlabs.io/v1/user/subscription";',
         "sidepanel.html": "Create and validate an ElevenLabs API key.",
@@ -36,7 +34,9 @@ describe("release ZIP credential scan", () => {
   it.each(knownSyntheticCredentialLiterals)(
     "rejects known synthetic credential literal %s from release text",
     (literal) => {
-      expect(validateReleaseTextEntries({ "background.js": literal })).toContain(
+      expect(
+        artifactContract.validateReleaseTextEntries({ "background.js": literal }),
+      ).toContain(
         `Release text contains synthetic credential literal: ${literal}.`,
       );
     },
@@ -44,16 +44,78 @@ describe("release ZIP credential scan", () => {
 
   it("rejects key-shaped values without treating ordinary API-key prose as a secret", () => {
     expect(
-      validateReleaseTextEntries({
+      artifactContract.validateReleaseTextEntries({
         "background.js": `const leaked = "sk_${"a".repeat(40)}";`,
       }),
     ).toContain(
       "Release text contains a key-shaped credential value in background.js.",
     );
     expect(
-      validateReleaseTextEntries({
+      artifactContract.validateReleaseTextEntries({
         "sidepanel.html": "Your API key is stored locally after validation.",
       }),
     ).toEqual([]);
+  });
+
+  it("requires ZIP, WXT output, and staged unpacked files to match exactly by path and bytes", () => {
+    const baseline = {
+      "manifest.json": Buffer.from('{"manifest_version":3}'),
+      "assets/app.js": Buffer.from("release bytes"),
+    };
+    expect(
+      artifactContract.validateReleaseArtifactParity({
+        zip: baseline,
+        output: baseline,
+        dist: baseline,
+      }),
+    ).toEqual([]);
+
+    expect(
+      artifactContract.validateReleaseArtifactParity({
+        zip: { ...baseline, "extra.js": Buffer.from("extra") },
+        output: baseline,
+        dist: {
+          "manifest.json": baseline["manifest.json"],
+          "assets/app.js": Buffer.from("different bytes"),
+        },
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        "ZIP has unexpected file extra.js compared with WXT output.",
+        "Staged unpacked bytes differ from WXT output for assets/app.js.",
+      ]),
+    );
+  });
+
+  it.each([
+    ["../escape.js", "traversal"],
+    ["/absolute.js", "absolute"],
+    ["C:\\Users\\developer\\leak.js", "absolute"],
+    [".superpowers/sdd/plan/task-8-report.md", "Superpowers"],
+    ["docs/superpowers/private.md", "Superpowers"],
+    ["assets/app.js.map", "source map"],
+    [".env", "dotfile"],
+    ["release-evidence/task-8-report.md", "generated evidence"],
+  ])("rejects unsafe release entry %s", (entry, reason) => {
+    expect(artifactContract.validateReleaseEntryNames([entry])).toEqual([
+      expect.stringMatching(new RegExp(reason, "i")),
+    ]);
+  });
+
+  it("rejects workstation paths and credential sentinels anywhere in artifact bytes", () => {
+    const workstationPath = ["", "Users", "developer", "project"].join("/");
+    expect(
+      artifactContract.validateReleaseArtifactContents({
+        "assets/app.js": Buffer.from(
+          `${workstationPath} active-test-key ` + `sk_${"a".repeat(40)}`,
+        ),
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/workstation path/i),
+        expect.stringMatching(/synthetic credential literal/i),
+        expect.stringMatching(/key-shaped credential/i),
+      ]),
+    );
   });
 });

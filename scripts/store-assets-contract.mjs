@@ -1107,13 +1107,73 @@ export async function waitForDocumentFonts(page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
+const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
+const ALLOWED_MARKETING_PNG_CHUNKS = new Set(["IHDR", "IDAT", "IEND"]);
+
+export function readMarketingPngChunkTypes(buffer) {
+  const bytes = Buffer.from(buffer);
+  if (
+    bytes.length < PNG_SIGNATURE.length ||
+    !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  ) {
+    throw new Error("Invalid PNG signature.");
+  }
+
+  const chunkTypes = [];
+  let offset = PNG_SIGNATURE.length;
+  while (offset < bytes.length) {
+    if (offset + 12 > bytes.length) {
+      throw new Error("PNG contains a truncated chunk.");
+    }
+    const length = bytes.readUInt32BE(offset);
+    const chunkEnd = offset + 12 + length;
+    if (!Number.isSafeInteger(chunkEnd) || chunkEnd > bytes.length) {
+      throw new Error("PNG contains a truncated chunk.");
+    }
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    if (!/^[A-Za-z]{4}$/u.test(type)) {
+      throw new Error("PNG contains an invalid chunk type.");
+    }
+    if (!ALLOWED_MARKETING_PNG_CHUNKS.has(type)) {
+      throw new Error(`PNG contains forbidden ${type} chunk.`);
+    }
+    chunkTypes.push(type);
+    offset = chunkEnd;
+    if (type === "IEND") break;
+  }
+
+  if (
+    chunkTypes[0] !== "IHDR" ||
+    chunkTypes.at(-1) !== "IEND" ||
+    offset !== bytes.length
+  ) {
+    throw new Error("PNG must contain only a complete IHDR/IDAT/IEND stream.");
+  }
+  return chunkTypes;
+}
+
 export function readPngDimensions(buffer) {
+  readMarketingPngChunkTypes(buffer);
   const png = PNG.sync.read(buffer, { checkCRC: true });
 
   return {
     width: png.width,
     height: png.height,
   };
+}
+
+export function validateMarketingPngInventory(paths) {
+  const expected = new Set(Object.keys(REQUIRED_STORE_ASSET_DIMENSIONS));
+  const actual = new Set(paths);
+  const errors = [];
+
+  for (const name of [...expected].sort()) {
+    if (!actual.has(name)) errors.push(`${name} is missing.`);
+  }
+  for (const name of [...actual].sort()) {
+    if (!expected.has(name)) errors.push(`Unexpected marketing PNG: ${name}.`);
+  }
+  return errors;
 }
 
 export function validateStoreAssetDimensions(assets) {

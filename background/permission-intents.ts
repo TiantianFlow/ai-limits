@@ -299,7 +299,12 @@ export function createPermissionIntentStore(
           candidate: storedCandidate(instance),
           expiresAt: now,
         };
-        await write([...intents, cleanup]);
+        try {
+          await write([...intents, cleanup]);
+        } catch (error) {
+          const persisted = (await read()).find(({ id }) => id === cleanup.id);
+          if (!persisted) throw error;
+        }
         return cleanup;
       });
     },

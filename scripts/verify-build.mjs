@@ -1,9 +1,11 @@
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { resolve } from "node:path";
 
 import {
   validateBuildManifest,
+  readReleaseDirectoryEntries,
+  validateReleaseArtifactParity,
   validateReleaseTextEntries,
   validateSidePanelAssetText,
 } from "./artifact-contract.mjs";
@@ -42,20 +44,19 @@ assert(
   "Expected the visible unpacked build to match the verified WXT build.",
 );
 
-const textEntries = {};
-for (const entry of await readdir(outputDirectory, {
-  recursive: true,
-  withFileTypes: true,
+const outputEntries = await readReleaseDirectoryEntries(outputDirectory);
+const stagedEntries = await readReleaseDirectoryEntries(stagedDirectory);
+for (const error of validateReleaseArtifactParity({
+  output: outputEntries,
+  dist: stagedEntries,
 })) {
-  if (!entry.isFile()) continue;
-  const relativePath = resolve(entry.parentPath, entry.name).slice(
-    `${outputDirectory}/`.length,
-  );
+  throw new Error(error);
+}
+
+const textEntries = {};
+for (const [relativePath, bytes] of Object.entries(outputEntries)) {
   if (!/\.(?:css|html|js|json|md|svg)$/u.test(relativePath)) continue;
-  textEntries[relativePath] = await readFile(
-    resolve(outputDirectory, relativePath),
-    "utf8",
-  );
+  textEntries[relativePath] = bytes.toString("utf8");
 }
 
 for (const error of validateReleaseTextEntries(textEntries)) {
