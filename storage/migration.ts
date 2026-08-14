@@ -380,6 +380,17 @@ export function migrateLegacyStorage(
     const rawInstances = Array.isArray(input.aiLimitsState.instances)
       ? input.aiLimitsState.instances
       : [];
+    const invalidExplicitBindings = new Set(
+      rawInstances.flatMap((candidate) =>
+        isRecord(candidate) &&
+        typeof candidate.id === "string" &&
+        isApiKeyProviderId(candidate.providerKind) &&
+        Object.hasOwn(candidate, "connectionRevision") &&
+        !isConnectionRevision(candidate.connectionRevision)
+          ? [candidate.id]
+          : [],
+      ),
+    );
     const state = normalizeInstanceAppState(
       {
         ...input.aiLimitsState,
@@ -388,7 +399,7 @@ export function migrateLegacyStorage(
             !isRecord(candidate) ||
             typeof candidate.id !== "string" ||
             !isApiKeyProviderId(candidate.providerKind) ||
-            isConnectionRevision(candidate.connectionRevision)
+            Object.hasOwn(candidate, "connectionRevision")
           ) {
             return candidate;
           }
@@ -407,7 +418,8 @@ export function migrateLegacyStorage(
     );
     const credentials = Object.fromEntries(
       Object.entries(normalizedCredentials.credentials).filter(([instanceId]) =>
-        activeApiKeyInstances.has(instanceId),
+        activeApiKeyInstances.has(instanceId) &&
+        !invalidExplicitBindings.has(instanceId),
       ),
     );
     return {
