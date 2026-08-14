@@ -1,6 +1,6 @@
-import type { ProviderId } from "../providers/catalog";
+import type { ProviderId, ProviderKind } from "../providers/catalog";
 
-export type { ProviderId } from "../providers/catalog";
+export type { ProviderId, ProviderKind } from "../providers/catalog";
 
 export type DisplayMode = "used" | "left";
 
@@ -39,8 +39,80 @@ export interface UsageGroup {
   id: string;
   label: string;
   description?: string;
+  /** The canonical metric membership. Optional while V4 window/credit groups remain. */
+  metricIds?: string[];
+  /** @deprecated Temporary V4 bridge removed in Task 2. */
   windowIds: string[];
+  /** @deprecated Temporary V4 bridge removed in Task 2. */
   creditIds: string[];
+}
+
+export type MetricScope = "general" | "model" | "feature" | "product";
+
+export interface MetricCycle {
+  cadence?: "rolling" | "calendar";
+  startedAt?: number;
+  resetsAt?: number;
+  durationMs?: number;
+}
+
+export interface MetricSegment {
+  id: string;
+  label: string;
+  usedRatio: number;
+}
+
+interface MetricBase {
+  id: string;
+  label: string;
+  scope: MetricScope;
+  cycle?: MetricCycle;
+}
+
+export interface QuotaMetric extends MetricBase {
+  type: "quota";
+  usedRatio: number;
+  used?: number;
+  limit?: number;
+  unit?: string;
+  segments?: MetricSegment[];
+}
+
+export interface CounterMetric extends MetricBase {
+  type: "counter";
+  semantic: "consumed" | "spent";
+  value: number;
+  unit: string;
+  limit?: number;
+}
+
+export interface BalanceMetric extends MetricBase {
+  type: "balance";
+  value: number;
+  unit: string;
+  initialLimit?: number;
+}
+
+export type UsageMetric = QuotaMetric | CounterMetric | BalanceMetric;
+
+export interface UsageSnapshot {
+  providerKind: ProviderKind;
+  accountLabel?: string;
+  planLabel?: string;
+  source: "web-session" | "oauth" | "api-key" | "fixture";
+  fetchedAt: number;
+  metrics: UsageMetric[];
+  usageGroups?: UsageGroup[];
+}
+
+export type MetricHistorySample =
+  | ({ metricId: string } & Pick<QuotaMetric, "type" | "usedRatio" | "cycle">)
+  | ({ metricId: string } & Pick<CounterMetric, "type" | "semantic" | "value" | "unit" | "limit" | "cycle">)
+  | ({ metricId: string } & Pick<BalanceMetric, "type" | "value" | "unit" | "initialLimit" | "cycle">);
+
+export interface UsageHistoryObservation {
+  observedAt: number;
+  metrics: MetricHistorySample[];
 }
 
 export interface ProviderSnapshot {

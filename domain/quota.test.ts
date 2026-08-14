@@ -36,6 +36,10 @@ describe("quota semantics", () => {
     expect(elapsedRatio({ resetsAt: now + day }, now)).toBeUndefined();
   });
 
+  test("does not infer elapsed progress from a cycle without a reset", () => {
+    expect(elapsedRatio({ startedAt: now - day, durationMs: day }, now)).toBeUndefined();
+  });
+
   test("identifies consumption materially ahead of elapsed time", () => {
     expect(paceStatus(0.72, 0.6)).toEqual({ kind: "ahead", deltaPoints: 12 });
   });

@@ -1,4 +1,4 @@
-import type { DisplayMode, QuotaWindow } from "./model";
+import type { DisplayMode, MetricCycle } from "./model";
 
 export type PaceKind = "ahead" | "on-pace" | "behind";
 
@@ -26,19 +26,19 @@ export function displayRatio(usedRatio: number, mode: DisplayMode): number {
 }
 
 export function elapsedRatio(
-  window: Pick<QuotaWindow, "startedAt" | "resetsAt" | "durationMs">,
+  cycle: MetricCycle,
   now: number,
 ): number | undefined {
-  if (!Number.isFinite(now) || !isFiniteNumber(window.resetsAt)) {
+  if (!Number.isFinite(now) || !isFiniteNumber(cycle.resetsAt)) {
     return undefined;
   }
 
-  if (isFiniteNumber(window.startedAt) && window.resetsAt > window.startedAt) {
-    return clampRatio((now - window.startedAt) / (window.resetsAt - window.startedAt));
+  if (isFiniteNumber(cycle.startedAt) && cycle.resetsAt > cycle.startedAt) {
+    return clampRatio((now - cycle.startedAt) / (cycle.resetsAt - cycle.startedAt));
   }
 
-  if (isFiniteNumber(window.durationMs) && window.durationMs > 0) {
-    return clampRatio(1 - (window.resetsAt - now) / window.durationMs);
+  if (isFiniteNumber(cycle.durationMs) && cycle.durationMs > 0) {
+    return clampRatio(1 - (cycle.resetsAt - now) / cycle.durationMs);
   }
 
   return undefined;
