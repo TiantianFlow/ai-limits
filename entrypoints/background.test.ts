@@ -101,7 +101,6 @@ type PermissionListener = (
   permissions: Browser.permissions.Permissions,
 ) => void;
 type AlarmListener = (alarm: Browser.alarms.Alarm) => void;
-type ActionListener = (tab: Browser.tabs.Tab) => void;
 
 function invoke(listener: RuntimeListener, message: unknown): Promise<unknown> {
   return new Promise((resolveResponse) => {
@@ -125,18 +124,34 @@ beforeEach(async () => {
   vi.spyOn(browser.alarms.onAlarm, "addListener").mockImplementation(
     () => undefined,
   );
-  vi.spyOn(browser.action.onClicked, "addListener").mockImplementation(
-    () => undefined,
-  );
-  vi.spyOn(browser.sidePanel, "open").mockResolvedValue(undefined);
+  vi.spyOn(browser.sidePanel, "setPanelBehavior").mockResolvedValue(undefined);
 });
 
 describe("service-worker activation barrier", () => {
-  test("captures first-wake commands, permission changes, alarms, and toolbar clicks before activation", async () => {
+  test("enables Chrome's native toolbar-click side-panel behavior before activation completes", async () => {
+    const vault = deferred<void>();
+
+    const registration = registerBackgroundEventCapture({
+      initializeVault: () => vault.promise,
+      grantedPermissions: async () => ({}),
+      migrate: async () => undefined,
+      packages: [],
+      createService: fakeService,
+      now: () => 1,
+    });
+
+    expect(browser.sidePanel.setPanelBehavior).toHaveBeenCalledWith({
+      openPanelOnActionClick: true,
+    });
+
+    vault.resolve();
+    await registration.activation;
+  });
+
+  test("captures first-wake commands, permission changes, and alarms before activation", async () => {
     let runtimeListener: RuntimeListener | undefined;
     let removedListener: PermissionListener | undefined;
     let alarmListener: AlarmListener | undefined;
-    let actionListener: ActionListener | undefined;
     vi.spyOn(browser.runtime.onMessage, "addListener").mockImplementation(
       (listener) => {
         runtimeListener = listener as RuntimeListener;
@@ -150,11 +165,6 @@ describe("service-worker activation barrier", () => {
     vi.spyOn(browser.alarms.onAlarm, "addListener").mockImplementation(
       (listener) => {
         alarmListener = listener as AlarmListener;
-      },
-    );
-    vi.spyOn(browser.action.onClicked, "addListener").mockImplementation(
-      (listener) => {
-        actionListener = listener as ActionListener;
       },
     );
     const vault = deferred<void>();
@@ -172,7 +182,6 @@ describe("service-worker activation barrier", () => {
     expect(runtimeListener).toBeDefined();
     expect(removedListener).toBeDefined();
     expect(alarmListener).toBeDefined();
-    expect(actionListener).toBeDefined();
 
     const stateResponse = invoke(runtimeListener!, { type: "GET_STATE" });
     removedListener!({ origins: ["https://relay.example/*"] });
@@ -181,12 +190,10 @@ describe("service-worker activation barrier", () => {
       scheduledTime: 1,
       persistAcrossSessions: false,
     });
-    actionListener!({ windowId: 7 } as Browser.tabs.Tab);
     await Promise.resolve();
 
     expect(service.reconcilePermissions).not.toHaveBeenCalled();
     expect(service.refreshAll).not.toHaveBeenCalled();
-    expect(browser.sidePanel.open).not.toHaveBeenCalled();
 
     vault.resolve();
     await registration.activation;
@@ -200,7 +207,6 @@ describe("service-worker activation barrier", () => {
         origins: ["https://relay.example/*"],
       });
       expect(service.refreshAll).toHaveBeenCalledWith("scheduled");
-      expect(browser.sidePanel.open).toHaveBeenCalledWith({ windowId: 7 });
     });
   });
 
@@ -208,7 +214,6 @@ describe("service-worker activation barrier", () => {
     let runtimeListener: RuntimeListener | undefined;
     let removedListener: PermissionListener | undefined;
     let alarmListener: AlarmListener | undefined;
-    let actionListener: ActionListener | undefined;
     vi.spyOn(browser.runtime.onMessage, "addListener").mockImplementation(
       (listener) => {
         runtimeListener = listener as RuntimeListener;
@@ -222,11 +227,6 @@ describe("service-worker activation barrier", () => {
     vi.spyOn(browser.alarms.onAlarm, "addListener").mockImplementation(
       (listener) => {
         alarmListener = listener as AlarmListener;
-      },
-    );
-    vi.spyOn(browser.action.onClicked, "addListener").mockImplementation(
-      (listener) => {
-        actionListener = listener as ActionListener;
       },
     );
     const createService = vi.fn(() => fakeService());
@@ -248,7 +248,6 @@ describe("service-worker activation barrier", () => {
       scheduledTime: 1,
       persistAcrossSessions: false,
     });
-    actionListener!({ windowId: 7 } as Browser.tabs.Tab);
 
     await expect(registration.activation).rejects.toThrow(
       "startup-private-detail",
@@ -259,7 +258,6 @@ describe("service-worker activation barrier", () => {
     });
     await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
     expect(createService).not.toHaveBeenCalled();
-    expect(browser.sidePanel.open).not.toHaveBeenCalled();
   });
 
   test("orders vault, migration, package startup, then live reconciliation", async () => {
