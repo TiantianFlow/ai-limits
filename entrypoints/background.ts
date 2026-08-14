@@ -2,18 +2,21 @@ import {
   createChromeRuntimeMessageListener,
   createRuntimeCommandHandler,
 } from "../background/messages";
-import { updateAutoRefreshTransaction } from "../background/auto-refresh";
+import {
+  createSerializedStateReconciler,
+  updateAutoRefreshTransaction,
+} from "../background/auto-refresh";
 import {
   createProviderService,
   type ProviderService,
 } from "../background/provider-service";
-import { launchScheduledRefresh } from "../background/scheduled-refresh";
 import { projectAppViewState } from "../background/view-state";
 import type { InstanceAppState } from "../domain/instances";
 import { providerRegistry } from "../providers/registry";
 import type { ProviderPackage } from "../providers/types";
 import { initializeCredentialVault } from "../storage/credential-vault";
 import { migrateLegacyStorageInPlace } from "../storage/migration";
+import { PERMISSION_INTENT_SWEEP_ALARM } from "../background/permission-intents";
 
 const REFRESH_ALARM = "refresh-connected";
 const REFRESH_PERIOD_MINUTES = 15;
@@ -75,37 +78,69 @@ async function settlePackageStartup(
   );
 }
 
-export async function initializeBackground(
-  options: BackgroundInitializationOptions = productionOptions,
-): Promise<void> {
+interface ActivatedBackground {
+  handleCommand(value: unknown): unknown;
+  reconcilePermissions(
+    change?: Browser.permissions.Permissions,
+  ): Promise<void>;
+  runScheduledRefresh(): Promise<void>;
+  sweepPermissionIntents(): Promise<void>;
+  openSidePanel(tab: Browser.tabs.Tab): Promise<void>;
+}
+
+async function activateBackground(
+  options: BackgroundInitializationOptions,
+): Promise<ActivatedBackground> {
   await options.initializeVault();
   const granted = await options.grantedPermissions();
   await options.migrate(options.now(), granted);
   await settlePackageStartup(options.packages);
 
   const service = options.createService();
+  const reconcileAlarm = createSerializedStateReconciler(
+    () => service.getState(),
+    syncRefreshAlarm,
+  );
+  await service.sweepPermissionIntents();
   await service.reconcilePermissions();
-  await syncRefreshAlarm(await service.getState());
+  await reconcileAlarm();
 
   const currentView = async () => projectAppViewState(await service.getState());
+  const stateAfterAlarmReconciliation = async () => {
+    await reconcileAlarm();
+    return service.getState();
+  };
   const commandHandler = createRuntimeCommandHandler({
     async refreshAll() {
       const report = await service.refreshAll("manual_all");
-      const state = await service.getState();
-      await syncRefreshAlarm(state);
+      const state = await stateAfterAlarmReconciliation();
       return { state: projectAppViewState(state), report };
     },
-    async connectBrowserProvider(providerKind) {
-      const report = await service.connectBrowserProvider(providerKind);
-      const state = await service.getState();
-      await syncRefreshAlarm(state);
+    async prepareProviderPermission(command) {
+      const { type: _type, ...request } = command;
+      const intent = await service.prepareProviderPermission(request);
+      return { state: await currentView(), ...intent };
+    },
+    async resolveProviderPermission(permissionIntentId, granted) {
+      await service.resolveProviderPermission(permissionIntentId, granted);
+      return currentView();
+    },
+    async abandonProviderPermission(permissionIntentId) {
+      await service.abandonProviderPermission(permissionIntentId);
+      return currentView();
+    },
+    async connectBrowserProvider(providerKind, permissionIntentId) {
+      const report = await service.connectBrowserProvider(
+        providerKind,
+        permissionIntentId,
+      );
+      const state = await stateAfterAlarmReconciliation();
       return { state: projectAppViewState(state), report };
     },
     async connectApiKeyProvider(command) {
       const { type: _type, ...request } = command;
       const result = await service.connectApiKeyProvider(request);
-      const state = await service.getState();
-      await syncRefreshAlarm(state);
+      const state = await stateAfterAlarmReconciliation();
       return { ...result, state: projectAppViewState(state) };
     },
     async refreshInstance(instanceId) {
@@ -113,8 +148,7 @@ export async function initializeBackground(
         instanceId,
         "manual_provider",
       );
-      const state = await service.getState();
-      await syncRefreshAlarm(state);
+      const state = await stateAfterAlarmReconciliation();
       return { state: projectAppViewState(state), report };
     },
     async renameInstance(instanceId, userLabel) {
@@ -123,8 +157,7 @@ export async function initializeBackground(
     },
     async disconnectInstance(instanceId) {
       const result = await service.disconnectInstance(instanceId);
-      const state = await service.getState();
-      await syncRefreshAlarm(state);
+      const state = await stateAfterAlarmReconciliation();
       return { state: projectAppViewState(state), result };
     },
     getState: currentView,
@@ -133,48 +166,94 @@ export async function initializeBackground(
       return currentView();
     },
     async setAutoRefresh(enabled) {
-      const state = await updateAutoRefreshTransaction(enabled, {
+      await updateAutoRefreshTransaction(enabled, {
         readState: () => service.getState(),
         writePreference: (value) => service.setAutoRefresh(value),
-        syncAlarm: syncRefreshAlarm,
+        syncAlarm: () => reconcileAlarm(),
       });
-      return projectAppViewState(state);
+      return currentView();
     },
     async deleteLocalData() {
       const result = await service.deleteAllLocalData();
-      const state = await service.getState();
-      await syncRefreshAlarm(state);
+      const state = await stateAfterAlarmReconciliation();
       return { state: projectAppViewState(state), ...result };
     },
   });
 
+  return {
+    handleCommand: commandHandler,
+    async reconcilePermissions(change) {
+      await service.reconcilePermissions(change);
+      await reconcileAlarm();
+    },
+    async runScheduledRefresh() {
+      try {
+        await service.refreshAll("scheduled");
+      } catch {
+        // Scheduled work is best effort, but alarm authority is still restored.
+      }
+      await reconcileAlarm();
+    },
+    async sweepPermissionIntents() {
+      await service.sweepPermissionIntents();
+      await reconcileAlarm();
+    },
+    async openSidePanel(tab) {
+      await browser.sidePanel.open({ windowId: tab.windowId });
+    },
+  };
+}
+
+export async function initializeBackground(
+  options: BackgroundInitializationOptions = productionOptions,
+): Promise<void> {
+  await activateBackground(options);
+}
+
+export interface BackgroundEventRegistration {
+  activation: Promise<void>;
+}
+
+export function registerBackgroundEventCapture(
+  options: BackgroundInitializationOptions = productionOptions,
+): BackgroundEventRegistration {
+  let wakeEventQueue: Promise<void> = Promise.resolve();
+  const activation = Promise.resolve().then(() => activateBackground(options));
+  const enqueueWakeEvent = (
+    run: (background: ActivatedBackground) => Promise<void>,
+  ) => {
+    const event = wakeEventQueue.then(() => activation).then(run);
+    wakeEventQueue = event.catch(() => undefined);
+  };
+
   browser.runtime.onMessage.addListener(
-    createChromeRuntimeMessageListener(commandHandler),
+    createChromeRuntimeMessageListener((message) =>
+      activation.then((background) => background.handleCommand(message)),
+    ),
   );
   browser.permissions.onAdded.addListener(() => {
-    void service
-      .reconcilePermissions()
-      .then(() => service.getState())
-      .then(syncRefreshAlarm)
-      .catch(() => undefined);
+    enqueueWakeEvent((background) => background.reconcilePermissions());
   });
   browser.permissions.onRemoved.addListener((removed) => {
-    void service
-      .reconcilePermissions(removed)
-      .then(() => service.getState())
-      .then(syncRefreshAlarm)
-      .catch(() => undefined);
+    enqueueWakeEvent((background) =>
+      background.reconcilePermissions(removed),
+    );
   });
   browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name !== REFRESH_ALARM) return;
-    launchScheduledRefresh({
-      refreshAll: (trigger) => service.refreshAll(trigger),
-      currentState: () => service.getState(),
-      syncRefreshAlarm,
-    });
+    if (alarm.name === REFRESH_ALARM) {
+      enqueueWakeEvent((background) => background.runScheduledRefresh());
+    } else if (alarm.name === PERMISSION_INTENT_SWEEP_ALARM) {
+      enqueueWakeEvent((background) => background.sweepPermissionIntents());
+    }
   });
+  browser.action.onClicked.addListener((tab) => {
+    enqueueWakeEvent((background) => background.openSidePanel(tab));
+  });
+
+  return { activation: activation.then(() => undefined) };
 }
 
 export default defineBackground(() => {
-  void initializeBackground().catch(() => undefined);
+  const registration = registerBackgroundEventCapture();
+  void registration.activation.catch(() => undefined);
 });

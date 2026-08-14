@@ -6,8 +6,8 @@ import type {
 import {
   isProviderOperationEvent,
   type ProviderOperation,
-  type RuntimeCommand,
-} from "../../background/messages";
+} from "../../background/events";
+import type { RuntimeCommand } from "../../background/messages";
 import type {
   ConnectApiKeyProviderResult,
   DisconnectInstanceResult,
@@ -37,10 +37,12 @@ import {
 } from "../../providers/catalog";
 import {
   normalizeProviderConfig,
-  requiredPermissionsForProviderConfig,
 } from "../../providers/package-factories";
 import { Cockpit } from "./Cockpit";
-import { projectLegacyInstanceState } from "./legacy-instance-adapter";
+import {
+  projectLegacyInstanceOperations,
+  projectLegacyInstanceState,
+} from "./legacy-instance-adapter";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface RefreshResponse {
@@ -71,7 +73,14 @@ interface AutoRefreshGuard {
   priorValue: boolean;
 }
 
-type ProviderOperations = Partial<Record<ProviderId, ProviderOperation>>;
+type ProviderOperations = Partial<Record<ProviderInstanceId, ProviderOperation>>;
+
+interface PermissionIntentResponse {
+  state: AppViewState;
+  permissionIntentId: string;
+  instanceId: ProviderInstanceId;
+  permissions: Browser.permissions.Permissions;
+}
 
 const publicInstanceKeys = new Set([
   "id",
@@ -257,6 +266,41 @@ function asApiKeyConnectionResponse(value: unknown): ApiKeyConnectionResponse {
   };
 }
 
+function asPermissionIntentResponse(value: unknown): PermissionIntentResponse {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).some(
+      (key) =>
+        !["state", "permissionIntentId", "instanceId", "permissions"].includes(
+          key,
+        ),
+    ) ||
+    Object.keys(value).length !== 4 ||
+    typeof value.permissionIntentId !== "string" ||
+    !isProviderInstanceId(value.instanceId) ||
+    !isRecord(value.permissions) ||
+    Object.keys(value.permissions).some(
+      (key) => key !== "origins" && key !== "permissions",
+    ) ||
+    (Object.hasOwn(value.permissions, "origins") &&
+      (!Array.isArray(value.permissions.origins) ||
+        !value.permissions.origins.every((origin) => typeof origin === "string"))) ||
+    (Object.hasOwn(value.permissions, "permissions") &&
+      (!Array.isArray(value.permissions.permissions) ||
+        !value.permissions.permissions.every(
+          (permission) => typeof permission === "string",
+        )))
+  ) {
+    throw new Error("Missing permission intent response");
+  }
+  return {
+    state: asAppViewState(value.state),
+    permissionIntentId: value.permissionIntentId,
+    instanceId: value.instanceId,
+    permissions: value.permissions as Browser.permissions.Permissions,
+  };
+}
+
 export function App() {
   const [viewState, setViewState] = useState<AppViewState>();
   const viewStateRef = useRef<AppViewState | undefined>(undefined);
@@ -321,13 +365,9 @@ export function App() {
     };
     const handleRuntimeMessage = (message: unknown) => {
       if (!isProviderOperationEvent(message)) return false;
-      const providerKind = viewStateRef.current?.instances.find(
-        ({ id }) => id === message.instanceId,
-      )?.providerKind;
-      if (!providerKind) return false;
       setProviderOperations((current) =>
-        current[providerKind] === "fetching"
-          ? { ...current, [providerKind]: message.operation }
+        current[message.instanceId] === "fetching"
+          ? { ...current, [message.instanceId]: message.operation }
           : current,
       );
       return false;
@@ -345,13 +385,13 @@ export function App() {
   }, [loadAttempt]);
 
   const setProviderOperation = (
-    providerId: ProviderId,
+    instanceId: ProviderInstanceId,
     operation?: ProviderOperation,
   ) => {
     setProviderOperations((current) => {
       const next = { ...current };
-      if (operation) next[providerId] = operation;
-      else delete next[providerId];
+      if (operation) next[instanceId] = operation;
+      else delete next[instanceId];
       return next;
     });
   };
@@ -378,49 +418,110 @@ export function App() {
       .catch(() => undefined);
   };
 
-  const requestPermission = async (
+  const abandonPermissionIntent = async (permissionIntentId: string) => {
+    try {
+      commitViewState(
+        asAppViewState(
+          await browser.runtime.sendMessage({
+            type: "ABANDON_PROVIDER_PERMISSION",
+            permissionIntentId,
+          } satisfies RuntimeCommand),
+        ),
+      );
+    } catch {
+      // The persisted bounded intent is also swept by the background alarm.
+    }
+  };
+
+  const preparePermission = async (
     providerId: ProviderId,
     config: ProviderInstanceConfig,
+    instanceId?: ProviderInstanceId,
   ) => {
-    const required = requiredPermissionsForProviderConfig(providerId, config);
-    return required ? Boolean(await browser.permissions.request(required)) : true;
+    const prepared = asPermissionIntentResponse(
+      await browser.runtime.sendMessage({
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: providerId,
+        ...(instanceId ? { instanceId } : {}),
+        config,
+      } satisfies RuntimeCommand),
+    );
+    commitViewState(prepared.state);
+    return prepared;
+  };
+
+  const requestPreparedPermission = async (
+    prepared: PermissionIntentResponse,
+  ): Promise<boolean> => {
+    try {
+      const required =
+        (prepared.permissions.origins?.length ?? 0) > 0 ||
+        (prepared.permissions.permissions?.length ?? 0) > 0;
+      const granted = required
+        ? Boolean(await browser.permissions.request(prepared.permissions))
+        : true;
+      commitViewState(
+        asAppViewState(
+          await browser.runtime.sendMessage({
+            type: "RESOLVE_PROVIDER_PERMISSION",
+            permissionIntentId: prepared.permissionIntentId,
+            granted,
+          } satisfies RuntimeCommand),
+        ),
+      );
+      return granted;
+    } catch (error) {
+      await abandonPermissionIntent(prepared.permissionIntentId);
+      throw error;
+    }
   };
 
   const handleConnectProvider = async (providerId: ConnectableProviderId) => {
     if (isApiKeyProviderId(providerId)) return;
     clearAnnouncement();
-    setProviderOperation(providerId, "requesting_permission");
     const config = normalizeProviderConfig(providerId, { kind: "fixed" });
-    let granted: boolean;
+    const existingInstanceId = viewStateRef.current
+      ? projectLegacyInstanceState(viewStateRef.current).instanceIds[providerId]
+      : undefined;
+    let prepared: PermissionIntentResponse;
     try {
-      granted = Boolean(
-        config && (await requestPermission(providerId, config)),
-      );
+      if (!config) throw new Error("Invalid provider config");
+      prepared = await preparePermission(providerId, config, existingInstanceId);
     } catch {
       announce(`Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`);
-      setProviderOperation(providerId);
+      return;
+    }
+    setProviderOperation(prepared.instanceId, "requesting_permission");
+    let granted: boolean;
+    try {
+      granted = await requestPreparedPermission(prepared);
+    } catch {
+      announce(`Couldn’t connect ${providerNames[providerId]}. Reload AI Limits and try again.`);
+      setProviderOperation(prepared.instanceId);
       return;
     }
     if (!granted) {
       announce(`${providerNames[providerId]} was not connected.`);
-      setProviderOperation(providerId);
+      setProviderOperation(prepared.instanceId);
       return;
     }
 
     try {
-      setProviderOperation(providerId, "fetching");
+      setProviderOperation(prepared.instanceId, "fetching");
       const response = asRefreshResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_BROWSER_PROVIDER",
           providerKind: providerId as BrowserSessionProviderKind,
+          permissionIntentId: prepared.permissionIntentId,
         } satisfies RuntimeCommand),
       );
       commitViewState(response.state);
       announce(manualSummary(response.report, response.state));
     } catch {
+      await abandonPermissionIntent(prepared.permissionIntentId);
       announce(confirmationFailure(providerId));
     } finally {
-      setProviderOperation(providerId);
+      setProviderOperation(prepared.instanceId);
     }
   };
 
@@ -449,30 +550,38 @@ export function App() {
       : undefined;
     const instanceId = projection?.instanceIds[providerId];
     clearAnnouncement();
-    setProviderOperation(providerId, "requesting_permission");
-    let granted: boolean;
+    let prepared: PermissionIntentResponse;
     try {
-      granted = await requestPermission(providerId, config);
+      prepared = await preparePermission(providerId, config, instanceId);
     } catch {
       announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
-      setProviderOperation(providerId);
+      return "temporary_error";
+    }
+    setProviderOperation(prepared.instanceId, "requesting_permission");
+    let granted: boolean;
+    try {
+      granted = await requestPreparedPermission(prepared);
+    } catch {
+      announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
+      setProviderOperation(prepared.instanceId);
       return "temporary_error";
     }
     if (!granted) {
       announce(`${providerNames[providerId]} access was not changed.`);
-      setProviderOperation(providerId);
+      setProviderOperation(prepared.instanceId);
       return "permission_declined";
     }
 
     try {
-      setProviderOperation(providerId, "fetching");
+      setProviderOperation(prepared.instanceId, "fetching");
       const response = asApiKeyConnectionResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_API_KEY_PROVIDER",
           providerKind: providerId,
-          ...(instanceId ? { instanceId } : {}),
+          instanceId: prepared.instanceId,
           config,
           apiKey,
+          permissionIntentId: prepared.permissionIntentId,
         } satisfies RuntimeCommand),
       );
       commitViewState(response.state);
@@ -499,10 +608,11 @@ export function App() {
       }
       return response.result;
     } catch {
+      await abandonPermissionIntent(prepared.permissionIntentId);
       announce(`${providerNames[providerId]} could not be validated right now. Try again later.`);
       return "temporary_error";
     } finally {
-      setProviderOperation(providerId);
+      setProviderOperation(prepared.instanceId);
     }
   };
 
@@ -512,7 +622,7 @@ export function App() {
       : undefined;
     if (!instanceId) return;
     clearAnnouncement();
-    setProviderOperation(providerId, "fetching");
+    setProviderOperation(instanceId, "fetching");
     try {
       const response = asRefreshResponse(
         await browser.runtime.sendMessage({
@@ -525,7 +635,7 @@ export function App() {
     } catch {
       announce(confirmationFailure(providerId));
     } finally {
-      setProviderOperation(providerId);
+      setProviderOperation(instanceId);
     }
   };
 
@@ -538,7 +648,7 @@ export function App() {
       Object.fromEntries(
         current.instances
           .filter(({ access }) => access === "granted")
-          .map(({ providerKind }) => [providerKind, "fetching"] as const),
+          .map(({ id }) => [id, "fetching"] as const),
       ),
     );
     try {
@@ -666,7 +776,7 @@ export function App() {
       refreshAnnouncement={announcement.message}
       refreshAnnouncementId={announcement.id}
       autoRefreshPending={isAutoRefreshPending}
-      providerOperations={providerOperations}
+      providerOperations={projectLegacyInstanceOperations(providerOperations)}
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => void handleRefresh()}
       onConnectProvider={(providerId) => void handleConnectProvider(providerId)}

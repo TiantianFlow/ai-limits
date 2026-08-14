@@ -229,6 +229,7 @@ describe("provider catalog", () => {
           ? isRuntimeCommand({
               type: "CONNECT_BROWSER_PROVIDER",
               providerKind,
+              permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
             })
           : isRuntimeCommand({
               type: "CONNECT_API_KEY_PROVIDER",
@@ -241,6 +242,7 @@ describe("provider catalog", () => {
                     }
                   : { kind: "fixed" },
               apiKey: "candidate",
+              permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
             }),
       ),
     ).toBe(true);

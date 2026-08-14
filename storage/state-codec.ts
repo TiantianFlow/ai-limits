@@ -9,12 +9,11 @@ import {
 import {
   isProviderInstanceId,
   type InstanceAppState,
-  type ProviderInstanceConfig,
   type ProviderInstanceRecord,
 } from "../domain/instances";
 import { isProviderId, type ProviderKind } from "../providers/catalog";
 import { normalizeUsageSnapshot } from "../providers/initial-state";
-import { normalizeNewApiBaseUrl } from "../providers/newapi/url";
+import { providerRegistry } from "../providers/registry";
 
 export const INSTANCE_STATE_VERSION = 5 as const;
 
@@ -211,19 +210,6 @@ function normalizeAttempt(value: unknown): ProviderAttempt | undefined {
   };
 }
 
-function normalizeConfig(
-  providerKind: ProviderKind,
-  value: unknown,
-): ProviderInstanceConfig | undefined {
-  if (!isRecord(value)) return undefined;
-  if (providerKind !== "newapi") {
-    return value.kind === "fixed" ? { kind: "fixed" } : undefined;
-  }
-  if (value.kind !== "dynamic-origin") return undefined;
-  const baseUrl = normalizeNewApiBaseUrl(value.baseUrl);
-  return baseUrl ? { kind: "dynamic-origin", baseUrl } : undefined;
-}
-
 function normalizeInstance(
   value: unknown,
   now: number,
@@ -238,7 +224,7 @@ function normalizeInstance(
   ) {
     return undefined;
   }
-  const config = normalizeConfig(value.providerKind, value.config);
+  const config = providerRegistry[value.providerKind].normalizeConfig(value.config);
   if (!config) return undefined;
   const snapshot = normalizeUsageSnapshot(value.snapshot, value.providerKind);
   const lastAttempt = normalizeAttempt(value.lastAttempt);
@@ -285,14 +271,14 @@ export function normalizeInstanceAppState(
     if (
       !instance ||
       instanceIds.has(instance.id) ||
-      (instance.providerKind !== "newapi" &&
+      (providerRegistry[instance.providerKind].cardinality === "single" &&
         singletonKinds.has(instance.providerKind))
     ) {
       continue;
     }
     instances.push(instance);
     instanceIds.add(instance.id);
-    if (instance.providerKind !== "newapi") {
+    if (providerRegistry[instance.providerKind].cardinality === "single") {
       singletonKinds.add(instance.providerKind);
     }
   }

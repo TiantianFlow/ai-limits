@@ -8,7 +8,10 @@ import {
   type BrowserSessionProviderKind,
   type ProviderKind,
 } from "./catalog";
-import { normalizeNewApiBaseUrl } from "./newapi/url";
+import {
+  newApiPermissionOrigin,
+  normalizeNewApiBaseUrl,
+} from "./newapi/url";
 import type {
   CollectionContext,
   CollectionResult,
@@ -38,7 +41,7 @@ export function normalizeProviderConfig(
     (value as { baseUrl?: unknown }).baseUrl,
   );
   return baseUrl
-    ? { kind: "dynamic-origin", baseUrl: new URL(baseUrl).origin }
+    ? { kind: "dynamic-origin", baseUrl }
     : undefined;
 }
 
@@ -51,7 +54,9 @@ export function requiredPermissionsForProviderConfig(
     definition.connection.kind === "api-key" &&
     definition.connection.origin === "dynamic"
       ? config.kind === "dynamic-origin"
-        ? [`${config.baseUrl}/*`]
+        ? [newApiPermissionOrigin(config.baseUrl)].filter(
+            (origin): origin is string => origin !== undefined,
+          )
         : []
       : [...definition.optionalOrigins];
   const permissions = [...definition.optionalPermissions];

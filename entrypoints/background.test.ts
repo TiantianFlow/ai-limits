@@ -8,9 +8,14 @@ import orchestratorSource from "../background/orchestrator.ts?raw";
 import permissionsSource from "../background/permissions.ts?raw";
 import providerAccessSource from "../background/provider-access.ts?raw";
 import providerServiceSource from "../background/provider-service.ts?raw";
+import messagesSource from "../background/messages.ts?raw";
 import registrySource from "../providers/registry.ts?raw";
+import stateCodecSource from "../storage/state-codec.ts?raw";
 import backgroundSource from "./background.ts?raw";
-import { initializeBackground } from "./background";
+import {
+  initializeBackground,
+  registerBackgroundEventCapture,
+} from "./background";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -30,6 +35,14 @@ const emptyState: InstanceAppState = {
 
 function fakeService(overrides: Partial<ProviderService> = {}): ProviderService {
   const service: ProviderService = {
+    prepareProviderPermission: vi.fn(async () => ({
+      permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
+      instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
+      permissions: {},
+    })),
+    resolveProviderPermission: vi.fn(async () => undefined),
+    abandonProviderPermission: vi.fn(async () => undefined),
+    sweepPermissionIntents: vi.fn(async () => undefined),
     connectBrowserProvider: vi.fn(async () => ({
       trigger: "connect" as const,
       startedAt: 1,
@@ -77,6 +90,12 @@ type RuntimeListener = (
   sendResponse: (response?: unknown) => void,
 ) => boolean | void;
 
+type PermissionListener = (
+  permissions: Browser.permissions.Permissions,
+) => void;
+type AlarmListener = (alarm: Browser.alarms.Alarm) => void;
+type ActionListener = (tab: Browser.tabs.Tab) => void;
+
 function invoke(listener: RuntimeListener, message: unknown): Promise<unknown> {
   return new Promise((resolveResponse) => {
     expect(listener(message, {} as Browser.runtime.MessageSender, resolveResponse)).toBe(true);
@@ -98,31 +117,157 @@ beforeEach(async () => {
   vi.spyOn(browser.alarms.onAlarm, "addListener").mockImplementation(
     () => undefined,
   );
+  vi.spyOn(browser.action.onClicked, "addListener").mockImplementation(
+    () => undefined,
+  );
+  vi.spyOn(browser.sidePanel, "open").mockResolvedValue(undefined);
 });
 
 describe("service-worker activation barrier", () => {
-  test("orders vault, migration, package startup, reconciliation, then listener exposure", async () => {
+  test("captures first-wake commands, permission changes, alarms, and toolbar clicks before activation", async () => {
+    let runtimeListener: RuntimeListener | undefined;
+    let removedListener: PermissionListener | undefined;
+    let alarmListener: AlarmListener | undefined;
+    let actionListener: ActionListener | undefined;
+    vi.spyOn(browser.runtime.onMessage, "addListener").mockImplementation(
+      (listener) => {
+        runtimeListener = listener as RuntimeListener;
+      },
+    );
+    vi.spyOn(browser.permissions.onRemoved, "addListener").mockImplementation(
+      (listener) => {
+        removedListener = listener as PermissionListener;
+      },
+    );
+    vi.spyOn(browser.alarms.onAlarm, "addListener").mockImplementation(
+      (listener) => {
+        alarmListener = listener as AlarmListener;
+      },
+    );
+    vi.spyOn(browser.action.onClicked, "addListener").mockImplementation(
+      (listener) => {
+        actionListener = listener as ActionListener;
+      },
+    );
+    const vault = deferred<void>();
+    const service = fakeService();
+
+    const registration = registerBackgroundEventCapture({
+      initializeVault: () => vault.promise,
+      grantedPermissions: async () => ({}),
+      migrate: async () => undefined,
+      packages: [],
+      createService: () => service,
+      now: () => 1,
+    });
+
+    expect(runtimeListener).toBeDefined();
+    expect(removedListener).toBeDefined();
+    expect(alarmListener).toBeDefined();
+    expect(actionListener).toBeDefined();
+
+    const stateResponse = invoke(runtimeListener!, { type: "GET_STATE" });
+    removedListener!({ origins: ["https://relay.example/*"] });
+    alarmListener!({
+      name: "refresh-connected",
+      scheduledTime: 1,
+      persistAcrossSessions: false,
+    });
+    actionListener!({ windowId: 7 } as Browser.tabs.Tab);
+    await Promise.resolve();
+
+    expect(service.reconcilePermissions).not.toHaveBeenCalled();
+    expect(service.refreshAll).not.toHaveBeenCalled();
+    expect(browser.sidePanel.open).not.toHaveBeenCalled();
+
+    vault.resolve();
+    await registration.activation;
+    await expect(stateResponse).resolves.toEqual({
+      preferences: { displayMode: "used", autoRefresh: true },
+      instances: [],
+    });
+    await vi.waitFor(() => {
+      expect(service.reconcilePermissions).toHaveBeenNthCalledWith(2, {
+        origins: ["https://relay.example/*"],
+      });
+      expect(service.refreshAll).toHaveBeenCalledWith("scheduled");
+      expect(browser.sidePanel.open).toHaveBeenCalledWith({ windowId: 7 });
+    });
+  });
+
+  test("contains startup failure for every synchronously captured wake event", async () => {
+    let runtimeListener: RuntimeListener | undefined;
+    let removedListener: PermissionListener | undefined;
+    let alarmListener: AlarmListener | undefined;
+    let actionListener: ActionListener | undefined;
+    vi.spyOn(browser.runtime.onMessage, "addListener").mockImplementation(
+      (listener) => {
+        runtimeListener = listener as RuntimeListener;
+      },
+    );
+    vi.spyOn(browser.permissions.onRemoved, "addListener").mockImplementation(
+      (listener) => {
+        removedListener = listener as PermissionListener;
+      },
+    );
+    vi.spyOn(browser.alarms.onAlarm, "addListener").mockImplementation(
+      (listener) => {
+        alarmListener = listener as AlarmListener;
+      },
+    );
+    vi.spyOn(browser.action.onClicked, "addListener").mockImplementation(
+      (listener) => {
+        actionListener = listener as ActionListener;
+      },
+    );
+    const createService = vi.fn(() => fakeService());
+    const registration = registerBackgroundEventCapture({
+      initializeVault: async () => {
+        throw new Error("startup-private-detail");
+      },
+      grantedPermissions: async () => ({}),
+      migrate: async () => undefined,
+      packages: [],
+      createService,
+      now: () => 1,
+    });
+
+    const response = invoke(runtimeListener!, { type: "GET_STATE" });
+    removedListener!({ origins: ["https://relay.example/*"] });
+    alarmListener!({
+      name: "refresh-connected",
+      scheduledTime: 1,
+      persistAcrossSessions: false,
+    });
+    actionListener!({ windowId: 7 } as Browser.tabs.Tab);
+
+    await expect(registration.activation).rejects.toThrow(
+      "startup-private-detail",
+    );
+    await expect(response).resolves.toEqual({
+      ok: false,
+      error: "command_failed",
+    });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+    expect(createService).not.toHaveBeenCalled();
+    expect(browser.sidePanel.open).not.toHaveBeenCalled();
+  });
+
+  test("orders vault, migration, package startup, then live reconciliation", async () => {
     const order: string[] = [];
     const vault = deferred<void>();
     const migration = deferred<void>();
     const startup = deferred<void>();
     const reconciliation = deferred<void>();
     const service = fakeService({
+      sweepPermissionIntents: vi.fn(async () => {
+        order.push("sweep-intents");
+      }),
       reconcilePermissions: vi.fn(async () => {
         order.push("reconcile");
         return reconciliation.promise;
       }),
     });
-    const addRuntime = vi
-      .spyOn(browser.runtime.onMessage, "addListener")
-      .mockImplementation(() => order.push("runtime-listener"));
-    const addPermission = vi
-      .spyOn(browser.permissions.onRemoved, "addListener")
-      .mockImplementation(() => order.push("permission-listener"));
-    const addAlarm = vi
-      .spyOn(browser.alarms.onAlarm, "addListener")
-      .mockImplementation(() => order.push("alarm-listener"));
-
     const activation = initializeBackground({
       initializeVault: async () => {
         order.push("vault");
@@ -152,34 +297,29 @@ describe("service-worker activation barrier", () => {
     });
 
     expect(order).toEqual(["vault"]);
-    expect(addRuntime).not.toHaveBeenCalled();
-    expect(addPermission).not.toHaveBeenCalled();
-    expect(addAlarm).not.toHaveBeenCalled();
 
     vault.resolve();
     await vi.waitFor(() => expect(order).toEqual(["vault", "grants", "migration"]));
-    expect(addRuntime).not.toHaveBeenCalled();
 
     migration.resolve();
     await vi.waitFor(() => expect(order).toContain("startup"));
     expect(order).not.toContain("create-service");
-    expect(addRuntime).not.toHaveBeenCalled();
 
     startup.resolve();
     await vi.waitFor(() => expect(order).toContain("reconcile"));
     expect(order.indexOf("create-service")).toBeGreaterThan(order.indexOf("startup"));
-    expect(addRuntime).not.toHaveBeenCalled();
+    expect(order.indexOf("sweep-intents")).toBeGreaterThan(
+      order.indexOf("create-service"),
+    );
+    expect(order.indexOf("reconcile")).toBeGreaterThan(
+      order.indexOf("sweep-intents"),
+    );
 
     reconciliation.resolve();
     await activation;
-
-    expect(order.indexOf("runtime-listener")).toBeGreaterThan(order.indexOf("reconcile"));
-    expect(order.indexOf("permission-listener")).toBeGreaterThan(order.indexOf("reconcile"));
-    expect(order.indexOf("alarm-listener")).toBeGreaterThan(order.indexOf("reconcile"));
   });
 
-  test("vault or migration failure exposes no listener or service mutation path", async () => {
-    const addRuntime = vi.spyOn(browser.runtime.onMessage, "addListener");
+  test("vault or migration failure exposes no service mutation path", async () => {
     const createService = vi.fn(() => fakeService());
     const migrate = vi.fn(async () => undefined);
 
@@ -197,7 +337,6 @@ describe("service-worker activation barrier", () => {
     ).rejects.toThrow("vault unavailable");
     expect(migrate).not.toHaveBeenCalled();
     expect(createService).not.toHaveBeenCalled();
-    expect(addRuntime).not.toHaveBeenCalled();
 
     await expect(
       initializeBackground({
@@ -212,12 +351,10 @@ describe("service-worker activation barrier", () => {
       }),
     ).rejects.toThrow("migration unavailable");
     expect(createService).not.toHaveBeenCalled();
-    expect(addRuntime).not.toHaveBeenCalled();
   });
 
-  test("contains package startup cleanup rejection before exposing the live service", async () => {
+  test("contains package startup cleanup rejection before creating the live service", async () => {
     const service = fakeService();
-    const addRuntime = vi.spyOn(browser.runtime.onMessage, "addListener");
 
     await expect(
       initializeBackground({
@@ -234,12 +371,14 @@ describe("service-worker activation barrier", () => {
     ).resolves.toBeUndefined();
 
     expect(service.reconcilePermissions).toHaveBeenCalledTimes(1);
-    expect(addRuntime).toHaveBeenCalledTimes(1);
   });
 
   test("reruns the complete barrier on a simulated service-worker restart", async () => {
     const order: string[] = [];
     const service = fakeService({
+      sweepPermissionIntents: vi.fn(async () => {
+        order.push("sweep-intents");
+      }),
       reconcilePermissions: vi.fn(async () => {
         order.push("reconcile");
       }),
@@ -266,8 +405,8 @@ describe("service-worker activation barrier", () => {
     await initializeBackground(options);
 
     expect(order).toEqual([
-      "vault", "grants", "migration", "startup", "reconcile",
-      "vault", "grants", "migration", "startup", "reconcile",
+      "vault", "grants", "migration", "startup", "sweep-intents", "reconcile",
+      "vault", "grants", "migration", "startup", "sweep-intents", "reconcile",
     ]);
     expect(options.createService).toHaveBeenCalledTimes(2);
   });
@@ -297,7 +436,7 @@ describe("instance runtime wiring", () => {
       getState: vi.fn(async () => relayState),
     });
 
-    await initializeBackground({
+    const registration = registerBackgroundEventCapture({
       initializeVault: async () => undefined,
       grantedPermissions: async () => ({}),
       migrate: async () => undefined,
@@ -305,6 +444,7 @@ describe("instance runtime wiring", () => {
       createService: () => service,
       now: () => 1,
     });
+    await registration.activation;
 
     const response = await invoke(runtimeListener!, { type: "GET_STATE" });
     expect(response).toEqual({
@@ -322,6 +462,23 @@ describe("instance runtime wiring", () => {
       ],
     });
     expect(JSON.stringify(response)).not.toContain("config");
+
+    const prepared = await invoke(runtimeListener!, {
+      type: "PREPARE_PROVIDER_PERMISSION",
+      providerKind: "newapi",
+      instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example/gateway",
+      },
+    });
+    expect(prepared).toEqual({
+      state: response,
+      permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
+      instanceId: "newapi:550e8400-e29b-41d4-a716-446655440000",
+      permissions: {},
+    });
+    expect(JSON.stringify(prepared)).not.toContain("gateway");
   });
 
   test("forwards external permission removal without deleting instance data", async () => {
@@ -333,7 +490,7 @@ describe("instance runtime wiring", () => {
     });
     const service = fakeService();
 
-    await initializeBackground({
+    const registration = registerBackgroundEventCapture({
       initializeVault: async () => undefined,
       grantedPermissions: async () => ({}),
       migrate: async () => undefined,
@@ -341,6 +498,7 @@ describe("instance runtime wiring", () => {
       createService: () => service,
       now: () => 1,
     });
+    await registration.activation;
     removedListener?.({ origins: ["https://relay.example/*"] });
 
     await vi.waitFor(() =>
@@ -370,7 +528,7 @@ describe("instance runtime wiring", () => {
         };
       }),
     });
-    await initializeBackground({
+    const registration = registerBackgroundEventCapture({
       initializeVault: async () => undefined,
       grantedPermissions: async () => ({}),
       migrate: async () => undefined,
@@ -378,6 +536,7 @@ describe("instance runtime wiring", () => {
       createService: () => service,
       now: () => 1,
     });
+    await registration.activation;
     vi.mocked(browser.alarms.clear).mockRejectedValue(
       new Error("alarm unavailable") as never,
     );
@@ -401,7 +560,9 @@ describe("central provider abstraction source contract", () => {
       "background/permissions.ts": permissionsSource,
       "background/provider-access.ts": providerAccessSource,
       "background/provider-service.ts": providerServiceSource,
+      "background/messages.ts": messagesSource,
       "entrypoints/background.ts": backgroundSource,
+      "storage/state-codec.ts": stateCodecSource,
     };
     const providerKinds = "chatgpt|claude|kimi|cursor|elevenlabs|newapi";
     const comparison = new RegExp(

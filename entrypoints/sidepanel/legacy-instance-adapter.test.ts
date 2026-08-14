@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
 
 import type { AppViewState } from "../../background/view-state";
-import { projectLegacyInstanceState } from "./legacy-instance-adapter";
+import {
+  projectLegacyInstanceOperations,
+  projectLegacyInstanceState,
+} from "./legacy-instance-adapter";
 
 function view(instances: AppViewState["instances"]): AppViewState {
   return {
@@ -88,5 +91,22 @@ describe("Task 6-only legacy instance adapter", () => {
     expect(JSON.stringify(projection.state)).not.toContain("relay.example");
     expect(JSON.stringify(projection.state)).not.toContain("Secret-ish");
     expect(JSON.stringify(projection.state)).not.toContain("550e8400");
+  });
+
+  test("translates instance-keyed operations only at the Task 6 boundary and rejects sibling collapse", () => {
+    expect(
+      projectLegacyInstanceOperations({
+        "kimi:default": "waiting_for_session",
+        "newapi:550e8400-e29b-41d4-a716-446655440000": "fetching",
+      }),
+    ).toEqual({ kimi: "waiting_for_session", newapi: "fetching" });
+
+    expect(() =>
+      projectLegacyInstanceOperations({
+        "newapi:550e8400-e29b-41d4-a716-446655440000": "fetching",
+        "newapi:550e8400-e29b-41d4-a716-446655440001":
+          "requesting_permission",
+      }),
+    ).toThrow("Legacy Cockpit cannot project duplicate provider operations.");
   });
 });

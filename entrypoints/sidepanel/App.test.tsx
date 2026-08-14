@@ -18,10 +18,12 @@ import type {
 import type { AppViewState } from "../../background/view-state";
 import { createFixtureState } from "../../providers/fixtures";
 import { createInitialState } from "../../providers/initial-state";
+import { providerRegistry } from "../../providers/registry";
 import { saveState } from "../../storage/repository";
 import { App } from "./App";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
+const TEST_PERMISSION_INTENT = "550e8400-e29b-41d4-a716-446655440099";
 
 let messageListener:
   | ((
@@ -45,11 +47,42 @@ function installMessageHandler(
 ) {
   messageListener = (message, _sender, sendResponse) => {
     handler(message as Record<string, unknown>, (value) =>
-      sendResponse(toPublicResponse(value)),
+      sendResponse(toPublicControlResponse(message as Record<string, unknown>, value)),
     );
     return true;
   };
   browser.runtime.onMessage.addListener(messageListener);
+}
+
+function toPublicControlResponse(
+  message: Record<string, unknown>,
+  value: unknown,
+): unknown {
+  const publicValue = toPublicResponse(value);
+  if (
+    message.type !== "PREPARE_PROVIDER_PERMISSION" ||
+    !message.providerKind ||
+    typeof message.providerKind !== "string" ||
+    !(message.providerKind in providerRegistry) ||
+    !publicValue ||
+    typeof publicValue !== "object" ||
+    !("preferences" in publicValue)
+  ) {
+    return publicValue;
+  }
+  const providerKind = message.providerKind as keyof typeof providerRegistry;
+  const config = providerRegistry[providerKind].normalizeConfig(message.config);
+  return {
+    state: publicValue,
+    permissionIntentId: TEST_PERMISSION_INTENT,
+    instanceId:
+      typeof message.instanceId === "string"
+        ? message.instanceId
+        : `${providerKind}:default`,
+    permissions: config
+      ? providerRegistry[providerKind].requiredPermissions(config) ?? {}
+      : {},
+  };
 }
 
 function report(
@@ -156,9 +189,10 @@ describe("side-panel App", () => {
         instanceId: "newapi:default",
         config: {
           kind: "dynamic-origin",
-          baseUrl: "https://api.example.com",
+          baseUrl: "https://api.example.com/gateway",
         },
         apiKey: "sk-candidate",
+        permissionIntentId: TEST_PERMISSION_INTENT,
       }),
     );
     expect(requestPermission).toHaveBeenCalledWith({
@@ -232,9 +266,11 @@ describe("side-panel App", () => {
     fireEvent.change(input, { target: { value: secret } });
     fireEvent.click(screen.getByRole("button", { name: "Validate & connect" }));
 
-    expect(requestPermission).toHaveBeenCalledWith({
-      origins: ["https://api.elevenlabs.io/*"],
-    });
+    await waitFor(() =>
+      expect(requestPermission).toHaveBeenCalledWith({
+        origins: ["https://api.elevenlabs.io/*"],
+      }),
+    );
     const guide = screen
       .getByRole("heading", { name: "Connect ElevenLabs" })
       .closest("section")!;
@@ -245,11 +281,23 @@ describe("side-panel App", () => {
     expect(commands).toEqual([
       { type: "GET_STATE" },
       {
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "elevenlabs",
+        instanceId: "elevenlabs:default",
+        config: { kind: "fixed" },
+      },
+      {
+        type: "RESOLVE_PROVIDER_PERMISSION",
+        permissionIntentId: TEST_PERMISSION_INTENT,
+        granted: true,
+      },
+      {
         type: "CONNECT_API_KEY_PROVIDER",
         providerKind: "elevenlabs",
         instanceId: "elevenlabs:default",
         config: { kind: "fixed" },
         apiKey: secret,
+        permissionIntentId: TEST_PERMISSION_INTENT,
       },
     ]);
     expect(document.body).not.toHaveTextContent(secret);
@@ -280,7 +328,20 @@ describe("side-panel App", () => {
       await within(guide).findByText(/ElevenLabs access was not changed/i),
     ).toBeVisible();
     expect(input).toHaveValue("");
-    expect(commands).toEqual([{ type: "GET_STATE" }]);
+    expect(commands).toEqual([
+      { type: "GET_STATE" },
+      {
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "elevenlabs",
+        instanceId: "elevenlabs:default",
+        config: { kind: "fixed" },
+      },
+      {
+        type: "RESOLVE_PROVIDER_PERMISSION",
+        permissionIntentId: TEST_PERMISSION_INTENT,
+        granted: false,
+      },
+    ]);
   });
 
   test.each([
@@ -442,6 +503,7 @@ describe("side-panel App", () => {
       instanceId: "elevenlabs:default",
       config: { kind: "fixed" },
       apiKey: "replacement",
+      permissionIntentId: TEST_PERMISSION_INTENT,
     });
   });
   test("offers a retry when the initial state load fails", async () => {
@@ -582,7 +644,7 @@ describe("side-panel App", () => {
     const card = await screen.findByRole("article", { name: "ChatGPT" });
     fireEvent.click(within(card).getByRole("button", { name: "Connect ChatGPT" }));
 
-    expect(within(card).getByText("Requesting permission…")).toBeVisible();
+    expect(await within(card).findByText("Requesting permission…")).toBeVisible();
     act(() => approvePermission?.(true));
     expect(await within(card).findByText("Fetching usage…")).toBeVisible();
 
@@ -635,7 +697,19 @@ describe("side-panel App", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Couldn’t connect ChatGPT. Reload AI Limits and try again.",
     );
-    expect(commands).toEqual([{ type: "GET_STATE" }]);
+    expect(commands).toEqual([
+      { type: "GET_STATE" },
+      {
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "chatgpt",
+        instanceId: "chatgpt:default",
+        config: { kind: "fixed" },
+      },
+      {
+        type: "ABANDON_PROVIDER_PERMISSION",
+        permissionIntentId: TEST_PERMISSION_INTENT,
+      },
+    ]);
   });
 
   test("shows Kimi waiting only after the recovery boundary emits progress", async () => {
@@ -735,7 +809,10 @@ describe("side-panel App", () => {
         if ((message as { type?: string }).type === "REFRESH_ALL") {
           throw new Error("response channel closed");
         }
-        return toPublicState(state) as never;
+        return toPublicControlResponse(
+          message as Record<string, unknown>,
+          state,
+        ) as never;
       },
     );
 
@@ -778,13 +855,18 @@ describe("side-panel App", () => {
 
   test("uses confirmation-failure copy when connect transport fails", async () => {
     const state = createInitialState();
+    const commands: Record<string, unknown>[] = [];
     vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
       async (message: unknown) => {
+        commands.push(message as Record<string, unknown>);
         if ((message as { type?: string }).type === "CONNECT_BROWSER_PROVIDER") {
           throw new Error("response channel closed");
         }
-        return toPublicState(state) as never;
+        return toPublicControlResponse(
+          message as Record<string, unknown>,
+          state,
+        ) as never;
       },
     );
 
@@ -796,6 +878,14 @@ describe("side-panel App", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Couldn’t confirm the ChatGPT refresh result. Check the latest usage before retrying.",
     );
+    expect(commands.map(({ type }) => type)).toEqual([
+      "GET_STATE",
+      "PREPARE_PROVIDER_PERMISSION",
+      "RESOLVE_PROVIDER_PERMISSION",
+      "CONNECT_BROWSER_PROVIDER",
+      "ABANDON_PROVIDER_PERMISSION",
+    ]);
+    expect(commands[1]).not.toHaveProperty("apiKey");
   });
 
   test("keeps the authoritative auto-refresh value when the command fails", async () => {

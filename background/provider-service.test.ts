@@ -15,7 +15,11 @@ import {
   connectionRepository,
   loadInstanceAppState,
 } from "../storage/instance-repository";
-import { createProviderService } from "./provider-service";
+import {
+  createProviderService,
+  type ConnectApiKeyProviderRequest,
+  type ProviderService,
+} from "./provider-service";
 
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const FIRST = "newapi:550e8400-e29b-41d4-a716-446655440000";
@@ -70,9 +74,38 @@ async function seed(instance: ProviderInstanceRecord, apiKey?: string) {
   }
 }
 
+async function authorizedApiRequest(
+  service: ProviderService,
+  request: Omit<ConnectApiKeyProviderRequest, "permissionIntentId">,
+): Promise<ConnectApiKeyProviderRequest> {
+  const prepared = await service.prepareProviderPermission({
+    providerKind: request.providerKind,
+    ...(request.instanceId ? { instanceId: request.instanceId } : {}),
+    ...(Object.hasOwn(request, "userLabel")
+      ? { userLabel: request.userLabel }
+      : {}),
+    config: request.config,
+  });
+  await service.resolveProviderPermission(prepared.permissionIntentId, true);
+  return { ...request, permissionIntentId: prepared.permissionIntentId };
+}
+
+async function authorizedBrowserIntent(
+  service: ProviderService,
+  providerKind: "chatgpt",
+): Promise<string> {
+  const prepared = await service.prepareProviderPermission({
+    providerKind,
+    config: { kind: "fixed" },
+  });
+  await service.resolveProviderPermission(prepared.permissionIntentId, true);
+  return prepared.permissionIntentId;
+}
+
 beforeEach(async () => {
   vi.restoreAllMocks();
   await browser.storage.local.clear();
+  await browser.storage.session.clear();
   Object.assign(browser.storage.local, {
     setAccessLevel: vi.fn(async () => undefined),
   });
@@ -81,6 +114,147 @@ beforeEach(async () => {
 });
 
 describe("generic provider instance service", () => {
+  test("registers a non-secret exact permission intent before API connection", async () => {
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: vi
+        .fn()
+        .mockReturnValueOnce("550e8400-e29b-41d4-a716-446655440099")
+        .mockReturnValueOnce("550e8400-e29b-41d4-a716-446655440000"),
+    });
+
+    const prepared = await service.prepareProviderPermission({
+      providerKind: "newapi",
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://relay.example/gateway/v1/messages",
+      },
+    });
+
+    expect(prepared).toEqual({
+      permissionIntentId: "550e8400-e29b-41d4-a716-446655440000",
+      instanceId: "newapi:550e8400-e29b-41d4-a716-446655440099",
+      permissions: { origins: ["https://relay.example/*"] },
+    });
+    expect(JSON.stringify(await browser.storage.session.get(null))).not.toMatch(
+      /apiKey|credential|secret|revision|lease/i,
+    );
+  });
+
+  test("keeps a same-origin pending owner through sibling disconnect, then removes the orphan on abandon", async () => {
+    await seed(newApiInstance(FIRST), "first-secret");
+    let permissionPresent = true;
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockImplementation(async () => {
+        permissionPresent = false;
+        return true as never;
+      });
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: vi
+        .fn()
+        .mockReturnValueOnce("550e8400-e29b-41d4-a716-446655440001")
+        .mockReturnValueOnce("550e8400-e29b-41d4-a716-446655440099"),
+    });
+    const prepared = await service.prepareProviderPermission({
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+    });
+
+    await service.disconnectInstance(FIRST);
+    expect(remove).not.toHaveBeenCalled();
+
+    await service.abandonProviderPermission(prepared.permissionIntentId);
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://relay.example/*"],
+    });
+  });
+
+  test("prepares exact Kimi origin, cookie, and scripting permission ownership", async () => {
+    const service = createProviderService({
+      clock: () => NOW,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+    });
+
+    await expect(
+      service.prepareProviderPermission({
+        providerKind: "kimi",
+        config: { kind: "fixed" },
+      }),
+    ).resolves.toMatchObject({
+      instanceId: "kimi:default",
+      permissions: {
+        origins: ["https://www.kimi.com/*"],
+        permissions: ["cookies", "scripting"],
+      },
+    });
+  });
+
+  test("sweeps an abandoned worker-lifetime intent and removes its exact orphan grant", async () => {
+    let now = NOW;
+    let permissionPresent = true;
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async () => permissionPresent as never,
+    );
+    const remove = vi
+      .spyOn(browser.permissions, "remove")
+      .mockImplementation(async () => {
+        permissionPresent = false;
+        return true as never;
+      });
+    const service = createProviderService({
+      clock: () => now,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440099",
+      permissionIntentTtlMs: 100,
+    });
+    await service.prepareProviderPermission({
+      providerKind: "kimi",
+      config: { kind: "fixed" },
+    });
+
+    now += 101;
+    await service.sweepPermissionIntents();
+
+    expect(remove).toHaveBeenCalledWith({
+      origins: ["https://www.kimi.com/*"],
+      permissions: ["cookies", "scripting"],
+    });
+  });
+
+  test("never leaves a committed API instance granted when authority disappears during its commit", async () => {
+    const service = createProviderService({
+      packages: registryWith({
+        newapi: {
+          ...providerRegistry.newapi,
+          collect: vi.fn(async () => success("newapi")),
+        },
+      }),
+      clock: () => NOW,
+      randomUUID: () => "550e8400-e29b-41d4-a716-446655440000",
+    });
+    const request = await authorizedApiRequest(service, {
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      apiKey: "candidate-secret",
+    });
+    vi.mocked(browser.permissions.contains)
+      .mockResolvedValueOnce(true as never)
+      .mockResolvedValueOnce(true as never)
+      .mockResolvedValueOnce(false as never)
+      .mockResolvedValue(false as never);
+
+    await expect(service.connectApiKeyProvider(request)).resolves.toMatchObject({
+      result: "temporary_error",
+    });
+    await expect(connectionRepository.get(FIRST)).resolves.toMatchObject({
+      access: "required",
+    });
+  });
+
   test("refreshes only the selected same-kind sibling with its own credential and state", async () => {
     await seed(newApiInstance(FIRST), "first-secret");
     await seed(newApiInstance(SECOND), "second-secret");
@@ -152,22 +326,29 @@ describe("generic provider instance service", () => {
     });
   });
 
-  test("a superseded singleton connect cannot overwrite the newer credential or state", async () => {
-    let enteredFirstCreate: (() => void) | undefined;
-    let releaseFirstCreate: (() => void) | undefined;
-    const firstCreateEntered = new Promise<void>((resolve) => {
-      enteredFirstCreate = resolve;
+  test("serializes same-instance replacement commits so the later singleton generation wins intact", async () => {
+    await seed({
+      id: "elevenlabs:default",
+      providerKind: "elevenlabs",
+      config: { kind: "fixed" },
+      access: "granted",
+      createdAt: NOW,
+      history: [],
+    }, "old-secret");
+    let enteredFirstReplace: (() => void) | undefined;
+    let releaseFirstReplace: (() => void) | undefined;
+    const firstReplaceEntered = new Promise<void>((resolve) => {
+      enteredFirstReplace = resolve;
     });
-    const firstCreateRelease = new Promise<void>((resolve) => {
-      releaseFirstCreate = resolve;
+    const firstReplaceRelease = new Promise<void>((resolve) => {
+      releaseFirstReplace = resolve;
     });
-    const originalCreateIfCurrent =
-      connectionRepository.createIfCurrent.bind(connectionRepository);
-    vi.spyOn(connectionRepository, "createIfCurrent")
-      .mockImplementationOnce(async (candidate, isCurrent) => {
-        enteredFirstCreate?.();
-        await firstCreateRelease;
-        return originalCreateIfCurrent(candidate, isCurrent);
+    const originalReplace = connectionRepository.replace.bind(connectionRepository);
+    vi.spyOn(connectionRepository, "replace")
+      .mockImplementationOnce(async (instanceId, updater) => {
+        enteredFirstReplace?.();
+        await firstReplaceRelease;
+        return originalReplace(instanceId, updater);
       });
     const collect = vi.fn(async () => success("elevenlabs"));
     const service = createProviderService({
@@ -177,37 +358,125 @@ describe("generic provider instance service", () => {
       clock: () => NOW,
     });
 
-    const first = service.connectApiKeyProvider({
+    const firstRequest = await authorizedApiRequest(service, {
       providerKind: "elevenlabs",
+      instanceId: "elevenlabs:default",
       config: { kind: "fixed" },
       apiKey: "first-secret",
     });
-    await firstCreateEntered;
-    const second = service.connectApiKeyProvider({
+    const secondRequest = await authorizedApiRequest(service, {
       providerKind: "elevenlabs",
+      instanceId: "elevenlabs:default",
       config: { kind: "fixed" },
       apiKey: "second-secret",
     });
-    await expect(second).resolves.toMatchObject({ result: "connected" });
-    releaseFirstCreate?.();
+    const first = service.connectApiKeyProvider(firstRequest);
+    await firstReplaceEntered;
+    const second = service.connectApiKeyProvider(secondRequest);
+    await Promise.resolve();
+    releaseFirstReplace?.();
 
-    await expect(first).resolves.toMatchObject({
-      result: "temporary_error",
-      report: {
-        results: [
-          {
-            instanceId: "elevenlabs:default",
-            outcome: { kind: "skipped", reason: "superseded" },
-          },
-        ],
-      },
-    });
+    await expect(first).resolves.toMatchObject({ result: "connected" });
+    await expect(second).resolves.toMatchObject({ result: "connected" });
     await expect(
       readCredentialWithRevision("elevenlabs:default"),
     ).resolves.toMatchObject({ value: "second-secret", status: "active" });
     expect(
       (await connectionRepository.get("elevenlabs:default"))?.history,
     ).toHaveLength(1);
+  });
+
+  test("does not pair an older credential with a superseded replacement config when state storage pauses", async () => {
+    await seed(newApiInstance(FIRST, "https://old.example/gateway"), "old-secret");
+    let enteredFirstStateWrite: (() => void) | undefined;
+    let releaseFirstStateWrite: (() => void) | undefined;
+    const firstStateWriteEntered = new Promise<void>((resolve) => {
+      enteredFirstStateWrite = resolve;
+    });
+    const firstStateWriteRelease = new Promise<void>((resolve) => {
+      releaseFirstStateWrite = resolve;
+    });
+    const originalSet = browser.storage.local.set.bind(browser.storage.local);
+    let paused = false;
+    vi.spyOn(browser.storage.local, "set").mockImplementation(async (items) => {
+      const state = (items as Record<string, unknown>).aiLimitsState as
+        | { instances?: ProviderInstanceRecord[] }
+        | undefined;
+      if (
+        !paused &&
+        state?.instances?.some(
+          ({ config }) =>
+            config.kind === "dynamic-origin" &&
+            config.baseUrl === "https://first.example/gateway",
+        )
+      ) {
+        paused = true;
+        enteredFirstStateWrite?.();
+        await firstStateWriteRelease;
+      }
+      return originalSet(items);
+    });
+    const collect = vi.fn(async (instance: ProviderInstanceRecord) =>
+      instance.config.kind === "dynamic-origin" &&
+      instance.config.baseUrl === "https://second.example/gateway"
+        ? ({ ok: false, health: { kind: "credential_invalid" } } as const)
+        : success("newapi"),
+    );
+    const service = createProviderService({
+      packages: registryWith({ newapi: { ...providerRegistry.newapi, collect } }),
+      clock: () => NOW,
+    });
+
+    const firstRequest = await authorizedApiRequest(service, {
+      providerKind: "newapi",
+      instanceId: FIRST,
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://first.example/gateway",
+      },
+      apiKey: "first-secret",
+    });
+    const secondRequest = await authorizedApiRequest(service, {
+      providerKind: "newapi",
+      instanceId: FIRST,
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://second.example/gateway",
+      },
+      apiKey: "second-secret",
+    });
+    const first = service.connectApiKeyProvider(firstRequest);
+    await firstStateWriteEntered;
+    const second = service.connectApiKeyProvider(secondRequest);
+    await Promise.resolve();
+    releaseFirstStateWrite?.();
+    await expect(first).resolves.toMatchObject({ result: "connected" });
+    await expect(second).resolves.toMatchObject({ result: "invalid_key" });
+
+    await expect(connectionRepository.get(FIRST)).resolves.toMatchObject({
+      config: {
+        kind: "dynamic-origin",
+        baseUrl: "https://first.example/gateway",
+      },
+    });
+    await expect(readCredentialWithRevision(FIRST)).resolves.toMatchObject({
+      value: "first-secret",
+      status: "active",
+    });
+
+    collect.mockClear();
+    await service.refreshInstance(FIRST, "manual_provider");
+    expect(collect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: FIRST,
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://first.example/gateway",
+        },
+      }),
+      expect.anything(),
+      { kind: "api-key", value: "first-secret" },
+    );
   });
 
   test("delete-all invalidates an uncommitted new instance before local state can reappear", async () => {
@@ -240,28 +509,21 @@ describe("generic provider instance service", () => {
       randomUUID: () => "550e8400-e29b-41d4-a716-446655440000",
     });
 
-    const connection = service.connectApiKeyProvider({
+    const connectionRequest = await authorizedApiRequest(service, {
       providerKind: "newapi",
       config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
       apiKey: "candidate-secret",
     });
+    const connection = service.connectApiKeyProvider(connectionRequest);
     await createEntered;
     vi.mocked(browser.permissions.contains).mockResolvedValue(false as never);
-    await expect(service.deleteAllLocalData()).resolves.toEqual({
-      result: "deleted",
-    });
+    const deletion = service.deleteAllLocalData();
+    await Promise.resolve();
     releaseCreate?.();
 
-    await expect(connection).resolves.toMatchObject({
-      result: "temporary_error",
-      report: {
-        results: [
-          {
-            instanceId: FIRST,
-            outcome: { kind: "skipped", reason: "superseded" },
-          },
-        ],
-      },
+    await connection;
+    await expect(deletion).resolves.toEqual({
+      result: "deleted",
     });
     await expect(loadInstanceAppState()).resolves.toMatchObject({ instances: [] });
     await expect(readCredentialWithRevision(FIRST)).resolves.toBeUndefined();
@@ -293,11 +555,11 @@ describe("generic provider instance service", () => {
     });
 
     await expect(
-      service.connectApiKeyProvider({
+      service.connectApiKeyProvider(await authorizedApiRequest(service, {
         providerKind: "newapi",
         config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
         apiKey: "invalid-secret",
-      }),
+      })),
     ).resolves.toMatchObject({ result: "invalid_key" });
 
     expect(remove).toHaveBeenCalledWith({
@@ -325,11 +587,11 @@ describe("generic provider instance service", () => {
     });
 
     await expect(
-      service.connectApiKeyProvider({
+      service.connectApiKeyProvider(await authorizedApiRequest(service, {
         providerKind: "newapi",
         config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
         apiKey: "invalid-secret",
-      }),
+      })),
     ).resolves.toMatchObject({ result: "invalid_key" });
 
     expect(remove).not.toHaveBeenCalled();
@@ -496,8 +758,14 @@ describe("generic provider instance service", () => {
       clock: () => NOW,
     });
 
-    await service.connectBrowserProvider("chatgpt");
-    await service.connectBrowserProvider("chatgpt");
+    await service.connectBrowserProvider(
+      "chatgpt",
+      await authorizedBrowserIntent(service, "chatgpt"),
+    );
+    await service.connectBrowserProvider(
+      "chatgpt",
+      await authorizedBrowserIntent(service, "chatgpt"),
+    );
 
     const instances = (await loadInstanceAppState()).instances;
     expect(instances).toHaveLength(1);

@@ -83,6 +83,28 @@ describe("V5 instance state codec", () => {
     ]);
   });
 
+  test("normalizes instance config through its package without dropping a base path", () => {
+    const instance = newApiInstance("newapi:default", "Gateway relay");
+    instance.config = {
+      kind: "dynamic-origin",
+      baseUrl: "https://API.example/gateway/v1/messages",
+    };
+
+    expect(
+      normalizeInstanceAppState(
+        {
+          version: 5,
+          preferences: { displayMode: "used", autoRefresh: true },
+          instances: [instance],
+        },
+        now,
+      ).instances[0]?.config,
+    ).toEqual({
+      kind: "dynamic-origin",
+      baseUrl: "https://api.example/gateway",
+    });
+  });
+
   test("drops duplicate IDs, singleton siblings, and connection-mode mismatches independently", () => {
     const firstChatGpt: ProviderInstanceRecord = {
       id: "chatgpt:default",

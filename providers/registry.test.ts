@@ -47,7 +47,10 @@ describe("provider registry", () => {
         kind: "dynamic-origin",
         baseUrl: "https://relay.example/path?secret=no",
       }),
-    ).toEqual({ kind: "dynamic-origin", baseUrl: "https://relay.example" });
+    ).toEqual({
+      kind: "dynamic-origin",
+      baseUrl: "https://relay.example/path",
+    });
     expect(
       providerRegistry.newapi.requiredPermissions({
         kind: "dynamic-origin",

@@ -2,6 +2,21 @@ interface AutoRefreshState {
   preferences: { autoRefresh: boolean };
 }
 
+export function createSerializedStateReconciler<TState>(
+  readState: () => Promise<TState>,
+  reconcileState: (state: TState) => Promise<void>,
+): () => Promise<void> {
+  let queue: Promise<void> = Promise.resolve();
+  return () => {
+    const reconciliation = queue.then(async () => {
+      const authoritative = await readState();
+      await reconcileState(authoritative);
+    });
+    queue = reconciliation.catch(() => undefined);
+    return reconciliation;
+  };
+}
+
 export interface AutoRefreshTransactionDependencies<TState extends AutoRefreshState> {
   readState(): Promise<TState>;
   writePreference(enabled: boolean): Promise<void>;

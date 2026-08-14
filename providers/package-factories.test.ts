@@ -110,4 +110,40 @@ describe("provider package factories", () => {
     expect(seen[0]?.credential).not.toHaveProperty("baseUrl");
     expect(seen[1]?.credential).not.toHaveProperty("baseUrl");
   });
+
+  test("preserves a normalized New API base path while deriving host permission separately", async () => {
+    const collect = vi.fn(async () => ({
+      ok: false as const,
+      health: { kind: "provider_changed" as const },
+    }));
+    const providerPackage = createApiKeyPackage({
+      kind: "newapi",
+      adapter: { id: "newapi", collect },
+    });
+    const config = providerPackage.normalizeConfig({
+      kind: "dynamic-origin",
+      baseUrl: "https://API.example/gateway/v1/messages",
+    });
+
+    expect(config).toEqual({
+      kind: "dynamic-origin",
+      baseUrl: "https://api.example/gateway",
+    });
+    expect(providerPackage.requiredPermissions(config!)).toEqual({
+      origins: ["https://api.example/*"],
+    });
+
+    await providerPackage.collect(
+      instance(
+        "newapi",
+        config!,
+        "newapi:550e8400-e29b-41d4-a716-446655440000",
+      ),
+      services,
+      { kind: "api-key", value: "relay-key" },
+    );
+    expect(collect).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: "https://api.example/gateway" }),
+    );
+  });
 });

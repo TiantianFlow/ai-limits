@@ -8,6 +8,7 @@ import {
 } from "./messages";
 
 const INSTANCE = "newapi:550e8400-e29b-41d4-a716-446655440000";
+const INTENT = "550e8400-e29b-41d4-a716-446655440099";
 
 describe("strict instance runtime protocol", () => {
   test("dispatches every exact command shape with instance identity intact", async () => {
@@ -15,6 +16,9 @@ describe("strict instance runtime protocol", () => {
       refreshAll: vi.fn(async () => "all"),
       connectBrowserProvider: vi.fn(async () => "browser"),
       connectApiKeyProvider: vi.fn(async () => "api"),
+      prepareProviderPermission: vi.fn(async () => "prepared"),
+      resolveProviderPermission: vi.fn(async () => "resolved"),
+      abandonProviderPermission: vi.fn(async () => "abandoned"),
       refreshInstance: vi.fn(async () => "one"),
       renameInstance: vi.fn(async () => "renamed"),
       disconnectInstance: vi.fn(async () => "disconnected"),
@@ -27,7 +31,25 @@ describe("strict instance runtime protocol", () => {
 
     await expect(handle({ type: "REFRESH_ALL" })).resolves.toBe("all");
     await expect(
-      handle({ type: "CONNECT_BROWSER_PROVIDER", providerKind: "kimi" }),
+      handle({
+        type: "PREPARE_PROVIDER_PERMISSION",
+        providerKind: "kimi",
+        config: { kind: "fixed" },
+      }),
+    ).resolves.toBe("prepared");
+    await expect(
+      handle({
+        type: "RESOLVE_PROVIDER_PERMISSION",
+        permissionIntentId: INTENT,
+        granted: true,
+      }),
+    ).resolves.toBe("resolved");
+    await expect(
+      handle({
+        type: "CONNECT_BROWSER_PROVIDER",
+        providerKind: "kimi",
+        permissionIntentId: INTENT,
+      }),
     ).resolves.toBe("browser");
     const apiCommand = {
       type: "CONNECT_API_KEY_PROVIDER" as const,
@@ -36,6 +58,7 @@ describe("strict instance runtime protocol", () => {
       userLabel: "Work relay",
       config: { kind: "dynamic-origin" as const, baseUrl: "https://relay.example/path" },
       apiKey: "synthetic-candidate-key",
+      permissionIntentId: INTENT,
     };
     await expect(handle(apiCommand)).resolves.toBe("api");
     await expect(
@@ -54,8 +77,14 @@ describe("strict instance runtime protocol", () => {
     await expect(handle({ type: "SET_DISPLAY_MODE", mode: "left" })).resolves.toBe("display");
     await expect(handle({ type: "SET_AUTO_REFRESH", enabled: false })).resolves.toBe("auto");
     await expect(handle({ type: "DELETE_LOCAL_DATA" })).resolves.toBe("deleted");
+    await expect(
+      handle({
+        type: "ABANDON_PROVIDER_PERMISSION",
+        permissionIntentId: INTENT,
+      }),
+    ).resolves.toBe("abandoned");
 
-    expect(handlers.connectBrowserProvider).toHaveBeenCalledWith("kimi");
+    expect(handlers.connectBrowserProvider).toHaveBeenCalledWith("kimi", INTENT);
     expect(handlers.connectApiKeyProvider).toHaveBeenCalledWith(apiCommand);
     expect(handlers.refreshInstance).toHaveBeenCalledWith(INSTANCE);
     expect(handlers.renameInstance).toHaveBeenNthCalledWith(1, INSTANCE, "Renamed");
@@ -69,6 +98,18 @@ describe("strict instance runtime protocol", () => {
     { type: "REFRESH_PROVIDER", providerId: "kimi" },
     { type: "DISCONNECT_PROVIDER", providerId: "kimi" },
     { type: "CONNECT_BROWSER_PROVIDER", providerKind: "elevenlabs" },
+    {
+      type: "PREPARE_PROVIDER_PERMISSION",
+      providerKind: "newapi",
+      config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+      apiKey: "must-never-enter-intent",
+    },
+    {
+      type: "RESOLVE_PROVIDER_PERMISSION",
+      permissionIntentId: INTENT,
+      granted: true,
+      apiKey: "unexpected-secret",
+    },
     { type: "REFRESH_INSTANCE", instanceId: "newapi:not-a-uuid" },
     { type: "REFRESH_INSTANCE", instanceId: INSTANCE, token: "secret" },
     { type: "RENAME_INSTANCE", instanceId: INSTANCE, userLabel: "x".repeat(129) },
@@ -131,6 +172,7 @@ describe("strict instance runtime protocol", () => {
         providerKind: "newapi",
         config: { kind: "dynamic-origin", baseUrl: "https://relay.example/v1" },
         apiKey: "synthetic-key",
+        permissionIntentId: INTENT,
       }),
     ).toBe(true);
     expect(
@@ -139,6 +181,7 @@ describe("strict instance runtime protocol", () => {
         providerKind: "elevenlabs",
         config: { kind: "fixed" },
         apiKey: "synthetic-key",
+        permissionIntentId: INTENT,
       }),
     ).toBe(true);
   });
@@ -174,6 +217,7 @@ describe("strict instance runtime protocol", () => {
           providerKind: "elevenlabs",
           config: { kind: "fixed" },
           apiKey: "candidate-secret",
+          permissionIntentId: INTENT,
         },
         {} as never,
         sendResponse,
