@@ -126,9 +126,11 @@ function validExactHost(host: string): boolean {
 }
 
 function parseOriginPattern(value: unknown): ParsedOriginPattern | undefined {
-  if (typeof value !== "string" || !value.endsWith("/*")) return undefined;
-  const match = /^(\*|https?):\/\/([^/]+)\/\*$/.exec(value);
+  if (typeof value !== "string") return undefined;
+  const match = /^(\*|https?):\/\/([^/]+)(\/.*)$/.exec(value);
   if (!match) return undefined;
+  const path = match[3]!;
+  if (/[\u0000-\u0020\u007f?#]/.test(path)) return undefined;
   const scheme = match[1] as ParsedOriginPattern["scheme"];
   const authority = match[2]!;
   const separator = authority.lastIndexOf(":");
