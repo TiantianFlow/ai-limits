@@ -6,7 +6,7 @@ import type {
 import type { ProviderInstanceView } from "../../../domain/public-protocol";
 import type { ProviderInstanceId } from "../../../domain/instances";
 import { providerNames } from "../../../providers/catalog";
-import { instanceLabel, instanceLabels } from "../instance-label";
+import { instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageHeader } from "../components/PageHeader";
@@ -79,7 +79,7 @@ export function HistoryView({
   }
 
   const providerName = providerNames[instance.providerKind];
-  const label = labelsByInstance.get(instance.id) ?? instanceLabel(instance);
+  const label = labelsByInstance.get(instance.id)!;
 
   return (
     <section className="screen" aria-label={`${label} history`}>
@@ -117,9 +117,9 @@ export function HistoryView({
             >
               {eligibleInstances.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  {(labelsByInstance.get(candidate.id) ?? instanceLabel(candidate)) === providerNames[candidate.providerKind]
+                  {labelsByInstance.get(candidate.id)! === providerNames[candidate.providerKind]
                     ? providerNames[candidate.providerKind]
-                    : `${providerNames[candidate.providerKind]} · ${labelsByInstance.get(candidate.id) ?? instanceLabel(candidate)}`}
+                    : `${providerNames[candidate.providerKind]} · ${labelsByInstance.get(candidate.id)!}`}
                 </option>
               ))}
             </select>

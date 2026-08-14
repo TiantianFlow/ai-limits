@@ -27,25 +27,49 @@ export function instanceLabel(instance: ProviderInstanceView): string {
   );
 }
 
-function shortUniqueId(
+function idTail(instance: ProviderInstanceView): string {
+  return instance.id.slice(instance.id.indexOf(":") + 1);
+}
+
+function uniqueCandidate(
+  instance: ProviderInstanceView,
+  collisions: readonly ProviderInstanceView[],
+  candidateFor: (candidate: ProviderInstanceView) => string,
+): string | undefined {
+  const candidate = candidateFor(instance);
+  return collisions.every(
+    (other) => other.id === instance.id || candidateFor(other) !== candidate,
+  )
+    ? candidate
+    : undefined;
+}
+
+function stableUniqueSuffix(
   instance: ProviderInstanceView,
   collisions: readonly ProviderInstanceView[],
 ): string {
-  const identity = instance.id.slice(instance.id.indexOf(":") + 1);
-  for (let length = Math.min(8, identity.length); length < identity.length; length += 1) {
-    const candidate = identity.slice(0, length);
-    if (
-      collisions.every(
-        (other) =>
-          other.id === instance.id ||
-          other.id.slice(other.id.indexOf(":") + 1, other.id.indexOf(":") + 1 + length) !==
-            candidate,
-      )
-    ) {
-      return candidate;
-    }
+  const preferred = uniqueCandidate(instance, collisions, (candidate) => {
+    const identity = idTail(candidate);
+    return identity === "default" ? identity : identity.slice(0, 8);
+  });
+  if (preferred) return preferred;
+
+  const provider = uniqueCandidate(
+    instance,
+    collisions,
+    (candidate) => providerNames[candidate.providerKind],
+  );
+  if (provider) return provider;
+
+  const maximumLength = Math.max(...collisions.map((candidate) => idTail(candidate).length));
+  for (let length = 9; length <= maximumLength; length += 1) {
+    const extended = uniqueCandidate(instance, collisions, (candidate) =>
+      idTail(candidate).slice(0, length),
+    );
+    if (extended) return extended;
   }
-  return identity;
+
+  return instance.id;
 }
 
 export function instanceLabels(
@@ -65,8 +89,8 @@ export function instanceLabels(
       const siblings = collisions.get(label) ?? [];
       return [
         instance.id,
-        siblings.length > 1 && !nonBlank(instance.userLabel)
-          ? `${label} · ${shortUniqueId(instance, siblings)}`
+        siblings.length > 1
+          ? `${label} · ${stableUniqueSuffix(instance, siblings)}`
           : label,
       ] as const;
     }),

@@ -155,19 +155,6 @@ export interface PermissionIntentResponse {
   permissions: Browser.permissions.Permissions;
 }
 
-const publicInstanceKeys = new Set([
-  "id",
-  "providerKind",
-  "userLabel",
-  "baseUrl",
-  "origin",
-  "access",
-  "createdAt",
-  "history",
-  "snapshot",
-  "lastAttempt",
-]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -178,6 +165,8 @@ function hasExactKeys(
   optional: readonly string[] = [],
 ): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
   const allowed = new Set([...required, ...optional]);
   return (
     required.every((key) => Object.hasOwn(value, key)) &&
@@ -572,8 +561,11 @@ function isNormalizedOrigin(value: unknown): value is string {
 
 function parseProviderInstanceView(value: unknown): ProviderInstanceView {
   if (
-    !isRecord(value) ||
-    Object.keys(value).some((key) => !publicInstanceKeys.has(key)) ||
+    !hasExactKeys(
+      value,
+      ["id", "providerKind", "access", "createdAt", "history"],
+      ["userLabel", "baseUrl", "origin", "snapshot", "lastAttempt"],
+    ) ||
     !isProviderInstanceId(value.id) ||
     !isProviderId(value.providerKind) ||
     (value.access !== "required" && value.access !== "granted") ||

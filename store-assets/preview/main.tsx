@@ -297,7 +297,28 @@ function createFidelityState(
     }
   }
 
-  return fixtureViewState(state, request.now);
+  const viewState = fixtureViewState(state, request.now);
+  if (request.state === "unlabeled-collision") {
+    return {
+      ...viewState,
+      instances: viewState.instances.map((instance) => {
+        if (instance.providerKind !== "newapi") return instance;
+        const snapshot = instance.snapshot
+          ? (() => {
+              const { accountLabel: _accountLabel, ...publicSnapshot } =
+                instance.snapshot;
+              return publicSnapshot;
+            })()
+          : undefined;
+        return {
+          ...instance,
+          userLabel: undefined,
+          ...(snapshot ? { snapshot } : {}),
+        };
+      }),
+    };
+  }
+  return viewState;
 }
 
 function waitForElement(
@@ -424,6 +445,7 @@ function FidelityPreview({ request }: { request: FidelityRequest }) {
         onRefreshInstance={() => undefined}
         onAutoRefreshChange={updateAutoRefresh}
         onDisconnectInstance={disconnectInstance}
+        onRenameInstance={async () => request.state !== "rename-failure"}
         onDeleteLocalData={() => undefined}
       />
     </div>
