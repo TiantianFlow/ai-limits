@@ -55,7 +55,7 @@ export function NewApiConnectView({
     <section className="screen api-key-guide" aria-label={title}>
       <PageHeader
         title={title}
-        subtitle={`${instanceLabel ? `${instanceLabel} · ` : ""}One instance · One relay key`}
+        subtitle={`${instanceLabel ? `${instanceLabel} · ` : ""}Independent instance · Independent relay key`}
         backLabel={backLabel}
         onBack={onBack}
       />
@@ -73,6 +73,7 @@ export function NewApiConnectView({
           Each New API connection keeps its own relay key, label, usage, and
           history. It shows key-specific granted, used, and remaining quota.
           Unlimited keys show absolute usage without an invented percentage.
+          Same-origin connections share only Chrome's host permission.
         </p>
 
         <form

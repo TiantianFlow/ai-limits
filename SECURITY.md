@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Security fixes are made against the current source and latest 0.2.x release.
+Security fixes are made against the current source and latest 0.3.x release.
 Older development builds may not receive separate fixes.
 
 ## Report a vulnerability
@@ -27,9 +27,11 @@ It stores normalized usage locally and does not operate a remote backend.
 Browser-session credentials are request-local. Successfully validated
 ElevenLabs and New API keys are stored separately in chrome.storage.local after
 that storage area is restricted to trusted extension contexts. Each key is sent
-only to its selected provider API. Background command responses and application
-state never include saved API keys, and AI Limits does not render them or copy
-them into reports, logs, or History.
+only to its selected provider API. Every New API instance has its own credential
+binding; same-origin instances share only Chrome's browser-global host grant,
+not keys, labels, usage, or History. Background command responses and
+application state never include saved API keys, and AI Limits does not render
+them or copy them into reports, logs, or History.
 
 Chrome's trusted extension contexts include the background worker and the side
 panel. The side-panel code does not request or read the credential record, but
@@ -42,7 +44,9 @@ isolation.
 
 This local boundary is not OS-keychain encryption. Someone with access to the
 unlocked Chrome profile, extension DevTools, or local profile files may be able
-to inspect the saved key. Browser-session provider endpoints are private and
+to inspect saved keys. Per-instance History contains normalized quota,
+counter/spend, and balance observations, never credentials or raw responses;
+version 0.3.0 graphs quota metrics only. Browser-session provider endpoints are private and
 unsupported; ElevenLabs uses a documented endpoint, but provider responses,
 authorization behavior, and security flows can still change without notice.
 Reports about a provider's own service should be sent to that provider rather

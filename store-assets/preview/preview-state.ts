@@ -28,7 +28,7 @@ function fixtureViewState(state: AppViewState, now: number): AppViewState {
       const second = {
         ...structuredClone(instance),
         id: "newapi:22222222-2222-4222-8222-222222222222",
-        userLabel: "Work relay for product engineering",
+        userLabel: "Demo relay B",
         createdAt: now - 1_000,
       } satisfies AppViewState["instances"][number];
       const snapshot = instance.snapshot

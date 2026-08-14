@@ -18,7 +18,7 @@ const releaseChannelStatementZh =
 const limitedUseStatement =
   "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
 const historyRetentionStatement =
-  "Successful normalized quota observations are stored locally for up to 30 days, subject to a 1,024-observation per-provider safety cap.";
+  "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days, subject to a 1,024-observation per-instance safety cap.";
 const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
@@ -97,7 +97,7 @@ const requiredVisibleElevenLabsStatements = [
   {
     key: "privacy",
     statement:
-      "The saved key is never included in usage state, quota history, screenshots, reports, logs, analytics, or a developer backend.",
+      "The saved key is never included in usage state, History, screenshots, reports, logs, analytics, or a developer backend.",
     error:
       "Privacy policy is missing the ElevenLabs key exclusion boundaries.",
   },
@@ -111,14 +111,14 @@ const requiredVisibleElevenLabsStatements = [
   {
     key: "privacy",
     statement:
-      "Disconnect, external permission removal, Delete all local data, uninstall, or clearing extension storage deletes the saved API key.",
+      "Disconnect, Delete all local data, uninstall, or clearing extension storage deletes the saved API key.",
     error:
       "Privacy policy is missing the complete ElevenLabs key-deletion lifecycle.",
   },
   {
     key: "privacy",
     statement:
-      "If Chrome cannot revoke the host permission, local key and usage deletion remains authoritative; the provider stays locally suppressed until explicit reconnect or later successful permission removal.",
+      "If Chrome cannot revoke a final-owner host permission, local instance deletion remains authoritative and durable cleanup evidence is retained for retry.",
     error:
       "Privacy policy is missing the permission-cleanup failure boundary.",
   },
@@ -146,7 +146,7 @@ const requiredVisibleElevenLabsStatements = [
   {
     key: "faqZh",
     statement:
-      "该密钥绝不会写入应用用量状态、History、截图、报告、日志、分析系统或开发者后端。",
+      "该密钥绝不会写入用量状态、History、截图、报告、日志、分析系统或开发者后端。",
     error:
       "Simplified Chinese FAQ is missing the ElevenLabs key exclusion boundaries.",
   },
@@ -160,14 +160,14 @@ const requiredVisibleElevenLabsStatements = [
   {
     key: "faqZh",
     statement:
-      "断开 ElevenLabs、外部移除主机权限、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
+      "断开 ElevenLabs、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
     error:
       "Simplified Chinese FAQ is missing the complete ElevenLabs key-deletion lifecycle.",
   },
   {
     key: "faqZh",
     statement:
-      "即使 Chrome 无法撤销主机权限，本地密钥和用量删除仍然有效；除非用户明确重新连接或之后成功移除权限，该服务会保持本地抑制状态。",
+      "如果 Chrome 无法撤销最后一个所有者的主机权限，本地实例删除仍然有效，并会保留持久清理证据供之后重试。",
     error:
       "Simplified Chinese FAQ is missing the permission-cleanup failure boundary.",
   },
@@ -184,6 +184,125 @@ const requiredVisibleElevenLabsStatements = [
       "confirm the side panel opens with six permission-required cards.",
     error:
       "Store listing reviewer flow must expect six permission-required cards.",
+  },
+];
+const requiredVisibleV030Statements = [
+  {
+    key: "readme",
+    statement:
+      "AI Limits supports multiple New API instances. Each instance keeps its own normalized base URL, label, relay key, current usage, refresh state, and History.",
+    error: "README is missing the rendered multi-instance New API disclosure.",
+  },
+  {
+    key: "readmeZh",
+    statement:
+      "AI Limits 支持多个 New API 实例。每个实例分别保存自己的标准化基础网址、标签、Relay Key、当前用量、刷新状态和 History。",
+    error:
+      "Simplified Chinese README is missing the rendered multi-instance New API disclosure.",
+  },
+  {
+    key: "faq",
+    statement:
+      "Two New API instances on the same origin share only Chrome's browser-global origin permission; they never share a relay key, label, usage state, or History.",
+    error: "English FAQ is missing the same-origin New API isolation disclosure.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "位于同一来源的两个 New API 实例只会共享 Chrome 的浏览器全局来源权限；它们绝不会共享 Relay Key、标签、用量状态或 History。",
+    error:
+      "Simplified Chinese FAQ is missing the same-origin New API isolation disclosure.",
+  },
+  {
+    key: "faq",
+    statement:
+      "Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may open at most one inactive temporary Kimi tab, waits up to 10 seconds for recovery, and closes only the tab it created.",
+    error: "English FAQ is missing the exact bounded Kimi tab policy.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 10 秒完成恢复，并且只关闭它自己创建的标签页。",
+    error: "Simplified Chinese FAQ is missing the exact bounded Kimi tab policy.",
+  },
+  {
+    key: "supported",
+    statement:
+      "New API supports multiple independent instances. Each configured instance has its own normalized base URL, label, relay key, usage, History, refresh state, replacement, rejection, and deletion lifecycle.",
+    error: "Supported providers is missing the New API instance lifecycle.",
+  },
+  {
+    key: "supported",
+    statement:
+      "Same-origin instances share only Chrome's browser-global origin grant; credentials, labels, usage state, and History remain independent.",
+    error: "Supported providers is missing the shared-origin boundary.",
+  },
+  {
+    key: "supportedZh",
+    statement:
+      "New API 支持多个相互独立的实例。每个已配置实例分别拥有自己的标准化基础网址、标签、Relay Key、用量、History、刷新状态、替换、拒绝和删除生命周期。",
+    error:
+      "Simplified Chinese supported providers is missing the New API instance lifecycle.",
+  },
+  {
+    key: "supportedZh",
+    statement:
+      "同一来源的实例只共享 Chrome 的浏览器全局来源授权；凭据、标签、用量状态和 History 始终相互独立。",
+    error:
+      "Simplified Chinese supported providers is missing the shared-origin boundary.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days, subject to a 1,024-observation per-instance safety cap.",
+    error: "Privacy policy is missing the typed per-instance history disclosure.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Within that cap, the newest 48 hours remain at collection resolution and older retained observations are compacted to the latest observation in each UTC hour.",
+    error: "Privacy policy is missing the exact history compaction policy.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "In version 0.3.0, History graphs plot quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
+    error: "Privacy policy is missing the quota-only graph disclosure.",
+  },
+  {
+    key: "privacy",
+    statement: "History never stores credentials or raw provider responses.",
+    error: "Privacy policy is missing the credential and raw-response exclusion.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Currency-denominated spend counters and balances are normalized usage data, not raw payment transaction history.",
+    error: "Privacy policy is missing the normalized financial-data distinction.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Externally removing a permission marks every affected instance permission-required while retaining its nonsecret configuration, normalized usage, refresh status, and History.",
+    error: "Privacy policy is missing the external-permission retention behavior.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Disconnect deletes that instance's credential, configuration, usage, refresh status, and History before permission cleanup; a shared origin remains granted while another active instance owns it, and final-owner removal is best-effort with durable retry evidence.",
+    error: "Privacy policy is missing the instance disconnect and final-owner behavior.",
+  },
+  {
+    key: "listing",
+    statement:
+      "AI Limits supports multiple independent New API instances, including multiple separately labeled keys on the same origin.",
+    error: "Store listing is missing multi-instance New API support.",
+  },
+  {
+    key: "listing",
+    statement:
+      "Successful normalized quota, counter or spend, and balance observations are retained per instance, while version 0.3.0 graphs quota metrics only.",
+    error: "Store listing is missing typed history and quota-only graph behavior.",
   },
 ];
 
@@ -481,6 +600,12 @@ export function validatePublicationDocuments(documents) {
     }
   }
 
+  for (const { key, statement, error } of requiredVisibleV030Statements) {
+    if (!extractQualifyingMarkdownProse(documents[key] ?? "").includes(statement)) {
+      errors.push(error);
+    }
+  }
+
   for (const {
     key,
     label,
@@ -523,7 +648,7 @@ export function validatePublicationDocuments(documents) {
 
   if (!visiblePrivacy.includes(historyRetentionStatement)) {
     errors.push(
-      "Privacy policy is missing the 30-day local quota-history disclosure.",
+      "Privacy policy is missing the typed per-instance history disclosure.",
     );
   }
 

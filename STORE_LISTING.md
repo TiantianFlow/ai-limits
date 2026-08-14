@@ -1,6 +1,6 @@
 # Chrome Web Store listing draft
 
-This document describes AI Limits version 0.2.3. It is submission copy and a
+This document describes AI Limits version 0.3.0. It is submission copy and a
 review checklist, not a claim that any provider has approved the extension.
 
 ## Store configuration
@@ -55,11 +55,13 @@ individually, approve that provider's optional access, and view the usage
 windows, reset times, credits, and plan labels that the provider makes
 available. The first four providers use the signed-in browser session.
 ElevenLabs uses a user-created API key and its documented read-only
-subscription request. New API uses one user-provided instance URL and relay
-key, validates `/api/status`, and reads that key's documented read-only
-`/api/usage/token/` response. Capped keys show used and remaining quota;
-unlimited keys show absolute usage. Account wallet, subscriptions, admin data,
-and multiple New API instances are not currently read.
+subscription request. AI Limits supports multiple independent New API
+instances, including multiple separately labeled keys on the same origin. Each
+instance keeps its own normalized base URL, label, key, usage, refresh state,
+replacement/rejection status, and History. AI Limits validates `/api/status`
+and reads that key's documented read-only `/api/usage/token/` response. Capped
+keys show used and remaining quota; unlimited keys show absolute usage. Account
+wallet, subscriptions, admin data, and other relay keys are not read.
 
 Providers use different conventions: some report quota consumed, while others
 report quota remaining. AI Limits normalizes them into a single display and lets
@@ -80,14 +82,16 @@ because the response does not provide their own reset boundary. Invoice,
 payment-attempt, coupon, payment-identifier, and currency-overage fields are
 excluded.
 
-Successful normalized quota observations are stored locally for
-up to 30 days, subject to a 1,024-observation per-provider safety cap. Within
-that cap, observations from the newest 48 hours are kept at collection
-resolution; older retained history keeps only the latest value in each UTC
-hour. History begins with one valid locally stored current snapshot on upgrade
-or with subsequent successful refreshes. The extension does not reconstruct
-earlier provider history and does not store credit-balance history. History is
-never transmitted to the developer.
+Successful normalized quota, counter or spend, and balance observations are
+retained per instance, while version 0.3.0 graphs quota metrics only. History
+is retained for up to 30 days, subject to a 1,024-observation per-instance
+safety cap. The newest 48 hours remain at collection resolution; older retained
+observations keep only the latest value in each UTC hour. Currency-denominated
+spend counters and balances are normalized usage data, not raw payment
+transaction history. History begins with one valid locally stored current
+snapshot on upgrade or with subsequent successful refreshes. The extension
+does not reconstruct earlier provider history, store credentials or raw
+provider responses in History, or transmit History to the developer.
 
 The extension stores normalized results in the local Chrome profile. Refresh
 can be manual or automatic about every 15 minutes. ElevenLabs setup opens the
@@ -97,10 +101,16 @@ validates the real request because ElevenLabs does not formally document the
 exact endpoint-to-scope mapping. Once connected, ElevenLabs refreshes in the
 background without opening tabs. New API onboarding accepts a homepage,
 dashboard, `/v1`, `/v1/messages`, or usage-endpoint URL, removes known suffixes,
-and requests only the exact normalized instance origin. Settings let the user turn automatic refresh
-off, disconnect one provider and remove its saved usage and credential, or
-delete all saved usage and credentials while attempting to revoke every
-provider permission.
+and requests only the exact normalized instance origin. Same-origin instances
+share only Chrome's browser-global origin permission, never keys, labels,
+usage, or History. Settings let the user turn automatic refresh off, disconnect
+one instance and remove only its saved configuration, usage, credential, and
+History, or delete all saved usage and credentials while attempting to revoke
+every provider permission. A shared grant remains while another active instance
+owns it; final-owner permission cleanup is best-effort with durable retry
+evidence. External permission removal marks affected instances as requiring
+permission while retaining their nonsecret configuration, normalized usage,
+refresh status, History, and inactive saved key.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor,
@@ -113,8 +123,9 @@ and authorization behavior can still change without notice.
 ### Required permissions
 
 - `storage`: saves display and refresh preferences, provider access state,
-  normalized quota/credit snapshots, up to 30 days of quota-only history, and
-  sanitized refresh status in `chrome.storage.local`. It also holds temporary
+  normalized quota/counter/balance snapshots, up to 30 days of typed
+  per-instance History, and sanitized refresh status in
+  `chrome.storage.local`. Version 0.3.0 graphs quota metrics only. It also holds temporary
   Kimi tab-cleanup lease metadata in `chrome.storage.session`. Browser-session
   cookies and access credentials are not persisted. After validation, the
   user-created ElevenLabs or New API key is persisted in a separate
@@ -187,9 +198,10 @@ does not create or activate provider tabs.
   adapters do not query Claude or Cursor email endpoints.
 - **Financial and payment information:** Yes, limited to provider-reported
   usage-credit balances, extra-usage amounts or limits, and on-demand spend
-  limits included in a usage response. Payment cards, bank details, and
-  transaction histories are not accessed. The local history feature does not
-  retain these credit fields over time.
+  values/limits included in a usage response. These normalized counters and
+  balances may be retained in local per-instance History, but version 0.3.0
+  does not graph them. Payment cards, bank details, raw provider responses, and
+  transaction histories are not accessed or retained.
 - **Web history:** No browsing history or list of visited pages is collected or
   retained. During Kimi collection, AI Limits may check for an already-open tab
   matching the exact Kimi origin.
@@ -199,20 +211,19 @@ does not create or activate provider tabs.
 - **Sale or unrelated sharing:** No. Data is not sold and is not sent to the
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
-- **Retention and controls:** Successful normalized quota observations stay in
-  the local Chrome profile for up to 30 days, subject to a 1,024-observation
-  per-provider safety cap. Within that cap, observations from the newest 48
-  hours stay at collection resolution; older retained history keeps the latest
-  value in each UTC hour. Disconnect or permission revocation removes that
-  provider's history; **Delete all local data** removes every provider's history
-  even if a permission cannot be revoked. Extension uninstall or browser-storage
-  clearing also removes the local record. Users can disable automatic refresh
-  at any time. A rejected API key stops that provider's scheduled requests
-  while stale normalized usage and History remain until replacement or
-  deletion. Disconnect, external permission removal, **Delete all local
-  data**, uninstall, or clearing extension storage deletes the key. Local
-  key/data deletion remains authoritative even if Chrome cannot revoke the
-  host permission.
+- **Retention and controls:** Successful normalized quota, counter/spend, and
+  balance observations stay in the local Chrome profile per instance for up to
+  30 days, subject to a 1,024-observation per-instance safety cap. Within that
+  cap, observations from the newest 48 hours stay at collection resolution;
+  older retained History keeps the latest value in each UTC hour. Disconnect
+  removes that instance's key/configuration/usage/History before best-effort
+  permission cleanup; **Delete all local data** removes every instance even if
+  a permission cannot be revoked. External permission removal instead retains
+  instance data and saved keys but marks affected instances permission-required.
+  Extension uninstall or browser-storage clearing removes the local records.
+  Users can disable automatic refresh at any time. A rejected API key stops
+  that instance's scheduled requests while stale normalized usage and History
+  remain until replacement or deletion.
 - **Use limitation:** Data is used only to provide the usage dashboard, refresh
   health, permission lifecycle, and user-requested settings. It is not used for
   advertising, credit decisions, or purposes unrelated to the single purpose.
@@ -222,7 +233,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.2.3-chrome.zip` upload artifact.
+- The validated `ai-limits-0.3.0-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
   provider sites in the same Chrome profile. ElevenLabs review additionally
   requires the reviewer to create a temporary **User → Read** API key in their
@@ -263,18 +274,22 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    available voice limits. Close all ElevenLabs tabs and refresh again; no tab
    should open. If possible, revoke the key at ElevenLabs and confirm AI Limits
    stops scheduled attempts, preserves stale data, and offers **Replace key**.
-7. **New API:** click **Connect New API**, enter a reviewer-controlled New API
-   site URL or a `/v1/messages` URL, and paste one temporary relay key. Confirm
-   the onboarding normalizes the URL, Chrome asks only for that exact instance
-   origin, and the extension displays the key-specific capped quota or
-   unlimited-key absolute usage. Confirm no provider tab opens. Revoke the key
-   if practical and verify AI Limits preserves stale normalized data while
-   offering replacement. Account wallet, subscriptions, admin data, and
-   multiple instances are intentionally out of scope.
+7. **New API:** click **Connect New API** twice, use two nonpersonal labels, and
+   connect two reviewer-controlled keys for the same origin (a site URL or a
+   `/v1/messages` URL is accepted). Confirm onboarding normalizes each URL,
+   Chrome asks only for that exact origin, both independent cards appear, and
+   each shows its own capped quota or unlimited-key absolute usage. Refresh and
+   replace one without changing the other. Confirm no provider tab opens.
+   Disconnect one and confirm the sibling plus shared grant remain; disconnect
+   the final owner and confirm permission cleanup. Reconnect both, remove the
+   origin permission externally, and confirm both become permission-required
+   while nonsecret configuration, normalized usage, refresh state, and History
+   remain. Account wallet, subscriptions, admin data, and other keys remain out
+   of scope.
 8. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
-   quota history without adding credit history. In Settings, turn automatic
+   quota history while counter/spend and balance samples remain ungraphed. In Settings, turn automatic
    refresh off and on, disconnect one provider, then use **Delete all local
    data** and confirm the cards return to the permission-required state. For
    ElevenLabs, inspect extension storage after Disconnect and after Delete all

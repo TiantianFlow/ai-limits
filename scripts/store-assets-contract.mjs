@@ -531,6 +531,22 @@ export const MARKETING_ASSET_CAPTURES = [
   },
 ];
 
+export function marketingProviderHeadingSelector(instanceId) {
+  const identitySuffix = instanceId.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return `#provider-name-${identitySuffix}`;
+}
+
+export function marketingQuotaHistorySelector(instanceId, metricId) {
+  const focusKey = `provider-history-${instanceId}-${metricId}`
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
+  return `[data-focus-key="${focusKey}"]`;
+}
+
+export function marketingPrivacyRequiredLabels() {
+  return ["Demo relay A", "Demo relay B"];
+}
+
 const FIDELITY_WIDTHS = [340, 400, 460];
 const FIDELITY_THEMES = ["light", "dark"];
 const FIDELITY_SCENARIOS = [

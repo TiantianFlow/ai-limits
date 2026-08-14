@@ -249,7 +249,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "One Chrome side panel",
       title: "Every AI limit, in one quiet view.",
       description:
-        "See every provider as Used or Left, with reset timing, plan details, and local History—without hopping between account pages.",
+        "See six providers and multiple independent New API instances as Used or Left, with reset timing and local History.",
     },
     pacing: {
       eyebrow: "Plan your usage",
@@ -261,7 +261,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "See the trend",
       title: "History that stays on your device.",
       description:
-        "Successful refreshes build a local quota graph, with reset-aware gaps instead of misleading lines.",
+        "Quota graphs use per-instance typed history from successful local refreshes, with reset-aware gaps instead of misleading lines.",
     },
     privacy: {
       eyebrow: "Local by design",
@@ -277,7 +277,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "ChatGPT · Claude · Kimi · Cursor",
+      description: "6 providers · Multiple New API instances",
     },
     chromeSidePanelLabel: "Chrome side panel",
     providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
@@ -299,7 +299,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "一个 Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
       description:
-        "无需在各个账户页面之间切换，即可统一查看已用或剩余、重置时间、套餐详情和本地历史。",
+        "统一查看六个服务和多个相互独立的 New API 实例，包括已用或剩余、重置时间和本地历史。",
     },
     pacing: {
       eyebrow: "规划你的用量",

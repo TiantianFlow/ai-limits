@@ -171,7 +171,7 @@ export function createFixtureState(
     {
       id: "newapi:default",
       providerKind: "newapi",
-      userLabel: "Personal relay",
+      userLabel: "Demo relay A",
       baseUrl: "https://relay.example/gateway",
       origin: "https://relay.example",
       access: "granted",
@@ -179,8 +179,8 @@ export function createFixtureState(
       history: [],
       snapshot: fixtureSnapshot({
         providerKind: "newapi",
-        accountLabel: "Example New API",
-        planLabel: "AI Limits",
+        accountLabel: "Demo New API",
+        planLabel: "Demo plan",
         metrics: [{ ...quota("relay-key-quota", "API key quota", "feature", 0.25), used: 2_500, limit: 10_000, unit: "quota units" }],
         usageGroups: [{ id: "usage", label: "Usage", metricIds: ["relay-key-quota"] }],
       }, now),

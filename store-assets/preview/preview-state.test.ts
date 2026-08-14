@@ -75,6 +75,25 @@ describe("preview view state", () => {
     },
   );
 
+  it("shows two clearly labeled nonpersonal same-origin New API instances", () => {
+    const state = createStorePreviewState(new URLSearchParams(), now);
+    const newApiInstances = state.instances.filter(
+      ({ providerKind }) => providerKind === "newapi",
+    );
+
+    expect(newApiInstances).toHaveLength(2);
+    expect(newApiInstances.map(({ userLabel }) => userLabel)).toEqual([
+      "Demo relay A",
+      "Demo relay B",
+    ]);
+    expect(new Set(newApiInstances.map(({ origin }) => origin))).toEqual(
+      new Set(["https://relay.example"]),
+    );
+    expect(newApiInstances.map(({ userLabel }) => userLabel).join(" ")).not.toMatch(
+      /personal|work|@/i,
+    );
+  });
+
   it.each(
     fidelityScreens.flatMap((screen) =>
       fidelityStates.map((state) => [screen, state] as const),
@@ -200,7 +219,7 @@ describe("preview view state", () => {
     ).toBe(false);
     expect(renameFailed).not.toBe(initial);
     expect(renameFailed.instances.find((instance) => instance.id === workId)?.userLabel).toBe(
-      "Work relay for product engineering",
+      "Demo relay B",
     );
   });
 

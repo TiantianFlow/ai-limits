@@ -14,9 +14,9 @@ const releaseChannelStatement =
 const releaseChannelStatementZh =
   "Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。";
 const historyRetentionStatement =
-  "Successful normalized quota observations are stored locally for up to 30 days, subject to a 1,024-observation per-provider safety cap.";
+  "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days, subject to a 1,024-observation per-instance safety cap.";
 const uncappedHistoryRetentionStatement =
-  "Successful normalized quota observations are stored locally for up to 30 days.";
+  "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days.";
 const securityCondition =
   "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
 const securityFallback =
@@ -85,7 +85,7 @@ const elevenLabsPublicationStatements = [
   {
     key: "privacy",
     statement:
-      "The saved key is never included in usage state, quota history, screenshots, reports, logs, analytics, or a developer backend.",
+      "The saved key is never included in usage state, History, screenshots, reports, logs, analytics, or a developer backend.",
     error:
       "Privacy policy is missing the ElevenLabs key exclusion boundaries.",
   },
@@ -99,14 +99,14 @@ const elevenLabsPublicationStatements = [
   {
     key: "privacy",
     statement:
-      "Disconnect, external permission removal, Delete all local data, uninstall, or clearing extension storage deletes the saved API key.",
+      "Disconnect, Delete all local data, uninstall, or clearing extension storage deletes the saved API key.",
     error:
       "Privacy policy is missing the complete ElevenLabs key-deletion lifecycle.",
   },
   {
     key: "privacy",
     statement:
-      "If Chrome cannot revoke the host permission, local key and usage deletion remains authoritative; the provider stays locally suppressed until explicit reconnect or later successful permission removal.",
+      "If Chrome cannot revoke a final-owner host permission, local instance deletion remains authoritative and durable cleanup evidence is retained for retry.",
     error:
       "Privacy policy is missing the permission-cleanup failure boundary.",
   },
@@ -134,7 +134,7 @@ const elevenLabsPublicationStatements = [
   {
     key: "faqZh",
     statement:
-      "该密钥绝不会写入应用用量状态、History、截图、报告、日志、分析系统或开发者后端。",
+      "该密钥绝不会写入用量状态、History、截图、报告、日志、分析系统或开发者后端。",
     error:
       "Simplified Chinese FAQ is missing the ElevenLabs key exclusion boundaries.",
   },
@@ -148,14 +148,14 @@ const elevenLabsPublicationStatements = [
   {
     key: "faqZh",
     statement:
-      "断开 ElevenLabs、外部移除主机权限、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
+      "断开 ElevenLabs、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
     error:
       "Simplified Chinese FAQ is missing the complete ElevenLabs key-deletion lifecycle.",
   },
   {
     key: "faqZh",
     statement:
-      "即使 Chrome 无法撤销主机权限，本地密钥和用量删除仍然有效；除非用户明确重新连接或之后成功移除权限，该服务会保持本地抑制状态。",
+      "如果 Chrome 无法撤销最后一个所有者的主机权限，本地实例删除仍然有效，并会保留持久清理证据供之后重试。",
     error:
       "Simplified Chinese FAQ is missing the permission-cleanup failure boundary.",
   },
@@ -172,6 +172,125 @@ const elevenLabsPublicationStatements = [
       "confirm the side panel opens with six permission-required cards.",
     error:
       "Store listing reviewer flow must expect six permission-required cards.",
+  },
+];
+const v030PublicationStatements = [
+  {
+    key: "readme",
+    statement:
+      "AI Limits supports multiple New API instances. Each instance keeps its own normalized base URL, label, relay key, current usage, refresh state, and History.",
+    error: "README is missing the rendered multi-instance New API disclosure.",
+  },
+  {
+    key: "readmeZh",
+    statement:
+      "AI Limits 支持多个 New API 实例。每个实例分别保存自己的标准化基础网址、标签、Relay Key、当前用量、刷新状态和 History。",
+    error:
+      "Simplified Chinese README is missing the rendered multi-instance New API disclosure.",
+  },
+  {
+    key: "faq",
+    statement:
+      "Two New API instances on the same origin share only Chrome's browser-global origin permission; they never share a relay key, label, usage state, or History.",
+    error: "English FAQ is missing the same-origin New API isolation disclosure.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "位于同一来源的两个 New API 实例只会共享 Chrome 的浏览器全局来源权限；它们绝不会共享 Relay Key、标签、用量状态或 History。",
+    error:
+      "Simplified Chinese FAQ is missing the same-origin New API isolation disclosure.",
+  },
+  {
+    key: "faq",
+    statement:
+      "Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may open at most one inactive temporary Kimi tab, waits up to 10 seconds for recovery, and closes only the tab it created.",
+    error: "English FAQ is missing the exact bounded Kimi tab policy.",
+  },
+  {
+    key: "faqZh",
+    statement:
+      "Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 10 秒完成恢复，并且只关闭它自己创建的标签页。",
+    error: "Simplified Chinese FAQ is missing the exact bounded Kimi tab policy.",
+  },
+  {
+    key: "supported",
+    statement:
+      "New API supports multiple independent instances. Each configured instance has its own normalized base URL, label, relay key, usage, History, refresh state, replacement, rejection, and deletion lifecycle.",
+    error: "Supported providers is missing the New API instance lifecycle.",
+  },
+  {
+    key: "supported",
+    statement:
+      "Same-origin instances share only Chrome's browser-global origin grant; credentials, labels, usage state, and History remain independent.",
+    error: "Supported providers is missing the shared-origin boundary.",
+  },
+  {
+    key: "supportedZh",
+    statement:
+      "New API 支持多个相互独立的实例。每个已配置实例分别拥有自己的标准化基础网址、标签、Relay Key、用量、History、刷新状态、替换、拒绝和删除生命周期。",
+    error:
+      "Simplified Chinese supported providers is missing the New API instance lifecycle.",
+  },
+  {
+    key: "supportedZh",
+    statement:
+      "同一来源的实例只共享 Chrome 的浏览器全局来源授权；凭据、标签、用量状态和 History 始终相互独立。",
+    error:
+      "Simplified Chinese supported providers is missing the shared-origin boundary.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days, subject to a 1,024-observation per-instance safety cap.",
+    error: "Privacy policy is missing the typed per-instance history disclosure.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Within that cap, the newest 48 hours remain at collection resolution and older retained observations are compacted to the latest observation in each UTC hour.",
+    error: "Privacy policy is missing the exact history compaction policy.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "In version 0.3.0, History graphs plot quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
+    error: "Privacy policy is missing the quota-only graph disclosure.",
+  },
+  {
+    key: "privacy",
+    statement: "History never stores credentials or raw provider responses.",
+    error: "Privacy policy is missing the credential and raw-response exclusion.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Currency-denominated spend counters and balances are normalized usage data, not raw payment transaction history.",
+    error: "Privacy policy is missing the normalized financial-data distinction.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Externally removing a permission marks every affected instance permission-required while retaining its nonsecret configuration, normalized usage, refresh status, and History.",
+    error: "Privacy policy is missing the external-permission retention behavior.",
+  },
+  {
+    key: "privacy",
+    statement:
+      "Disconnect deletes that instance's credential, configuration, usage, refresh status, and History before permission cleanup; a shared origin remains granted while another active instance owns it, and final-owner removal is best-effort with durable retry evidence.",
+    error: "Privacy policy is missing the instance disconnect and final-owner behavior.",
+  },
+  {
+    key: "listing",
+    statement:
+      "AI Limits supports multiple independent New API instances, including multiple separately labeled keys on the same origin.",
+    error: "Store listing is missing multi-instance New API support.",
+  },
+  {
+    key: "listing",
+    statement:
+      "Successful normalized quota, counter or spend, and balance observations are retained per instance, while version 0.3.0 graphs quota metrics only.",
+    error: "Store listing is missing typed history and quota-only graph behavior.",
   },
 ];
 const listingLinks = [
@@ -229,21 +348,34 @@ const listingDefaults = [
 ];
 
 const valid = {
-  readme: `${issuesLink}\n${faqLink}\n${storeLink}\n${releaseLink}\n${releaseChannelStatement}\n${elevenLabsPublicationStatements[0].statement}`,
-  readmeZh: `[常见问题](FAQ.zh-CN.md)\n${storeLink}\n${releaseLink}\n${releaseChannelStatementZh}\n${elevenLabsPublicationStatements[1].statement}`,
-  faq: `English | [简体中文](FAQ.zh-CN.md)\n${kimiAutoRefreshStatement}\n${elevenLabsPublicationStatements[2].statement}`,
+  readme: `${issuesLink}\n${faqLink}\n${storeLink}\n${releaseLink}\n${releaseChannelStatement}\n${elevenLabsPublicationStatements[0].statement}\n${v030PublicationStatements.filter(({ key }) => key === "readme").map(({ statement }) => statement).join("\n")}`,
+  readmeZh: `[常见问题](FAQ.zh-CN.md)\n${storeLink}\n${releaseLink}\n${releaseChannelStatementZh}\n${elevenLabsPublicationStatements[1].statement}\n${v030PublicationStatements.filter(({ key }) => key === "readmeZh").map(({ statement }) => statement).join("\n")}`,
+  faq: `English | [简体中文](FAQ.zh-CN.md)\n${kimiAutoRefreshStatement}\n${elevenLabsPublicationStatements[2].statement}\n${v030PublicationStatements.filter(({ key }) => key === "faq").map(({ statement }) => statement).join("\n")}`,
   faqZh: [
     "[English](FAQ.md) | 简体中文",
     kimiAutoRefreshStatementZh,
     ...elevenLabsPublicationStatements
       .filter(({ key }) => key === "faqZh")
       .map(({ statement }) => statement),
+    ...v030PublicationStatements
+      .filter(({ key }) => key === "faqZh")
+      .map(({ statement }) => statement),
   ].join("\n"),
+  supported: v030PublicationStatements
+    .filter(({ key }) => key === "supported")
+    .map(({ statement }) => statement)
+    .join("\n"),
+  supportedZh: v030PublicationStatements
+    .filter(({ key }) => key === "supportedZh")
+    .map(({ statement }) => statement)
+    .join("\n"),
   privacy: [
     issuesLink,
     "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.",
-    historyRetentionStatement,
     ...elevenLabsPublicationStatements
+      .filter(({ key }) => key === "privacy")
+      .map(({ statement }) => statement),
+    ...v030PublicationStatements
       .filter(({ key }) => key === "privacy")
       .map(({ statement }) => statement),
   ].join("\n"),
@@ -260,6 +392,9 @@ const valid = {
     storeShortDescription,
     publicRouteGate,
     ...elevenLabsPublicationStatements
+      .filter(({ key }) => key === "listing")
+      .map(({ statement }) => statement),
+    ...v030PublicationStatements
       .filter(({ key }) => key === "listing")
       .map(({ statement }) => statement),
   ].join("\n"),
@@ -634,6 +769,17 @@ describe("publication content", () => {
     },
   );
 
+  it.each(v030PublicationStatements)(
+    "requires the rendered 0.3.0 disclosure in $key: $error",
+    ({ key, statement, error }) => {
+      const errors = validatePublicationDocuments({
+        ...valid,
+        [key]: valid[key].replace(statement, ""),
+      });
+      expect(errors).toContain(error);
+    },
+  );
+
   it.each(faqNavigationLinks)(
     "rejects a missing FAQ navigation link from $key",
     ({ key, markdown, error }) => {
@@ -658,17 +804,17 @@ describe("publication content", () => {
     expect(errors).toContain("Privacy policy is missing the Limited Use compliance statement.");
   });
 
-  it("requires the privacy policy to disclose the 30-day local quota-history limit", () => {
+  it("requires the privacy policy to disclose typed per-instance history retention", () => {
     const errors = validatePublicationDocuments({
       ...valid,
       privacy: valid.privacy.replace(historyRetentionStatement, ""),
     });
     expect(errors).toContain(
-      "Privacy policy is missing the 30-day local quota-history disclosure.",
+      "Privacy policy is missing the typed per-instance history disclosure.",
     );
   });
 
-  it("requires the local quota-history limit to disclose the per-provider safety cap", () => {
+  it("requires typed history to disclose the per-instance safety cap", () => {
     expect(
       validatePublicationDocuments({
         ...valid,
@@ -678,7 +824,7 @@ describe("publication content", () => {
         ),
       }),
     ).toContain(
-      "Privacy policy is missing the 30-day local quota-history disclosure.",
+      "Privacy policy is missing the typed per-instance history disclosure.",
     );
   });
 
@@ -690,7 +836,7 @@ describe("publication content", () => {
         privacy: valid.privacy.replace(historyRetentionStatement, replacement),
       });
       expect(errors).toContain(
-        "Privacy policy is missing the 30-day local quota-history disclosure.",
+        "Privacy policy is missing the typed per-instance history disclosure.",
       );
     },
   );
@@ -701,7 +847,7 @@ describe("publication content", () => {
         ...valid,
         privacy: valid.privacy.replace(
           historyRetentionStatement,
-          "Successful normalized quota observations are stored locally for up to 30 days,\nsubject to a 1,024-observation per-provider safety cap.",
+          "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days,\nsubject to a 1,024-observation per-instance safety cap.",
         ),
       }),
     ).toEqual([]);
@@ -852,6 +998,8 @@ describe("publication content", () => {
     "readmeZh",
     "faq",
     "faqZh",
+    "supported",
+    "supportedZh",
     "privacy",
     "security",
     "listing",

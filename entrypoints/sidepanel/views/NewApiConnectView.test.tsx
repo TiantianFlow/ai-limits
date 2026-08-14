@@ -49,7 +49,9 @@ describe("NewApiConnectView", () => {
     renderView();
 
     expect(screen.getByRole("heading", { level: 1, name: "Connect New API" })).toBeVisible();
+    expect(screen.getByText("Independent instance · Independent relay key")).toBeVisible();
     expect(screen.getByText(/each New API connection keeps its own relay key, label, usage, and history/i)).toBeVisible();
+    expect(screen.getByText(/same-origin connections share only Chrome's host permission/i)).toBeVisible();
     expect(screen.getByText(/key-specific granted, used, and remaining quota/i)).toBeVisible();
     expect(screen.getByText(/unlimited keys show absolute usage/i)).toBeVisible();
     expect(screen.getByText(/does not read account wallet, subscriptions, admin data, or other relay keys/i)).toBeVisible();
