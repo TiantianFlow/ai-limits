@@ -1,5 +1,8 @@
 import { KIMI_RECOVERY_GUIDANCE } from "../../domain/model";
-import type { ProviderInstanceConfig } from "../../domain/instances";
+import type {
+  ProviderInstanceConfig,
+  ProviderInstanceId,
+} from "../../domain/instances";
 import type {
   CollectionContext,
   CollectionResult,
@@ -31,7 +34,7 @@ interface KimiPackageDependencies {
     signal: AbortSignal,
   ): Promise<string | undefined>;
   cleanupAbandonedRecovery(): Promise<void>;
-  announceRecovery(instanceId: string): void;
+  announceRecovery(instanceId: ProviderInstanceId): void;
   retryAfterChangedToken?(
     result: CollectionResult,
     context: CollectionContext,
@@ -91,7 +94,7 @@ export function createKimiPackage(
   };
 
   const recoverAfterStartup = (
-    instanceId: string,
+    instanceId: ProviderInstanceId,
     rejectedToken: string | undefined,
     services: ProviderRuntimeServices,
   ): Promise<string | undefined> => {

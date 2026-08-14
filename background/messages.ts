@@ -9,8 +9,14 @@ import {
   isProviderId,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
+  type ProviderKind,
 } from "../providers/catalog";
-import { normalizeProviderConfig } from "../providers/package-factories";
+import { providerRegistry } from "../providers/registry";
+export {
+  isProviderOperationEvent,
+  type ProviderOperation,
+  type ProviderOperationEvent,
+} from "./events";
 
 const MAX_API_KEY_LENGTH = 4_096;
 const MAX_LABEL_LENGTH = 128;
@@ -22,6 +28,15 @@ export interface ConnectApiKeyProviderCommand {
   userLabel?: string;
   config: ProviderInstanceConfig;
   apiKey: string;
+  permissionIntentId: string;
+}
+
+export interface PrepareProviderPermissionCommand {
+  type: "PREPARE_PROVIDER_PERMISSION";
+  providerKind: ProviderKind;
+  instanceId?: ProviderInstanceId;
+  userLabel?: string;
+  config: ProviderInstanceConfig;
 }
 
 export type RuntimeCommand =
@@ -29,7 +44,15 @@ export type RuntimeCommand =
   | {
       type: "CONNECT_BROWSER_PROVIDER";
       providerKind: BrowserSessionProviderKind;
+      permissionIntentId: string;
     }
+  | PrepareProviderPermissionCommand
+  | {
+      type: "RESOLVE_PROVIDER_PERMISSION";
+      permissionIntentId: string;
+      granted: boolean;
+    }
+  | { type: "ABANDON_PROVIDER_PERMISSION"; permissionIntentId: string }
   | ConnectApiKeyProviderCommand
   | { type: "REFRESH_INSTANCE"; instanceId: ProviderInstanceId }
   | {
@@ -42,17 +65,6 @@ export type RuntimeCommand =
   | { type: "SET_DISPLAY_MODE"; mode: DisplayMode }
   | { type: "SET_AUTO_REFRESH"; enabled: boolean }
   | { type: "DELETE_LOCAL_DATA" };
-
-export type ProviderOperation =
-  | "requesting_permission"
-  | "fetching"
-  | "waiting_for_session";
-
-export interface ProviderOperationEvent {
-  type: "PROVIDER_OPERATION";
-  instanceId: ProviderInstanceId;
-  operation: "waiting_for_session";
-}
 
 export interface RuntimeCommandFailure {
   ok: false;
@@ -101,14 +113,57 @@ function isExactProviderConfig(value: unknown): boolean {
   );
 }
 
+function isPermissionIntentId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
 export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   if (!isRecord(value)) return false;
 
   if (value.type === "CONNECT_BROWSER_PROVIDER") {
     return (
-      hasExactKeys(value, ["type", "providerKind"]) &&
+      hasExactKeys(value, ["type", "providerKind", "permissionIntentId"]) &&
       isProviderId(value.providerKind) &&
-      !isApiKeyProviderId(value.providerKind)
+      !isApiKeyProviderId(value.providerKind) &&
+      isPermissionIntentId(value.permissionIntentId)
+    );
+  }
+
+  if (value.type === "PREPARE_PROVIDER_PERMISSION") {
+    return (
+      hasAllowedKeys(
+        value,
+        ["type", "providerKind", "config"],
+        ["instanceId", "userLabel"],
+      ) &&
+      isProviderId(value.providerKind) &&
+      (!Object.hasOwn(value, "instanceId") ||
+        (isProviderInstanceId(value.instanceId) &&
+          value.instanceId.startsWith(`${value.providerKind}:`))) &&
+      (!Object.hasOwn(value, "userLabel") || isLabel(value.userLabel)) &&
+      isExactProviderConfig(value.config) &&
+      providerRegistry[value.providerKind].normalizeConfig(value.config) !==
+        undefined
+    );
+  }
+
+  if (value.type === "RESOLVE_PROVIDER_PERMISSION") {
+    return (
+      hasExactKeys(value, ["type", "permissionIntentId", "granted"]) &&
+      isPermissionIntentId(value.permissionIntentId) &&
+      typeof value.granted === "boolean"
+    );
+  }
+
+  if (value.type === "ABANDON_PROVIDER_PERMISSION") {
+    return (
+      hasExactKeys(value, ["type", "permissionIntentId"]) &&
+      isPermissionIntentId(value.permissionIntentId)
     );
   }
 
@@ -116,11 +171,18 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
     if (
       !hasAllowedKeys(
         value,
-        ["type", "providerKind", "config", "apiKey"],
+        [
+          "type",
+          "providerKind",
+          "config",
+          "apiKey",
+          "permissionIntentId",
+        ],
         ["instanceId", "userLabel"],
       ) ||
       !isApiKeyProviderId(value.providerKind) ||
       typeof value.apiKey !== "string" ||
+      !isPermissionIntentId(value.permissionIntentId) ||
       value.apiKey.trim().length === 0 ||
       value.apiKey.length > MAX_API_KEY_LENGTH ||
       (Object.hasOwn(value, "instanceId") &&
@@ -131,7 +193,10 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
     ) {
       return false;
     }
-    return normalizeProviderConfig(value.providerKind, value.config) !== undefined;
+    return (
+      providerRegistry[value.providerKind].normalizeConfig(value.config) !==
+      undefined
+    );
   }
 
   if (
@@ -172,21 +237,15 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
   );
 }
 
-export function isProviderOperationEvent(
-  value: unknown,
-): value is ProviderOperationEvent {
-  if (!isRecord(value)) return false;
-  return (
-    hasExactKeys(value, ["type", "instanceId", "operation"]) &&
-    value.type === "PROVIDER_OPERATION" &&
-    isProviderInstanceId(value.instanceId) &&
-    value.operation === "waiting_for_session"
-  );
-}
-
 export interface RuntimeCommandHandlers {
   refreshAll(): unknown;
-  connectBrowserProvider(providerKind: BrowserSessionProviderKind): unknown;
+  prepareProviderPermission(command: PrepareProviderPermissionCommand): unknown;
+  resolveProviderPermission(permissionIntentId: string, granted: boolean): unknown;
+  abandonProviderPermission(permissionIntentId: string): unknown;
+  connectBrowserProvider(
+    providerKind: BrowserSessionProviderKind,
+    permissionIntentId: string,
+  ): unknown;
   connectApiKeyProvider(command: ConnectApiKeyProviderCommand): unknown;
   refreshInstance(instanceId: ProviderInstanceId): unknown;
   renameInstance(instanceId: ProviderInstanceId, userLabel?: string): unknown;
@@ -223,8 +282,20 @@ export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
     switch (value.type) {
       case "REFRESH_ALL":
         return handlers.refreshAll();
+      case "PREPARE_PROVIDER_PERMISSION":
+        return handlers.prepareProviderPermission(value);
+      case "RESOLVE_PROVIDER_PERMISSION":
+        return handlers.resolveProviderPermission(
+          value.permissionIntentId,
+          value.granted,
+        );
+      case "ABANDON_PROVIDER_PERMISSION":
+        return handlers.abandonProviderPermission(value.permissionIntentId);
       case "CONNECT_BROWSER_PROVIDER":
-        return handlers.connectBrowserProvider(value.providerKind);
+        return handlers.connectBrowserProvider(
+          value.providerKind,
+          value.permissionIntentId,
+        );
       case "CONNECT_API_KEY_PROVIDER":
         return handlers.connectApiKeyProvider(value);
       case "REFRESH_INSTANCE":
