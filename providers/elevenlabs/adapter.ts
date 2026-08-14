@@ -1,4 +1,4 @@
-import type { ProviderHealth, QuotaWindow } from "../../domain/model";
+import type { MetricCycle, ProviderHealth, QuotaMetric } from "../../domain/model";
 import { retryAtFromResponse } from "../retry-after";
 import type {
   CollectionContext,
@@ -96,10 +96,10 @@ function previousCalendarBoundary(
     : undefined;
 }
 
-function creditBoundary(
+function creditCycle(
   subscription: ElevenLabsSubscription,
   now: number,
-): Pick<QuotaWindow, "startedAt" | "resetsAt" | "durationMs"> {
+): MetricCycle {
   const resetsAt = unixMilliseconds(
     subscription.next_character_count_reset_unix,
   );
@@ -132,16 +132,13 @@ function creditBoundary(
     : {};
 }
 
-function normalizedWindow(
-  identity: Pick<QuotaWindow, "id" | "label" | "kind">,
+function normalizedQuota(
+  identity: Pick<QuotaMetric, "id" | "label" | "scope">,
   used: number | null | undefined,
   limit: number | null | undefined,
   unit: string,
-  boundary: Pick<
-    QuotaWindow,
-    "startedAt" | "resetsAt" | "durationMs"
-  > = {},
-): QuotaWindow | undefined {
+  cycle: MetricCycle = {},
+): QuotaMetric | undefined {
   if (
     !Number.isFinite(used) ||
     !Number.isFinite(limit) ||
@@ -153,59 +150,59 @@ function normalizedWindow(
   }
 
   return {
+    type: "quota",
     ...identity,
     usedRatio: (used as number) / (limit as number),
     used: used as number,
     limit: limit as number,
     unit,
-    ...boundary,
-    sourceSemantics: "used",
+    ...(Object.keys(cycle).length === 0 ? {} : { cycle }),
   };
 }
 
-function normalizeWindows(
+function normalizeQuotas(
   subscription: ElevenLabsSubscription,
   now: number,
-): QuotaWindow[] {
+): QuotaMetric[] {
   return [
-    normalizedWindow(
+    normalizedQuota(
       {
         id: "monthly-credits",
         label: "Monthly credits",
-        kind: "calendar",
+        scope: "product",
       },
       subscription.character_count,
       subscription.character_limit,
       "credits",
-      creditBoundary(subscription, now),
+      { cadence: "calendar", ...creditCycle(subscription, now) },
     ),
-    normalizedWindow(
-      { id: "voice-slots", label: "Voice slots", kind: "feature" },
+    normalizedQuota(
+      { id: "voice-slots", label: "Voice slots", scope: "feature" },
       subscription.voice_slots_used,
       subscription.voice_limit,
       "voices",
     ),
-    normalizedWindow(
+    normalizedQuota(
       {
         id: "professional-voice-slots",
         label: "Professional voice slots",
-        kind: "feature",
+        scope: "feature",
       },
       subscription.professional_voice_slots_used_in_workspace,
       subscription.professional_voice_limit,
       "voices",
     ),
-    normalizedWindow(
+    normalizedQuota(
       {
         id: "voice-add-edits",
         label: "Voice add/edits",
-        kind: "feature",
+        scope: "feature",
       },
       subscription.voice_add_edit_counter,
       subscription.max_voice_add_edits,
       "actions",
     ),
-  ].filter((window): window is QuotaWindow => window !== undefined);
+  ].filter((metric): metric is QuotaMetric => metric !== undefined);
 }
 
 async function collectElevenLabs({
@@ -242,20 +239,19 @@ async function collectElevenLabs({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const windows = normalizeWindows(parsed.data, now);
-    if (windows.length === 0) {
+    const metrics = normalizeQuotas(parsed.data, now);
+    if (metrics.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
     return {
       ok: true,
       snapshot: {
-        providerId: "elevenlabs",
+        providerKind: "elevenlabs",
         planLabel: parsed.data.tier,
         source: "api-key",
         fetchedAt: now,
-        windows,
-        credits: [],
+        metrics,
       },
     };
   } catch {

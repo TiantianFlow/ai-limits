@@ -4,7 +4,7 @@ import type { ApiKeyProviderId } from "../../providers/catalog";
 export type CockpitScreen =
   | { name: "overview" }
   | { name: "provider"; providerId: ProviderId }
-  | { name: "history"; providerId: ProviderId; windowId?: string }
+  | { name: "history"; providerId: ProviderId; metricId?: string }
   | { name: "settings" }
   | { name: "add-provider" }
   | {
@@ -34,7 +34,7 @@ function sameScreen(left: CockpitScreen, right: CockpitScreen): boolean {
 
   if (left.name === "history" && right.name === "history") {
     return (
-      left.providerId === right.providerId && left.windowId === right.windowId
+      left.providerId === right.providerId && left.metricId === right.metricId
     );
   }
 

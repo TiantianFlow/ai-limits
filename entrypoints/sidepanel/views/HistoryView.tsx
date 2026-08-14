@@ -6,6 +6,7 @@ import type {
   ProviderRecord,
 } from "../../../domain/model";
 import { providerNames } from "../../../providers/catalog";
+import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageHeader } from "../components/PageHeader";
 import type { QuotaView } from "../components/ProviderCard";
@@ -14,15 +15,15 @@ import { QuotaBars } from "../components/QuotaBars";
 export interface HistoryViewProps {
   providers: ProviderRecord[];
   providerId: ProviderId;
-  windowId?: string;
-  windowIdsByProvider: Partial<Record<ProviderId, string>>;
+  metricId?: string;
+  metricIdsByProvider: Partial<Record<ProviderId, string>>;
   currentQuota?: QuotaView;
   mode: DisplayMode;
   now: number;
   backLabel: string;
   onBack: () => void;
   onDisplayModeChange: (mode: DisplayMode) => void;
-  onSelectionChange: (providerId: ProviderId, windowId: string) => void;
+  onSelectionChange: (providerId: ProviderId, metricId: string) => void;
 }
 
 const RANGE_OPTIONS = [
@@ -34,8 +35,8 @@ const RANGE_OPTIONS = [
 export function HistoryView({
   providers,
   providerId,
-  windowId,
-  windowIdsByProvider,
+  metricId,
+  metricIdsByProvider,
   currentQuota,
   mode,
   now,
@@ -45,26 +46,29 @@ export function HistoryView({
   onSelectionChange,
 }: HistoryViewProps) {
   const eligibleProviders = providers.filter(
-    (provider) => provider.access === "granted" && provider.snapshot,
+    (provider) =>
+      provider.access === "granted" &&
+      provider.snapshot !== undefined &&
+      quotaMetrics(provider.snapshot).length > 0,
   );
   const provider = eligibleProviders.find(
     (candidate) => candidate.providerId === providerId,
   );
-  const windows = provider?.snapshot?.windows ?? [];
-  const selectedWindow =
-    windows.find((window) => window.id === windowId) ?? windows[0];
+  const metrics = provider?.snapshot ? quotaMetrics(provider.snapshot) : [];
+  const selectedMetric =
+    metrics.find((metric) => metric.id === metricId) ?? metrics[0];
   const [rangeHours, setRangeHours] = useState<number>(48);
 
   useEffect(() => {
     setRangeHours(48);
-  }, [providerId, selectedWindow?.id]);
+  }, [providerId, selectedMetric?.id]);
 
-  if (!provider || !selectedWindow) {
+  if (!provider || !selectedMetric) {
     return (
       <section className="screen" aria-label="History unavailable">
         <PageHeader
           title="History unavailable"
-          subtitle="No current quota window is available"
+          subtitle="No current quota metric is available"
           backLabel={backLabel}
           onBack={onBack}
         />
@@ -94,15 +98,17 @@ export function HistoryView({
                 const nextProvider = eligibleProviders.find(
                   (candidate) => candidate.providerId === event.currentTarget.value,
                 );
-                const nextWindows = nextProvider?.snapshot?.windows ?? [];
-                const savedWindowId = nextProvider
-                  ? windowIdsByProvider[nextProvider.providerId]
+                const nextMetrics = nextProvider?.snapshot
+                  ? quotaMetrics(nextProvider.snapshot)
+                  : [];
+                const savedMetricId = nextProvider
+                  ? metricIdsByProvider[nextProvider.providerId]
                   : undefined;
-                const nextWindow =
-                  nextWindows.find((window) => window.id === savedWindowId) ??
-                  nextWindows[0];
-                if (nextProvider && nextWindow) {
-                  onSelectionChange(nextProvider.providerId, nextWindow.id);
+                const nextMetric =
+                  nextMetrics.find((metric) => metric.id === savedMetricId) ??
+                  nextMetrics[0];
+                if (nextProvider && nextMetric) {
+                  onSelectionChange(nextProvider.providerId, nextMetric.id);
                 }
               }}
             >
@@ -116,17 +122,17 @@ export function HistoryView({
         ) : null}
 
         <label className="compact-select">
-          <span>Window</span>
+          <span>Metric</span>
           <select
-            aria-label="Quota window"
-            value={selectedWindow.id}
+            aria-label="Quota metric"
+            value={selectedMetric.id}
             onChange={(event) =>
               onSelectionChange(provider.providerId, event.currentTarget.value)
             }
           >
-            {windows.map((window) => (
-              <option key={window.id} value={window.id}>
-                {window.label}
+            {metrics.map((metric) => (
+              <option key={metric.id} value={metric.id}>
+                {metric.label}
               </option>
             ))}
           </select>
@@ -172,20 +178,20 @@ export function HistoryView({
 
         <section className="history-surface" aria-label="Usage history chart">
           <div className="history-surface__heading">
-            <h2>{selectedWindow.label}</h2>
-            <span>{selectedWindow.kind} window</span>
+            <h2>{selectedMetric.label}</h2>
+            <span>{selectedMetric.scope} quota</span>
           </div>
           <HistoryChart
             providerName={providerName}
             mode={mode}
-            windows={[selectedWindow]}
+            metrics={[selectedMetric]}
             history={provider.history}
             now={now}
             rangeHours={rangeHours}
           />
         </section>
 
-        {currentQuota?.id === selectedWindow.id ? (
+        {currentQuota?.id === selectedMetric.id ? (
           <section className="current-cycle-surface" aria-label="Current cycle">
             <h2>Current cycle</h2>
             <QuotaBars {...currentQuota} mode={mode} />
@@ -197,8 +203,8 @@ export function HistoryView({
           breaks at resets and periods without an observation rather than
           implying zero usage. The newest 48 hours stay at collection resolution;
           older retained history is compacted hourly and kept for up to 30 days
-          on this device. Credit balances are point-in-time values and are not
-          historized.
+          on this device. Counter and balance observations are stored but are not
+          available as graph series.
         </p>
       </div>
     </section>

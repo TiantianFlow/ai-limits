@@ -60,44 +60,49 @@ describe("ChatGPT adapter", () => {
     expect(result).toEqual({
       ok: true,
       snapshot: {
-        providerId: "chatgpt",
+        providerKind: "chatgpt",
         planLabel: "plus",
         source: "web-session",
         fetchedAt: NOW,
-        windows: [
+        metrics: [
           {
+            type: "quota",
             id: "five-hour",
             label: "5-hour messages",
-            kind: "rolling",
+            scope: "general",
             usedRatio: 0.72,
-            resetsAt: RESET_SECONDS * 1_000,
-            durationMs: 18_000_000,
-            sourceSemantics: "used",
+            cycle: {
+              cadence: "rolling",
+              resetsAt: RESET_SECONDS * 1_000,
+              durationMs: 18_000_000,
+            },
           },
           {
+            type: "quota",
             id: "weekly",
             label: "Weekly messages",
-            kind: "rolling",
+            scope: "general",
             usedRatio: 0.71,
-            resetsAt: (RESET_SECONDS + 604_800) * 1_000,
-            durationMs: 604_800_000,
-            sourceSemantics: "used",
+            cycle: {
+              cadence: "rolling",
+              resetsAt: (RESET_SECONDS + 604_800) * 1_000,
+              durationMs: 604_800_000,
+            },
           },
-        ],
-        credits: [
           {
+            type: "balance",
             id: "credits",
             label: "Credits",
+            scope: "product",
             unit: "credits",
-            remaining: 414,
+            value: 414,
           },
         ],
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: ["five-hour", "weekly"],
-            creditIds: ["credits"],
+            metricIds: ["five-hour", "weekly", "credits"],
           },
         ],
       },
@@ -136,11 +141,14 @@ describe("ChatGPT adapter", () => {
         }),
       );
 
-    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+    const result = await chatGptAdapter.collect(context(injectedFetch));
+    expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: [expect.objectContaining({ id: "five-hour", usedRatio: 0.72 })],
-        credits: [expect.objectContaining({ remaining: 414 })],
+        metrics: [
+          expect.objectContaining({ type: "quota", id: "five-hour", usedRatio: 0.72 }),
+          expect.objectContaining({ type: "balance", id: "credits", value: 414 }),
+        ],
       },
     });
   });
@@ -153,7 +161,8 @@ describe("ChatGPT adapter", () => {
       .mockResolvedValueOnce(response({}, 404))
       .mockResolvedValueOnce(response(usageFixture()));
 
-    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+    const result = await chatGptAdapter.collect(context(injectedFetch));
+    expect(result).toMatchObject({
       ok: true,
       snapshot: { planLabel: "plus" },
     });
@@ -255,7 +264,7 @@ describe("ChatGPT adapter", () => {
     });
   });
 
-  test("keeps valid quota windows when the optional credit shape changes", async () => {
+  test("keeps valid quota metrics when the optional credit shape changes", async () => {
     const accessToken = jwt({ chatgpt_account_id: "account-test" });
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
@@ -267,16 +276,21 @@ describe("ChatGPT adapter", () => {
         }),
       );
 
-    await expect(chatGptAdapter.collect(context(injectedFetch))).resolves.toMatchObject({
+    const result = await chatGptAdapter.collect(context(injectedFetch));
+    expect(result).toMatchObject({
       ok: true,
       snapshot: {
-        windows: expect.arrayContaining([
+        metrics: expect.arrayContaining([
           expect.objectContaining({ id: "five-hour" }),
           expect.objectContaining({ id: "weekly" }),
         ]),
-        credits: [],
       },
     });
+    if (result.ok) {
+      expect(result.snapshot.metrics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: "balance" })]),
+      );
+    }
   });
 
   test("maps an aborted request to a temporary error", async () => {

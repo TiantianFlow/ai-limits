@@ -1,4 +1,4 @@
-import type { CreditBalance, ProviderHealth, QuotaWindow } from "../../domain/model";
+import type { CounterMetric, ProviderHealth, QuotaMetric } from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
@@ -109,22 +109,25 @@ function summaryIsSemanticallyValid(summary: CursorUsageSummary): boolean {
   );
 }
 
-function onDemandCredit(summary: CursorUsageSummary): CreditBalance[] {
+function onDemandCounter(summary: CursorUsageSummary): CounterMetric[] {
   const individual = summary.individualUsage?.onDemand;
   const team = summary.teamUsage?.onDemand;
   const onDemand = individual?.enabled ? individual : team?.enabled ? team : undefined;
   if (!onDemand || !supplied(onDemand.used)) return [];
 
   return [{
+    type: "counter",
     id: "on-demand",
     label: "On-demand spend",
+    scope: "product",
+    semantic: "spent",
     unit: "USD",
-    used: onDemand.used / 100,
+    value: onDemand.used / 100,
     ...(supplied(onDemand.limit) ? { limit: onDemand.limit / 100 } : {}),
   }];
 }
 
-function normalizeWindows(summary: CursorUsageSummary): QuotaWindow[] {
+function normalizeQuotas(summary: CursorUsageSummary): QuotaMetric[] {
   const startedAt = Date.parse(summary.billingCycleStart);
   const resetsAt = Date.parse(summary.billingCycleEnd);
   if (
@@ -136,17 +139,20 @@ function normalizeWindows(summary: CursorUsageSummary): QuotaWindow[] {
   const monthlyWindow = (
     id: string,
     label: string,
-    kind: QuotaWindow["kind"],
+    scope: QuotaMetric["scope"],
     usedRatio: number,
-  ): QuotaWindow => ({
+  ): QuotaMetric => ({
+    type: "quota",
     id,
     label,
-    kind,
+    scope,
     usedRatio,
-    startedAt,
-    resetsAt,
-    durationMs: resetsAt - startedAt,
-    sourceSemantics: "used",
+    cycle: {
+      cadence: "calendar",
+      startedAt,
+      resetsAt,
+      durationMs: resetsAt - startedAt,
+    },
   });
 
   const plan = summary.individualUsage?.plan;
@@ -167,7 +173,7 @@ function normalizeWindows(summary: CursorUsageSummary): QuotaWindow[] {
     quotaRatio(summary.teamUsage?.pooled);
   return fallback === undefined
     ? []
-    : [monthlyWindow("monthly", "Monthly usage", "calendar", fallback)];
+    : [monthlyWindow("monthly", "Monthly usage", "general", fallback)];
 }
 
 async function collectCursor({ fetch, now, signal }: CollectionContext): Promise<CollectionResult> {
@@ -181,26 +187,24 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const windows = normalizeWindows(parsed.data);
-    if (windows.length === 0) {
+    const quotas = normalizeQuotas(parsed.data);
+    if (quotas.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
-    const credits = onDemandCredit(parsed.data);
+    const counters = onDemandCounter(parsed.data);
     return {
       ok: true,
       snapshot: {
-        providerId: "cursor",
+        providerKind: "cursor",
         planLabel: parsed.data.membershipType,
         source: "web-session",
         fetchedAt: now,
-        windows,
-        credits,
+        metrics: [...quotas, ...counters],
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            windowIds: windows.map((window) => window.id),
-            creditIds: credits.map((credit) => credit.id),
+            metricIds: [...quotas, ...counters].map((metric) => metric.id),
           },
         ],
       },

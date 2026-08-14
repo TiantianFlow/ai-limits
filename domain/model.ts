@@ -4,51 +4,11 @@ export type { ProviderId, ProviderKind } from "../providers/catalog";
 
 export type DisplayMode = "used" | "left";
 
-export interface QuotaSegment {
-  id: string;
-  label: string;
-  usedRatio: number;
-}
-
-export interface QuotaWindow {
-  id: string;
-  label: string;
-  kind: "rolling" | "calendar" | "model" | "feature";
-  usedRatio: number;
-  used?: number;
-  limit?: number;
-  unit?: string;
-  startedAt?: number;
-  resetsAt?: number;
-  durationMs?: number;
-  sourceSemantics: "used" | "remaining";
-  segments?: QuotaSegment[];
-}
-
-export interface CreditBalance {
-  id: string;
-  label: string;
-  unit: string;
-  used?: number;
-  limit?: number;
-  remaining?: number;
-  resetsAt?: number;
-}
-
 export interface UsageGroup {
   id: string;
   label: string;
   description?: string;
   metricIds: string[];
-}
-
-/** @deprecated Temporary V4 bridge removed in Task 2. */
-export interface LegacyUsageGroup {
-  id: string;
-  label: string;
-  description?: string;
-  windowIds: string[];
-  creditIds: string[];
 }
 
 export type MetricScope = "general" | "model" | "feature" | "product";
@@ -119,30 +79,6 @@ export interface UsageHistoryObservation {
   metrics: MetricHistorySample[];
 }
 
-export interface ProviderSnapshot {
-  providerId: ProviderId;
-  accountLabel?: string;
-  planLabel?: string;
-  source: "web-session" | "oauth" | "api-key" | "fixture";
-  fetchedAt: number;
-  windows: QuotaWindow[];
-  credits: CreditBalance[];
-  usageGroups?: LegacyUsageGroup[];
-}
-
-export interface QuotaHistorySample {
-  windowId: string;
-  usedRatio: number;
-  startedAt?: number;
-  resetsAt?: number;
-  durationMs?: number;
-}
-
-export interface QuotaHistoryObservation {
-  observedAt: number;
-  windows: QuotaHistorySample[];
-}
-
 export type RefreshTrigger =
   | "connect"
   | "manual_provider"
@@ -160,7 +96,7 @@ export type FailureCategory =
   | "temporary_error";
 
 export type ProviderRefreshOutcome =
-  | { kind: "success"; snapshot: ProviderSnapshot }
+  | { kind: "success"; snapshot: UsageSnapshot }
   | { kind: "deferred"; reason: DeferredReason; retryAt?: number }
   | {
       kind: "failure";
@@ -239,8 +175,8 @@ export type ProviderHealth =
 export interface ProviderRecord {
   providerId: ProviderId;
   access: "required" | "granted";
-  history: QuotaHistoryObservation[];
-  snapshot?: ProviderSnapshot;
+  history: UsageHistoryObservation[];
+  snapshot?: UsageSnapshot;
   lastAttempt?: ProviderAttempt;
 }
 

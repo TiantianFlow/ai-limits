@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import type {
   ProviderId,
   ProviderRefreshOutcome,
-  ProviderSnapshot,
+  UsageSnapshot,
 } from "../domain/model";
 import { readKimiPageAccessToken } from "./kimi-page";
 import {
@@ -16,18 +16,17 @@ import {
 
 const NOW = 1_800_000_000_000;
 
-function snapshot(providerId: ProviderSnapshot["providerId"]): ProviderSnapshot {
+function snapshot(providerKind: UsageSnapshot["providerKind"]): UsageSnapshot {
   return {
-    providerId,
+    providerKind,
     source: "web-session",
     fetchedAt: NOW,
-    windows: [],
-    credits: [],
+    metrics: [],
   };
 }
 
 function success(
-  providerId: ProviderSnapshot["providerId"],
+  providerId: UsageSnapshot["providerKind"],
 ): ProviderRefreshOutcome {
   return { kind: "success", snapshot: snapshot(providerId) };
 }

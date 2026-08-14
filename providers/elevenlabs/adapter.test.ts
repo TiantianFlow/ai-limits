@@ -74,56 +74,53 @@ describe("ElevenLabs adapter", () => {
     expect(result).toEqual({
       ok: true,
       snapshot: {
-        providerId: "elevenlabs",
+        providerKind: "elevenlabs",
         planLabel: "starter",
         source: "api-key",
         fetchedAt: NOW,
-        windows: [
+        metrics: [
           {
+            type: "quota",
             id: "monthly-credits",
             label: "Monthly credits",
-            kind: "calendar",
+            scope: "product",
             usedRatio: 0.25,
             used: 2_500,
             limit: 10_000,
             unit: "credits",
-            startedAt: Date.parse("2030-04-01T00:00:00.000Z"),
-            resetsAt: Date.parse("2030-05-01T00:00:00.000Z"),
-            durationMs: 30 * 24 * 60 * 60 * 1_000,
-            sourceSemantics: "used",
+            cycle: { cadence: "calendar", startedAt: Date.parse("2030-04-01T00:00:00.000Z"), resetsAt: Date.parse("2030-05-01T00:00:00.000Z"), durationMs: 30 * 24 * 60 * 60 * 1_000 },
           },
           {
+            type: "quota",
             id: "voice-slots",
             label: "Voice slots",
-            kind: "feature",
+            scope: "feature",
             usedRatio: 0.2,
             used: 2,
             limit: 10,
             unit: "voices",
-            sourceSemantics: "used",
           },
           {
+            type: "quota",
             id: "professional-voice-slots",
             label: "Professional voice slots",
-            kind: "feature",
+            scope: "feature",
             usedRatio: 1 / 3,
             used: 1,
             limit: 3,
             unit: "voices",
-            sourceSemantics: "used",
           },
           {
+            type: "quota",
             id: "voice-add-edits",
             label: "Voice add/edits",
-            kind: "feature",
+            scope: "feature",
             usedRatio: 0.2,
             used: 4,
             limit: 20,
             unit: "actions",
-            sourceSemantics: "used",
           },
         ],
-        credits: [],
       },
     });
     const serialized = JSON.stringify(result);
@@ -152,11 +149,13 @@ describe("ElevenLabs adapter", () => {
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
       expect(
-        result.snapshot.windows.find(({ id }) => id === "monthly-credits"),
+        result.snapshot.metrics.find(({ id }) => id === "monthly-credits"),
       ).toMatchObject({
-        startedAt: lastReset * 1_000,
-        resetsAt: nextReset * 1_000,
-        durationMs: (nextReset - lastReset) * 1_000,
+        cycle: {
+          startedAt: lastReset * 1_000,
+          resetsAt: nextReset * 1_000,
+          durationMs: (nextReset - lastReset) * 1_000,
+        },
       });
     }
   });
@@ -177,7 +176,7 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      expect(result.snapshot.windows[0]).toMatchObject({
+      expect(result.snapshot.metrics[0]?.cycle).toMatchObject({
         startedAt: Date.parse("2030-02-28T16:11:00.000Z"),
         resetsAt: Date.parse("2030-03-31T16:11:00.000Z"),
       });
@@ -201,7 +200,7 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      expect(result.snapshot.windows[0]).toMatchObject({
+      expect(result.snapshot.metrics[0]?.cycle).toMatchObject({
         startedAt: Date.parse("2031-02-28T08:45:00.000Z"),
         resetsAt: Date.parse("2032-02-29T08:45:00.000Z"),
       });
@@ -217,13 +216,13 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      const monthly = result.snapshot.windows[0];
-      expect(monthly).toMatchObject({
-        id: "monthly-credits",
+      const monthly = result.snapshot.metrics[0];
+      expect(monthly).toMatchObject({ id: "monthly-credits" });
+      expect(monthly?.cycle).toMatchObject({
         resetsAt: MAY_RESET_SECONDS * 1_000,
       });
-      expect(monthly).not.toHaveProperty("startedAt");
-      expect(monthly).not.toHaveProperty("durationMs");
+      expect(monthly?.cycle).not.toHaveProperty("startedAt");
+      expect(monthly?.cycle).not.toHaveProperty("durationMs");
     }
   });
 
@@ -240,11 +239,9 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      const monthly = result.snapshot.windows[0];
+      const monthly = result.snapshot.metrics[0];
       expect(monthly).toMatchObject({ id: "monthly-credits" });
-      expect(monthly).not.toHaveProperty("startedAt");
-      expect(monthly).not.toHaveProperty("resetsAt");
-      expect(monthly).not.toHaveProperty("durationMs");
+      expect(monthly?.cycle).toEqual({ cadence: "calendar" });
     }
   });
 
@@ -261,8 +258,8 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      expect(result.snapshot.windows[0]).toMatchObject({
-        id: "monthly-credits",
+      expect(result.snapshot.metrics[0]).toMatchObject({ id: "monthly-credits" });
+      expect(result.snapshot.metrics[0]?.cycle).toMatchObject({
         startedAt: Date.parse("2030-04-01T00:00:00.000Z"),
         resetsAt: Date.parse("2030-05-01T00:00:00.000Z"),
       });
@@ -283,7 +280,7 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      const monthly = result.snapshot.windows[0];
+      const monthly = result.snapshot.metrics[0];
       expect(monthly).toMatchObject({
         id: "monthly-credits",
         used: 2_500,
@@ -309,7 +306,7 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      const monthly = result.snapshot.windows[0];
+      const monthly = result.snapshot.metrics[0];
       expect(monthly).toMatchObject({
         id: "monthly-credits",
         used: 2_500,
@@ -338,7 +335,7 @@ describe("ElevenLabs adapter", () => {
 
     await expect(elevenLabsAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
-      snapshot: { windows: [{ id: "monthly-credits" }] },
+      snapshot: { metrics: [{ id: "monthly-credits" }] },
     });
   });
 
@@ -358,10 +355,10 @@ describe("ElevenLabs adapter", () => {
 
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      expect(result.snapshot.windows.map(({ id, used, usedRatio }) => ({
-        id,
-        used,
-        usedRatio,
+      expect(result.snapshot.metrics.map((metric) => ({
+        id: metric.id,
+        used: metric.type === "quota" ? metric.used : undefined,
+        usedRatio: metric.type === "quota" ? metric.usedRatio : undefined,
       }))).toEqual([
         { id: "monthly-credits", used: 0, usedRatio: 0 },
         { id: "voice-slots", used: 0, usedRatio: 0 },
@@ -371,7 +368,7 @@ describe("ElevenLabs adapter", () => {
     }
   });
 
-  test("omits zero optional limits instead of emitting invalid windows", async () => {
+  test("omits zero optional limits instead of emitting invalid metrics", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       response(
         subscriptionFixture({
@@ -384,7 +381,7 @@ describe("ElevenLabs adapter", () => {
 
     await expect(elevenLabsAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
-      snapshot: { windows: [{ id: "monthly-credits" }] },
+      snapshot: { metrics: [{ id: "monthly-credits" }] },
     });
   });
 
@@ -406,7 +403,7 @@ describe("ElevenLabs adapter", () => {
     await expect(elevenLabsAdapter.collect(context(fetch))).resolves.toMatchObject({
       ok: true,
       snapshot: {
-        windows: [{ id: "voice-slots", used: 2, limit: 10 }],
+        metrics: [{ id: "voice-slots", used: 2, limit: 10 }],
       },
     });
     expect(fetch).toHaveBeenCalledTimes(1);

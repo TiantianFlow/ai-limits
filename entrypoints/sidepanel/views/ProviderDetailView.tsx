@@ -21,7 +21,7 @@ export interface ProviderDetailViewProps {
   onRefreshProvider: (providerId: ProviderId) => void;
   onOpenHistory: (
     providerId: ProviderId,
-    windowId?: string,
+    metricId?: string,
     focusKey?: string,
   ) => void;
   onOpenSettings: () => void;
@@ -182,10 +182,10 @@ export function ProviderDetailView({
                             mode={provider.mode}
                             historyLabel={`Open ${provider.name} history for ${quota.label}`}
                             historyFocusKey={historyFocusKey}
-                            onOpenHistory={(windowId) =>
+                            onOpenHistory={(metricId) =>
                               onOpenHistory(
                                 provider.providerId,
-                                windowId,
+                                metricId,
                                 historyFocusKey,
                               )
                             }
@@ -194,15 +194,15 @@ export function ProviderDetailView({
                       })}
                     </div>
                   ) : null}
-                  {group.credits.length ? (
+                  {group.values.length ? (
                     <div className="detail-group__credits">
-                      {group.credits.map((credit) => (
-                        <div className="credit-row" key={credit.id}>
-                          <span>{credit.label}</span>
-                          <strong>{credit.value}</strong>
+                      {group.values.map((metric) => (
+                        <div className="credit-row" key={metric.id}>
+                          <span>{metric.label}</span>
+                          <strong>{metric.value}</strong>
                         </div>
                       ))}
-                      <p>Point-in-time balance; credit values are not historized.</p>
+                      <p>Counters and balances are stored as point-in-time observations.</p>
                     </div>
                   ) : null}
                 </section>

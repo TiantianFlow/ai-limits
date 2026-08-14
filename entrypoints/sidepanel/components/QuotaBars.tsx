@@ -24,7 +24,7 @@ export interface QuotaBarsProps {
   paceKind?: PaceKind;
   paceLabel: string;
   segments?: QuotaSegmentView[];
-  onOpenHistory?: (windowId: string) => void;
+  onOpenHistory?: (metricId: string) => void;
   historyLabel?: string;
   historyFocusKey?: string;
 }

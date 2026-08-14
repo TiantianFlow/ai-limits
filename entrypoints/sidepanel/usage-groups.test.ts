@@ -1,10 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import type { LegacyUsageGroup } from "../../domain/model";
-import type {
-  CreditView,
-  QuotaView,
-} from "./components/ProviderCard";
+import type { UsageGroup } from "../../domain/model";
+import type { MetricValueView, QuotaView } from "./components/ProviderCard";
 import { usageGroupViews } from "./usage-groups";
 
 const quotas: QuotaView[] = [
@@ -24,52 +21,50 @@ const quotas: QuotaView[] = [
   },
 ];
 
-const credits: CreditView[] = [
+const values: MetricValueView[] = [
   { id: "extra", label: "Extra usage", value: "$2.00 used" },
 ];
 
 describe("usageGroupViews", () => {
   test("resolves provider-authored groups from explicit measure references", () => {
-    const groups: LegacyUsageGroup[] = [
+    const groups: UsageGroup[] = [
       {
         id: "priority",
         label: "Priority usage",
         description: "Provider-authored hierarchy.",
-        windowIds: ["weekly"],
-        creditIds: ["extra"],
+        metricIds: ["weekly", "extra"],
       },
       {
         id: "monthly",
         label: "Monthly usage",
-        windowIds: ["monthly"],
-        creditIds: [],
+        metricIds: ["monthly"],
       },
     ];
 
-    expect(usageGroupViews(groups, quotas, credits)).toEqual([
+    expect(usageGroupViews(groups, quotas, values)).toEqual([
       {
         id: "priority",
         label: "Priority usage",
         description: "Provider-authored hierarchy.",
         quotas: [quotas[1]],
-        credits: [credits[0]],
+        values: [values[0]],
       },
       {
         id: "monthly",
         label: "Monthly usage",
         quotas: [quotas[0]],
-        credits: [],
+        values: [],
       },
     ]);
   });
 
   test("uses one generic Usage group when provider-authored groups are absent", () => {
-    expect(usageGroupViews(undefined, quotas, credits)).toEqual([
+    expect(usageGroupViews(undefined, quotas, values)).toEqual([
       {
         id: "usage",
         label: "Usage",
         quotas,
-        credits,
+        values,
       },
     ]);
   });

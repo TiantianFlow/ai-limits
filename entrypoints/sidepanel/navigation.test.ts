@@ -26,7 +26,7 @@ describe("navigateCockpit", () => {
       screen: {
         name: "history",
         providerId: chatGpt,
-        windowId: "weekly",
+        metricId: "weekly",
       },
     });
 
@@ -34,7 +34,7 @@ describe("navigateCockpit", () => {
       current: {
         name: "history",
         providerId: chatGpt,
-        windowId: "weekly",
+        metricId: "weekly",
       },
       backStack: [overview, { name: "provider", providerId: chatGpt }],
     });

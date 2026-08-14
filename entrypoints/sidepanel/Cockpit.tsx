@@ -4,11 +4,12 @@ import type { ProviderOperation } from "../../background/messages";
 import { sanitizedFailureMessage } from "../../domain/model";
 import type {
   AppState,
-  CreditBalance,
+  BalanceMetric,
+  CounterMetric,
   DisplayMode,
   ProviderId,
   ProviderRecord,
-  QuotaWindow,
+  QuotaMetric,
 } from "../../domain/model";
 import {
   displayRatio,
@@ -24,7 +25,7 @@ import {
   providerPresentation,
 } from "../../providers/catalog";
 import {
-  type CreditView,
+  type MetricValueView,
   type ProviderCardProps,
   type QuotaView,
 } from "./components/ProviderCard";
@@ -50,6 +51,7 @@ import {
 } from "./views/ApiKeyConnectView";
 import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
+import { balanceMetrics, counterMetrics, quotaMetrics } from "./metrics";
 
 export interface CockpitProps {
   state: AppState;
@@ -81,14 +83,14 @@ function percent(ratio: number): number {
 }
 
 function formatDuration(
-  window: QuotaWindow,
+  metric: QuotaMetric,
   ratio: number,
   noun: "elapsed" | "remaining",
 ): string | undefined {
   const duration =
-    window.startedAt !== undefined && window.resetsAt !== undefined
-      ? window.resetsAt - window.startedAt
-      : window.durationMs;
+    metric.cycle?.startedAt !== undefined && metric.cycle.resetsAt !== undefined
+      ? metric.cycle.resetsAt - metric.cycle.startedAt
+      : metric.cycle?.durationMs;
 
   if (!duration || duration <= 0) {
     return undefined;
@@ -126,39 +128,39 @@ function formatPace(status: PaceStatus | undefined): string {
   return `${points} pts ${status.kind === "ahead" ? "over" : "under"} pace`;
 }
 
-function quotaView(window: QuotaWindow, mode: DisplayMode, now: number): QuotaView {
-  const elapsed = elapsedRatio(window, now);
-  const pace = elapsed === undefined ? undefined : paceStatus(window.usedRatio, elapsed);
+function quotaView(metric: QuotaMetric, mode: DisplayMode, now: number): QuotaView {
+  const elapsed = metric.cycle ? elapsedRatio(metric.cycle, now) : undefined;
+  const pace = elapsed === undefined ? undefined : paceStatus(metric.usedRatio, elapsed);
   const timeRatio = elapsed === undefined ? undefined : displayRatio(elapsed, mode);
   const timeNoun = mode === "used" ? "elapsed" : "remaining";
   const shownCount =
-    window.used !== undefined && window.limit !== undefined
+    metric.used !== undefined && metric.limit !== undefined
       ? mode === "used"
-        ? window.used
-        : Math.max(0, window.limit - window.used)
+        ? metric.used
+        : Math.max(0, metric.limit - metric.used)
       : undefined;
   const valueLabel =
-    shownCount === undefined || window.limit === undefined
+    shownCount === undefined || metric.limit === undefined
       ? undefined
-      : `${shownCount.toLocaleString(undefined, { maximumFractionDigits: 2 })} / ${window.limit.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      : `${shownCount.toLocaleString(undefined, { maximumFractionDigits: 2 })} / ${metric.limit.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
   return {
-    id: window.id,
-    label: window.label,
-    quotaPercent: percent(displayRatio(window.usedRatio, mode)),
-    usedPercent: percent(window.usedRatio),
+    id: metric.id,
+    label: metric.label,
+    quotaPercent: percent(displayRatio(metric.usedRatio, mode)),
+    usedPercent: percent(metric.usedRatio),
     valueLabel,
     timePercent: timeRatio === undefined ? undefined : percent(timeRatio),
     timeLabel:
       timeRatio === undefined
         ? undefined
-        : formatDuration(window, timeRatio, timeNoun),
-    resetAt: window.resetsAt,
+        : formatDuration(metric, timeRatio, timeNoun),
+    resetAt: metric.cycle?.resetsAt,
     resetLabel:
-      window.resetsAt === undefined ? undefined : formatReset(window.resetsAt),
+      metric.cycle?.resetsAt === undefined ? undefined : formatReset(metric.cycle.resetsAt),
     paceKind: pace?.kind,
     paceLabel: formatPace(pace),
-    segments: window.segments?.map((segment) => ({
+    segments: metric.segments?.map((segment) => ({
       id: segment.id,
       label: segment.label,
       percent: percent(segment.usedRatio),
@@ -174,43 +176,20 @@ function formatAmount(value: number, unit: string): string {
   return `${value.toLocaleString()} ${unit}`;
 }
 
-function creditView(credit: CreditBalance, mode: DisplayMode): CreditView {
-  const isAbsoluteBalance =
-    credit.used === undefined &&
-    credit.limit === undefined &&
-    credit.remaining !== undefined;
-  const isAbsoluteUsage =
-    credit.used !== undefined &&
-    credit.limit === undefined &&
-    credit.remaining === undefined;
-  let current = isAbsoluteBalance ? credit.remaining : credit.used;
-
-  if (!isAbsoluteBalance && !isAbsoluteUsage && mode === "left") {
-    current =
-      credit.remaining ??
-      (credit.limit !== undefined && credit.used !== undefined
-        ? Math.max(0, credit.limit - credit.used)
-        : undefined);
-  }
-
-  const redundantAbsoluteUnit =
-    isAbsoluteBalance &&
-    credit.label.trim().toLowerCase() === credit.unit.trim().toLowerCase();
-  const value =
-    current === undefined
-      ? "Not reported"
-      : redundantAbsoluteUnit
-        ? current.toLocaleString()
-        : formatAmount(current, credit.unit);
-  const limit =
-    credit.limit === undefined ? undefined : formatAmount(credit.limit, credit.unit);
-
+function counterView(metric: CounterMetric): MetricValueView {
+  const limit = metric.limit === undefined ? undefined : formatAmount(metric.limit, metric.unit);
   return {
-    id: credit.id,
-    label: credit.label,
-    value: `${value}${limit ? ` / ${limit}` : ""}${
-      isAbsoluteBalance ? " remaining" : isAbsoluteUsage ? " used" : ` ${mode}`
-    }`,
+    id: metric.id,
+    label: metric.label,
+    value: `${formatAmount(metric.value, metric.unit)}${limit ? ` / ${limit}` : ""} ${metric.semantic === "spent" ? "spent" : "used"}`,
+  };
+}
+
+function balanceView(metric: BalanceMetric): MetricValueView {
+  return {
+    id: metric.id,
+    label: metric.label,
+    value: `${formatAmount(metric.value, metric.unit)} remaining`,
   };
 }
 
@@ -290,10 +269,15 @@ export function providerView(
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
   const presentation = providerPresentation(provider.providerId);
-  const quotas =
-    snapshot?.windows.map((window) => quotaView(window, mode, now)) ?? [];
-  const credits =
-    snapshot?.credits.map((credit) => creditView(credit, mode)) ?? [];
+  const quotas = snapshot?.metrics
+    ? quotaMetrics(snapshot).map((metric) => quotaView(metric, mode, now))
+    : [];
+  const values = snapshot?.metrics
+    ? [
+        ...counterMetrics(snapshot).map(counterView),
+        ...balanceMetrics(snapshot).map(balanceView),
+      ]
+    : [];
   const rawPlan = snapshot?.planLabel ?? snapshot?.accountLabel;
   const plan =
     provider.providerId === "chatgpt" && rawPlan?.toLowerCase() === "plus"
@@ -305,11 +289,11 @@ export function providerView(
     name: providerNames[provider.providerId],
     plan,
     mode,
-    credits,
+    values,
     usageGroups:
       snapshot === undefined
         ? []
-        : usageGroupViews(snapshot.usageGroups, quotas, credits),
+        : usageGroupViews(snapshot.usageGroups, quotas, values),
     freshness: snapshot ? formatFreshness(snapshot.fetchedAt, now) : undefined,
     stale,
     access: provider.access,
@@ -317,7 +301,7 @@ export function providerView(
     hasSnapshot: snapshot !== undefined,
     history: snapshot
       ? {
-          windows: snapshot.windows,
+          metrics: quotaMetrics(snapshot),
           observations: provider.history,
           now,
         }
@@ -360,8 +344,8 @@ export function Cockpit({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [historySelection, setHistorySelection] = useState<{
     providerId?: ProviderId;
-    windows: Partial<Record<ProviderId, string>>;
-  }>({ windows: {} });
+    metrics: Partial<Record<ProviderId, string>>;
+  }>({ metrics: {} });
   const cockpitRef = useRef<HTMLElement>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const addProviderButton = useRef<HTMLButtonElement>(null);
@@ -498,10 +482,10 @@ export function Cockpit({
   const activeHistoryProviderId =
     historySelection.providerId ??
     (view.name === "history" ? view.providerId : undefined);
-  const activeHistoryWindowId = activeHistoryProviderId
-    ? historySelection.windows[activeHistoryProviderId] ??
+  const activeHistoryMetricId = activeHistoryProviderId
+    ? historySelection.metrics[activeHistoryProviderId] ??
       (view.name === "history" && view.providerId === activeHistoryProviderId
-        ? view.windowId
+        ? view.metricId
         : undefined)
     : undefined;
   const activeHistoryRecord = activeHistoryProviderId
@@ -517,37 +501,36 @@ export function Cockpit({
     : undefined;
   const activeHistoryQuota = activeHistoryView?.usageGroups
     .flatMap((group) => group.quotas)
-    .find((quota) => quota.id === activeHistoryWindowId);
+    .find((quota) => quota.id === activeHistoryMetricId);
 
   const openHistory = (
     providerId: ProviderId,
     focusKey: string,
-    requestedWindowId?: string,
+    requestedMetricId?: string,
   ) => {
-    const providerWindows =
-      state.providers.find((provider) => provider.providerId === providerId)
-        ?.snapshot?.windows ?? [];
-    const explicitWindowId = providerWindows.some(
-      (window) => window.id === requestedWindowId,
+    const snapshot = state.providers.find((provider) => provider.providerId === providerId)?.snapshot;
+    const providerMetrics = snapshot ? quotaMetrics(snapshot) : [];
+    const explicitMetricId = providerMetrics.some(
+      (metric) => metric.id === requestedMetricId,
     )
-      ? requestedWindowId
+      ? requestedMetricId
       : undefined;
-    const savedWindowId = historySelection.windows[providerId];
-    const validSavedWindowId = providerWindows.some(
-      (window) => window.id === savedWindowId,
+    const savedMetricId = historySelection.metrics[providerId];
+    const validSavedMetricId = providerMetrics.some(
+      (metric) => metric.id === savedMetricId,
     )
-      ? savedWindowId
+      ? savedMetricId
       : undefined;
-    const windowId =
-      explicitWindowId ?? validSavedWindowId ?? providerWindows[0]?.id;
+    const metricId =
+      explicitMetricId ?? validSavedMetricId ?? providerMetrics[0]?.id;
     setHistorySelection((current) => ({
       providerId,
-      windows: {
-        ...current.windows,
-        ...(windowId ? { [providerId]: windowId } : {}),
+      metrics: {
+        ...current.metrics,
+        ...(metricId ? { [providerId]: metricId } : {}),
       },
     }));
-    pushScreen({ name: "history", providerId, windowId }, focusKey);
+    pushScreen({ name: "history", providerId, metricId }, focusKey);
   };
 
   return (
@@ -640,11 +623,11 @@ export function Cockpit({
           onBack={popScreen}
           onHome={goHome}
           onRefreshProvider={onRefreshProvider}
-          onOpenHistory={(providerId, windowId, focusKey) =>
+          onOpenHistory={(providerId, metricId, focusKey) =>
             openHistory(
               providerId,
               focusKey ?? `provider-history-${providerId}`,
-              windowId ?? detailRecord?.snapshot?.windows[0]?.id,
+              metricId ?? (detailRecord?.snapshot ? quotaMetrics(detailRecord.snapshot)[0]?.id : undefined),
             )
           }
           onOpenSettings={() =>
@@ -658,18 +641,18 @@ export function Cockpit({
         <HistoryView
           providers={state.providers}
           providerId={activeHistoryProviderId ?? view.providerId}
-          windowId={activeHistoryWindowId}
-          windowIdsByProvider={historySelection.windows}
+          metricId={activeHistoryMetricId}
+          metricIdsByProvider={historySelection.metrics}
           currentQuota={activeHistoryQuota}
           mode={mode}
           now={now}
           backLabel={historyBackLabel}
           onBack={popScreen}
           onDisplayModeChange={onDisplayModeChange}
-          onSelectionChange={(providerId, windowId) =>
+          onSelectionChange={(providerId, metricId) =>
             setHistorySelection((current) => ({
               providerId,
-              windows: { ...current.windows, [providerId]: windowId },
+              metrics: { ...current.metrics, [providerId]: metricId },
             }))
           }
         />
@@ -694,11 +677,11 @@ export function Cockpit({
               `overview-provider-${providerId}`,
             )
           }
-          onOpenHistory={(providerId, windowId) =>
+          onOpenHistory={(providerId, metricId) =>
             openHistory(
               providerId,
-              `provider-history-${providerId}-${windowId}`,
-              windowId,
+              `provider-history-${providerId}-${metricId}`,
+              metricId,
             )
           }
           onReplaceApiKey={(providerId) =>

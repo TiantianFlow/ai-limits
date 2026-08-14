@@ -5,8 +5,8 @@ import type {
   DisplayMode,
   ProviderId,
   ProviderRecord,
-  QuotaHistoryObservation,
-  QuotaWindow,
+  QuotaMetric,
+  UsageHistoryObservation,
 } from "../../../domain/model";
 import type { PaceKind } from "../../../domain/quota";
 import { Icon } from "./Icon";
@@ -30,7 +30,7 @@ export interface QuotaView {
   segments?: QuotaSegmentView[];
 }
 
-export interface CreditView {
+export interface MetricValueView {
   id: string;
   label: string;
   value: string;
@@ -41,7 +41,7 @@ export interface UsageGroupView {
   label: string;
   description?: string;
   quotas: QuotaView[];
-  credits: CreditView[];
+  values: MetricValueView[];
 }
 
 export interface ProviderCardProps {
@@ -49,7 +49,7 @@ export interface ProviderCardProps {
   name: string;
   plan?: string;
   mode: DisplayMode;
-  credits: CreditView[];
+  values: MetricValueView[];
   usageGroups: UsageGroupView[];
   freshness?: string;
   stale: boolean;
@@ -58,8 +58,8 @@ export interface ProviderCardProps {
   attemptMessage?: string;
   hasSnapshot: boolean;
   history?: {
-    windows: QuotaWindow[];
-    observations: QuotaHistoryObservation[];
+    metrics: QuotaMetric[];
+    observations: UsageHistoryObservation[];
     now: number;
   };
   emptyDescription: string;
@@ -73,7 +73,7 @@ export interface ProviderCardProps {
   headingLevel?: 2 | 3;
   openDetailsFocusKey?: string;
   onOpenDetails?: () => void;
-  onOpenHistory?: (windowId: string) => void;
+  onOpenHistory?: (metricId: string) => void;
 }
 
 const operationLabels: Record<ProviderOperation, string> = {
@@ -87,7 +87,7 @@ export function ProviderCard({
   name,
   plan,
   mode,
-  credits,
+  values,
   usageGroups,
   freshness,
   stale,
@@ -214,13 +214,13 @@ export function ProviderCard({
         </div>
       ) : null}
 
-      {credits.length ? (
-        <section className="credits" aria-label={`${name} credits`}>
-          <h3 className="visually-hidden">Credits</h3>
-          {credits.map((credit) => (
-            <div className="credit-row" key={credit.id}>
-              <span>{credit.label}</span>
-              <strong>{credit.value}</strong>
+      {values.length ? (
+        <section className="metric-values" aria-label={`${name} values`}>
+          <h3 className="visually-hidden">Counters and balances</h3>
+          {values.map((metric) => (
+            <div className="credit-row" key={metric.id}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
             </div>
           ))}
         </section>

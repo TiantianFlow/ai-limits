@@ -3,7 +3,7 @@ import type {
   ProviderHealth,
   ProviderId,
   ProviderRefreshOutcome,
-  ProviderSnapshot,
+  UsageSnapshot,
 } from "../domain/model";
 
 export interface ProviderCredential {
@@ -31,7 +31,7 @@ export interface CollectionContext {
 }
 
 export type CollectionResult =
-  | { ok: true; snapshot: ProviderSnapshot }
+  | { ok: true; snapshot: UsageSnapshot }
   | { ok: false; health: ProviderHealth }
   | {
       ok: false;

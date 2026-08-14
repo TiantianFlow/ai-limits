@@ -164,7 +164,7 @@ export function updateProvider(
         ...updated,
         providerId: originalProviderId,
         snapshot: updated.snapshot
-          ? { ...updated.snapshot, providerId: originalProviderId }
+          ? { ...updated.snapshot, providerKind: originalProviderId }
           : undefined,
       };
     }),

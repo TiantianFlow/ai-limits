@@ -95,35 +95,35 @@ async function collectNewApi({
     return {
       ok: true,
       snapshot: {
-        providerId: "newapi",
+        providerKind: "newapi",
         accountLabel: status.data.data.system_name,
         planLabel: value.name,
         source: "api-key",
         fetchedAt: now,
-        windows: value.unlimited_quota
-          ? []
+        metrics: value.unlimited_quota
+          ? [
+              {
+                type: "counter",
+                id: "relay-key-usage",
+                label: "API key usage",
+                scope: "feature",
+                semantic: "consumed",
+                unit: "quota units",
+                value: value.total_used,
+              },
+            ]
           : [
               {
+                type: "quota",
                 id: "relay-key-quota",
                 label: "API key quota",
-                kind: "feature",
+                scope: "feature",
                 usedRatio: value.total_used / value.total_granted,
                 used: value.total_used,
                 limit: value.total_granted,
                 unit: "quota units",
-                sourceSemantics: "used",
               },
             ],
-        credits: value.unlimited_quota
-          ? [
-              {
-                id: "relay-key-usage",
-                label: "API key usage",
-                unit: "quota units",
-                used: value.total_used,
-              },
-            ]
-          : [],
       },
     };
   } catch {

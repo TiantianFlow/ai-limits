@@ -2,19 +2,19 @@ import React, { useEffect, useId, useState } from "react";
 
 import {
   quotaHistorySegments,
-  type QuotaHistoryPoint,
+  type MetricHistoryPoint,
 } from "../../../domain/history";
 import type {
   DisplayMode,
-  QuotaHistoryObservation,
-  QuotaWindow,
+  QuotaMetric,
+  UsageHistoryObservation,
 } from "../../../domain/model";
 
 export interface HistoryChartProps {
   providerName: string;
   mode: DisplayMode;
-  windows: QuotaWindow[];
-  history: QuotaHistoryObservation[];
+  metrics: QuotaMetric[];
+  history: UsageHistoryObservation[];
   now: number;
   rangeHours?: number;
 }
@@ -26,12 +26,12 @@ const PLOT_RIGHT = 312;
 const PLOT_TOP = 8;
 const PLOT_BOTTOM = 88;
 
-function displayedRatio(point: QuotaHistoryPoint, mode: DisplayMode): number {
+function displayedRatio(point: MetricHistoryPoint, mode: DisplayMode): number {
   return mode === "used" ? point.usedRatio : 1 - point.usedRatio;
 }
 
 function pointPosition(
-  point: QuotaHistoryPoint,
+  point: MetricHistoryPoint,
   mode: DisplayMode,
   rangeStart: number,
   rangeEnd: number,
@@ -47,7 +47,7 @@ function pointPosition(
 }
 
 function segmentPath(
-  segment: QuotaHistoryPoint[],
+  segment: MetricHistoryPoint[],
   mode: DisplayMode,
   rangeStart: number,
   rangeEnd: number,
@@ -61,7 +61,7 @@ function segmentPath(
 }
 
 function segmentAreaPath(
-  segment: QuotaHistoryPoint[],
+  segment: MetricHistoryPoint[],
   mode: DisplayMode,
   rangeStart: number,
   rangeEnd: number,
@@ -107,27 +107,27 @@ function formatRangeStart(rangeHours: number | undefined, rangeStart: number): s
 export function HistoryChart({
   providerName,
   mode,
-  windows,
+  metrics,
   history,
   now,
   rangeHours,
 }: HistoryChartProps) {
-  const windowSelectId = useId();
+  const metricSelectId = useId();
   const summaryId = useId();
   const gapPatternId = useId();
   const areaGradientId = useId();
-  const [selectedWindowId, setSelectedWindowId] = useState(
-    () => windows[0]?.id ?? "",
+  const [selectedMetricId, setSelectedMetricId] = useState(
+    () => metrics[0]?.id ?? "",
   );
   useEffect(() => {
-    if (!windows.some((window) => window.id === selectedWindowId)) {
-      setSelectedWindowId(windows[0]?.id ?? "");
+    if (!metrics.some((metric) => metric.id === selectedMetricId)) {
+      setSelectedMetricId(metrics[0]?.id ?? "");
     }
-  }, [selectedWindowId, windows]);
-  const selectedWindow =
-    windows.find((window) => window.id === selectedWindowId) ?? windows[0];
+  }, [selectedMetricId, metrics]);
+  const selectedMetric =
+    metrics.find((metric) => metric.id === selectedMetricId) ?? metrics[0];
 
-  if (!selectedWindow) {
+  if (!selectedMetric) {
     return null;
   }
 
@@ -137,7 +137,7 @@ export function HistoryChart({
     requestedRangeStart === undefined
       ? history
       : history.filter((observation) => observation.observedAt >= requestedRangeStart);
-  const segments = quotaHistorySegments(visibleHistory, selectedWindow.id);
+  const segments = quotaHistorySegments(visibleHistory, selectedMetric.id);
   const points = segments.flat();
   const firstPoint = points[0];
   const latestPoint = points.at(-1);
@@ -153,26 +153,26 @@ export function HistoryChart({
     : undefined;
   const summary = latestPoint
     ? `${points.length} observation${points.length === 1 ? "" : "s"} across ${segments.length} chart segment${segments.length === 1 ? "" : "s"}. Latest value is ${latestValue}% ${mode}.`
-    : `No ${selectedWindow.label} history is stored yet.`;
-  const accessibleName = `${providerName} ${selectedWindow.label} usage history`;
+    : `No ${selectedMetric.label} history is stored yet.`;
+  const accessibleName = `${providerName} ${selectedMetric.label} usage history`;
 
   return (
     <div className="history-chart">
-      {windows.length > 1 ? (
+      {metrics.length > 1 ? (
         <div className="history-chart__toolbar">
           <h3>History</h3>
-          <label htmlFor={windowSelectId}>
-            <span>Quota window</span>
+          <label htmlFor={metricSelectId}>
+            <span>Quota metric</span>
             <select
-              id={windowSelectId}
-              value={selectedWindow.id}
+              id={metricSelectId}
+              value={selectedMetric.id}
               onChange={(event) =>
-                setSelectedWindowId(event.currentTarget.value)
+                setSelectedMetricId(event.currentTarget.value)
               }
             >
-              {windows.map((window) => (
-                <option key={window.id} value={window.id}>
-                  {window.label}
+              {metrics.map((metric) => (
+                <option key={metric.id} value={metric.id}>
+                  {metric.label}
                 </option>
               ))}
             </select>

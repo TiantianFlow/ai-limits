@@ -40,6 +40,75 @@ function renderCockpit(
 }
 
 describe("Cockpit", () => {
+  it("renders counter and balance metrics on Overview and Detail but offers only quotas in History", () => {
+    const state = createInitialState();
+    state.providers[0] = {
+      providerId: "chatgpt",
+      access: "granted",
+      history: [],
+      snapshot: {
+        providerKind: "chatgpt",
+        source: "web-session",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "quota",
+            id: "weekly",
+            label: "Weekly messages",
+            scope: "general",
+            usedRatio: 0.4,
+          },
+          {
+            type: "counter",
+            id: "extra-usage",
+            label: "Extra usage",
+            scope: "product",
+            semantic: "spent",
+            value: 12.5,
+            unit: "USD",
+            limit: 50,
+          },
+          {
+            type: "balance",
+            id: "credits",
+            label: "Credits",
+            scope: "product",
+            value: 414,
+            unit: "credits",
+          },
+        ],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            metricIds: ["weekly", "extra-usage", "credits"],
+          },
+        ],
+      },
+    } as unknown as AppState["providers"][number];
+
+    renderCockpit(state);
+
+    const overview = screen.getByRole("article", { name: "ChatGPT" });
+    expect(within(overview).getByText("$12.50 / $50.00 spent")).toBeVisible();
+    expect(within(overview).getByText("414 credits remaining")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open ChatGPT details" }));
+    const detail = screen.getByRole("region", { name: "ChatGPT detail" });
+    expect(within(detail).getByText("$12.50 / $50.00 spent")).toBeVisible();
+    expect(within(detail).getByText("414 credits remaining")).toBeVisible();
+
+    fireEvent.click(
+      within(detail).getByRole("button", {
+        name: "Open ChatGPT history for Weekly messages",
+      }),
+    );
+    const selector = screen.getByRole("combobox", { name: "Quota metric" });
+    expect(within(selector).getByRole("option", { name: "Weekly messages" })).toBeVisible();
+    expect(within(selector).queryByRole("option", { name: "Extra usage" })).not.toBeInTheDocument();
+    expect(within(selector).queryByRole("option", { name: "Credits" })).not.toBeInTheDocument();
+  });
+
   it.each([
     {
       name: "Provider Detail",
@@ -139,8 +208,7 @@ describe("Cockpit", () => {
         id: "priority",
         label: "Priority usage",
         description: "Provider-authored hierarchy.",
-        windowIds: ["weekly"],
-        creditIds: [],
+        metricIds: ["weekly"],
       },
     ];
 
@@ -152,7 +220,7 @@ describe("Cockpit", () => {
         quotas: [
           expect.objectContaining({ id: "weekly", label: "Weekly messages" }),
         ],
-        credits: [],
+        values: [],
       },
     ]);
   });
@@ -164,14 +232,12 @@ describe("Cockpit", () => {
       {
         id: "short-term",
         label: "Short-term limits",
-        windowIds: ["five-hour"],
-        creditIds: [],
+        metricIds: ["five-hour"],
       },
       {
         id: "long-term",
         label: "Long-term limits",
-        windowIds: ["weekly"],
-        creditIds: [],
+        metricIds: ["weekly"],
       },
     ];
     state.providers[0] = provider;
@@ -195,26 +261,28 @@ describe("Cockpit", () => {
     ).toBeVisible();
   });
 
-  it("renders one generic Usage group without embedded History and before the credits footer", () => {
+  it("renders one generic Usage group without embedded History and before the values footer", () => {
     const state = createInitialState();
     const provider = createFixtureState(NOW).providers[0]!;
     delete provider.snapshot!.usageGroups;
-    provider.snapshot!.credits = [
+    provider.snapshot!.metrics.push(
       {
+        type: "balance",
         id: "credits",
         label: "Credits",
+        scope: "product",
         unit: "credits",
-        remaining: 414,
+        value: 414,
       },
-    ];
+    );
     state.providers[0] = provider;
 
     renderCockpit(state);
 
     const card = screen.getByRole("article", { name: "ChatGPT" });
     const usage = within(card).getByRole("region", { name: "Usage" });
-    const credits = within(card).getByRole("region", {
-      name: "ChatGPT credits",
+    const values = within(card).getByRole("region", {
+      name: "ChatGPT values",
     });
 
     expect(
@@ -224,7 +292,7 @@ describe("Cockpit", () => {
       within(usage).getByRole("group", { name: "Weekly messages" }),
     ).toBeVisible();
     expect(
-      usage.compareDocumentPosition(credits) &
+      usage.compareDocumentPosition(values) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(card.querySelector(".history-disclosure")).not.toBeInTheDocument();
@@ -348,7 +416,7 @@ describe("Cockpit", () => {
 
     const usage = screen.getByRole("region", { name: "Usage" });
     expect(within(usage).getByRole("heading", { name: "Usage" })).toBeVisible();
-    expect(within(usage).getByText("$8.20 / $20.00 used")).toBeVisible();
+    expect(within(usage).getByText("$8.20 / $20.00 spent")).toBeVisible();
     expect(screen.getByRole("button", { name: "Open Claude history" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Connection and capabilities" })).toBeVisible();
     expect(screen.getByText(/Reads usage from your signed-in browser session/)).toBeVisible();
@@ -359,11 +427,15 @@ describe("Cockpit", () => {
     const state = createFixtureState(NOW);
     state.providers[0]!.history.unshift({
       observedAt: NOW - 4 * 24 * 60 * 60 * 1_000,
-      windows: [
+      metrics: [
         {
-          windowId: "five-hour",
+          type: "quota",
+          metricId: "five-hour",
           usedRatio: 0.28,
-          resetsAt: NOW - 4 * 24 * 60 * 60 * 1_000 + 2 * 60 * 60 * 1_000,
+          cycle: {
+            cadence: "rolling",
+            resetsAt: NOW - 4 * 24 * 60 * 60 * 1_000 + 2 * 60 * 60 * 1_000,
+          },
         },
       ],
     });
@@ -376,7 +448,7 @@ describe("Cockpit", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "ChatGPT history" })).toBeVisible();
-    expect(screen.getByRole("combobox", { name: "Quota window" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Quota metric" })).toBeVisible();
     expect(
       screen.getByRole("radiogroup", { name: "Show used or left" }),
     ).toBeVisible();
@@ -471,7 +543,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota window" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
       target: { value: "weekly" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
@@ -484,7 +556,7 @@ describe("Cockpit", () => {
     );
 
     expect(
-      screen.getByRole("combobox", { name: "Quota window" }),
+      screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("five-hour");
   });
 
@@ -498,7 +570,7 @@ describe("Cockpit", () => {
     );
 
     expect(
-      screen.getByRole("combobox", { name: "Quota window" }),
+      screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("weekly");
   });
 
@@ -513,7 +585,7 @@ describe("Cockpit", () => {
     const providerSelect = screen.getByRole("combobox", {
       name: "History provider",
     });
-    const windowSelect = screen.getByRole("combobox", { name: "Quota window" });
+    const windowSelect = screen.getByRole("combobox", { name: "Quota metric" });
 
     fireEvent.change(windowSelect, { target: { value: "weekly" } });
     fireEvent.change(providerSelect, { target: { value: "kimi" } });
@@ -534,7 +606,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota window" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
       target: { value: "weekly" },
     });
     fireEvent.change(
@@ -553,7 +625,7 @@ describe("Cockpit", () => {
       screen.getByRole("combobox", { name: "History provider" }),
     ).toHaveValue("chatgpt");
     expect(
-      screen.getByRole("combobox", { name: "Quota window" }),
+      screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("five-hour");
   });
 
@@ -574,7 +646,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota window" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
       target: { value: "weekly" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
@@ -589,7 +661,7 @@ describe("Cockpit", () => {
                   ...provider,
                   snapshot: {
                     ...provider.snapshot,
-                    windows: [provider.snapshot.windows[0]!],
+                    metrics: [provider.snapshot.metrics[0]!],
                   },
                 }
               : provider,
@@ -608,7 +680,7 @@ describe("Cockpit", () => {
       }),
     );
     expect(
-      screen.getByRole("combobox", { name: "Quota window" }),
+      screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("five-hour");
   });
 
@@ -992,7 +1064,7 @@ describe("Cockpit", () => {
     expect(screen.getByText("ChatGPT")).toBeVisible();
     expect(screen.getByText("72% used")).toBeVisible();
     expect(screen.getAllByText("5 / 7 days elapsed")[0]).toBeVisible();
-    expect(screen.getByText("$8.20 / $20.00 used")).toBeVisible();
+    expect(screen.getByText("$8.20 / $20.00 spent")).toBeVisible();
     expect(screen.queryByText("Antigravity")).not.toBeInTheDocument();
   });
 
@@ -1090,7 +1162,13 @@ describe("Cockpit", () => {
 
   it("describes pace deltas as over or under pace", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.snapshot!.windows[1]!.usedRatio = 0.5;
+    const weekly = state.providers[0]!.snapshot!.metrics.find(
+      (metric) => metric.type === "quota" && metric.id === "weekly",
+    );
+    if (!weekly || weekly.type !== "quota") {
+      throw new Error("Expected the weekly quota fixture.");
+    }
+    weekly.usedRatio = 0.5;
 
     renderCockpit(state);
 
@@ -1118,16 +1196,27 @@ describe("Cockpit", () => {
     ).toBeVisible();
   });
 
-  it("keeps an absolute credit balance unchanged in Used and Left modes", () => {
+  it("keeps counter and balance values unchanged in Used and Left modes", () => {
     const state = createFixtureState(NOW);
-    state.providers[0]!.snapshot!.credits = [
+    state.providers[0]!.snapshot!.metrics.push(
       {
+        type: "counter",
+        id: "extra-usage",
+        label: "Extra usage",
+        scope: "product",
+        semantic: "spent",
+        unit: "USD",
+        value: 12.5,
+      },
+      {
+        type: "balance",
         id: "credits",
         label: "Credits",
+        scope: "product",
         unit: "credits",
-        remaining: 414,
+        value: 414,
       },
-    ];
+    );
     const view = render(
       <Cockpit
         state={state}
@@ -1138,7 +1227,8 @@ describe("Cockpit", () => {
       />,
     );
 
-    expect(screen.getByText("414 remaining")).toBeVisible();
+    expect(screen.getByText("$12.50 spent")).toBeVisible();
+    expect(screen.getByText("414 credits remaining")).toBeVisible();
 
     view.rerender(
       <Cockpit
@@ -1152,7 +1242,8 @@ describe("Cockpit", () => {
         onConnectProvider={vi.fn()}
       />,
     );
-    expect(screen.getByText("414 remaining")).toBeVisible();
+    expect(screen.getByText("$12.50 spent")).toBeVisible();
+    expect(screen.getByText("414 credits remaining")).toBeVisible();
   });
 
   it("requests left mode and renders the complementary percentage", () => {
@@ -1180,7 +1271,11 @@ describe("Cockpit", () => {
     expect(reset.tagName).toBe("TIME");
     expect(reset).toHaveAttribute(
       "datetime",
-      new Date(state.providers[0]!.snapshot!.windows[1]!.resetsAt!).toISOString(),
+      new Date(
+        state.providers[0]!.snapshot!.metrics.find(
+          (metric) => metric.type === "quota" && metric.id === "weekly",
+        )!.cycle!.resetsAt!,
+      ).toISOString(),
     );
 
     fireEvent.click(screen.getByRole("radio", { name: "Left" }));
@@ -1260,12 +1355,10 @@ describe("Cockpit", () => {
           ...chatGpt,
           snapshot: {
             ...chatGpt.snapshot,
-            windows: [
+            metrics: [
               {
-                ...chatGpt.snapshot.windows[0]!,
-                startedAt: undefined,
-                resetsAt: undefined,
-                durationMs: undefined,
+                ...chatGpt.snapshot.metrics[0]!,
+                cycle: undefined,
               },
             ],
           },
@@ -1500,7 +1593,9 @@ describe("Cockpit", () => {
     const state = createFixtureState(NOW);
     state.providers[0]!.history.push({
       observedAt: NOW - 15 * 60 * 1_000,
-      windows: [{ windowId: "retired-window", usedRatio: 0.9 }],
+      metrics: [
+        { type: "quota", metricId: "retired-window", usedRatio: 0.9 },
+      ],
     });
 
     renderCockpit(state);
@@ -1525,7 +1620,7 @@ describe("Cockpit", () => {
       screen.getByRole("button", { name: "Overview" }),
     ).toBeVisible();
     const windowSelect = screen.getByRole("combobox", {
-      name: "Quota window",
+      name: "Quota metric",
     });
     expect(windowSelect).toBeVisible();
     expect(

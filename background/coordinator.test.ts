@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type {
   ProviderRefreshOutcome,
-  ProviderSnapshot,
+  UsageSnapshot,
 } from "../domain/model";
-import { observationFromSnapshot } from "../domain/history";
+import { observationFromUsage } from "../domain/history";
 import { createFixtureState } from "../providers/fixtures";
 import type { CollectionResult, ProviderAdapter } from "../providers/types";
 import { loadState, saveState, setDisplayMode } from "../storage/repository";
@@ -33,25 +33,23 @@ function deferred<T>() {
 }
 
 function liveSnapshot(
-  providerId: ProviderSnapshot["providerId"] = "chatgpt",
-): ProviderSnapshot {
+  providerKind: UsageSnapshot["providerKind"] = "chatgpt",
+): UsageSnapshot {
   return {
-    providerId,
+    providerKind,
     planLabel: "Plus",
     source: "web-session",
     fetchedAt: NOW,
-    windows: [
+    metrics: [
       {
+        type: "quota",
         id: "five-hour",
         label: "5-hour messages",
-        kind: "rolling",
+        scope: "general",
         usedRatio: 0.4,
-        resetsAt: NOW + 60_000,
-        durationMs: 18_000_000,
-        sourceSemantics: "used",
+        cycle: { cadence: "rolling", resetsAt: NOW + 60_000, durationMs: 18_000_000 },
       },
     ],
-    credits: [],
   };
 }
 
@@ -179,7 +177,7 @@ describe("provider refresh coordinator", () => {
       access: "granted",
       history: [
         ...initial.providers[0]!.history,
-        observationFromSnapshot({ ...liveSnapshot(), fetchedAt: FINISHED_AT }),
+        observationFromUsage({ ...liveSnapshot(), fetchedAt: FINISHED_AT }),
       ],
       snapshot: { ...liveSnapshot(), fetchedAt: FINISHED_AT },
       lastAttempt: {
@@ -194,7 +192,7 @@ describe("provider refresh coordinator", () => {
 
   test("appends exactly one quota observation for a successful refresh", async () => {
     const initial = liveState(NOW - 60_000);
-    const previous = observationFromSnapshot({
+    const previous = observationFromUsage({
       ...liveSnapshot(),
       fetchedAt: NOW - 60_000,
     });
@@ -207,13 +205,44 @@ describe("provider refresh coordinator", () => {
 
     expect((await loadState())?.providers[0]?.history).toEqual([
       previous,
-      observationFromSnapshot({ ...liveSnapshot(), fetchedAt: FINISHED_AT }),
+      observationFromUsage({ ...liveSnapshot(), fetchedAt: FINISHED_AT }),
+    ]);
+  });
+
+  test("records quota, counter, and balance samples from one successful usage snapshot", async () => {
+    const initial = liveState(NOW - 60_000);
+    initial.providers[0]!.history = [];
+    await saveState(initial, NOW);
+    const snapshot: UsageSnapshot = {
+      providerKind: "chatgpt",
+      source: "web-session",
+      fetchedAt: NOW,
+      metrics: [
+        { type: "quota", id: "weekly", label: "Weekly", scope: "general", usedRatio: 0.4 },
+        { type: "counter", id: "spend", label: "Spend", scope: "product", semantic: "spent", value: 12.5, unit: "USD" },
+        { type: "balance", id: "credits", label: "Credits", scope: "product", value: 414, unit: "credits" },
+      ],
+    };
+
+    await refresh(
+      adapter(async () => ({ ok: true, snapshot })),
+    );
+
+    expect((await loadState())?.providers[0]?.history).toEqual([
+      {
+        observedAt: FINISHED_AT,
+        metrics: [
+          { type: "quota", metricId: "weekly", usedRatio: 0.4 },
+          { type: "counter", metricId: "spend", semantic: "spent", value: 12.5, unit: "USD" },
+          { type: "balance", metricId: "credits", value: 414, unit: "credits" },
+        ],
+      },
     ]);
   });
 
   test("does not append history for failure, deferral, permission skip, or superseded work", async () => {
     const initial = liveState(NOW - 60_000);
-    const previous = observationFromSnapshot({
+    const previous = observationFromUsage({
       ...liveSnapshot(),
       fetchedAt: NOW - 60_000,
     });
@@ -246,9 +275,9 @@ describe("provider refresh coordinator", () => {
     expect((await loadState())?.providers[0]?.history).toEqual([previous]);
   });
 
-  test("clears prior history before appending when a non-empty plan label changes", async () => {
+  test("preserves prior history when a presentation-only plan label changes", async () => {
     const initial = liveState(NOW - 60_000);
-    const previous = observationFromSnapshot({
+    const previous = observationFromUsage({
       ...liveSnapshot(),
       planLabel: "Plus",
       fetchedAt: NOW - 60_000,
@@ -269,7 +298,8 @@ describe("provider refresh coordinator", () => {
     );
 
     expect((await loadState())?.providers[0]?.history).toEqual([
-      observationFromSnapshot({
+      previous,
+      observationFromUsage({
         ...liveSnapshot(),
         planLabel: "Team",
         fetchedAt: FINISHED_AT,
@@ -290,7 +320,7 @@ describe("provider refresh coordinator", () => {
               ...liveSnapshot(),
               accountLabel: "person@example.com",
               accessToken: "secret-bearing snapshot field",
-            } as ProviderSnapshot,
+            } as UsageSnapshot,
           })),
         );
         coordinatorOutcome = outcome;
@@ -314,16 +344,16 @@ describe("provider refresh coordinator", () => {
     );
   });
 
-  test("rejects duplicate quota window IDs before persisting snapshot or history", async () => {
-    const duplicateWindows = [
-      liveSnapshot().windows[0]!,
-      { ...liveSnapshot().windows[0]! },
+  test("rejects duplicate metric IDs before persisting snapshot or history", async () => {
+    const duplicateMetrics = [
+      liveSnapshot().metrics[0]!,
+      { ...liveSnapshot().metrics[0]! },
     ];
 
     const outcome = await refresh(
       adapter(async () => ({
         ok: true,
-        snapshot: { ...liveSnapshot(), windows: duplicateWindows },
+        snapshot: { ...liveSnapshot(), metrics: duplicateMetrics },
       })),
     );
 
@@ -508,12 +538,12 @@ describe("provider refresh coordinator", () => {
     const providers = (await loadState())?.providers;
     expect(providers?.find(({ providerId }) => providerId === "chatgpt")).toMatchObject({
       providerId: "chatgpt",
-      snapshot: { providerId: "chatgpt", fetchedAt: FINISHED_AT },
+      snapshot: { providerKind: "chatgpt", fetchedAt: FINISHED_AT },
       lastAttempt: { outcome: { kind: "success" } },
     });
     expect(providers?.find(({ providerId }) => providerId === "claude")).toMatchObject({
       providerId: "claude",
-      snapshot: { providerId: "claude", fetchedAt: FINISHED_AT },
+      snapshot: { providerKind: "claude", fetchedAt: FINISHED_AT },
       lastAttempt: { outcome: { kind: "success" } },
     });
   });
@@ -698,11 +728,9 @@ describe("provider refresh coordinator", () => {
     older.resolve(false);
     await olderReconciliation;
 
-    expect((await loadState())?.providers[0]).toEqual({
-      providerId: "chatgpt",
-      access: "granted",
-      history: createFixtureState(NOW).providers[0]!.history,
-    });
+    expect((await loadState())?.providers[0]).toEqual(
+      createFixtureState(NOW).providers[0],
+    );
   });
 
   test("disconnect deletes local credential and provider data before awaited permission removal", async () => {

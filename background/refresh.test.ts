@@ -29,11 +29,10 @@ describe("refreshGrantedProviders", () => {
         return {
           kind: "success",
           snapshot: {
-            providerId,
+            providerKind: providerId,
             source: "fixture",
             fetchedAt: 1_800_000_000_000,
-            windows: [],
-            credits: [],
+            metrics: [],
           },
         };
       },
@@ -59,11 +58,10 @@ describe("refreshGrantedProviders", () => {
         chatgpt: {
           kind: "success",
           snapshot: {
-            providerId: "chatgpt",
+            providerKind: "chatgpt",
             source: "fixture",
             fetchedAt: 1_800_000_000_000,
-            windows: [],
-            credits: [],
+            metrics: [],
           },
         },
         claude: { kind: "skipped", reason: "permission_required" },
@@ -103,21 +101,19 @@ describe("refreshGrantedProviders", () => {
     resolvers.get("chatgpt")!({
       kind: "success",
       snapshot: {
-        providerId: "chatgpt",
+        providerKind: "chatgpt",
         source: "fixture",
         fetchedAt: 1_800_000_000_000,
-        windows: [],
-        credits: [],
+        metrics: [],
       },
     });
     resolvers.get("claude")!({
       kind: "success",
       snapshot: {
-        providerId: "claude",
+        providerKind: "claude",
         source: "fixture",
         fetchedAt: 1_800_000_000_000,
-        windows: [],
-        credits: [],
+        metrics: [],
       },
     });
 

@@ -1,339 +1,159 @@
-import type { AppState, ProviderRecord, ProviderSnapshot } from "../domain/model";
-import { observationFromSnapshot } from "../domain/history";
+import { observationFromUsage } from "../domain/history";
+import type {
+  AppState,
+  ProviderRecord,
+  QuotaMetric,
+  UsageSnapshot,
+} from "../domain/model";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
 
 function fixtureSnapshot(
-  snapshot: Omit<ProviderSnapshot, "source" | "fetchedAt">,
+  snapshot: Omit<UsageSnapshot, "source" | "fetchedAt">,
   now: number,
-): ProviderSnapshot {
-  return {
-    ...snapshot,
-    source: "fixture",
-    fetchedAt: now,
-  };
+): UsageSnapshot {
+  return { ...snapshot, source: "fixture", fetchedAt: now };
 }
 
-function fixtureHistory(snapshot: ProviderSnapshot) {
-  const current = observationFromSnapshot(snapshot);
+function fixtureHistory(snapshot: UsageSnapshot) {
+  const current = observationFromUsage(snapshot);
+  const earlier = (observedAt: number, delta: number) => ({
+    observedAt,
+    metrics: current.metrics.map((metric) =>
+      metric.type === "quota"
+        ? { ...metric, usedRatio: Math.max(0, metric.usedRatio - delta) }
+        : { ...metric },
+    ),
+  });
   return [
-    {
-      observedAt: snapshot.fetchedAt - HOUR,
-      windows: current.windows.map((window) => ({
-        ...window,
-        usedRatio: Math.max(0, window.usedRatio - 0.18),
-      })),
-    },
-    {
-      observedAt: snapshot.fetchedAt - 30 * 60 * 1_000,
-      windows: current.windows.map((window) => ({
-        ...window,
-        usedRatio: Math.max(0, window.usedRatio - 0.08),
-      })),
-    },
+    earlier(snapshot.fetchedAt - HOUR, 0.18),
+    earlier(snapshot.fetchedAt - 30 * 60 * 1_000, 0.08),
     current,
   ];
+}
+
+function quota(
+  id: string,
+  label: string,
+  scope: QuotaMetric["scope"],
+  usedRatio: number,
+  cycle?: QuotaMetric["cycle"],
+): QuotaMetric {
+  return {
+    type: "quota",
+    id,
+    label,
+    scope,
+    usedRatio,
+    ...(cycle === undefined ? {} : { cycle }),
+  };
 }
 
 export function createFixtureState(now: number): AppState {
   const fiveHours = 5 * HOUR;
   const week = 7 * DAY;
   const fixtureDate = new Date(now);
-  const calendarMonthStartedAt = Date.UTC(
-    fixtureDate.getUTCFullYear(),
-    fixtureDate.getUTCMonth(),
-    1,
-  );
-  const calendarMonthResetsAt = Date.UTC(
-    fixtureDate.getUTCFullYear(),
-    fixtureDate.getUTCMonth() + 1,
-    1,
-  );
+  const monthStart = Date.UTC(fixtureDate.getUTCFullYear(), fixtureDate.getUTCMonth(), 1);
+  const monthReset = Date.UTC(fixtureDate.getUTCFullYear(), fixtureDate.getUTCMonth() + 1, 1);
+  const rollingFiveHour = { cadence: "rolling" as const, resetsAt: now + 2 * HOUR, durationMs: fiveHours };
+  const rollingWeek = { cadence: "rolling" as const, startedAt: now - 5 * DAY, resetsAt: now + 2 * DAY, durationMs: week };
+  const calendarMonth = { cadence: "calendar" as const, startedAt: monthStart, resetsAt: monthReset, durationMs: monthReset - monthStart };
 
   const providers: ProviderRecord[] = [
     {
       providerId: "chatgpt",
       access: "granted",
       history: [],
-      snapshot: fixtureSnapshot(
-        {
-          providerId: "chatgpt",
-          accountLabel: "ChatGPT Plus",
-          planLabel: "Plus",
-          windows: [
-            {
-              id: "five-hour",
-              label: "5-hour messages",
-              kind: "rolling",
-              usedRatio: 0.72,
-              resetsAt: now + 2 * HOUR,
-              durationMs: fiveHours,
-              sourceSemantics: "used",
-            },
-            {
-              id: "weekly",
-              label: "Weekly messages",
-              kind: "rolling",
-              usedRatio: 0.71,
-              startedAt: now - 5 * DAY,
-              resetsAt: now + 2 * DAY,
-              durationMs: week,
-              sourceSemantics: "used",
-            },
-          ],
-          credits: [],
-          usageGroups: [
-            {
-              id: "usage",
-              label: "Usage",
-              windowIds: ["five-hour", "weekly"],
-              creditIds: [],
-            },
-          ],
-        },
-        now,
-      ),
+      snapshot: fixtureSnapshot({
+        providerKind: "chatgpt",
+        accountLabel: "ChatGPT Plus",
+        planLabel: "Plus",
+        metrics: [
+          quota("five-hour", "5-hour messages", "general", 0.72, rollingFiveHour),
+          quota("weekly", "Weekly messages", "general", 0.71, rollingWeek),
+        ],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["five-hour", "weekly"] }],
+      }, now),
     },
     {
       providerId: "claude",
       access: "granted",
       history: [],
-      snapshot: fixtureSnapshot(
-        {
-          providerId: "claude",
-          accountLabel: "Claude Max",
-          planLabel: "Max",
-          windows: [
-            {
-              id: "weekly",
-              label: "Weekly usage",
-              kind: "rolling",
-              usedRatio: 0.67,
-              startedAt: now - 5 * DAY,
-              resetsAt: now + 2 * DAY,
-              durationMs: week,
-              sourceSemantics: "used",
-            },
-          ],
-          credits: [
-            {
-              id: "extra-usage",
-              label: "Extra usage",
-              unit: "USD",
-              used: 8.2,
-              limit: 20,
-              resetsAt: now + 2 * DAY,
-            },
-          ],
-          usageGroups: [
-            {
-              id: "usage",
-              label: "Usage",
-              windowIds: ["weekly"],
-              creditIds: ["extra-usage"],
-            },
-          ],
-        },
-        now,
-      ),
+      snapshot: fixtureSnapshot({
+        providerKind: "claude",
+        accountLabel: "Claude Max",
+        planLabel: "Max",
+        metrics: [
+          quota("weekly", "Weekly usage", "general", 0.67, rollingWeek),
+          { type: "counter", id: "extra-usage", label: "Extra usage", scope: "product", semantic: "spent", value: 8.2, limit: 20, unit: "USD", cycle: rollingWeek },
+        ],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["weekly", "extra-usage"] }],
+      }, now),
     },
     {
       providerId: "kimi",
       access: "granted",
       history: [],
-      snapshot: fixtureSnapshot(
-        {
-          providerId: "kimi",
-          accountLabel: "Kimi Coding Moderato",
-          planLabel: "Moderato",
-          windows: [
-            {
-              id: "five-hour",
-              label: "5-hour usage",
-              kind: "rolling",
-              usedRatio: 0.55,
-              resetsAt: now + 2 * HOUR,
-              durationMs: fiveHours,
-              sourceSemantics: "used",
-            },
-            {
-              id: "weekly",
-              label: "Weekly usage",
-              kind: "rolling",
-              usedRatio: 0.22,
-              startedAt: now - 5 * DAY,
-              resetsAt: now + 2 * DAY,
-              durationMs: week,
-              sourceSemantics: "used",
-            },
-          ],
-          credits: [],
-          usageGroups: [
-            {
-              id: "usage",
-              label: "Usage",
-              windowIds: ["five-hour", "weekly"],
-              creditIds: [],
-            },
-          ],
-        },
-        now,
-      ),
+      snapshot: fixtureSnapshot({
+        providerKind: "kimi",
+        accountLabel: "Kimi Coding Moderato",
+        planLabel: "Moderato",
+        metrics: [
+          quota("five-hour", "5-hour usage", "general", 0.55, rollingFiveHour),
+          quota("weekly", "Weekly usage", "general", 0.22, rollingWeek),
+        ],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["five-hour", "weekly"] }],
+      }, now),
     },
     {
       providerId: "cursor",
       access: "granted",
       history: [],
-      snapshot: fixtureSnapshot(
-        {
-          providerId: "cursor",
-          accountLabel: "Cursor Pro",
-          planLabel: "Pro",
-          windows: [
-            {
-              id: "monthly",
-              label: "Monthly usage",
-              kind: "calendar",
-              usedRatio: 0.78,
-              startedAt: calendarMonthStartedAt,
-              resetsAt: calendarMonthResetsAt,
-              durationMs: calendarMonthResetsAt - calendarMonthStartedAt,
-              sourceSemantics: "used",
-            },
-          ],
-          credits: [
-            {
-              id: "on-demand",
-              label: "On-demand spend",
-              unit: "USD",
-              used: 3.2,
-            },
-          ],
-          usageGroups: [
-            {
-              id: "usage",
-              label: "Usage",
-              windowIds: ["monthly"],
-              creditIds: ["on-demand"],
-            },
-          ],
-        },
-        now,
-      ),
+      snapshot: fixtureSnapshot({
+        providerKind: "cursor",
+        accountLabel: "Cursor Pro",
+        planLabel: "Pro",
+        metrics: [
+          quota("monthly", "Monthly usage", "general", 0.78, calendarMonth),
+          { type: "counter", id: "on-demand", label: "On-demand spend", scope: "product", semantic: "spent", value: 3.2, unit: "USD" },
+        ],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["monthly", "on-demand"] }],
+      }, now),
     },
     {
       providerId: "elevenlabs",
       access: "granted",
       history: [],
-      snapshot: fixtureSnapshot(
-        {
-          providerId: "elevenlabs",
-          accountLabel: "ElevenLabs Starter",
-          planLabel: "Starter",
-          windows: [
-            {
-              id: "monthly-credits",
-              label: "Monthly credits",
-              kind: "calendar",
-              usedRatio: 0.25,
-              used: 2_500,
-              limit: 10_000,
-              unit: "credits",
-              startedAt: calendarMonthStartedAt,
-              resetsAt: calendarMonthResetsAt,
-              durationMs: calendarMonthResetsAt - calendarMonthStartedAt,
-              sourceSemantics: "used",
-            },
-            {
-              id: "voice-slots",
-              label: "Voice slots",
-              kind: "feature",
-              usedRatio: 0.2,
-              used: 2,
-              limit: 10,
-              unit: "voices",
-              sourceSemantics: "used",
-            },
-            {
-              id: "professional-voice-slots",
-              label: "Professional voice slots",
-              kind: "feature",
-              usedRatio: 1 / 3,
-              used: 1,
-              limit: 3,
-              unit: "voices",
-              sourceSemantics: "used",
-            },
-            {
-              id: "voice-add-edits",
-              label: "Voice add/edits",
-              kind: "feature",
-              usedRatio: 0.2,
-              used: 4,
-              limit: 20,
-              unit: "actions",
-              sourceSemantics: "used",
-            },
-          ],
-          credits: [],
-          usageGroups: [
-            {
-              id: "usage",
-              label: "Usage",
-              windowIds: [
-                "monthly-credits",
-                "voice-slots",
-                "professional-voice-slots",
-                "voice-add-edits",
-              ],
-              creditIds: [],
-            },
-          ],
-        },
-        now,
-      ),
+      snapshot: fixtureSnapshot({
+        providerKind: "elevenlabs",
+        accountLabel: "ElevenLabs Starter",
+        planLabel: "Starter",
+        metrics: [
+          { ...quota("monthly-credits", "Monthly credits", "product", 0.25, calendarMonth), used: 2_500, limit: 10_000, unit: "credits" },
+          { ...quota("voice-slots", "Voice slots", "feature", 0.2), used: 2, limit: 10, unit: "voices" },
+          { ...quota("professional-voice-slots", "Professional voice slots", "feature", 1 / 3), used: 1, limit: 3, unit: "voices" },
+          { ...quota("voice-add-edits", "Voice add/edits", "feature", 0.2), used: 4, limit: 20, unit: "actions" },
+        ],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["monthly-credits", "voice-slots", "professional-voice-slots", "voice-add-edits"] }],
+      }, now),
     },
     {
       providerId: "newapi",
       access: "granted",
       history: [],
-      snapshot: fixtureSnapshot(
-        {
-          providerId: "newapi",
-          accountLabel: "Example New API",
-          planLabel: "AI Limits",
-          windows: [
-            {
-              id: "relay-key-quota",
-              label: "API key quota",
-              kind: "feature",
-              usedRatio: 0.25,
-              used: 2_500,
-              limit: 10_000,
-              unit: "quota units",
-              sourceSemantics: "used",
-            },
-          ],
-          credits: [],
-          usageGroups: [
-            {
-              id: "usage",
-              label: "Usage",
-              windowIds: ["relay-key-quota"],
-              creditIds: [],
-            },
-          ],
-        },
-        now,
-      ),
+      snapshot: fixtureSnapshot({
+        providerKind: "newapi",
+        accountLabel: "Example New API",
+        planLabel: "AI Limits",
+        metrics: [{ ...quota("relay-key-quota", "API key quota", "feature", 0.25), used: 2_500, limit: 10_000, unit: "quota units" }],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["relay-key-quota"] }],
+      }, now),
     },
   ];
 
   for (const provider of providers) {
-    provider.history = provider.snapshot
-      ? fixtureHistory(provider.snapshot)
-      : [];
+    provider.history = provider.snapshot ? fixtureHistory(provider.snapshot) : [];
   }
 
   return {
