@@ -2257,6 +2257,18 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-weight: 650;
 }
 
+.settings-rename__feedback {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.settings-rename__feedback[role="alert"] {
+  color: #be123c;
+}
+
 .api-key-guide {
   min-width: 0;
 }
@@ -2575,7 +2587,7 @@ section[aria-labelledby="overview-title"] .provider-list {
 
   .provider-mark--provider-chatgpt,
   .provider-mark--provider-elevenlabs,
-  .provider-mark--provider-fallback,
+  .provider-mark--fallback,
   .open-source-footer__mark {
     filter: invert(1);
   }

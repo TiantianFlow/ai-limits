@@ -71,6 +71,12 @@ describe("ProviderMark", () => {
     expect(
       marks.some((mark) => mark.classList.contains("mark-contrast-tile")),
     ).toBe(false);
+    expect(marks[5]).toHaveClass("provider-mark--fallback");
+    expect(
+      marks.slice(0, 5).every((mark) =>
+        !mark.classList.contains("provider-mark--fallback"),
+      ),
+    ).toBe(true);
     expect(screen.getByText("unknown-provider")).toBeVisible();
   });
 });

@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import type { ProviderOperation } from "../../background/messages";
 import type {
   AppViewState,
   ProviderInstanceView,
-} from "../../background/view-state";
+  ProviderOperation,
+} from "../../domain/public-protocol";
 import type { ProviderInstanceId } from "../../domain/instances";
 import { sanitizedFailureMessage } from "../../domain/model";
 import type {
@@ -57,7 +57,7 @@ import {
 import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
 import { balanceMetrics, counterMetrics, quotaMetrics } from "./metrics";
-import { instanceLabel } from "./instance-label";
+import { instanceLabel, instanceLabels } from "./instance-label";
 
 export interface ApiKeySubmission {
   providerKind: ApiKeyProviderKind;
@@ -86,7 +86,7 @@ export interface CockpitProps {
   onRenameInstance?: (
     instanceId: ProviderInstanceId,
     userLabel?: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDeleteLocalData?: () => void;
 }
 
@@ -279,6 +279,7 @@ export function providerView(
   provider: ProviderInstanceView,
   mode: DisplayMode,
   now: number,
+  resolvedInstanceLabel = instanceLabel(provider),
 ): ProviderCardProps {
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
@@ -300,7 +301,7 @@ export function providerView(
 
   return {
     instanceId: provider.id,
-    instanceLabel: instanceLabel(provider),
+    instanceLabel: resolvedInstanceLabel,
     providerId: provider.providerKind,
     name: providerNames[provider.providerKind],
     plan,
@@ -349,7 +350,7 @@ export function Cockpit({
   onRefreshInstance = () => undefined,
   onAutoRefreshChange = () => undefined,
   onDisconnectInstance = () => undefined,
-  onRenameInstance = () => undefined,
+  onRenameInstance = async () => true,
   onDeleteLocalData = () => undefined,
 }: CockpitProps) {
   const mode = state.preferences.displayMode;
@@ -458,6 +459,7 @@ export function Cockpit({
   const connectedInstances = state.instances.filter(
     (instance) => instance.access === "granted",
   );
+  const labelsByInstance = instanceLabels(state.instances);
   const availableProviderKinds = providerIds.filter((providerKind) =>
     canCreateProviderInstance(providerKind, connectedInstances),
   );
@@ -469,7 +471,12 @@ export function Cockpit({
         : undefined,
   }));
   const overviewProviders = connectedInstances.map((instance) => {
-    const card = providerView(instance, mode, now);
+    const card = providerView(
+      instance,
+      mode,
+      now,
+      labelsByInstance.get(instance.id),
+    );
     const failureCategory =
       instance.lastAttempt?.outcome.kind === "failure"
         ? instance.lastAttempt.outcome.category
@@ -488,7 +495,7 @@ export function Cockpit({
   const previousScreen = navigation.backStack.at(-1);
   const labelForInstance = (instanceId: ProviderInstanceId): string => {
     const instance = state.instances.find((candidate) => candidate.id === instanceId);
-    return instance ? instanceLabel(instance) : "Provider";
+    return instance ? labelsByInstance.get(instance.id) ?? instanceLabel(instance) : "Provider";
   };
   const historyBackLabel =
     previousScreen?.name === "provider"
@@ -503,8 +510,13 @@ export function Cockpit({
       ? labelForInstance(previousScreen.instanceId)
       : previousScreen?.name === "add-provider"
         ? "Add provider"
-        : previousScreen?.name === "settings"
+      : previousScreen?.name === "settings"
           ? "Settings"
+          : previousScreen?.name === "overview" &&
+              connectedInstances.length === 0 &&
+              view.name === "api-key-connect" &&
+              view.providerKind === "newapi"
+            ? "Connect your providers"
           : "Overview";
   const detailRecord =
     view.name === "provider"
@@ -535,7 +547,12 @@ export function Cockpit({
       )
     : undefined;
   const activeHistoryView = activeHistoryRecord
-    ? providerView(activeHistoryRecord, mode, now)
+    ? providerView(
+        activeHistoryRecord,
+        mode,
+        now,
+        labelsByInstance.get(activeHistoryRecord.id),
+      )
     : undefined;
   const activeHistoryQuota = activeHistoryView?.usageGroups
     .flatMap((group) => group.quotas)
@@ -603,7 +620,7 @@ export function Cockpit({
             initialBaseUrl={
               view.instanceId
                 ? state.instances.find((instance) => instance.id === view.instanceId)
-                    ?.origin
+                    ?.baseUrl
                 : undefined
             }
             initialUserLabel={

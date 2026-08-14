@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -180,6 +181,7 @@ function twoNewApiInstances(): AppViewState {
         id: PERSONAL_NEW_API_ID,
         providerKind: "newapi",
         userLabel: "Personal relay",
+        baseUrl: "https://relay.example",
         origin: "https://relay.example",
         access: "granted",
         createdAt: NOW - 2_000,
@@ -195,6 +197,7 @@ function twoNewApiInstances(): AppViewState {
         id: WORK_NEW_API_ID,
         providerKind: "newapi",
         userLabel: "Work relay",
+        baseUrl: "https://relay.example",
         origin: "https://relay.example",
         access: "granted",
         createdAt: NOW - 1_000,
@@ -285,6 +288,69 @@ describe("Cockpit", () => {
     ).toBeVisible();
   });
 
+  it("stably disambiguates blank same-origin fallbacks everywhere by short instance ID", () => {
+    const state = twoNewApiInstances();
+    delete state.instances[0]!.userLabel;
+    delete state.instances[1]!.userLabel;
+    const view = render(
+      <InstanceCockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    const personalLabel = "relay.example · 11111111";
+    const workLabel = "relay.example · 22222222";
+
+    expect(
+      screen.getByRole("article", { name: `New API ${personalLabel}` }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("article", { name: `New API ${workLabel}` }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: `Refresh ${personalLabel}` }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `Open ${personalLabel} history for API key quota`,
+      }),
+    );
+    const providerOptions = within(
+      screen.getByRole("combobox", { name: "History provider" }),
+    ).getAllByRole("option");
+    expect(providerOptions.map((option) => option.textContent)).toEqual([
+      `New API · ${personalLabel}`,
+      `New API · ${workLabel}`,
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+      screen.getByRole("heading", { name: `New API · ${personalLabel}` }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: `Disconnect ${workLabel}` }),
+    ).toBeVisible();
+
+    view.rerender(
+      <InstanceCockpit
+        state={{ ...state, instances: [...state.instances].reverse() }}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: `Rename ${personalLabel}` }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: `Disconnect ${workLabel}` }),
+    ).toBeVisible();
+  });
+
   it("keeps same-kind operations and History metric selection independent per instance", () => {
     render(
       <InstanceCockpit
@@ -330,7 +396,7 @@ describe("Cockpit", () => {
 
   it("targets exact same-kind Settings actions and restores rename focus", async () => {
     const onDisconnectInstance = vi.fn();
-    const onRenameInstance = vi.fn();
+    const onRenameInstance = vi.fn(async () => true);
     const onSubmitApiKey = vi.fn(async () => "invalid_key" as const);
     render(
       <InstanceCockpit
@@ -394,6 +460,89 @@ describe("Cockpit", () => {
     fireEvent.click(screen.getByRole("button", { name: "Disconnect Work relay" }));
     expect(onDisconnectInstance).toHaveBeenCalledWith(WORK_NEW_API_ID);
     expect(onDisconnectInstance).not.toHaveBeenCalledWith(PERSONAL_NEW_API_ID);
+  });
+
+  it("keeps the rename editor pending until success and restores focus afterward", async () => {
+    let finishRename: ((value: boolean) => void) | undefined;
+    const onRenameInstance = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishRename = resolve;
+        }),
+    );
+    render(
+      <InstanceCockpit
+        state={twoNewApiInstances()}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onRenameInstance={onRenameInstance}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename Work relay" }));
+    const input = screen.getByLabelText("Instance label");
+    fireEvent.change(input, { target: { value: "Focused relay" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save label for Work relay" }),
+    );
+
+    expect(onRenameInstance).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue("Focused relay");
+    expect(input).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Save label for Work relay" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Renaming…");
+    expect(
+      screen.queryByRole("button", { name: "Rename Work relay" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => finishRename?.(true));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Rename Work relay" }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("keeps a failed rename draft and shows only sanitized inline feedback", async () => {
+    const onRenameInstance = vi.fn(async () => {
+      throw new Error("secret backend detail");
+    });
+    render(
+      <InstanceCockpit
+        state={twoNewApiInstances()}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onRenameInstance={onRenameInstance}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename Work relay" }));
+    const input = screen.getByLabelText("Instance label");
+    fireEvent.change(input, { target: { value: "Still here" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save label for Work relay" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn’t rename this connection. Try again.",
+    );
+    expect(input).toHaveValue("Still here");
+    expect(input).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Save label for Work relay" }),
+    ).toBeEnabled();
+    expect(document.body).not.toHaveTextContent("secret backend detail");
+    expect(
+      screen.queryByRole("button", { name: "Rename Work relay" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders unlimited New API usage without offering quota history", () => {
@@ -1319,6 +1468,9 @@ describe("Cockpit", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect New API" }));
     expect(onOpenApiKeySetup).not.toHaveBeenCalledWith("newapi");
     expect(screen.getByRole("heading", { name: "Connect New API" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Connect your providers" }),
+    ).toBeVisible();
 
     fireEvent.change(screen.getByLabelText("New API site URL"), {
       target: { value: "https://api.example.com/gateway/v1/messages" },
@@ -1368,9 +1520,13 @@ describe("Cockpit", () => {
     expect(
       within(card).queryByRole("button", { name: "Refresh ElevenLabs" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      within(card).getByRole("button", { name: "Replace ElevenLabs API key" }),
-    );
+    const replace = within(card).getByRole("button", {
+      name: "Replace ElevenLabs API key",
+    });
+    expect(replace).toHaveAttribute("title", "Replace ElevenLabs API key");
+    expect(replace.querySelector('[data-icon="key"]')).not.toBeNull();
+    expect(replace.querySelector('[data-icon="refresh"]')).toBeNull();
+    fireEvent.click(replace);
 
     expect(onOpenApiKeySetup).toHaveBeenCalledWith("elevenlabs");
     expect(

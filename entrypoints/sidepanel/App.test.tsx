@@ -294,6 +294,7 @@ describe("side-panel App", () => {
           id: personalId,
           providerKind: "newapi",
           userLabel: "Personal relay",
+          baseUrl: "https://relay.example",
           origin: "https://relay.example",
           access: "granted",
           createdAt: NOW - 2_000,
@@ -309,6 +310,7 @@ describe("side-panel App", () => {
           id: workId,
           providerKind: "newapi",
           userLabel: "Work relay",
+          baseUrl: "https://relay.example/gateway",
           origin: "https://relay.example",
           access: "granted",
           createdAt: NOW - 1_000,
@@ -345,7 +347,9 @@ describe("side-panel App", () => {
     const renamed = structuredClone(state);
     delete renamed.instances[1]!.userLabel;
     const commands: Record<string, unknown>[] = [];
-    vi.spyOn(browser.permissions, "request").mockResolvedValue(true as never);
+    const requestPermission = vi
+      .spyOn(browser.permissions, "request")
+      .mockResolvedValue(true as never);
     installMessageHandler((message, respond) => {
       commands.push(message);
       respond(
@@ -397,7 +401,7 @@ describe("side-panel App", () => {
       screen.getByRole("button", { name: "Replace Relay account API key" }),
     );
     expect(screen.getByLabelText("New API site URL")).toHaveValue(
-      "https://relay.example",
+      "https://relay.example/gateway",
     );
     fireEvent.change(screen.getByLabelText("New API relay key"), {
       target: { value: "replacement" },
@@ -410,9 +414,15 @@ describe("side-panel App", () => {
         providerKind: "newapi",
         instanceId: workId,
         userLabel: "",
-        config: { kind: "dynamic-origin", baseUrl: "https://relay.example" },
+        config: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example/gateway",
+        },
       }),
     );
+    expect(requestPermission).toHaveBeenCalledWith({
+      origins: ["https://relay.example/*"],
+    });
     expect(
       commands.find(
         ({ type, instanceId }) =>
@@ -426,6 +436,10 @@ describe("side-panel App", () => {
           providerKind: "newapi",
           instanceId: workId,
           userLabel: "",
+          config: {
+            kind: "dynamic-origin",
+            baseUrl: "https://relay.example/gateway",
+          },
           apiKey: "replacement",
         }),
       ),
@@ -813,6 +827,32 @@ describe("side-panel App", () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  test("ignores an older initial GET_STATE reply after a storage reload finishes", async () => {
+    const stale = createFixtureState(NOW);
+    stale.preferences.displayMode = "used";
+    const fresh = structuredClone(stale);
+    fresh.preferences.displayMode = "left";
+    let finishInitial: ((value: unknown) => void) | undefined;
+    const sendMessage = vi
+      .spyOn(browser.runtime, "sendMessage")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishInitial = resolve;
+          }) as never,
+      )
+      .mockImplementation(async () => toPublicState(fresh) as never);
+
+    render(<App />);
+    await act(async () => saveState(fresh, NOW));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("radio", { name: "Left" })).toBeChecked();
+
+    await act(async () => finishInitial?.(toPublicState(stale)));
+    expect(screen.getByRole("radio", { name: "Left" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Used" })).not.toBeChecked();
+  });
+
   test("keeps existing usage visible while manual refresh work is pending", async () => {
     const state = createFixtureState(NOW);
     let finishRefresh: ((value: unknown) => void) | undefined;
@@ -1184,6 +1224,33 @@ describe("side-panel App", () => {
     );
     expect(autoRefresh).toBeChecked();
     expect(autoRefresh).toBeEnabled();
+  });
+
+  test("reverts a failed display-mode mutation and shows sanitized feedback", async () => {
+    const state = createFixtureState(NOW);
+    state.preferences.displayMode = "used";
+    const commands: Record<string, unknown>[] = [];
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        commands.push(message as Record<string, unknown>);
+        if ((message as { type?: string }).type === "SET_DISPLAY_MODE") {
+          throw new Error("secret worker detail");
+        }
+        return toPublicState(state) as never;
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("radio", { name: "Left" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Couldn’t update the display mode.",
+    );
+    expect(screen.getByRole("radio", { name: "Used" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Left" })).not.toBeChecked();
+    expect(document.body).not.toHaveTextContent("secret worker detail");
+    expect(commands.filter(({ type }) => type === "GET_STATE")).toHaveLength(2);
   });
 
   test("disables auto-refresh control until authoritative state returns", async () => {

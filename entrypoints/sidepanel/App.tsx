@@ -1,41 +1,28 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import type {
-  ApiKeyConnectionStatus,
-} from "../../background/api-key-connection";
 import {
   isProviderOperationEvent,
+  parseApiKeyConnectionResponse,
+  parseAppViewState,
+  parseDeleteResponse,
+  parseDisconnectResponse,
+  parsePermissionIntentResponse,
+  parseRefreshResponse,
+  type AppViewState,
+  type PermissionIntentResponse,
   type ProviderOperation,
-} from "../../background/events";
-import type { RuntimeCommand } from "../../background/messages";
-import type {
-  ConnectApiKeyProviderResult,
-  DisconnectInstanceResult,
-} from "../../background/provider-service";
-import type {
-  AppViewState,
-  ProviderInstanceView,
-} from "../../background/view-state";
+  type RuntimeCommand,
+} from "../../domain/public-protocol";
 import {
-  isProviderInstanceId,
   type ProviderInstanceConfig,
   type ProviderInstanceId,
 } from "../../domain/instances";
 import type {
-  DeferredReason,
   DisplayMode,
-  FailureCategory,
-  ProviderAttempt,
-  ProviderRefreshOutcome,
   RefreshReport,
-  RefreshTrigger,
-  UsageHistoryObservation,
-  UsageMetric,
-  UsageSnapshot,
 } from "../../domain/model";
 import {
   isApiKeyProviderId,
-  isProviderId,
   type ApiKeyProviderKind,
   type BrowserSessionProviderKind,
   type ProviderKind,
@@ -50,25 +37,6 @@ import type { ApiKeySubmission } from "./Cockpit";
 import { instanceLabel } from "./instance-label";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
-interface RefreshResponse {
-  state: AppViewState;
-  report: RefreshReport;
-}
-
-interface DeleteResponse {
-  state: AppViewState;
-  result: "deleted" | "deleted_with_permission_errors";
-}
-
-interface DisconnectResponse {
-  state: AppViewState;
-  result: DisconnectInstanceResult;
-}
-
-interface ApiKeyConnectionResponse extends ConnectApiKeyProviderResult {
-  state: AppViewState;
-}
-
 interface Announcement {
   id: number;
   message: string;
@@ -79,402 +47,6 @@ interface AutoRefreshGuard {
 }
 
 type ProviderOperations = Partial<Record<ProviderInstanceId, ProviderOperation>>;
-
-interface PermissionIntentResponse {
-  state: AppViewState;
-  permissionIntentId: string;
-  instanceId: ProviderInstanceId;
-  permissions: Browser.permissions.Permissions;
-}
-
-const publicInstanceKeys = new Set([
-  "id",
-  "providerKind",
-  "userLabel",
-  "origin",
-  "access",
-  "createdAt",
-  "history",
-  "snapshot",
-  "lastAttempt",
-]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function hasExactKeys(
-  value: unknown,
-  required: readonly string[],
-  optional: readonly string[] = [],
-): value is Record<string, unknown> {
-  if (!isRecord(value)) return false;
-  const allowed = new Set([...required, ...optional]);
-  return (
-    required.every((key) => Object.hasOwn(value, key)) &&
-    Object.keys(value).every((key) => allowed.has(key))
-  );
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function isSafeText(
-  value: unknown,
-  maximumLength = 512,
-): value is string {
-  return (
-    typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= maximumLength &&
-    !/[\u0000-\u001f\u007f]/.test(value)
-  );
-}
-
-function isOptionalFiniteNumber(value: unknown): boolean {
-  return value === undefined || isFiniteNumber(value);
-}
-
-function isMetricCycle(value: unknown): boolean {
-  return (
-    hasExactKeys(value, [], ["cadence", "startedAt", "resetsAt", "durationMs"]) &&
-    (value.cadence === undefined ||
-      value.cadence === "rolling" ||
-      value.cadence === "calendar") &&
-    isOptionalFiniteNumber(value.startedAt) &&
-    isOptionalFiniteNumber(value.resetsAt) &&
-    isOptionalFiniteNumber(value.durationMs)
-  );
-}
-
-function isMetricSegment(value: unknown): boolean {
-  return (
-    hasExactKeys(value, ["id", "label", "usedRatio"]) &&
-    isSafeText(value.id, 128) &&
-    isSafeText(value.label) &&
-    isFiniteNumber(value.usedRatio)
-  );
-}
-
-function isUsageMetric(value: unknown): value is UsageMetric {
-  if (!isRecord(value)) return false;
-  const commonValid =
-    isSafeText(value.id, 128) &&
-    isSafeText(value.label) &&
-    (value.scope === "general" ||
-      value.scope === "model" ||
-      value.scope === "feature" ||
-      value.scope === "product") &&
-    (value.cycle === undefined || isMetricCycle(value.cycle));
-  if (!commonValid) return false;
-
-  if (value.type === "quota") {
-    return (
-      hasExactKeys(
-        value,
-        ["type", "id", "label", "scope", "usedRatio"],
-        ["cycle", "used", "limit", "unit", "segments"],
-      ) &&
-      isFiniteNumber(value.usedRatio) &&
-      isOptionalFiniteNumber(value.used) &&
-      isOptionalFiniteNumber(value.limit) &&
-      (value.unit === undefined || isSafeText(value.unit, 128)) &&
-      (value.segments === undefined ||
-        (Array.isArray(value.segments) &&
-          value.segments.every(isMetricSegment)))
-    );
-  }
-  if (value.type === "counter") {
-    return (
-      hasExactKeys(
-        value,
-        ["type", "id", "label", "scope", "semantic", "value", "unit"],
-        ["cycle", "limit"],
-      ) &&
-      (value.semantic === "consumed" || value.semantic === "spent") &&
-      isFiniteNumber(value.value) &&
-      isSafeText(value.unit, 128) &&
-      isOptionalFiniteNumber(value.limit)
-    );
-  }
-  if (value.type === "balance") {
-    return (
-      hasExactKeys(
-        value,
-        ["type", "id", "label", "scope", "value", "unit"],
-        ["cycle", "initialLimit"],
-      ) &&
-      isFiniteNumber(value.value) &&
-      isSafeText(value.unit, 128) &&
-      isOptionalFiniteNumber(value.initialLimit)
-    );
-  }
-  return false;
-}
-
-function isUsageGroup(value: unknown): boolean {
-  return (
-    hasExactKeys(value, ["id", "label", "metricIds"], ["description"]) &&
-    isSafeText(value.id, 128) &&
-    isSafeText(value.label) &&
-    (value.description === undefined || isSafeText(value.description, 1_024)) &&
-    Array.isArray(value.metricIds) &&
-    value.metricIds.every((metricId) => isSafeText(metricId, 128))
-  );
-}
-
-function isUsageSnapshot(value: unknown): value is UsageSnapshot {
-  return (
-    hasExactKeys(
-      value,
-      ["providerKind", "source", "fetchedAt", "metrics"],
-      ["accountLabel", "planLabel", "usageGroups"],
-    ) &&
-    isProviderId(value.providerKind) &&
-    (value.accountLabel === undefined || isSafeText(value.accountLabel)) &&
-    (value.planLabel === undefined || isSafeText(value.planLabel)) &&
-    (value.source === "web-session" ||
-      value.source === "oauth" ||
-      value.source === "api-key" ||
-      value.source === "fixture") &&
-    isFiniteNumber(value.fetchedAt) &&
-    Array.isArray(value.metrics) &&
-    value.metrics.every(isUsageMetric) &&
-    (value.usageGroups === undefined ||
-      (Array.isArray(value.usageGroups) &&
-        value.usageGroups.every(isUsageGroup)))
-  );
-}
-
-function isHistoryMetric(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  const commonValid =
-    isSafeText(value.metricId, 128) &&
-    (value.cycle === undefined || isMetricCycle(value.cycle));
-  if (!commonValid) return false;
-  if (value.type === "quota") {
-    return (
-      hasExactKeys(value, ["type", "metricId", "usedRatio"], ["cycle"]) &&
-      isFiniteNumber(value.usedRatio)
-    );
-  }
-  if (value.type === "counter") {
-    return (
-      hasExactKeys(
-        value,
-        ["type", "metricId", "semantic", "value", "unit"],
-        ["limit", "cycle"],
-      ) &&
-      (value.semantic === "consumed" || value.semantic === "spent") &&
-      isFiniteNumber(value.value) &&
-      isSafeText(value.unit, 128) &&
-      isOptionalFiniteNumber(value.limit)
-    );
-  }
-  if (value.type === "balance") {
-    return (
-      hasExactKeys(value, ["type", "metricId", "value", "unit"], ["initialLimit", "cycle"]) &&
-      isFiniteNumber(value.value) &&
-      isSafeText(value.unit, 128) &&
-      isOptionalFiniteNumber(value.initialLimit)
-    );
-  }
-  return false;
-}
-
-function isHistoryObservation(value: unknown): value is UsageHistoryObservation {
-  return (
-    hasExactKeys(value, ["observedAt", "metrics"]) &&
-    isFiniteNumber(value.observedAt) &&
-    Array.isArray(value.metrics) &&
-    value.metrics.every(isHistoryMetric)
-  );
-}
-
-const refreshTriggers = new Set<RefreshTrigger>([
-  "connect",
-  "manual_provider",
-  "manual_all",
-  "scheduled",
-]);
-const deferredReasons = new Set<DeferredReason>(["session_required", "backoff"]);
-const failureCategories = new Set<FailureCategory>([
-  "signed_out",
-  "credential_invalid",
-  "credential_scope_required",
-  "challenge_blocked",
-  "provider_changed",
-  "temporary_error",
-]);
-
-function isAttemptOutcome(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  if (value.kind === "success") return hasExactKeys(value, ["kind"]);
-  if (value.kind === "deferred") {
-    return (
-      hasExactKeys(value, ["kind", "reason"], ["retryAt"]) &&
-      deferredReasons.has(value.reason as DeferredReason) &&
-      isOptionalFiniteNumber(value.retryAt)
-    );
-  }
-  if (value.kind === "failure") {
-    return (
-      hasExactKeys(value, ["kind", "category"], ["message", "retryAt"]) &&
-      failureCategories.has(value.category as FailureCategory) &&
-      (value.message === undefined || isSafeText(value.message, 1_024)) &&
-      isOptionalFiniteNumber(value.retryAt)
-    );
-  }
-  return false;
-}
-
-function isProviderAttempt(value: unknown): value is ProviderAttempt {
-  return (
-    hasExactKeys(value, ["trigger", "startedAt", "finishedAt", "outcome"]) &&
-    refreshTriggers.has(value.trigger as RefreshTrigger) &&
-    isFiniteNumber(value.startedAt) &&
-    isFiniteNumber(value.finishedAt) &&
-    isAttemptOutcome(value.outcome)
-  );
-}
-
-function isNormalizedOrigin(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 2_048) return false;
-  try {
-    const parsed = new URL(value);
-    return (
-      value === parsed.origin &&
-      parsed.username === "" &&
-      parsed.password === "" &&
-      (parsed.protocol === "https:" ||
-        (parsed.protocol === "http:" &&
-          (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")))
-    );
-  } catch {
-    return false;
-  }
-}
-
-function asProviderInstanceView(value: unknown): ProviderInstanceView {
-  if (
-    !isRecord(value) ||
-    Object.keys(value).some((key) => !publicInstanceKeys.has(key)) ||
-    !isProviderInstanceId(value.id) ||
-    !isProviderId(value.providerKind) ||
-    (value.access !== "required" && value.access !== "granted") ||
-    !isFiniteNumber(value.createdAt) ||
-    !Array.isArray(value.history) ||
-    !value.history.every(isHistoryObservation) ||
-    (Object.hasOwn(value, "userLabel") &&
-      (!isSafeText(value.userLabel, 128) || value.userLabel.trim() !== value.userLabel)) ||
-    (Object.hasOwn(value, "origin") && !isNormalizedOrigin(value.origin)) ||
-    (Object.hasOwn(value, "snapshot") && !isUsageSnapshot(value.snapshot)) ||
-    (Object.hasOwn(value, "lastAttempt") && !isProviderAttempt(value.lastAttempt))
-  ) {
-    throw new Error("Missing application state");
-  }
-  return value as unknown as ProviderInstanceView;
-}
-
-function asAppViewState(value: unknown): AppViewState {
-  if (
-    !isRecord(value) ||
-    Object.keys(value).length !== 2 ||
-    !Object.hasOwn(value, "preferences") ||
-    !Object.hasOwn(value, "instances") ||
-    !isRecord(value.preferences) ||
-    Object.keys(value.preferences).length !== 2 ||
-    (value.preferences.displayMode !== "used" &&
-      value.preferences.displayMode !== "left") ||
-    typeof value.preferences.autoRefresh !== "boolean" ||
-    !Array.isArray(value.instances)
-  ) {
-    throw new Error("Missing application state");
-  }
-
-  const state: AppViewState = {
-    preferences: {
-      displayMode: value.preferences.displayMode,
-      autoRefresh: value.preferences.autoRefresh,
-    },
-    instances: value.instances.map(asProviderInstanceView),
-  };
-  const ids = new Set<ProviderInstanceId>();
-  for (const instance of state.instances) {
-    if (ids.has(instance.id)) throw new Error("Missing application state");
-    ids.add(instance.id);
-    if (!instance.id.startsWith(`${instance.providerKind}:`)) {
-      throw new Error("Missing application state");
-    }
-    if (
-      instance.snapshot &&
-      instance.snapshot.providerKind !== instance.providerKind
-    ) {
-      throw new Error("Missing application state");
-    }
-  }
-  return state;
-}
-
-function asRefreshReport(value: unknown): RefreshReport {
-  if (
-    !hasExactKeys(value, ["trigger", "startedAt", "finishedAt", "results"]) ||
-    !refreshTriggers.has(value.trigger as RefreshTrigger) ||
-    !isFiniteNumber(value.startedAt) ||
-    !isFiniteNumber(value.finishedAt) ||
-    !Array.isArray(value.results) ||
-    !value.results.every(
-      (result) =>
-        hasExactKeys(result, ["instanceId", "outcome"]) &&
-        isProviderInstanceId(result.instanceId) &&
-        isProviderRefreshOutcome(result.outcome, result.instanceId),
-    )
-  ) {
-    throw new Error("Missing refresh response");
-  }
-  const ids = value.results.map((result) => result.instanceId);
-  if (new Set(ids).size !== ids.length) {
-    throw new Error("Missing refresh response");
-  }
-  return value as unknown as RefreshReport;
-}
-
-function isProviderRefreshOutcome(
-  value: unknown,
-  instanceId: ProviderInstanceId,
-): value is ProviderRefreshOutcome {
-  if (!isRecord(value)) return false;
-  if (value.kind === "success") {
-    return (
-      hasExactKeys(value, ["kind", "snapshot"]) &&
-      isUsageSnapshot(value.snapshot) &&
-      instanceId.startsWith(`${value.snapshot.providerKind}:`)
-    );
-  }
-  if (value.kind === "deferred") {
-    return (
-      hasExactKeys(value, ["kind", "reason"], ["retryAt"]) &&
-      deferredReasons.has(value.reason as DeferredReason) &&
-      isOptionalFiniteNumber(value.retryAt)
-    );
-  }
-  if (value.kind === "failure") {
-    return (
-      hasExactKeys(value, ["kind", "category"], ["message", "retryAt"]) &&
-      failureCategories.has(value.category as FailureCategory) &&
-      (value.message === undefined || isSafeText(value.message, 1_024)) &&
-      isOptionalFiniteNumber(value.retryAt)
-    );
-  }
-  return (
-    value.kind === "skipped" &&
-    hasExactKeys(value, ["kind", "reason"]) &&
-    (value.reason === "permission_required" ||
-      value.reason === "auto_refresh_disabled" ||
-      value.reason === "superseded")
-  );
-}
 
 function manualSummary(report: RefreshReport, state: AppViewState): string {
   const attempted = report.results.filter(
@@ -516,111 +88,11 @@ function confirmationFailure(label?: string): string {
   return `Couldn’t confirm the ${subject} result. Check the latest usage before retrying.`;
 }
 
-function asRefreshResponse(value: unknown): RefreshResponse {
-  if (!hasExactKeys(value, ["state", "report"])) {
-    throw new Error("Missing refresh response");
-  }
-  return {
-    state: asAppViewState(value.state),
-    report: asRefreshReport(value.report),
-  };
-}
-
-function asDeleteResponse(value: unknown): DeleteResponse {
-  if (
-    !hasExactKeys(value, ["state", "result"]) ||
-    (value.result !== "deleted" &&
-      value.result !== "deleted_with_permission_errors")
-  ) {
-    throw new Error("Missing delete response");
-  }
-  return { state: asAppViewState(value.state), result: value.result };
-}
-
-function asDisconnectResponse(value: unknown): DisconnectResponse {
-  if (
-    !hasExactKeys(value, ["state", "result"]) ||
-    !hasExactKeys(
-      value.result,
-      ["ok", "localDataDeleted"],
-      value.result && isRecord(value.result) && value.result.ok === false
-        ? ["error"]
-        : [],
-    ) ||
-    value.result.localDataDeleted !== true ||
-    (value.result.ok !== true &&
-      (value.result.ok !== false ||
-        value.result.error !== "permission_removal_failed"))
-  ) {
-    throw new Error("Missing disconnect response");
-  }
-  return {
-    state: asAppViewState(value.state),
-    result: value.result as unknown as DisconnectInstanceResult,
-  };
-}
-
-const apiKeyConnectionStatuses = new Set<ApiKeyConnectionStatus>([
-  "connected",
-  "invalid_key",
-  "insufficient_scope",
-  "invalid_site",
-  "temporary_error",
-]);
-
-function asApiKeyConnectionResponse(value: unknown): ApiKeyConnectionResponse {
-  if (
-    !hasExactKeys(value, ["state", "report", "result"]) ||
-    typeof value.result !== "string" ||
-    !apiKeyConnectionStatuses.has(value.result as ApiKeyConnectionStatus)
-  ) {
-    throw new Error("Missing API key connection response");
-  }
-  return {
-    state: asAppViewState(value.state),
-    report: asRefreshReport(value.report),
-    result: value.result as ApiKeyConnectionStatus,
-  };
-}
-
-function asPermissionIntentResponse(value: unknown): PermissionIntentResponse {
-  if (
-    !isRecord(value) ||
-    Object.keys(value).some(
-      (key) =>
-        !["state", "permissionIntentId", "instanceId", "permissions"].includes(
-          key,
-        ),
-    ) ||
-    Object.keys(value).length !== 4 ||
-    typeof value.permissionIntentId !== "string" ||
-    !isProviderInstanceId(value.instanceId) ||
-    !isRecord(value.permissions) ||
-    Object.keys(value.permissions).some(
-      (key) => key !== "origins" && key !== "permissions",
-    ) ||
-    (Object.hasOwn(value.permissions, "origins") &&
-      (!Array.isArray(value.permissions.origins) ||
-        !value.permissions.origins.every((origin) => typeof origin === "string"))) ||
-    (Object.hasOwn(value.permissions, "permissions") &&
-      (!Array.isArray(value.permissions.permissions) ||
-        !value.permissions.permissions.every(
-          (permission) => typeof permission === "string",
-        )))
-  ) {
-    throw new Error("Missing permission intent response");
-  }
-  return {
-    state: asAppViewState(value.state),
-    permissionIntentId: value.permissionIntentId,
-    instanceId: value.instanceId,
-    permissions: value.permissions as Browser.permissions.Permissions,
-  };
-}
-
 export function App() {
   const [viewState, setViewState] = useState<AppViewState>();
   const viewStateRef = useRef<AppViewState | undefined>(undefined);
+  const stateRequestSequence = useRef(0);
+  const displayMutationSequence = useRef(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -639,14 +111,23 @@ export function App() {
     setViewState(next);
   };
 
+  const requestViewState = async (): Promise<AppViewState | undefined> => {
+    const sequence = ++stateRequestSequence.current;
+    const next = parseAppViewState(
+      await browser.runtime.sendMessage({ type: "GET_STATE" }),
+    );
+    return sequence === stateRequestSequence.current ? next : undefined;
+  };
+
   useEffect(() => {
     let mounted = true;
 
     const reloadView = async () => {
-      const next = asAppViewState(
-        await browser.runtime.sendMessage({ type: "GET_STATE" }),
-      );
-      if (mounted) commitViewState(next);
+      const next = await requestViewState();
+      if (mounted && next) {
+        setLoadFailed(false);
+        commitViewState(next);
+      }
       return next;
     };
 
@@ -660,11 +141,14 @@ export function App() {
     ) => {
       if (areaName !== "local") return;
       const guardAtEvent = autoRefreshGuard.current;
-      void browser.runtime
-        .sendMessage({ type: "GET_STATE" })
-        .then(asAppViewState)
+      void requestViewState()
         .then((nextState) => {
-          if (!mounted || guardAtEvent !== autoRefreshGuard.current) return;
+          if (
+            !nextState ||
+            !mounted ||
+            guardAtEvent !== autoRefreshGuard.current
+          )
+            return;
           const activeGuard = autoRefreshGuard.current;
           commitViewState(
             activeGuard
@@ -722,23 +206,49 @@ export function App() {
   };
 
   const handleDisplayModeChange = (mode: DisplayMode) => {
-    if (viewStateRef.current) {
-      commitViewState({
-        ...viewStateRef.current,
-        preferences: { ...viewStateRef.current.preferences, displayMode: mode },
-      });
-    }
+    const prior = viewStateRef.current;
+    if (!prior) return;
+    const mutation = ++displayMutationSequence.current;
+    clearAnnouncement();
+    commitViewState({
+      ...prior,
+      preferences: { ...prior.preferences, displayMode: mode },
+    });
     void browser.runtime
       .sendMessage({ type: "SET_DISPLAY_MODE", mode } satisfies RuntimeCommand)
-      .then(asAppViewState)
-      .then(commitViewState)
-      .catch(() => undefined);
+      .then(parseAppViewState)
+      .then((next) => {
+        if (mutation === displayMutationSequence.current) commitViewState(next);
+      })
+      .catch(async () => {
+        if (mutation !== displayMutationSequence.current) return;
+        try {
+          const authoritative = await requestViewState();
+          if (authoritative && mutation === displayMutationSequence.current) {
+            commitViewState(authoritative);
+          }
+        } catch {
+          const current = viewStateRef.current;
+          if (current && mutation === displayMutationSequence.current) {
+            commitViewState({
+              ...current,
+              preferences: {
+                ...current.preferences,
+                displayMode: prior.preferences.displayMode,
+              },
+            });
+          }
+        }
+        if (mutation === displayMutationSequence.current) {
+          announce("Couldn’t update the display mode.");
+        }
+      });
   };
 
   const abandonPermissionIntent = async (permissionIntentId: string) => {
     try {
       commitViewState(
-        asAppViewState(
+        parseAppViewState(
           await browser.runtime.sendMessage({
             type: "ABANDON_PROVIDER_PERMISSION",
             permissionIntentId,
@@ -756,7 +266,7 @@ export function App() {
     instanceId?: ProviderInstanceId,
     userLabel?: string,
   ) => {
-    const prepared = asPermissionIntentResponse(
+    const prepared = parsePermissionIntentResponse(
       await browser.runtime.sendMessage({
         type: "PREPARE_PROVIDER_PERMISSION",
         providerKind,
@@ -780,7 +290,7 @@ export function App() {
         ? Boolean(await browser.permissions.request(prepared.permissions))
         : true;
       commitViewState(
-        asAppViewState(
+        parseAppViewState(
           await browser.runtime.sendMessage({
             type: "RESOLVE_PROVIDER_PERMISSION",
             permissionIntentId: prepared.permissionIntentId,
@@ -827,7 +337,7 @@ export function App() {
 
     try {
       setProviderOperation(prepared.instanceId, "fetching");
-      const response = asRefreshResponse(
+      const response = parseRefreshResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_BROWSER_PROVIDER",
           providerKind: providerKind as BrowserSessionProviderKind,
@@ -899,7 +409,7 @@ export function App() {
 
     try {
       setProviderOperation(prepared.instanceId, "fetching");
-      const response = asApiKeyConnectionResponse(
+      const response = parseApiKeyConnectionResponse(
         await browser.runtime.sendMessage({
           type: "CONNECT_API_KEY_PROVIDER",
           providerKind,
@@ -951,7 +461,7 @@ export function App() {
     clearAnnouncement();
     setProviderOperation(instanceId, "fetching");
     try {
-      const response = asRefreshResponse(
+      const response = parseRefreshResponse(
         await browser.runtime.sendMessage({
           type: "REFRESH_INSTANCE",
           instanceId,
@@ -979,7 +489,7 @@ export function App() {
       ),
     );
     try {
-      const response = asRefreshResponse(
+      const response = parseRefreshResponse(
         await browser.runtime.sendMessage({ type: "REFRESH_ALL" } satisfies RuntimeCommand),
       );
       commitViewState(response.state);
@@ -1000,7 +510,7 @@ export function App() {
     clearAnnouncement();
     setIsAutoRefreshPending(true);
     try {
-      const authoritative = asAppViewState(
+      const authoritative = parseAppViewState(
         await browser.runtime.sendMessage({
           type: "SET_AUTO_REFRESH",
           enabled,
@@ -1014,11 +524,8 @@ export function App() {
     } catch {
       if (autoRefreshGuard.current === guard) autoRefreshGuard.current = undefined;
       try {
-        commitViewState(
-          asAppViewState(
-            await browser.runtime.sendMessage({ type: "GET_STATE" }),
-          ),
-        );
+        const authoritative = await requestViewState();
+        if (authoritative) commitViewState(authoritative);
       } catch {
         // The prior rendered view remains authoritative enough for recovery.
       }
@@ -1036,7 +543,7 @@ export function App() {
     const label = instanceLabel(instance);
     clearAnnouncement();
     try {
-      const response = asDisconnectResponse(
+      const response = parseDisconnectResponse(
         await browser.runtime.sendMessage({
           type: "DISCONNECT_INSTANCE",
           instanceId,
@@ -1060,10 +567,10 @@ export function App() {
     const current = viewStateRef.current?.instances.find(
       (candidate) => candidate.id === instanceId,
     );
-    if (!current) return;
+    if (!current) return false;
     clearAnnouncement();
     try {
-      const next = asAppViewState(
+      const next = parseAppViewState(
         await browser.runtime.sendMessage({
           type: "RENAME_INSTANCE",
           instanceId,
@@ -1073,15 +580,17 @@ export function App() {
       commitViewState(next);
       const renamed = next.instances.find((instance) => instance.id === instanceId);
       announce(`Renamed connection to ${renamed ? instanceLabel(renamed) : providerNames[current.providerKind]}.`);
+      return true;
     } catch {
       announce(`Couldn’t rename ${instanceLabel(current)}.`);
+      return false;
     }
   };
 
   const handleDeleteLocalData = async () => {
     clearAnnouncement();
     try {
-      const response = asDeleteResponse(
+      const response = parseDeleteResponse(
         await browser.runtime.sendMessage({
           type: "DELETE_LOCAL_DATA",
         } satisfies RuntimeCommand),
@@ -1137,9 +646,7 @@ export function App() {
       onRefreshInstance={(instanceId) => void handleRefreshInstance(instanceId)}
       onAutoRefreshChange={(enabled) => void handleAutoRefreshChange(enabled)}
       onDisconnectInstance={(instanceId) => void handleDisconnectInstance(instanceId)}
-      onRenameInstance={(instanceId, userLabel) =>
-        void handleRenameInstance(instanceId, userLabel)
-      }
+      onRenameInstance={handleRenameInstance}
       onDeleteLocalData={() => void handleDeleteLocalData()}
     />
   );

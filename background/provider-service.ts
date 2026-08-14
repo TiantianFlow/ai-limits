@@ -11,6 +11,11 @@ import type {
   RefreshTrigger,
 } from "../domain/model";
 import type {
+  ApiKeyConnectionStatus,
+  ConnectApiKeyProviderResult,
+  DisconnectInstanceResult,
+} from "../domain/public-protocol";
+import type {
   ApiKeyProviderKind,
   BrowserSessionProviderKind,
   ProviderKind,
@@ -38,7 +43,6 @@ import {
 } from "./coordinator";
 import {
   createApiKeyConnectionLifecycle,
-  type ApiKeyConnectionStatus,
 } from "./api-key-connection";
 import {
   createRefreshOrchestrator,
@@ -86,18 +90,10 @@ export interface PrepareProviderPermissionResult {
   permissions: Browser.permissions.Permissions;
 }
 
-export interface ConnectApiKeyProviderResult {
-  report: RefreshReport;
-  result: ApiKeyConnectionStatus;
-}
-
-export type DisconnectInstanceResult =
-  | { ok: true; localDataDeleted: true }
-  | {
-      ok: false;
-      error: "permission_removal_failed";
-      localDataDeleted: true;
-    };
+export type {
+  ConnectApiKeyProviderResult,
+  DisconnectInstanceResult,
+} from "../domain/public-protocol";
 
 export interface ProviderService {
   prepareProviderPermission(

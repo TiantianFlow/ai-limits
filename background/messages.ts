@@ -4,6 +4,12 @@ import {
   type ProviderInstanceId,
 } from "../domain/instances";
 import type { DisplayMode } from "../domain/model";
+import type {
+  ConnectApiKeyProviderCommand,
+  PrepareProviderPermissionCommand,
+  RuntimeCommand,
+  RuntimeCommandFailure,
+} from "../domain/public-protocol";
 import {
   isApiKeyProviderId,
   isProviderId,
@@ -17,59 +23,15 @@ export {
   type ProviderOperation,
   type ProviderOperationEvent,
 } from "./events";
+export type {
+  ConnectApiKeyProviderCommand,
+  PrepareProviderPermissionCommand,
+  RuntimeCommand,
+  RuntimeCommandFailure,
+} from "../domain/public-protocol";
 
 const MAX_API_KEY_LENGTH = 4_096;
 const MAX_LABEL_LENGTH = 128;
-
-export interface ConnectApiKeyProviderCommand {
-  type: "CONNECT_API_KEY_PROVIDER";
-  providerKind: ApiKeyProviderKind;
-  instanceId?: ProviderInstanceId;
-  userLabel?: string;
-  config: ProviderInstanceConfig;
-  apiKey: string;
-  permissionIntentId: string;
-}
-
-export interface PrepareProviderPermissionCommand {
-  type: "PREPARE_PROVIDER_PERMISSION";
-  providerKind: ProviderKind;
-  instanceId?: ProviderInstanceId;
-  userLabel?: string;
-  config: ProviderInstanceConfig;
-}
-
-export type RuntimeCommand =
-  | { type: "REFRESH_ALL" }
-  | {
-      type: "CONNECT_BROWSER_PROVIDER";
-      providerKind: BrowserSessionProviderKind;
-      permissionIntentId: string;
-    }
-  | PrepareProviderPermissionCommand
-  | {
-      type: "RESOLVE_PROVIDER_PERMISSION";
-      permissionIntentId: string;
-      granted: boolean;
-    }
-  | { type: "ABANDON_PROVIDER_PERMISSION"; permissionIntentId: string }
-  | ConnectApiKeyProviderCommand
-  | { type: "REFRESH_INSTANCE"; instanceId: ProviderInstanceId }
-  | {
-      type: "RENAME_INSTANCE";
-      instanceId: ProviderInstanceId;
-      userLabel?: string;
-    }
-  | { type: "DISCONNECT_INSTANCE"; instanceId: ProviderInstanceId }
-  | { type: "GET_STATE" }
-  | { type: "SET_DISPLAY_MODE"; mode: DisplayMode }
-  | { type: "SET_AUTO_REFRESH"; enabled: boolean }
-  | { type: "DELETE_LOCAL_DATA" };
-
-export interface RuntimeCommandFailure {
-  ok: false;
-  error: "command_failed";
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

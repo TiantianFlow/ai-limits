@@ -3,10 +3,10 @@ import React, { useEffect, useState } from "react";
 import type {
   DisplayMode,
 } from "../../../domain/model";
-import type { ProviderInstanceView } from "../../../background/view-state";
+import type { ProviderInstanceView } from "../../../domain/public-protocol";
 import type { ProviderInstanceId } from "../../../domain/instances";
 import { providerNames } from "../../../providers/catalog";
-import { instanceLabel } from "../instance-label";
+import { instanceLabel, instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageHeader } from "../components/PageHeader";
@@ -52,6 +52,7 @@ export function HistoryView({
       instance.snapshot !== undefined &&
       quotaMetrics(instance.snapshot).length > 0,
   );
+  const labelsByInstance = instanceLabels(instances);
   const instance = eligibleInstances.find(
     (candidate) => candidate.id === instanceId,
   );
@@ -78,7 +79,7 @@ export function HistoryView({
   }
 
   const providerName = providerNames[instance.providerKind];
-  const label = instanceLabel(instance);
+  const label = labelsByInstance.get(instance.id) ?? instanceLabel(instance);
 
   return (
     <section className="screen" aria-label={`${label} history`}>
@@ -116,9 +117,9 @@ export function HistoryView({
             >
               {eligibleInstances.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  {instanceLabel(candidate) === providerNames[candidate.providerKind]
+                  {(labelsByInstance.get(candidate.id) ?? instanceLabel(candidate)) === providerNames[candidate.providerKind]
                     ? providerNames[candidate.providerKind]
-                    : `${providerNames[candidate.providerKind]} · ${instanceLabel(candidate)}`}
+                    : `${providerNames[candidate.providerKind]} · ${labelsByInstance.get(candidate.id) ?? instanceLabel(candidate)}`}
                 </option>
               ))}
             </select>
