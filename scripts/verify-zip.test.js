@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { strFromU8, unzipSync, Zip, ZipPassThrough } from "fflate";
 
 import * as artifactContract from "./artifact-contract.mjs";
 
@@ -20,7 +21,43 @@ const knownSyntheticCredentialLiterals = [
   "synthetic-candidate-key",
 ];
 
+function zipWithDuplicateEntry(name, firstContents, secondContents) {
+  const chunks = [];
+  const archive = new Zip((error, data, final) => {
+    if (error) throw error;
+    chunks.push(data);
+    if (final) return;
+  });
+  for (const contents of [firstContents, secondContents]) {
+    const entry = new ZipPassThrough(name);
+    archive.add(entry);
+    entry.push(new TextEncoder().encode(contents), true);
+  }
+  archive.end();
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
+
 describe("release ZIP credential scan", () => {
+  it("rejects duplicate central-directory names before object decoding can hide malicious bytes", () => {
+    const bytes = zipWithDuplicateEntry(
+      "assets/app.js",
+      "active-test-key",
+      "release bytes",
+    );
+
+    expect(strFromU8(unzipSync(bytes)["assets/app.js"])).toBe("release bytes");
+    expect(() => artifactContract.readValidatedReleaseZipEntries(bytes)).toThrow(
+      "Duplicate ZIP entry name: assets/app.js.",
+    );
+  });
+
   it("accepts product prose and code-level header names without a value", () => {
     expect(
       artifactContract.validateReleaseTextEntries({

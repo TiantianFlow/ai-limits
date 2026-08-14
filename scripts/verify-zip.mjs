@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { strFromU8, unzipSync } from "fflate";
+import { strFromU8 } from "fflate";
 
 import {
   validateBuildManifest,
+  readValidatedReleaseZipEntries,
   readReleaseDirectoryEntries,
   validateReleaseArtifactParity,
   validateReleaseEntryNames,
@@ -23,7 +24,9 @@ function assert(condition, message) {
   }
 }
 
-const archive = unzipSync(new Uint8Array(await readFile(archivePath)));
+const archive = readValidatedReleaseZipEntries(
+  new Uint8Array(await readFile(archivePath)),
+);
 const entries = Object.keys(archive);
 for (const error of validateReleaseEntryNames(entries)) {
   throw new Error(error);

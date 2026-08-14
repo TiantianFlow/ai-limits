@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { unzipSync } from "fflate";
 
 export const EXPECTED_DESCRIPTION =
   "Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
@@ -201,6 +202,114 @@ export function validateReleaseEntryNames(names) {
     if (error) errors.push(error);
   }
   return errors;
+}
+
+function findZipEndOfCentralDirectory(bytes, view) {
+  const minimumOffset = Math.max(0, bytes.length - 22 - 65_535);
+  for (let offset = bytes.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (
+      view.getUint32(offset, true) === 0x06054b50 &&
+      offset + 22 + view.getUint16(offset + 20, true) === bytes.length
+    ) {
+      return offset;
+    }
+  }
+  throw new Error("ZIP end-of-central-directory record is missing or invalid.");
+}
+
+function decodeZipEntryName(nameBytes, usesUtf8) {
+  if (!usesUtf8 && nameBytes.some((byte) => byte > 0x7f)) {
+    throw new Error("ZIP entry name uses an unsupported legacy encoding.");
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(nameBytes);
+  } catch {
+    throw new Error("ZIP entry name is not valid UTF-8.");
+  }
+}
+
+export function readReleaseZipCentralDirectoryNames(value) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  if (bytes.length < 22) throw new Error("ZIP archive is truncated.");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const endOffset = findZipEndOfCentralDirectory(bytes, view);
+  const diskNumber = view.getUint16(endOffset + 4, true);
+  const centralDirectoryDisk = view.getUint16(endOffset + 6, true);
+  const diskEntries = view.getUint16(endOffset + 8, true);
+  const totalEntries = view.getUint16(endOffset + 10, true);
+  const centralDirectorySize = view.getUint32(endOffset + 12, true);
+  const centralDirectoryOffset = view.getUint32(endOffset + 16, true);
+  if (
+    diskNumber !== 0 ||
+    centralDirectoryDisk !== 0 ||
+    diskEntries !== totalEntries
+  ) {
+    throw new Error("Multi-disk ZIP archives are not supported.");
+  }
+  if (
+    totalEntries === 0xffff ||
+    centralDirectorySize === 0xffffffff ||
+    centralDirectoryOffset === 0xffffffff
+  ) {
+    throw new Error("ZIP64 release archives are not supported.");
+  }
+  if (centralDirectoryOffset + centralDirectorySize !== endOffset) {
+    throw new Error("ZIP central-directory bounds are invalid.");
+  }
+
+  const names = [];
+  let offset = centralDirectoryOffset;
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (
+      offset + 46 > endOffset ||
+      view.getUint32(offset, true) !== 0x02014b50
+    ) {
+      throw new Error("ZIP central-directory entry is truncated or invalid.");
+    }
+    const flags = view.getUint16(offset + 8, true);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
+    if (nextOffset > endOffset) {
+      throw new Error("ZIP central-directory entry exceeds its bounds.");
+    }
+    names.push(
+      decodeZipEntryName(
+        bytes.subarray(offset + 46, offset + 46 + nameLength),
+        (flags & 0x0800) !== 0,
+      ),
+    );
+    offset = nextOffset;
+  }
+  if (offset !== endOffset) {
+    throw new Error("ZIP central-directory inventory is inconsistent.");
+  }
+
+  const seen = new Set();
+  for (const name of names) {
+    if (seen.has(name)) throw new Error(`Duplicate ZIP entry name: ${name}.`);
+    seen.add(name);
+  }
+  const unsafeName = validateReleaseEntryNames(names)[0];
+  if (unsafeName) throw new Error(unsafeName);
+  return names;
+}
+
+export function readValidatedReleaseZipEntries(value) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  const rawNames = readReleaseZipCentralDirectoryNames(bytes);
+  const entries = unzipSync(bytes);
+  const decodedNames = Object.keys(entries);
+  if (
+    rawNames.length !== decodedNames.length ||
+    rawNames.some((name) => !Object.hasOwn(entries, name))
+  ) {
+    throw new Error(
+      "Decoded ZIP entries do not match the raw central-directory inventory.",
+    );
+  }
+  return entries;
 }
 
 export function validateReleaseArtifactContents(entries) {
