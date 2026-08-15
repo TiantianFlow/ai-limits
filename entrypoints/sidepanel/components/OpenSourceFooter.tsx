@@ -11,6 +11,10 @@ export interface OpenSourceFooterProps {
 }
 
 export function OpenSourceFooter({ showIssues = true }: OpenSourceFooterProps) {
+  // Read the version from the runtime manifest so package.json stays the single
+  // source of truth (WXT derives manifest.version from it). No hardcoded literal.
+  const version = browser.runtime.getManifest()?.version;
+
   return (
     <footer className="open-source-footer">
       <img
@@ -27,6 +31,9 @@ export function OpenSourceFooter({ showIssues = true }: OpenSourceFooterProps) {
           Inspect how provider usage is read, follow development, or help shape
           what comes next.
         </p>
+        {version ? (
+          <p className="open-source-footer__version">Version {version}</p>
+        ) : null}
         <div className="open-source-footer__links">
           <a href={REPOSITORY_URL} rel={SAFE_LINK_REL} target="_blank">
             <Icon name="code" />

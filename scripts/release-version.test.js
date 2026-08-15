@@ -4,14 +4,14 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const releaseVersion = "0.3.1";
+const releaseVersion = "0.3.2";
 
 function read(relativePath) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
 describe("release version", () => {
-  it("uses 0.3.1 as the package and verified manifest version", () => {
+  it("uses 0.3.2 as the package and verified manifest version", () => {
     const packageJson = JSON.parse(read("package.json"));
     const artifactContract = read("scripts/artifact-contract.mjs");
 
@@ -24,7 +24,7 @@ describe("release version", () => {
     );
   });
 
-  it("names the 0.3.1 archive consistently in release documentation", () => {
+  it("names the 0.3.2 archive consistently in release documentation", () => {
     for (const relativePath of [
       "README.md",
       "README.zh-CN.md",

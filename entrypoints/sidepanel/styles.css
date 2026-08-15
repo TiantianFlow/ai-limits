@@ -1515,6 +1515,11 @@ section[aria-labelledby="overview-title"] .provider-list {
   color: var(--text-muted);
 }
 
+.open-source-footer__version {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
 .settings-panel .open-source-footer {
   margin-inline: 0;
 }
