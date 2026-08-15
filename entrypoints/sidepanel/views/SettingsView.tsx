@@ -10,6 +10,7 @@ import {
   providerPresentation,
 } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
+import { Icon } from "../components/Icon";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
@@ -186,147 +187,147 @@ export function SettingsView({
                     aria-label={`${label} settings`}
                   >
                     <ProviderMark providerId={instance.providerKind} size="sm" />
-                    <div className="settings-provider-copy">
-                      <p
-                        role="heading"
-                        aria-level={3}
-                        aria-label={label === name ? name : `${name} · ${label}`}
-                      >
-                        <strong>{name}</strong>
-                        {label !== name ? (
-                          <span className="settings-provider-copy__instance">{label}</span>
+                    <div className="settings-provider-content">
+                      <div className="settings-provider-copy">
+                        <p
+                          role="heading"
+                          aria-level={3}
+                          aria-label={label === name ? name : `${name} · ${label}`}
+                        >
+                          <strong>{name}</strong>
+                          {label !== name ? (
+                            <span className="settings-provider-copy__instance">{label}</span>
+                          ) : null}
+                        </p>
+                        <small>
+                          {freshness(instance, now)} · {connectionMethod} · read-only
+                        </small>
+                        {instance.snapshot?.planLabel ? (
+                          <small>{instance.snapshot.planLabel}</small>
                         ) : null}
-                      </p>
-                      <small>
-                        {freshness(instance, now)} · {connectionMethod} · read-only
-                      </small>
-                      {instance.snapshot?.planLabel ? (
-                        <small>{instance.snapshot.planLabel}</small>
-                      ) : null}
-                      {usesApiKey ? (
-                        <small>API key saved</small>
-                      ) : null}
-                      <small>{presentation.connectionDisclosure}</small>
-                      {presentation.manualRefreshDisclosure ? (
-                        <small>{presentation.manualRefreshDisclosure}</small>
-                      ) : null}
-                    </div>
-                    <div className="settings-provider-actions">
-                      {editing ? (
-                        <div className="settings-rename" role="group" aria-label={`Rename ${label}`}>
-                          <label htmlFor={inputId}>Instance label</label>
-                          <input
-                            ref={renameInputRef}
-                            id={inputId}
-                            type="text"
-                            maxLength={128}
-                            value={labelDraft}
-                            disabled={renamePending}
-                            autoFocus
-                            onChange={(event) => {
-                              setLabelDraft(event.currentTarget.value);
-                              setRenameError("");
-                            }}
-                          />
-                          <button
-                            type="button"
-                            aria-label={`Save label for ${label}`}
-                            aria-busy={renamePending}
-                            disabled={renamePending}
-                            onClick={() => {
-                              const trimmed = labelDraft.trim();
-                              setRenamePending(true);
-                              setRenameError("");
-                              void onRenameInstance(
-                                instance.id,
-                                trimmed || undefined,
-                              )
-                                .then((success) => {
-                                  if (!success) {
+                        {usesApiKey ? <small>API key saved</small> : null}
+                        <small>{presentation.connectionDisclosure}</small>
+                        {presentation.manualRefreshDisclosure ? (
+                          <small>{presentation.manualRefreshDisclosure}</small>
+                        ) : null}
+                      </div>
+                      <div className="settings-provider-actions">
+                        {editing ? (
+                          <div className="settings-rename" role="group" aria-label={`Rename ${label}`}>
+                            <label htmlFor={inputId}>Instance label</label>
+                            <input
+                              ref={renameInputRef}
+                              id={inputId}
+                              type="text"
+                              maxLength={128}
+                              value={labelDraft}
+                              disabled={renamePending}
+                              autoFocus
+                              onChange={(event) => {
+                                setLabelDraft(event.currentTarget.value);
+                                setRenameError("");
+                              }}
+                            />
+                            <button
+                              type="button"
+                              aria-label={`Save label for ${label}`}
+                              aria-busy={renamePending}
+                              disabled={renamePending}
+                              onClick={() => {
+                                const trimmed = labelDraft.trim();
+                                setRenamePending(true);
+                                setRenameError("");
+                                void onRenameInstance(
+                                  instance.id,
+                                  trimmed || undefined,
+                                )
+                                  .then((success) => {
+                                    if (!success) {
+                                      restoreRenameInputFocus.current = true;
+                                      setRenameError(
+                                        "Couldn’t rename this connection. Try again.",
+                                      );
+                                      return;
+                                    }
+                                    restoreRenameFocus.current = instance.id;
+                                    setRenamingInstanceId(undefined);
+                                  })
+                                  .catch(() => {
                                     restoreRenameInputFocus.current = true;
                                     setRenameError(
                                       "Couldn’t rename this connection. Try again.",
                                     );
-                                    return;
-                                  }
-                                  restoreRenameFocus.current = instance.id;
-                                  setRenamingInstanceId(undefined);
-                                })
-                                .catch(() => {
-                                  restoreRenameInputFocus.current = true;
-                                  setRenameError(
-                                    "Couldn’t rename this connection. Try again.",
-                                  );
-                                })
-                                .finally(() => setRenamePending(false));
-                            }}
-                          >
-                            <span aria-hidden="true">Save</span>
-                          </button>
+                                  })
+                                  .finally(() => setRenamePending(false));
+                              }}
+                            >
+                              <span aria-hidden="true">Save</span>
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Cancel renaming ${label}`}
+                              disabled={renamePending}
+                              onClick={() => {
+                                restoreRenameInputFocus.current = false;
+                                setRenameError("");
+                                restoreRenameFocus.current = instance.id;
+                                setRenamingInstanceId(undefined);
+                              }}
+                            >
+                              <span aria-hidden="true">Cancel</span>
+                            </button>
+                            {renamePending ? (
+                              <p className="settings-rename__feedback" role="status">
+                                Renaming…
+                              </p>
+                            ) : renameError ? (
+                              <p className="settings-rename__feedback" role="alert">
+                                {renameError}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
                           <button
+                            ref={(element) => {
+                              renameTriggerRefs.current[instance.id] = element;
+                            }}
                             type="button"
-                            aria-label={`Cancel renaming ${label}`}
-                            disabled={renamePending}
+                            aria-label={`Rename ${label}`}
+                            data-focus-key={`settings-rename-${instance.id}`}
                             onClick={() => {
                               restoreRenameInputFocus.current = false;
                               setRenameError("");
-                              restoreRenameFocus.current = instance.id;
-                              setRenamingInstanceId(undefined);
+                              setLabelDraft(instance.userLabel ?? "");
+                              setRenamingInstanceId(instance.id);
                             }}
                           >
-                            <span aria-hidden="true">Cancel</span>
+                            <span aria-hidden="true">Rename</span>
                           </button>
-                          {renamePending ? (
-                            <p className="settings-rename__feedback" role="status">
-                              Renaming…
-                            </p>
-                          ) : renameError ? (
-                            <p className="settings-rename__feedback" role="alert">
-                              {renameError}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <button
-                          ref={(element) => {
-                            renameTriggerRefs.current[instance.id] = element;
-                          }}
-                          type="button"
-                          aria-label={`Rename ${label}`}
-                          data-focus-key={`settings-rename-${instance.id}`}
-                          onClick={() => {
-                            restoreRenameInputFocus.current = false;
-                            setRenameError("");
-                            setLabelDraft(instance.userLabel ?? "");
-                            setRenamingInstanceId(instance.id);
-                          }}
-                        >
-                          <span aria-hidden="true">Rename</span>
-                        </button>
-                      )}
-                      {usesApiKey ? (
+                        )}
+                        {usesApiKey ? (
+                          <button
+                            type="button"
+                            aria-label={`Replace ${label} API key`}
+                            data-focus-key={`settings-replace-api-key-${instance.id}`}
+                            onClick={() =>
+                              onReplaceApiKey(
+                                instance.providerKind as ApiKeyProviderKind,
+                                instance.id,
+                              )
+                            }
+                          >
+                            <span aria-hidden="true">Replace key</span>
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          aria-label={`Replace ${label} API key`}
-                          data-focus-key={`settings-replace-api-key-${instance.id}`}
-                          onClick={() =>
-                            onReplaceApiKey(
-                              instance.providerKind as ApiKeyProviderKind,
-                              instance.id,
-                            )
-                          }
+                          aria-label={`Disconnect ${label}`}
+                          data-focus-key={`settings-disconnect-${instance.id}`}
+                          onClick={() => onDisconnectInstance(instance.id)}
                         >
-                          <span aria-hidden="true">Replace key</span>
+                          <span aria-hidden="true">Disconnect</span>
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        aria-label={`Disconnect ${label}`}
-                        data-focus-key={`settings-disconnect-${instance.id}`}
-                        onClick={() => onDisconnectInstance(instance.id)}
-                      >
-                        <span aria-hidden="true">Disconnect</span>
-                      </button>
+                      </div>
                     </div>
                   </li>
                 );
@@ -379,11 +380,15 @@ export function SettingsView({
           ) : (
             <button
               ref={deleteTriggerRef}
-              className="button button--danger danger-zone__trigger"
+              className="button button--danger-outline danger-zone__trigger"
               type="button"
+              aria-label="Delete all local data"
               onClick={() => onConfirmDeleteChange(true)}
             >
-              Delete all local data
+              <span className="danger-zone__trigger-surface">
+                <Icon name="trash" />
+                Delete all local data
+              </span>
             </button>
           )}
         </section>

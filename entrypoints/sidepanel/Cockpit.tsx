@@ -362,10 +362,11 @@ export function Cockpit({
   });
   const view = navigation.current;
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [historySelection, setHistorySelection] = useState<{
-    instanceId?: ProviderInstanceId;
-    metrics: Partial<Record<ProviderInstanceId, string>>;
-  }>({ metrics: {} });
+  const [historySelection, setHistorySelection] = useState<
+    Partial<Record<ProviderInstanceId, string>>
+  >({});
+  const [dismissedRefreshAnnouncementId, setDismissedRefreshAnnouncementId] =
+    useState<number>();
   const cockpitRef = useRef<HTMLElement>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const addProviderButton = useRef<HTMLButtonElement>(null);
@@ -541,10 +542,9 @@ export function Cockpit({
       )
     : undefined;
   const activeHistoryInstanceId =
-    historySelection.instanceId ??
-    (view.name === "history" ? view.instanceId : undefined);
+    view.name === "history" ? view.instanceId : undefined;
   const activeHistoryMetricId = activeHistoryInstanceId
-    ? historySelection.metrics[activeHistoryInstanceId] ??
+    ? historySelection[activeHistoryInstanceId] ??
       (view.name === "history" && view.instanceId === activeHistoryInstanceId
         ? view.metricId
         : undefined)
@@ -582,7 +582,7 @@ export function Cockpit({
     )
       ? requestedMetricId
       : undefined;
-    const savedMetricId = historySelection.metrics[instanceId];
+    const savedMetricId = historySelection[instanceId];
     const validSavedMetricId = providerMetrics.some(
       (metric) => metric.id === savedMetricId,
     )
@@ -591,11 +591,8 @@ export function Cockpit({
     const metricId =
       explicitMetricId ?? validSavedMetricId ?? providerMetrics[0]?.id;
     setHistorySelection((current) => ({
-      instanceId,
-      metrics: {
-        ...current.metrics,
-        ...(metricId ? { [instanceId]: metricId } : {}),
-      },
+      ...current,
+      ...(metricId ? { [instanceId]: metricId } : {}),
     }));
     pushScreen({ name: "history", instanceId, metricId }, focusKey);
   };
@@ -621,7 +618,14 @@ export function Cockpit({
       {view.name === "overview" && !isFirstRun ? (
         <SummaryBar
           key={refreshAnnouncementId}
-          message={refreshAnnouncement}
+          message={
+            dismissedRefreshAnnouncementId === refreshAnnouncementId
+              ? ""
+              : refreshAnnouncement
+          }
+          onDismiss={() =>
+            setDismissedRefreshAnnouncementId(refreshAnnouncementId)
+          }
         />
       ) : null}
 
@@ -742,17 +746,16 @@ export function Cockpit({
           instances={state.instances}
           instanceId={activeHistoryInstanceId ?? view.instanceId}
           metricId={activeHistoryMetricId}
-          metricIdsByInstance={historySelection.metrics}
           currentQuota={activeHistoryQuota}
           mode={mode}
           now={now}
           backLabel={historyBackLabel}
           onBack={popScreen}
           onDisplayModeChange={onDisplayModeChange}
-          onSelectionChange={(instanceId, metricId) =>
+          onSelectionChange={(metricId) =>
             setHistorySelection((current) => ({
-              instanceId,
-              metrics: { ...current.metrics, [instanceId]: metricId },
+              ...current,
+              [view.instanceId]: metricId,
             }))
           }
         />
@@ -791,7 +794,11 @@ export function Cockpit({
       {view.name !== "overview" || isFirstRun ? (
         <RefreshAnnouncement
           key={refreshAnnouncementId}
-          message={refreshAnnouncement}
+          message={
+            dismissedRefreshAnnouncementId === refreshAnnouncementId
+              ? ""
+              : refreshAnnouncement
+          }
         />
       ) : null}
     </main>

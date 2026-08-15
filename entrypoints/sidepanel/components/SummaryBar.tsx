@@ -4,9 +4,10 @@ import { Icon } from "./Icon";
 
 export interface SummaryBarProps {
   message: string;
+  onDismiss?: () => void;
 }
 
-export function SummaryBar({ message }: SummaryBarProps) {
+export function SummaryBar({ message, onDismiss }: SummaryBarProps) {
   if (!message) {
     return null;
   }
@@ -24,6 +25,16 @@ export function SummaryBar({ message }: SummaryBarProps) {
     >
       <Icon name={needsAttention ? "info" : "check"} />
       <p>{message}</p>
+      {onDismiss ? (
+        <button
+          className="summary-bar__dismiss"
+          type="button"
+          aria-label="Dismiss refresh summary"
+          onClick={onDismiss}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      ) : null}
     </div>
   );
 }

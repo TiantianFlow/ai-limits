@@ -12,6 +12,7 @@ export type IconName =
   | "plus"
   | "refresh"
   | "settings"
+  | "trash"
   | "trending-down"
   | "trending-up";
 
@@ -53,6 +54,11 @@ export function Icon({ name, className = "" }: IconProps) {
             d="M8.3 2.7h3.4l.5 1.8c.5.2 1 .5 1.4.8l1.8-.5 1.7 3-1.3 1.3a6.7 6.7 0 0 1 0 1.8l1.3 1.3-1.7 3-1.8-.5c-.4.3-.9.6-1.4.8l-.5 1.8H8.3l-.5-1.8c-.5-.2-1-.5-1.4-.8l-1.8.5-1.7-3 1.3-1.3a6.7 6.7 0 0 1 0-1.8L2.9 7.8l1.7-3 1.8.5c.4-.3.9-.6 1.4-.8z"
           />
           <circle {...common} cx="10" cy="10" r="2.4" />
+        </>
+      ) : name === "trash" ? (
+        <>
+          <path {...common} d="M4.5 6h11M8 3.5h4l.8 2.5H7.2z" />
+          <path {...common} d="m6 6 .7 10h6.6L14 6M8.5 9v4M11.5 9v4" />
         </>
       ) : name === "chevron-right" ? (
         <path {...common} d="m7.5 4.5 5.5 5.5-5.5 5.5" />

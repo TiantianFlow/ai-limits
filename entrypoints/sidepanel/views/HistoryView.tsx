@@ -10,6 +10,7 @@ import { instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageHeader } from "../components/PageHeader";
+import { WindowSelect } from "../components/WindowSelect";
 import type { QuotaView } from "../components/ProviderCard";
 import { QuotaBars } from "../components/QuotaBars";
 
@@ -17,14 +18,13 @@ export interface HistoryViewProps {
   instances: ProviderInstanceView[];
   instanceId: ProviderInstanceId;
   metricId?: string;
-  metricIdsByInstance: Partial<Record<ProviderInstanceId, string>>;
   currentQuota?: QuotaView;
   mode: DisplayMode;
   now: number;
   backLabel: string;
   onBack: () => void;
   onDisplayModeChange: (mode: DisplayMode) => void;
-  onSelectionChange: (instanceId: ProviderInstanceId, metricId: string) => void;
+  onSelectionChange: (metricId: string) => void;
 }
 
 const RANGE_OPTIONS = [
@@ -37,7 +37,6 @@ export function HistoryView({
   instances,
   instanceId,
   metricId,
-  metricIdsByInstance,
   currentQuota,
   mode,
   now,
@@ -63,7 +62,7 @@ export function HistoryView({
 
   useEffect(() => {
     setRangeHours(48);
-  }, [instanceId, selectedMetric?.id]);
+  }, [instanceId]);
 
   if (!instance || !selectedMetric) {
     return (
@@ -91,57 +90,14 @@ export function HistoryView({
       />
 
       <div className="history-screen screen-body">
-        {eligibleInstances.length > 1 ? (
-          <label className="compact-select">
-            <span>Provider</span>
-            <select
-              aria-label="History provider"
-              value={instance.id}
-              onChange={(event) => {
-                const nextInstance = eligibleInstances.find(
-                  (candidate) => candidate.id === event.currentTarget.value,
-                );
-                const nextMetrics = nextInstance?.snapshot
-                  ? quotaMetrics(nextInstance.snapshot)
-                  : [];
-                const savedMetricId = nextInstance
-                  ? metricIdsByInstance[nextInstance.id]
-                  : undefined;
-                const nextMetric =
-                  nextMetrics.find((metric) => metric.id === savedMetricId) ??
-                  nextMetrics[0];
-                if (nextInstance && nextMetric) {
-                  onSelectionChange(nextInstance.id, nextMetric.id);
-                }
-              }}
-            >
-              {eligibleInstances.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {labelsByInstance.get(candidate.id)! === providerNames[candidate.providerKind]
-                    ? providerNames[candidate.providerKind]
-                    : `${providerNames[candidate.providerKind]} · ${labelsByInstance.get(candidate.id)!}`}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        <label className="compact-select">
-          <span>Metric</span>
-          <select
-            aria-label="Quota metric"
-            value={selectedMetric.id}
-            onChange={(event) =>
-              onSelectionChange(instance.id, event.currentTarget.value)
-            }
-          >
-            {metrics.map((metric) => (
-              <option key={metric.id} value={metric.id}>
-                {metric.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <WindowSelect
+          options={metrics.map((metric) => ({
+            id: metric.id,
+            label: metric.label,
+          }))}
+          selectedId={selectedMetric.id}
+          onSelectionChange={onSelectionChange}
+        />
 
         <div className="history-controls">
           <div

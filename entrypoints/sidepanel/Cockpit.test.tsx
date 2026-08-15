@@ -146,6 +146,23 @@ function renderCockpit(
   return { onDisplayModeChange };
 }
 
+function windowCombobox() {
+  return screen.getByRole("combobox", { name: "Window" });
+}
+
+function chooseWindow(label: string) {
+  fireEvent.click(windowCombobox());
+  fireEvent.click(screen.getByRole("option", { name: label }));
+}
+
+function expectWindow(label: string) {
+  const combobox = windowCombobox();
+  // The native select is gone: the Window control is a custom
+  // trigger-aligned listbox popover built on a button trigger.
+  expect(combobox.tagName).toBe("BUTTON");
+  expect(combobox).toHaveTextContent(label);
+}
+
 function twoNewApiInstances(): AppViewState {
   const metrics = [
     {
@@ -323,13 +340,12 @@ describe("Cockpit", () => {
         name: `Open ${personalLabel} history for API key quota`,
       }),
     );
-    const providerOptions = within(
-      screen.getByRole("combobox", { name: "History provider" }),
-    ).getAllByRole("option");
-    expect(providerOptions.map((option) => option.textContent)).toEqual([
-      `New API · ${personalLabel}`,
-      `New API · ${workLabel}`,
-    ]);
+    expect(
+      screen.queryByRole("combobox", { name: "History provider" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: `${personalLabel} history` }),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(
@@ -356,7 +372,7 @@ describe("Cockpit", () => {
     ).toBeVisible();
   });
 
-  it("keeps same-kind operations and History metric selection independent per instance", () => {
+  it("keeps same-kind operations and the routed History provider fixed", () => {
     render(
       <InstanceCockpit
         state={twoNewApiInstances()}
@@ -387,16 +403,14 @@ describe("Cockpit", () => {
         name: "Open Work relay history for API key quota",
       }),
     );
-    const instanceSelect = screen.getByRole("combobox", {
-      name: "History provider",
-    });
-    const metricSelect = screen.getByRole("combobox", { name: "Quota metric" });
-    expect(instanceSelect).toHaveValue(WORK_NEW_API_ID);
-    fireEvent.change(metricSelect, { target: { value: "daily-relay-quota" } });
-    fireEvent.change(instanceSelect, { target: { value: PERSONAL_NEW_API_ID } });
-    expect(metricSelect).toHaveValue("relay-key-quota");
-    fireEvent.change(instanceSelect, { target: { value: WORK_NEW_API_ID } });
-    expect(metricSelect).toHaveValue("daily-relay-quota");
+    expect(
+      screen.queryByRole("combobox", { name: "History provider" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Work relay history" }),
+    ).toBeVisible();
+    chooseWindow("Daily relay quota");
+    expectWindow("Daily relay quota");
   });
 
   it("targets exact same-kind Settings actions and restores rename focus", async () => {
@@ -667,10 +681,10 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for Weekly messages",
       }),
     );
-    const selector = screen.getByRole("combobox", { name: "Quota metric" });
-    expect(within(selector).getByRole("option", { name: "Weekly messages" })).toBeVisible();
-    expect(within(selector).queryByRole("option", { name: "Extra usage" })).not.toBeInTheDocument();
-    expect(within(selector).queryByRole("option", { name: "Credits" })).not.toBeInTheDocument();
+    fireEvent.click(windowCombobox());
+    expect(screen.getByRole("option", { name: "Weekly messages" })).toBeVisible();
+    expect(screen.queryByRole("option", { name: "Extra usage" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Credits" })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -1012,7 +1026,12 @@ describe("Cockpit", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "ChatGPT history" })).toBeVisible();
-    expect(screen.getByRole("combobox", { name: "Quota metric" })).toBeVisible();
+    expect(screen.getByText("Window")).toBeVisible();
+    expect(screen.queryByText("Metric")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "History provider" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Window" })).toBeVisible();
     expect(
       screen.getByRole("radiogroup", { name: "Show used or left" }),
     ).toBeVisible();
@@ -1023,6 +1042,34 @@ describe("Cockpit", () => {
     expect(screen.getByRole("region", { name: "Usage history chart" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Current cycle" })).toBeVisible();
     expect(screen.getByText(/Only successful, normalized quota observations are plotted/)).toBeVisible();
+  });
+
+  it("keeps Used/Left and the range radios in one compact filter group", () => {
+    renderCockpit();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open ChatGPT history for 5-hour messages",
+      }),
+    );
+
+    // Both radiogroups live inside the same .history-controls group so the
+    // stylesheet can keep them contiguous (no blank gaps) at any width.
+    const controls = document.querySelector(".history-controls");
+    expect(controls).not.toBeNull();
+    const groups = within(controls as HTMLElement).getAllByRole("radiogroup");
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toHaveAccessibleName("Show used or left");
+    expect(groups[1]).toHaveAccessibleName("History range");
+    expect(
+      within(groups[0]!).getAllByRole("radio").map((radio) => radio.textContent),
+    ).toEqual(["Used", "Left"]);
+    expect(
+      within(groups[1]!).getAllByRole("radio").map((radio) => radio.textContent),
+    ).toEqual(["48H", "7D", "30D"]);
+    expect(
+      within(groups[1]!).getByRole("radio", { name: "48 hours" }),
+    ).toBeChecked();
   });
 
   it("returns focus to the invoking Overview History control", () => {
@@ -1107,9 +1154,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
-      target: { value: "weekly" },
-    });
+    chooseWindow("Weekly messages");
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
 
     fireEvent.click(
@@ -1119,9 +1164,7 @@ describe("Cockpit", () => {
       screen.getByRole("button", { name: "Open ChatGPT history" }),
     );
 
-    expect(
-      screen.getByRole("combobox", { name: "Quota metric" }),
-    ).toHaveValue("five-hour");
+    expectWindow("5-hour messages");
   });
 
   it("opens the exact quota window named by an Overview History affordance", () => {
@@ -1133,12 +1176,10 @@ describe("Cockpit", () => {
       }),
     );
 
-    expect(
-      screen.getByRole("combobox", { name: "Quota metric" }),
-    ).toHaveValue("weekly");
+    expectWindow("Weekly messages");
   });
 
-  it("restores independent saved windows when switching history providers", () => {
+  it("preserves the selected range when switching quota windows", () => {
     renderCockpit();
 
     fireEvent.click(
@@ -1146,23 +1187,16 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    const providerSelect = screen.getByRole("combobox", {
-      name: "History provider",
-    });
-    const windowSelect = screen.getByRole("combobox", { name: "Quota metric" });
+    const sevenDays = screen.getByRole("radio", { name: "7 days" });
 
-    fireEvent.change(windowSelect, { target: { value: "weekly" } });
-    fireEvent.change(providerSelect, { target: { value: "kimi:default" } });
-    expect(windowSelect).toHaveValue("five-hour");
-    fireEvent.change(windowSelect, { target: { value: "weekly" } });
-
-    fireEvent.change(providerSelect, { target: { value: "chatgpt:default" } });
-    expect(windowSelect).toHaveValue("weekly");
-    fireEvent.change(providerSelect, { target: { value: "kimi:default" } });
-    expect(windowSelect).toHaveValue("weekly");
+    fireEvent.click(sevenDays);
+    expect(sevenDays).toBeChecked();
+    chooseWindow("Weekly messages");
+    expectWindow("Weekly messages");
+    expect(sevenDays).toBeChecked();
   });
 
-  it("lets an explicit Overview window override that provider's saved selection", () => {
+  it("lets an explicit Overview window override the routed provider's saved selection", () => {
     renderCockpit();
 
     fireEvent.click(
@@ -1170,13 +1204,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
-      target: { value: "weekly" },
-    });
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "History provider" }),
-      { target: { value: "claude:default" } },
-    );
+    chooseWindow("Weekly messages");
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
 
     fireEvent.click(
@@ -1186,11 +1214,9 @@ describe("Cockpit", () => {
     );
 
     expect(
-      screen.getByRole("combobox", { name: "History provider" }),
-    ).toHaveValue("chatgpt:default");
-    expect(
-      screen.getByRole("combobox", { name: "Quota metric" }),
-    ).toHaveValue("five-hour");
+      screen.queryByRole("combobox", { name: "History provider" }),
+    ).not.toBeInTheDocument();
+    expectWindow("5-hour messages");
   });
 
   it("falls back to the first current window when a saved window is no longer valid", () => {
@@ -1210,9 +1236,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Quota metric" }), {
-      target: { value: "weekly" },
-    });
+    chooseWindow("Weekly messages");
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
 
     view.rerender(
@@ -1243,9 +1267,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    expect(
-      screen.getByRole("combobox", { name: "Quota metric" }),
-    ).toHaveValue("five-hour");
+    expectWindow("5-hour messages");
   });
 
   it("returns from Settings to the Provider that invoked it", () => {
@@ -1753,6 +1775,49 @@ describe("Cockpit", () => {
     expect(settings.querySelector(".control-surface")).not.toBeNull();
   });
 
+  it("dismisses only the visible Overview refresh summary", () => {
+    const state = createFixtureState(NOW);
+    const onRefresh = vi.fn();
+    const view = render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        refreshAnnouncement="Updated 4 providers."
+        refreshAnnouncementId={11}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={onRefresh}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    const dismiss = screen.getByRole("button", {
+      name: "Dismiss refresh summary",
+    });
+    expect(dismiss).toBeVisible();
+    expect(dismiss).toHaveTextContent("×");
+    fireEvent.click(dismiss);
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "ChatGPT" })).toBeVisible();
+    expect(state.instances).toHaveLength(6);
+    expect(onRefresh).not.toHaveBeenCalled();
+
+    view.rerender(
+      <Cockpit
+        state={state}
+        now={NOW}
+        refreshAnnouncement="Updated 6 providers."
+        refreshAnnouncementId={12}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={onRefresh}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Updated 6 providers.",
+    );
+  });
+
   it("formats the known ChatGPT plan value at the display boundary", () => {
     const state = createFixtureState(NOW);
     state.instances[0]!.snapshot!.planLabel = "plus";
@@ -2224,17 +2289,14 @@ describe("Cockpit", () => {
     expect(
       screen.getByRole("button", { name: "Overview" }),
     ).toBeVisible();
-    const windowSelect = screen.getByRole("combobox", {
-      name: "Quota metric",
-    });
+    const windowSelect = windowCombobox();
     expect(windowSelect).toBeVisible();
+    fireEvent.click(windowSelect);
     expect(
-      within(windowSelect)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
+      screen.getAllByRole("option").map((option) => option.textContent),
     ).toEqual(["5-hour messages", "Weekly messages"]);
     expect(
-      within(windowSelect).queryByRole("option", {
+      screen.queryByRole("option", {
         name: "retired-window",
       }),
     ).not.toBeInTheDocument();
@@ -2436,6 +2498,17 @@ describe("Cockpit", () => {
       claudeRow.querySelector('img[src="/provider-marks/claude.svg"]'),
     ).not.toBeNull();
     expect(within(claudeRow).getByText(/refreshes about every 15 minutes/)).toBeVisible();
+    const providerContent = claudeRow.querySelector(".settings-provider-content");
+    const providerCopy = claudeRow.querySelector(".settings-provider-copy");
+    const providerActions = claudeRow.querySelector(".settings-provider-actions");
+    expect(providerContent).not.toBeNull();
+    expect(providerCopy?.parentElement).toBe(providerContent);
+    expect(providerActions?.parentElement).toBe(providerContent);
+    expect(providerCopy?.nextElementSibling).toBe(providerActions);
+    for (const action of within(providerActions as HTMLElement).getAllByRole("button")) {
+      expect(action).toHaveAttribute("type", "button");
+      expect(action.parentElement).toBe(providerActions);
+    }
     fireEvent.click(screen.getByRole("button", { name: "Disconnect Claude" }));
     expect(onDisconnectProvider).toHaveBeenCalledWith("claude");
   });
@@ -2455,6 +2528,15 @@ describe("Cockpit", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     const deleteTrigger = screen.getByRole("button", { name: "Delete all local data" });
+    expect(deleteTrigger.tagName).toBe("BUTTON");
+    expect(deleteTrigger).toHaveAttribute("type", "button");
+    expect(deleteTrigger).toHaveClass(
+      "button",
+      "button--danger-outline",
+      "danger-zone__trigger",
+    );
+    expect(deleteTrigger.querySelector('[data-icon="trash"]')).not.toBeNull();
+    expect(deleteTrigger.querySelector(".danger-zone__trigger-surface")).not.toBeNull();
     deleteTrigger.focus();
     fireEvent.click(deleteTrigger);
 
