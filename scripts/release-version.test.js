@@ -4,45 +4,48 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const releaseVersion = "0.3.2";
+const buildVersion = "0.3.3";
+const documentedReleaseVersion = "0.3.2";
 
 function read(relativePath) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
 describe("release version", () => {
-  it("uses 0.3.2 as the package and verified manifest version", () => {
+  it("uses 0.3.3 as the package and verified manifest version", () => {
     const packageJson = JSON.parse(read("package.json"));
     const artifactContract = read("scripts/artifact-contract.mjs");
 
-    expect(packageJson.version).toBe(releaseVersion);
+    expect(packageJson.version).toBe(buildVersion);
     expect(artifactContract).toContain(
-      `manifest.version !== packageVersion || manifest.version !== "${releaseVersion}"`,
+      `manifest.version !== packageVersion || manifest.version !== "${buildVersion}"`,
     );
     expect(artifactContract).toContain(
-      `Expected manifest version ${releaseVersion} derived from package.json.`,
+      `Expected manifest version ${buildVersion} derived from package.json.`,
     );
   });
 
-  it("names the 0.3.2 archive consistently in release documentation", () => {
-    for (const relativePath of [
-      "README.md",
-      "README.zh-CN.md",
-      "STORE_LISTING.md",
-    ]) {
+  it("names the 0.3.3 archive in build documentation", () => {
+    for (const relativePath of ["README.md", "README.zh-CN.md"]) {
       const contents = read(relativePath);
 
-      expect(contents).toContain(`ai-limits-${releaseVersion}-chrome.zip`);
+      expect(contents).toContain(`ai-limits-${buildVersion}-chrome.zip`);
       expect(contents).not.toMatch(/ai-limits-0\.1\.[01]-chrome\.zip/);
     }
   });
 
+  it("keeps the current Store archive reference at 0.3.2", () => {
+    expect(read("STORE_LISTING.md")).toContain(
+      `ai-limits-${documentedReleaseVersion}-chrome.zip`,
+    );
+  });
+
   it("describes the current release consistently in policy documents", () => {
     expect(read("PRIVACY.md")).toContain(
-      `describes version ${releaseVersion}.`,
+      `describes version ${documentedReleaseVersion}.`,
     );
     expect(read("STORE_LISTING.md")).toContain(
-      `describes AI Limits version ${releaseVersion}.`,
+      `describes AI Limits version ${documentedReleaseVersion}.`,
     );
     expect(read("SECURITY.md")).toContain("latest 0.3.x release");
   });
