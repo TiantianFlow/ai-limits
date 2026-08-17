@@ -8,6 +8,7 @@ import {
   providerAvailability,
   providerKinds,
   providerNames,
+  providerPlanLabel,
   providerPresentation,
   sanitizedFailureMessage,
   type ApiKeyProviderKind,
@@ -295,11 +296,10 @@ export function providerView(
         ...balanceMetrics(snapshot).map(balanceView),
       ]
     : [];
-  const rawPlan = snapshot?.planLabel;
-  const plan =
-    provider.providerKind === "chatgpt" && rawPlan?.toLowerCase() === "plus"
-      ? "Plus"
-      : rawPlan;
+  const plan = providerPlanLabel(
+    provider.providerKind,
+    snapshot?.planLabel,
+  );
 
   return {
     instanceId: provider.id,
@@ -469,6 +469,10 @@ export function Cockpit({
   const availableProviders = availableProviderKinds.map((providerKind) => ({
     providerKind,
     credentialKind: providerAvailability(state, providerKind).credentialKind,
+    isReconnect: state.instances.some(
+      (instance) =>
+        instance.providerKind === providerKind && instance.access === "required",
+    ),
     operation:
       providerAvailability(state, providerKind).cardinality === "single"
         ? providerOperations[`${providerKind}:default`]
@@ -705,6 +709,7 @@ export function Cockpit({
             pushScreen({ name: "add-provider" }, "settings-add-provider")
           }
           onAutoRefreshChange={onAutoRefreshChange}
+          onReconnectProvider={connectProvider}
           onDisconnectInstance={onDisconnectInstance}
           onRenameInstance={onRenameInstance}
           onReplaceApiKey={(providerKind, instanceId) =>

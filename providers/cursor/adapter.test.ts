@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { cursorAdapter } from "./adapter";
+import { collectCursor, cursorAdapter } from "./adapter";
 
 const NOW = 1_800_000_000_000;
 const START = "2030-04-01T00:00:00.000Z";
@@ -44,12 +44,68 @@ function planSummary(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Cursor adapter", () => {
+  test("normalizes supplied page dashboard JSON without extension-context dashboard requests", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), {
+      grok: {
+        hasAvailableUsage: true,
+        hasNonZeroIncludedLimit: true,
+        usagePercent: 25,
+        currentPeriodStart: "2030-04-01T00:00:00.000Z",
+        nextResetTimestampUtc: "2030-04-08T00:00:00.000Z",
+      },
+      credits: { total_cents: 1_250, used_cents: 200 },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "grok-bot-weekly", usedRatio: 0.25 }),
+          expect.objectContaining({ id: "extra-usage-credits", value: 10.5 }),
+        ]),
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://cursor.com/api/usage-summary",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  test("keeps the base monthly snapshot when page dashboard JSON is unavailable", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), {});
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({
+            id: "cursor-models-monthly",
+            usedRatio: 0.17,
+          }),
+          expect.objectContaining({
+            id: "other-models-monthly",
+            usedRatio: 1,
+          }),
+        ]),
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   test("keeps plan and quota data without requesting the account email", async () => {
     const controller = new AbortController();
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response(planSummary()))
-      .mockResolvedValueOnce(response({ email: "person@example.com" }));
+      .mockResolvedValueOnce(response(planSummary()));
 
     const result = await cursorAdapter.collect(context(fetch, controller.signal));
 
@@ -105,7 +161,6 @@ describe("Cursor adapter", () => {
     };
     expect(fetch).toHaveBeenNthCalledWith(1, "https://cursor.com/api/usage-summary", init);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(result)).not.toContain("person@example.com");
     expect(JSON.stringify(result)).not.toContain("autoPercentUsed");
     expect(JSON.stringify(result)).not.toContain("remaining");
   });
@@ -289,6 +344,366 @@ describe("Cursor adapter", () => {
     await expect(cursorAdapter.collect(context(fetch))).resolves.toEqual({
       ok: false,
       health: { kind },
+    });
+  });
+
+  test("adds the available Grok Bot weekly tracker and a positive extra-credit balance", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), {
+      grok: {
+        hasAvailableUsage: true,
+        hasNonZeroIncludedLimit: true,
+        usagePercent: 25,
+        currentPeriodStart: "2030-04-01T00:00:00.000Z",
+        nextResetTimestampUtc: "2030-04-08T00:00:00.000Z",
+      },
+      credits: { total_cents: 1250, used_cents: 200 },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          {
+            id: "grok-bot-weekly",
+            label: "Grok Bot",
+            type: "quota",
+            scope: "feature",
+            usedRatio: 0.25,
+            cycle: {
+              cadence: "rolling",
+              startedAt: Date.parse("2030-04-01T00:00:00.000Z"),
+              resetsAt: Date.parse("2030-04-08T00:00:00.000Z"),
+              durationMs:
+                Date.parse("2030-04-08T00:00:00.000Z") -
+                Date.parse("2030-04-01T00:00:00.000Z"),
+            },
+          },
+          {
+            id: "extra-usage-credits",
+            label: "Extra usage credits",
+            type: "balance",
+            scope: "product",
+            unit: "USD",
+            value: 10.5,
+          },
+        ]),
+        usageGroups: [
+          {
+            metricIds: expect.arrayContaining([
+              "grok-bot-weekly",
+              "extra-usage-credits",
+            ]),
+          },
+        ],
+      },
+    });
+  });
+
+  test.each([
+    ["unavailable", { hasAvailableUsage: false, hasNonZeroIncludedLimit: true, usagePercent: 25, currentPeriodStart: "2030-04-01T00:00:00.000Z", nextResetTimestampUtc: "2030-04-08T00:00:00.000Z" }],
+    ["disabled", { hasAvailableUsage: true, hasNonZeroIncludedLimit: false, usagePercent: 25, currentPeriodStart: "2030-04-01T00:00:00.000Z", nextResetTimestampUtc: "2030-04-08T00:00:00.000Z" }],
+    ["invalid percentage", { hasAvailableUsage: true, hasNonZeroIncludedLimit: true, usagePercent: 101, currentPeriodStart: "2030-04-01T00:00:00.000Z", nextResetTimestampUtc: "2030-04-08T00:00:00.000Z" }],
+    ["invalid start", { hasAvailableUsage: true, hasNonZeroIncludedLimit: true, usagePercent: 25, currentPeriodStart: "not-a-date", nextResetTimestampUtc: "2030-04-08T00:00:00.000Z" }],
+    ["invalid reset", { hasAvailableUsage: true, hasNonZeroIncludedLimit: true, usagePercent: 25, currentPeriodStart: "2030-04-01T00:00:00.000Z", nextResetTimestampUtc: "not-a-date" }],
+    ["non-positive window", { hasAvailableUsage: true, hasNonZeroIncludedLimit: true, usagePercent: 25, currentPeriodStart: "2030-04-08T00:00:00.000Z", nextResetTimestampUtc: "2030-04-01T00:00:00.000Z" }],
+  ])("omits Grok Bot when its status is %s", async (_name, grok) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), { grok });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.snapshot.metrics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "grok-bot-weekly" })]),
+      );
+    }
+  });
+
+  test.each([
+    ["an empty response", {}],
+    ["zero remaining credits", { total_cents: 200, used_cents: 200 }],
+    ["malformed numeric data", { total_cents: "1250", used_cents: 200 }],
+    ["an unsupported balance form", { balance_cents: 1250 }],
+  ])("omits extra credits for %s", async (_name, credits) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), { credits });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.snapshot.metrics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "extra-usage-credits" })]),
+      );
+    }
+  });
+
+  test.each([
+    ["a fractional aggregate", { total_cents: 1_250.5, used_cents: 200 }],
+    ["an unsafe aggregate", { total_cents: Number.MAX_SAFE_INTEGER + 1, used_cents: 0 }],
+    ["an overflowing grants total", {
+      credit_grants: [
+        { total_cents: Number.MAX_SAFE_INTEGER, used_cents: 0 },
+        { total_cents: 1, used_cents: 0 },
+      ],
+    }],
+  ])("omits extra credits for %s", async (_name, credits) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), { credits });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.snapshot.metrics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "extra-usage-credits" })]),
+      );
+    }
+  });
+
+  test.each([
+    ["snake aggregate", { total_cents: 1_250, used_cents: 200 }, 10.5],
+    ["camel aggregate", { totalCents: 1_250, usedCents: 200 }, 10.5],
+    ["snake grants alias", { credit_grants: [{ total_cents: 1_000, used_cents: 200 }] }, 8],
+    ["camel grants alias", { creditGrants: [{ totalCents: 1_000, usedCents: 200 }] }, 8],
+    ["short grants alias", { grants: [{ total_cents: 1_000, used_cents: 200 }] }, 8],
+  ])("normalizes extra credits from %s", async (_name, credits, value) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    await expect(collectCursor(context(fetch), { credits })).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "extra-usage-credits", value }),
+        ]),
+      },
+    });
+  });
+
+  test("falls back to one valid grants alias when the top-level aggregate is incomplete", async () => {
+    const credits = {
+      total_cents: 1_000,
+      creditGrants: [{ totalCents: 1_000, usedCents: 200 }],
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    await expect(collectCursor(context(fetch), { credits })).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "extra-usage-credits", value: 8 }),
+        ]),
+      },
+    });
+  });
+
+  test("omits mixed top-level aliases instead of falling back to grants", async () => {
+    const credits = {
+      total_cents: 1_000,
+      usedCents: 200,
+      creditGrants: [{ totalCents: 1_000, usedCents: 200 }],
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), { credits });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.snapshot.metrics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "extra-usage-credits" })]),
+      );
+    }
+  });
+
+  test.each([
+    ["mixed aggregate casing", { total_cents: 1_250, usedCents: 200 }],
+    ["conflicting aggregate aliases", { total_cents: 1_250, used_cents: 200, totalCents: 800, usedCents: 100 }],
+    ["mixed grant casing", { credit_grants: [{ total_cents: 1_250, usedCents: 200 }] }],
+    ["conflicting grants aliases", {
+      credit_grants: [{ total_cents: 1_250, used_cents: 200 }],
+      grants: [{ total_cents: 800, used_cents: 100 }],
+    }],
+  ])("omits extra credits for %s", async (_name, credits) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), { credits });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.snapshot.metrics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "extra-usage-credits" })]),
+      );
+    }
+  });
+
+  test("uses a top-level positive credit aggregate without double-counting grants", async () => {
+    const credits = {
+      total_cents: 2_000,
+      used_cents: 500,
+      credit_grants: [
+        { total_cents: 1_000, used_cents: 200 },
+        { total_cents: 500, used_cents: 100 },
+      ],
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), { credits });
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "extra-usage-credits", value: 15 }),
+        ]),
+      },
+    });
+    if (result.ok) {
+      expect(result.snapshot.metrics.filter((metric) => metric.id === "extra-usage-credits"))
+        .toHaveLength(1);
+    }
+  });
+
+  test("uses a complete top-level aggregate without validating unconsumed grants", async () => {
+    const credits = {
+      total_cents: 1_250,
+      used_cents: 200,
+      credit_grants: [{ total_cents: "bad", used_cents: 0 }],
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    await expect(collectCursor(context(fetch), { credits })).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "extra-usage-credits", value: 10.5 }),
+        ]),
+      },
+    });
+  });
+
+  test("uses positive credit grant remainders when no top-level aggregate is reported", async () => {
+    const credits = {
+      credit_grants: [
+        { total_cents: 1_000, used_cents: 200 },
+        { total_cents: 500, used_cents: 100 },
+        { total_cents: 0, used_cents: 0 },
+      ],
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    await expect(collectCursor(context(fetch), { credits })).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "extra-usage-credits", value: 12 }),
+        ]),
+      },
+    });
+  });
+
+  test("retains a valid zero-percent Grok Bot tracker", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    await expect(collectCursor(context(fetch), { grok: {
+        hasAvailableUsage: true,
+        hasNonZeroIncludedLimit: true,
+        usagePercent: 0,
+        currentPeriodStart: "2030-04-01T00:00:00.000Z",
+        nextResetTimestampUtc: "2030-04-08T00:00:00.000Z",
+      } })).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "grok-bot-weekly", usedRatio: 0 }),
+        ]),
+      },
+    });
+  });
+
+  test.each([
+    ["absent page JSON", {}],
+    ["malformed page JSON", {
+      grok: { hasAvailableUsage: "yes" },
+      credits: { total_cents: "unknown" },
+    }],
+  ])("preserves the base Cursor snapshot for %s", async (_name, dashboard) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+    const result = await collectCursor(context(fetch), dashboard);
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: "cursor-models-monthly", usedRatio: 0.17 }),
+          expect.objectContaining({ id: "other-models-monthly", usedRatio: 1 }),
+          expect.objectContaining({ id: "on-demand", value: 3.2 }),
+        ]),
+      },
+    });
+  });
+
+  test.each([
+    [
+      "Grok Bot",
+      { grok: {
+          hasAvailableUsage: true,
+          hasNonZeroIncludedLimit: true,
+          usagePercent: 25,
+          currentPeriodStart: "2030-04-01T00:00:00.000Z",
+          nextResetTimestampUtc: "2030-04-08T00:00:00.000Z",
+        },
+        credits: { total_cents: "malformed" },
+      },
+      "grok-bot-weekly",
+    ],
+    [
+      "extra credits",
+      {
+        grok: { hasAvailableUsage: "malformed" },
+        credits: { total_cents: 1_250, used_cents: 200 },
+      },
+      "extra-usage-credits",
+    ],
+  ])("retains valid optional %s when the other optional endpoint is invalid", async (
+    _name,
+    dashboard,
+    expectedMetricId,
+  ) => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(planSummary()));
+
+    const result = await collectCursor(context(fetch), dashboard);
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({ id: expectedMetricId }),
+        ]),
+      },
+    });
+  });
+
+  test("keeps a mandatory usage-summary AbortError as a temporary error", async () => {
+    const abort = new DOMException("Request aborted", "AbortError");
+    const fetch = vi.fn<typeof globalThis.fetch>().mockRejectedValue(abort);
+
+    await expect(cursorAdapter.collect(context(fetch))).resolves.toEqual({
+      ok: false,
+      health: { kind: "temporary_error" },
     });
   });
 });

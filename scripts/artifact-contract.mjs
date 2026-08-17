@@ -62,8 +62,8 @@ export function validateBuildManifest(manifest, packageVersion) {
   if (manifest.manifest_version !== 3) {
     errors.push("Expected manifest_version to be 3.");
   }
-  if (manifest.version !== packageVersion || manifest.version !== "0.3.3") {
-    errors.push("Expected manifest version 0.3.3 derived from package.json.");
+  if (manifest.version !== packageVersion || manifest.version !== "0.3.4") {
+    errors.push("Expected manifest version 0.3.4 derived from package.json.");
   }
   if (manifest.name !== "AI Limits") {
     errors.push('Expected manifest name to be "AI Limits".');

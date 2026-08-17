@@ -32,7 +32,9 @@ Cursor、ElevenLabs、New API 项目或其关联方不存在隶属、背书或�
 - 每个服务都需要单独启用。Chrome 只会请求该服务的精确主机访问权限。
 - ChatGPT、Claude、Kimi 和 Cursor 使用浏览器中已登录的会话。扩展以较低
   频率向这些服务自己的网站会话用量接口发送只读请求，不会抓取页面中渲染的
-  内容。
+  内容。Cursor 的基础用量仍由后台请求刷新；Connect 或手动 Refresh 还可能在
+  一个已经打开的 `cursor.com` 页面中运行扩展自带的只读代码，请求两个固定的
+  Dashboard JSON 响应。
 - ElevenLabs 使用由用户创建的 API 密钥，因为其公开且有文档的 API 不提供
   其他服务所采用的免设置网页会话方式。扩展只会把该密钥发送到 ElevenLabs API，
   用于只读订阅请求。
@@ -55,6 +57,13 @@ Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多
 扩展会先检查旧版 Kimi Cookie，再读取已打开 Kimi 页面中名称完全匹配的
 `access_token` 项；浏览器关闭或 API 错误可能延迟或阻止尽力清理。
 
+Cursor Connect 或手动 Refresh 可能使用一个已经打开的 `cursor.com` 标签页，
+在页面的同源上下文中请求 Grok Bot 和额外 Credits JSON。AI Limits 不会创建或
+激活 Cursor 标签页，也不会直接检查页面渲染内容、浏览器存储或 Cookie 值；
+Chrome 仍会把已登录的 Cursor Cookie 附加到这些固定的同源请求。定时或自动刷新
+绝不会向 Cursor 页面注入代码，因此只会刷新基础月度和按量用量，不会新增 Grok
+Bot 或额外 Credits 观测。
+
 ElevenLabs 设置流程会在普通标签页中打开其官方 API 密钥页面。如果你需要先
 登录，指南会保持打开，并允许再次打开该页面。指南要求创建仅含 **User → Read**
 且不含生成或写入权限的密钥，然后在保存前验证只读订阅请求。ElevenLabs 并未
@@ -75,7 +84,8 @@ AI Limits 使用 `storage`、`alarms` 和 `sidePanel`，分别用于本地状态
 API 密钥连接时才会逐个请求。New API 因可自托管而声明动态可选主机能力，但
 Chrome 实际只会请求设置中输入的那个实例来源。同一来源的多个 New API 实例
 只共享这一浏览器全局授权；凭据、标签、用量和 History 始终相互独立。可选的
-`cookies` 和 `scripting` 权限只用于 Kimi 会话访问和交互式恢复。ElevenLabs
+`cookies` 权限只用于 Kimi 会话访问。`scripting` 权限用于 Kimi 交互式恢复，
+以及 Cursor 仅在 Connect 或手动刷新期间执行的页面增强。ElevenLabs
 只会获得 `https://api.elevenlabs.io/*` 的可选访问权限；公开设置页面按普通
 网页打开，不会获得扩展主机访问权限。扩展不会请求范围更广的 `tabs` 权限。
 
@@ -120,7 +130,7 @@ macOS 文件选择器中正常显示。点击扩展工具栏图标即可打开�
 pnpm verify:zip
 ```
 
-该命令会重新构建扩展，创建 `.output/ai-limits-0.3.3-chrome.zip`，打开压缩包，
+该命令会重新构建扩展，创建 `.output/ai-limits-0.3.4-chrome.zip`，打开压缩包，
 并验证清单、入口文件、权限和禁止包含的文件规则。
 
 ## 服务兼容性

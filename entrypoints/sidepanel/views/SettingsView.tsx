@@ -6,7 +6,9 @@ import {
   type ProviderInstanceId,
   type ProviderInstanceView,
   type ProviderAvailabilityView,
+  type ProviderKind,
   providerNames,
+  providerPlanLabel,
   providerPresentation,
 } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
@@ -27,6 +29,7 @@ export interface SettingsViewProps {
   onClose: () => void;
   onAddProvider: () => void;
   onAutoRefreshChange: (enabled: boolean) => void;
+  onReconnectProvider: (providerKind: ProviderKind) => void;
   onDisconnectInstance: (instanceId: ProviderInstanceId) => void;
   onReplaceApiKey: (
     providerKind: ApiKeyProviderKind,
@@ -66,6 +69,7 @@ export function SettingsView({
   onClose,
   onAddProvider,
   onAutoRefreshChange,
+  onReconnectProvider,
   onDisconnectInstance,
   onReplaceApiKey,
   onRenameInstance,
@@ -178,6 +182,10 @@ export function SettingsView({
                   usesApiKey
                     ? "API key"
                     : "Browser session";
+                const planLabel = providerPlanLabel(
+                  instance.providerKind,
+                  instance.snapshot?.planLabel,
+                );
                 const editing = renamingInstanceId === instance.id;
                 const inputId = `settings-label-${instance.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
                 return (
@@ -202,8 +210,8 @@ export function SettingsView({
                         <small>
                           {freshness(instance, now)} · {connectionMethod} · read-only
                         </small>
-                        {instance.snapshot?.planLabel ? (
-                          <small>{instance.snapshot.planLabel}</small>
+                        {planLabel ? (
+                          <small>{planLabel}</small>
                         ) : null}
                         {usesApiKey ? <small>API key saved</small> : null}
                         <small>{presentation.connectionDisclosure}</small>
@@ -317,6 +325,18 @@ export function SettingsView({
                             }
                           >
                             <span aria-hidden="true">Replace key</span>
+                          </button>
+                        ) : null}
+                        {!usesApiKey && instance.access === "required" ? (
+                          <button
+                            type="button"
+                            aria-label={`Reconnect ${label}`}
+                            data-focus-key={`settings-reconnect-${instance.id}`}
+                            onClick={() =>
+                              onReconnectProvider(instance.providerKind)
+                            }
+                          >
+                            <span aria-hidden="true">Reconnect</span>
                           </button>
                         ) : null}
                         <button

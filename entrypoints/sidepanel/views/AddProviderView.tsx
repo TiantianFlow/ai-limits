@@ -8,6 +8,7 @@ export interface AddProviderViewProps {
   providers: Array<{
     providerKind: ProviderKind;
     credentialKind: "none" | "api-key";
+    isReconnect?: boolean;
     operation?: ProviderOperation;
   }>;
   origin: "overview" | "settings";
@@ -33,15 +34,18 @@ export function AddProviderView({
         <h2 className="section-label">Available · {providers.length}</h2>
         {providers.length ? (
           <div className="provider-list">
-            {providers.map(({ providerKind, credentialKind, operation }) => (
-              <ProviderConnectRow
-                key={providerKind}
-                providerKind={providerKind}
-                credentialKind={credentialKind}
-                operation={operation}
-                onConnect={onConnectProvider}
-              />
-            ))}
+            {providers.map(
+              ({ providerKind, credentialKind, isReconnect, operation }) => (
+                <ProviderConnectRow
+                  key={providerKind}
+                  providerKind={providerKind}
+                  credentialKind={credentialKind}
+                  isReconnect={isReconnect}
+                  operation={operation}
+                  onConnect={onConnectProvider}
+                />
+              ),
+            )}
           </div>
         ) : (
           <p className="empty-surface">All supported providers are connected.</p>

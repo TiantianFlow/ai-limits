@@ -40,15 +40,30 @@ does not reconstruct observations for intervals that were missed.
 
 ## If manual refresh works, should automatic refresh also work?
 
-Usually for ChatGPT, Claude, and Cursor, as long as their permission and browser
-session remain valid, and for ElevenLabs or New API while the saved key and
-host permission remain active.
+Usually for ChatGPT, Claude, and Cursor base usage, as long as their permission
+and browser session remain valid, and for ElevenLabs or New API while the saved
+key and host permission remain active.
 However, manual refresh bypasses scheduled backoff, while automatic refresh
 respects it. Kimi manual refresh may additionally perform interactive session
-recovery. A manual success therefore cannot guarantee every later scheduled
-refresh.
+recovery. Cursor manual refresh may additionally request Grok Bot and
+extra-credit JSON through an already-open Cursor page; automatic refresh never
+injects into a page. A manual success therefore cannot guarantee every later
+scheduled refresh contains the same optional metrics.
 
 Kimi has an additional limitation described below.
+
+## Why can Cursor Grok Bot or extra credits appear only after manual refresh?
+
+Cursor's base monthly and on-demand usage refreshes in the background. Its
+Grok Bot and extra-credit dashboard endpoints require a same-origin page
+request, so AI Limits tries them only during Connect or an explicit manual
+Refresh and only when a `cursor.com` tab is already open. The extension runs a
+bundled exact-origin function that sends two fixed read-only dashboard requests
+and returns their JSON for schema validation in the extension. It does not
+inspect rendered content, browser storage, or cookie values directly; Chrome
+attaches the signed-in Cursor cookies to those fixed same-origin requests. It
+never creates or activates a Cursor tab, and scheduled refresh never injects
+into a Cursor page.
 
 ## Why doesn't Kimi automatic refresh always work, and why can manual refresh open a background tab?
 
@@ -141,7 +156,8 @@ No. Scheduled refresh is non-interactive and never creates provider tabs. Only
 an interactive Kimi **Connect** or **Refresh** may briefly create an inactive
 Kimi tab for session recovery. ElevenLabs opens its normal API-keys page only
 when you explicitly start setup or choose **Open API keys page**.
-New API setup and refresh do not open provider tabs.
+Cursor manual enrichment can inspect an already-open exact-origin tab but does
+not create or activate one. New API setup and refresh do not open provider tabs.
 
 ## What does History store, and for how long?
 

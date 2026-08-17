@@ -8,6 +8,7 @@ export interface FirstRunViewProps {
   providers: Array<{
     providerKind: ProviderKind;
     credentialKind: "none" | "api-key";
+    isReconnect?: boolean;
     operation?: ProviderOperation;
   }>;
   onConnectProvider: (providerKind: ProviderKind) => void;
@@ -35,15 +36,18 @@ export function FirstRunView({
       <div className="screen-body screen-body--connections">
         <h2 className="section-label">Supported providers · {providers.length}</h2>
         <div className="provider-list">
-          {providers.map(({ providerKind, credentialKind, operation }) => (
-            <ProviderConnectRow
-              key={providerKind}
-              providerKind={providerKind}
-              credentialKind={credentialKind}
-              operation={operation}
-              onConnect={onConnectProvider}
-            />
-          ))}
+          {providers.map(
+            ({ providerKind, credentialKind, isReconnect, operation }) => (
+              <ProviderConnectRow
+                key={providerKind}
+                providerKind={providerKind}
+                credentialKind={credentialKind}
+                isReconnect={isReconnect}
+                operation={operation}
+                onConnect={onConnectProvider}
+              />
+            ),
+          )}
         </div>
         <p className="illustrative-note">
           Connect one provider at a time. There is no auto-discovery or demo

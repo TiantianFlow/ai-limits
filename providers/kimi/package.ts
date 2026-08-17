@@ -181,6 +181,7 @@ export function createKimiPackage(
         () => dependencies.findPageAccessToken(),
       );
       if (changedToken === token) changedToken = undefined;
+      const changedTokenFromPage = changedToken !== undefined;
       if (!changedToken && services.interaction === "allowed") {
         changedToken = normalizedToken(
           await recoverAfterStartup(instance.id, token, services),
@@ -199,13 +200,37 @@ export function createKimiPackage(
         signal: services.signal,
         accessToken: changedToken,
       };
-      const retryResult = await (
+      const retryAfterChangedToken =
         dependencies.retryAfterChangedToken ??
-        ((_result, context) => dependencies.adapter.collect(context))
-      )(firstResult, retryContext);
-      return requiresSession(retryResult) && services.interaction === "allowed"
+        ((_result: CollectionResult, context: CollectionContext) =>
+          dependencies.adapter.collect(context));
+      const retryResult = await retryAfterChangedToken(
+        firstResult,
+        retryContext,
+      );
+      if (
+        !requiresSession(retryResult) ||
+        services.interaction === "forbidden"
+      ) {
+        return retryResult;
+      }
+      if (!changedTokenFromPage) return recoveryFailure();
+
+      const recoveredToken = normalizedToken(
+        await recoverAfterStartup(instance.id, changedToken, services),
+      );
+      if (!recoveredToken || recoveredToken === changedToken) {
+        return recoveryFailure();
+      }
+      const recoveredResult = await retryAfterChangedToken(retryResult, {
+        fetch: services.fetch,
+        now: services.now,
+        signal: services.signal,
+        accessToken: recoveredToken,
+      });
+      return requiresSession(recoveredResult)
         ? recoveryFailure()
-        : retryResult;
+        : recoveredResult;
     },
   };
 }

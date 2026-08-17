@@ -310,6 +310,133 @@ describe("Kimi provider package", () => {
     ]);
   });
 
+  test("interactive collection does not recover twice when no passive page token exists", async () => {
+    const collect = vi
+      .fn<(_context: CollectionContext) => Promise<CollectionResult>>()
+      .mockResolvedValue({
+        ok: false,
+        deferred: { reason: "session_required" },
+      });
+    const recoverAccessToken = vi.fn().mockResolvedValue("recovered-token");
+    const providerPackage = createKimiPackage({
+      adapter: adapterResult(collect),
+      getCookieToken: vi.fn().mockResolvedValue("stale-token"),
+      findPageAccessToken: vi.fn().mockResolvedValue(undefined),
+      recoverAccessToken,
+      cleanupAbandonedRecovery: vi.fn().mockResolvedValue(undefined),
+      announceRecovery: vi.fn(),
+    });
+    const runtimeServices = services("allowed");
+
+    await expect(
+      providerPackage.collect(instance, runtimeServices),
+    ).resolves.toEqual({
+      ok: false,
+      health: { kind: "temporary_error", guidance: "retry_session" },
+    });
+    expect(collect.mock.calls.map(([context]) => context.accessToken)).toEqual([
+      "stale-token",
+      "recovered-token",
+    ]);
+    expect(recoverAccessToken).toHaveBeenCalledTimes(1);
+    expect(recoverAccessToken).toHaveBeenCalledWith(
+      "stale-token",
+      runtimeServices.signal,
+    );
+  });
+
+  test("interactive collection recovers when a changed page token is also unauthorized", async () => {
+    const collect = vi
+      .fn<(_context: CollectionContext) => Promise<CollectionResult>>()
+      .mockResolvedValueOnce({
+        ok: false,
+        deferred: { reason: "session_required" },
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        deferred: { reason: "session_required" },
+      })
+      .mockResolvedValueOnce(successfulCollection());
+    const recoverAccessToken = vi.fn().mockResolvedValue("recovered-token");
+    const providerPackage = createKimiPackage({
+      adapter: adapterResult(collect),
+      getCookieToken: vi.fn().mockResolvedValue("stale-token"),
+      findPageAccessToken: vi.fn().mockResolvedValue("page-token"),
+      recoverAccessToken,
+      cleanupAbandonedRecovery: vi.fn().mockResolvedValue(undefined),
+      announceRecovery: vi.fn(),
+    });
+    const runtimeServices = services("allowed");
+
+    const result = await providerPackage.collect(instance, runtimeServices);
+
+    expect(result).toEqual(successfulCollection());
+    expect(collect.mock.calls.map(([context]) => context.accessToken)).toEqual([
+      "stale-token",
+      "page-token",
+      "recovered-token",
+    ]);
+    expect(recoverAccessToken).toHaveBeenCalledTimes(1);
+    expect(recoverAccessToken).toHaveBeenCalledWith(
+      "page-token",
+      runtimeServices.signal,
+    );
+  });
+
+  test("interactive recovery preserves endpoint selection from the page-token retry", async () => {
+    const firstResult: CollectionResult = {
+      ok: false,
+      deferred: { reason: "session_required" },
+    };
+    const pageRetryResult: CollectionResult = {
+      ok: false,
+      deferred: { reason: "session_required" },
+    };
+    const collect = vi
+      .fn<(_context: CollectionContext) => Promise<CollectionResult>>()
+      .mockResolvedValueOnce(firstResult)
+      .mockResolvedValueOnce({
+        ok: false,
+        health: { kind: "provider_changed" },
+      });
+    const retryAfterChangedToken = vi
+      .fn<
+        (
+          result: CollectionResult,
+          context: CollectionContext,
+        ) => Promise<CollectionResult>
+      >()
+      .mockResolvedValueOnce(pageRetryResult)
+      .mockResolvedValueOnce(successfulCollection());
+    const providerPackage = createKimiPackage({
+      adapter: adapterResult(collect),
+      getCookieToken: vi.fn().mockResolvedValue("stale-token"),
+      findPageAccessToken: vi.fn().mockResolvedValue("page-token"),
+      recoverAccessToken: vi.fn().mockResolvedValue("recovered-token"),
+      cleanupAbandonedRecovery: vi.fn().mockResolvedValue(undefined),
+      announceRecovery: vi.fn(),
+      retryAfterChangedToken,
+    });
+
+    const result = await providerPackage.collect(
+      instance,
+      services("allowed"),
+    );
+
+    expect(result).toEqual(successfulCollection());
+    expect(collect).toHaveBeenCalledTimes(1);
+    expect(retryAfterChangedToken).toHaveBeenNthCalledWith(
+      1,
+      firstResult,
+      expect.objectContaining({ accessToken: "page-token" }),
+    );
+    expect(retryAfterChangedToken).toHaveBeenNthCalledWith(
+      2,
+      pageRetryResult,
+      expect.objectContaining({ accessToken: "recovered-token" }),
+    );
+  });
+
   test("does not retry when recovery repeats the rejected token", async () => {
     const collect = vi.fn(async () => ({
       ok: false as const,

@@ -1369,17 +1369,24 @@ describe("Cockpit", () => {
     expect(screen.queryByRole("button", { name: "Connect ChatGPT" })).not.toBeInTheDocument();
   });
 
-  it("keeps an ungranted singleton available until it is connected", () => {
+  it("labels an existing permission-required Cursor action as Reconnect", () => {
     const state: AppViewState = {
       preferences: { displayMode: "used", autoRefresh: true },
       providers: createEmptyFixtureState().providers,
       instances: [
         {
-          id: "chatgpt:default",
-          providerKind: "chatgpt",
+          id: "cursor:default",
+          providerKind: "cursor",
           access: "required",
           createdAt: NOW,
-          history: [],
+          history: [
+            {
+              observedAt: NOW,
+              metrics: [
+                { type: "quota", metricId: "monthly", usedRatio: 0.4 },
+              ],
+            },
+          ],
         },
       ],
     };
@@ -1394,7 +1401,7 @@ describe("Cockpit", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Connect ChatGPT" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reconnect Cursor" })).toBeVisible();
   });
 
   it("keeps connect actions provider-scoped and disables only the active provider", () => {
@@ -1827,6 +1834,58 @@ describe("Cockpit", () => {
     const chatGpt = within(screen.getByRole("article", { name: "ChatGPT" }));
     expect(chatGpt.getByText("Plus")).toBeVisible();
     expect(chatGpt.queryByText("plus")).not.toBeInTheDocument();
+  });
+
+  it("formats known Cursor and ElevenLabs plan values at the display boundary", () => {
+    const state = createFixtureState(NOW);
+    const cursor = state.instances.find(
+      (instance) => instance.providerKind === "cursor",
+    )!;
+    const elevenLabs = state.instances.find(
+      (instance) => instance.providerKind === "elevenlabs",
+    )!;
+    cursor.snapshot!.planLabel = "ultra";
+    elevenLabs.snapshot!.planLabel = "free";
+
+    renderCockpit(state);
+
+    expect(
+      within(screen.getByRole("article", { name: "Cursor" })).getByText("Ultra"),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("article", { name: "ElevenLabs" })).getByText("Free"),
+    ).toBeVisible();
+  });
+
+  it("formats known plan values in Settings", () => {
+    const state = createFixtureState(NOW);
+    const elevenLabs = state.instances.find(
+      (instance) => instance.providerKind === "elevenlabs",
+    )!;
+    elevenLabs.snapshot!.planLabel = "free";
+
+    renderCockpit(state);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    const row = screen.getByRole("listitem", { name: "ElevenLabs settings" });
+    expect(within(row).getByText("Free")).toBeVisible();
+    expect(within(row).queryByText("free")).not.toBeInTheDocument();
+  });
+
+  it("preserves an unknown provider plan label", () => {
+    const state = createFixtureState(NOW);
+    const newApi = state.instances.find(
+      (instance) => instance.providerKind === "newapi",
+    )!;
+    newApi.snapshot!.planLabel = "iCloud Partner";
+
+    renderCockpit(state);
+
+    expect(
+      within(
+        screen.getByRole("article", { name: "New API Demo relay A" }),
+      ).getByText("iCloud Partner"),
+    ).toBeVisible();
   });
 
   it("describes pace deltas as over or under pace", () => {
@@ -2466,6 +2525,39 @@ describe("Cockpit", () => {
     const remountedSettings = screen.getByRole("button", { name: "Settings" });
     expect(remountedSettings).not.toBe(settings);
     expect(remountedSettings).toHaveFocus();
+  });
+
+  it("offers Settings reconnect for a permission-required Cursor without deleting its data", () => {
+    const state = createFixtureState(NOW);
+    state.instances = state.instances.map((instance) =>
+      instance.providerKind === "cursor"
+        ? { ...instance, access: "required" }
+        : instance,
+    );
+    const cursorBefore = structuredClone(
+      state.instances.find((instance) => instance.providerKind === "cursor"),
+    );
+    const onConnectProvider = vi.fn();
+    render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={onConnectProvider}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const cursorRow = screen.getByRole("listitem", { name: "Cursor settings" });
+    fireEvent.click(
+      within(cursorRow).getByRole("button", { name: "Reconnect Cursor" }),
+    );
+
+    expect(onConnectProvider).toHaveBeenCalledWith("cursor");
+    expect(
+      state.instances.find((instance) => instance.providerKind === "cursor"),
+    ).toEqual(cursorBefore);
   });
 
   it("controls automatic refresh and connected-provider disconnects", () => {

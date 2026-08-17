@@ -51,8 +51,16 @@ export const providerCatalog = {
       markPath: "/provider-marks/cursor.svg",
       darkMarkPath: "/provider-marks/cursor-dark.svg",
       connectionLabel: "Connect Cursor",
-      connectionDisclosure: browserSessionDisclosure,
-      capabilities: ["Monthly usage", "On-demand spend"],
+      connectionDisclosure:
+        "Reads base usage from your signed-in Cursor session and refreshes it about every 15 minutes. On Connect or manual Refresh, AI Limits may run bundled read-only code in one already-open cursor.com page to request Grok Bot and extra-credit JSON. It does not inspect page content, browser storage, or cookie values directly; Chrome attaches signed-in Cursor cookies to those fixed same-origin requests.",
+      capabilities: [
+        "Monthly usage",
+        "Grok Bot usage",
+        "On-demand spend",
+        "Extra usage credits",
+      ],
+      manualRefreshDisclosure:
+        "Cursor page enrichment uses only an already-open Cursor tab. It never creates or activates a tab, and scheduled or automatic refresh never injects into a page.",
     },
   },
   elevenlabs: {
@@ -84,6 +92,33 @@ export const providerNames = Object.fromEntries(
     providerCatalog[providerKind].displayName,
   ]),
 ) as Record<ProviderKind, string>;
+
+const knownPlanLabels: Partial<
+  Record<ProviderKind, Record<string, string>>
+> = {
+  chatgpt: {
+    plus: "Plus",
+  },
+  cursor: {
+    ultra: "Ultra",
+  },
+  elevenlabs: {
+    free: "Free",
+  },
+};
+
+export function providerPlanLabel(
+  providerKind: ProviderKind,
+  rawPlanLabel: string | undefined,
+): string | undefined {
+  if (rawPlanLabel === undefined) {
+    return undefined;
+  }
+
+  return (
+    knownPlanLabels[providerKind]?.[rawPlanLabel.toLowerCase()] ?? rawPlanLabel
+  );
+}
 
 export function providerPresentation(
   providerKind: ProviderKind,

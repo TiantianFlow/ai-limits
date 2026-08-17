@@ -51,9 +51,10 @@ data, or other relay keys.
 ## Provider authentication and requests
 
 ChatGPT, Claude, Kimi, and Cursor use signed-in browser sessions. AI Limits
-sends read-only requests directly from the extension to those providers' own
-web-session services, and browser cookies may accompany requests to the same
-provider origin. ChatGPT and Kimi access credentials, the derived ChatGPT
+sends read-only requests to those providers' own web-session services, and
+browser cookies may accompany requests to the same provider origin. Requests
+normally run directly from the extension; the manual Cursor enrichment
+described below runs in an already-open exact-origin page. ChatGPT and Kimi access credentials, the derived ChatGPT
 account identifier, and the selected Claude organization UUID and capabilities
 may be held in memory long enough to complete the related collection attempt
 and request sequence. Those values are not written to persistent extension
@@ -76,6 +77,28 @@ identifier with the temporary tab ID and creation timestamp in
 background worker is interrupted. AI Limits attempts to remove it when
 recovery finishes and also performs best-effort abandoned-lease cleanup when
 the background worker starts.
+
+For Cursor, the base monthly and on-demand request runs from the extension.
+During Connect or an explicit manual Refresh only, AI Limits checks for one
+already-open tab matching `https://cursor.com/*`. If one exists, it uses the
+optional `scripting` permission to run a bundled function in that page's main
+JavaScript world. The function verifies the exact `https://cursor.com` origin,
+sends POST requests with the fixed `{}` body only to the Grok Bot and credit-grant
+dashboard endpoints, and returns only their JSON responses for schema
+validation in the extension context. It does not read rendered page content,
+local or session storage, or cookie values directly. Chrome does attach the
+signed-in Cursor cookies to these fixed same-origin requests. AI Limits never
+creates or activates a Cursor tab. Scheduled refresh never queries for or
+injects into a Cursor page, so page-only Grok Bot and extra-credit metrics are
+refreshed only by Connect or manual Refresh. Raw dashboard JSON is request-local
+and is not persisted.
+
+For conservative Chrome Web Store disclosure, AI Limits classifies its
+current-tab exact-provider-origin checks as **Web history** access. For Kimi and
+Cursor, the extension learns only whether a tab at that fixed provider origin
+is currently open so it can complete the user-requested provider operation.
+This open-state result is used locally for that attempt and is never retained,
+transmitted, or assembled into a list of visited pages.
 
 ElevenLabs uses a user-created API key and its documented public subscription
 API instead of a browser-session credential. The guided connection opens the
@@ -177,7 +200,8 @@ the prior key unchanged.
 Automatic refresh is enabled in the default settings. A repeating Chrome alarm
 is created only when automatic refresh is enabled and at least one provider is
 connected. About every 15 minutes, AI Limits checks browser-session providers
-whose optional permission is still granted. ElevenLabs additionally requires
+whose optional permission is still granted. Cursor automatic refresh collects
+base monthly and on-demand usage only and never injects into a page. ElevenLabs additionally requires
 its exact API permission and an active saved key. New API requires an active
 saved key, normalized instance URL, and the exact runtime host permission for
 that instance. A rejected API key stops that provider's scheduled requests

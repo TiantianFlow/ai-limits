@@ -34,7 +34,10 @@ ElevenLabs, the New API project, or their affiliates.
   access.
 - ChatGPT, Claude, Kimi, and Cursor use the signed-in browser session. The
   extension sends low-frequency, read-only requests to their own web-session
-  usage services and does not scrape rendered page content.
+  usage services and does not scrape rendered page content. Cursor's base
+  usage refresh remains a background request; Connect or manual Refresh may
+  additionally run bundled read-only code in one already-open `cursor.com`
+  page to request two fixed dashboard JSON responses.
 - ElevenLabs uses a user-created API key because its documented public API does
   not offer the same zero-setup web-session route used by the other providers.
   The extension sends that key only to the ElevenLabs API for its read-only
@@ -68,6 +71,15 @@ recovery, and closes only the tab it created. The extension checks the legacy
 Kimi cookie first, then the exact `access_token` entry in an already-open Kimi
 page. Browser shutdown or API errors can delay or prevent best-effort cleanup.
 
+Cursor Connect or manual Refresh may use one already-open `cursor.com` tab to
+request Grok Bot and extra-credit JSON in the page's same-origin context. AI
+Limits does not create or activate a Cursor tab and does not inspect its
+rendered content, browser storage, or cookie values directly. Chrome still
+attaches the signed-in Cursor cookies to those fixed same-origin requests.
+Scheduled or automatic refresh never injects into a Cursor page, so it refreshes
+base monthly and on-demand usage without adding new Grok Bot or extra-credit
+observations.
+
 ElevenLabs setup opens its official API-keys page in a normal tab. If you need
 to sign in first, the guide remains open and lets you reopen that page. It asks
 you to create a key with **User → Read** and no generation or write permissions,
@@ -93,8 +105,9 @@ connection. New API declares dynamic optional host capability because it can be
 self-hosted, but Chrome is asked only for the exact instance origin entered in
 onboarding. Same-origin New API instances share that browser-global grant only;
 their credentials, labels, usage, and History remain independent. The optional
-`cookies` and `scripting` permissions are
-requested only for Kimi session access and interactive recovery. ElevenLabs
+`cookies` is requested only for Kimi session access. `scripting` is requested
+for Kimi interactive recovery and for Cursor's manual/connect-only page
+enrichment. ElevenLabs
 receives only optional access to `https://api.elevenlabs.io/*`; the public
 setup page is opened normally and does not receive extension host access. The
 extension does not request the broad `tabs` permission.
@@ -141,7 +154,7 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.3.3-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.3.4-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility

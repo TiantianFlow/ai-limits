@@ -11,6 +11,7 @@ import { ProviderMark } from "./ProviderMark";
 export interface ProviderConnectRowProps {
   providerKind: ProviderKind;
   credentialKind: "none" | "api-key";
+  isReconnect?: boolean;
   operation?: ProviderOperation;
   onConnect: (providerKind: ProviderKind) => void;
 }
@@ -24,6 +25,7 @@ const operationLabels: Record<ProviderOperation, string> = {
 export function ProviderConnectRow({
   providerKind,
   credentialKind,
+  isReconnect = false,
   operation,
   onConnect,
 }: ProviderConnectRowProps) {
@@ -48,7 +50,9 @@ export function ProviderConnectRow({
         <button
           className="provider-connect-row__action"
           type="button"
-          aria-label={presentation.connectionLabel}
+          aria-label={
+            isReconnect ? `Reconnect ${name}` : presentation.connectionLabel
+          }
           data-focus-key={`connect-provider-${providerKind}`}
           aria-busy={operation !== undefined}
           disabled={operation !== undefined}
@@ -60,7 +64,7 @@ export function ProviderConnectRow({
             className="provider-connect-row__action-surface"
             style={{ height: 32 }}
           >
-            Connect
+            {isReconnect ? "Reconnect" : "Connect"}
           </span>
         </button>
       </div>

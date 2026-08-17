@@ -31,6 +31,41 @@ export const cursorUsageSummarySchema = z.object({
   }).passthrough().nullable().optional(),
 }).passthrough();
 
+export const cursorGrokStatusSchema = z.object({
+  hasAvailableUsage: z.boolean().optional(),
+  hasNonZeroIncludedLimit: z.boolean().optional(),
+  usagePercent: z.number().finite().optional(),
+  currentPeriodStart: z.iso.datetime({ offset: true }).optional(),
+  nextResetTimestampUtc: z.iso.datetime({ offset: true }).optional(),
+}).passthrough();
+
+const cursorCreditAmountSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER)
+  .optional();
+
+export const cursorCreditGrantSchema = z.object({
+  total_cents: cursorCreditAmountSchema,
+  used_cents: cursorCreditAmountSchema,
+  totalCents: cursorCreditAmountSchema,
+  usedCents: cursorCreditAmountSchema,
+}).passthrough();
+
+export const cursorCreditGrantsBalanceSchema = z.object({
+  total_cents: cursorCreditAmountSchema,
+  used_cents: cursorCreditAmountSchema,
+  totalCents: cursorCreditAmountSchema,
+  usedCents: cursorCreditAmountSchema,
+  credit_grants: z.unknown().optional(),
+  creditGrants: z.unknown().optional(),
+  grants: z.unknown().optional(),
+}).passthrough();
+
 export type CursorPlanQuota = z.infer<typeof cursorPlanQuotaSchema>;
 export type CursorQuota = z.infer<typeof cursorQuotaSchema>;
 export type CursorUsageSummary = z.infer<typeof cursorUsageSummarySchema>;
+export type CursorGrokStatus = z.infer<typeof cursorGrokStatusSchema>;
+export type CursorCreditGrant = z.infer<typeof cursorCreditGrantSchema>;
+export type CursorCreditGrantsBalance = z.infer<typeof cursorCreditGrantsBalanceSchema>;

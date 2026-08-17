@@ -86,8 +86,15 @@ describe("provider catalog", () => {
         darkMarkPath: "/provider-marks/cursor-dark.svg",
         connectionLabel: "Connect Cursor",
         connectionDisclosure:
-          "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
-        capabilities: ["Monthly usage", "On-demand spend"],
+          "Reads base usage from your signed-in Cursor session and refreshes it about every 15 minutes. On Connect or manual Refresh, AI Limits may run bundled read-only code in one already-open cursor.com page to request Grok Bot and extra-credit JSON. It does not inspect page content, browser storage, or cookie values directly; Chrome attaches signed-in Cursor cookies to those fixed same-origin requests.",
+        capabilities: [
+          "Monthly usage",
+          "Grok Bot usage",
+          "On-demand spend",
+          "Extra usage credits",
+        ],
+        manualRefreshDisclosure:
+          "Cursor page enrichment uses only an already-open Cursor tab. It never creates or activates a tab, and scheduled or automatic refresh never injects into a page.",
       },
       {
         providerId: "elevenlabs",

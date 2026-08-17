@@ -54,6 +54,10 @@ account pages. Connect ChatGPT, Claude, Kimi, Cursor, ElevenLabs, or New API
 individually, approve that provider's optional access, and view the usage
 windows, reset times, credits, and plan labels that the provider makes
 available. The first four providers use the signed-in browser session.
+Cursor Connect or manual Refresh can additionally use one already-open
+`cursor.com` page for two fixed dashboard JSON requests; scheduled refresh
+never injects into a Cursor page, and the extension never creates or activates
+a Cursor tab.
 ElevenLabs uses a user-created API key and its documented read-only
 subscription request. AI Limits supports multiple independent New API
 instances, including multiple separately labeled keys on the same origin. Each
@@ -149,7 +153,9 @@ These origins are requested one provider at a time after the user clicks
   response.
 - `https://www.kimi.com/*`: reads Kimi usage/subscription responses and supports
   the bounded interactive session-access and recovery flow.
-- `https://cursor.com/*`: reads the signed-in user's Cursor usage summary.
+- `https://cursor.com/*`: reads the signed-in user's base Cursor usage. During
+  Connect or manual Refresh only, it can also run bundled read-only code in one
+  already-open exact-origin page to request Grok Bot and credit-grant JSON.
 - `https://api.elevenlabs.io/*`: sends the user-created API key as the
   `xi-api-key` header only to the read-only subscription request, then
   normalizes monthly credits and supported voice limits. The extension does
@@ -167,15 +173,22 @@ These origins are requested one provider at a time after the user clicks
 
 - `cookies`: requested only with Kimi access; reads only Kimi's exact legacy
   `kimi-auth` cookie when available. This is checked before Kimi page storage.
-- `scripting`: requested only with Kimi access; reads only the exact
-  `access_token` browser-storage entry from an already-open or recovery-created
-  matching Kimi page. If a credential is missing or rejected, interactive
-  recovery may create one inactive Kimi homepage tab. Recovery stops waiting
-  for a credential after 10 seconds and attempts best-effort cleanup of only
-  its owned tab; shutdown or browser API errors can delay or prevent cleanup.
+- `scripting`: requested with Kimi or Cursor access. For Kimi, it reads only
+  the exact `access_token` browser-storage entry from an already-open or
+  recovery-created matching Kimi page. If a credential is missing or rejected,
+  interactive recovery may create one inactive Kimi homepage tab. Recovery
+  stops waiting for a credential after 10 seconds and attempts best-effort
+  cleanup of only its owned tab; shutdown or browser API errors can delay or
+  prevent cleanup. For Cursor, Connect or manual Refresh can run a bundled
+  exact-origin function in one already-open `cursor.com` page. That function
+  sends POST requests with the fixed `{}` body only to the Grok Bot and credit-grant
+  dashboard endpoints, returns only their JSON, and does not inspect rendered
+  content, browser storage, or cookie values directly. Chrome attaches the
+  signed-in Cursor cookies to those same-origin requests. Cursor never creates
+  or activates a tab, and scheduled refresh never injects into a Cursor page.
 
 The manifest does not request the broad `tabs` permission. Scheduled refresh
-does not create or activate provider tabs.
+does not create or activate provider tabs and never injects into provider pages.
 
 ## Data-disclosure answers
 
@@ -188,8 +201,9 @@ does not create or activate provider tabs.
   and never sent to the developer.
 - **Website content:** Yes. AI Limits handles private provider session, usage,
   subscription, and organization-response JSON plus Kimi's exact
-  `access_token` browser-storage entry. It does not read rendered page text,
-  prompts, conversations, or generated responses.
+  `access_token` browser-storage entry and Cursor's two manual page-context
+  dashboard JSON responses. It does not read rendered page text, prompts,
+  conversations, or generated responses.
 - **Account identifiers and personally identifiable information:** Yes,
   narrowly handled. A ChatGPT account identifier derived from the access
   credential and a Claude organization UUID/capabilities are request-local and
@@ -202,9 +216,14 @@ does not create or activate provider tabs.
   balances may be retained in local per-instance History, but version 0.3.0
   does not graph them. Payment cards, bank details, raw provider responses, and
   transaction histories are not accessed or retained.
-- **Web history:** No browsing history or list of visited pages is collected or
-  retained. During Kimi collection, AI Limits may check for an already-open tab
-  matching the exact Kimi origin.
+- **Web history:** Yes, narrowly and conservatively classified. During Kimi
+  collection, AI Limits may check for an already-open tab matching the exact
+  Kimi origin. During Cursor Connect or manual Refresh, it may check for one
+  already-open tab matching the exact Cursor origin. This reveals only whether
+  that fixed provider-origin tab is currently open, is used locally for the
+  requested provider operation, and is never retained, transmitted, or
+  assembled into a list of visited pages. AI Limits does not query arbitrary
+  page URLs, titles, or Chrome browsing history.
 - **User activity:** No clicks, keystrokes, pointer movement, scrolling, or
   general browsing activity is monitored.
 - **Health information, personal communications, and location:** No.
@@ -263,9 +282,14 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    waiting for a credential after 10 seconds and attempts best-effort cleanup;
    do not treat delayed cleanup during shutdown or browser API errors as a
    guarantee violation.
-5. **Cursor:** sign in at `cursor.com`, click **Connect** on Cursor, approve only
-   the Cursor origin, and confirm available monthly model usage and on-demand
-   credit data appears. Use the card's **Refresh** action once.
+5. **Cursor:** sign in at `cursor.com` and keep one Cursor page open. Click
+   **Connect** on Cursor, approve the Cursor origin plus `scripting`, and confirm
+   provider-reported monthly, Grok Bot, on-demand, and extra-credit data may
+   appear. Use the card's **Refresh** action once. Confirm no Cursor tab is
+   created or activated. Then close all Cursor tabs and refresh again: base
+   monthly/on-demand usage should remain available while page-only Grok Bot and
+   extra-credit data are omitted. Scheduled refresh must not inspect or inject
+   into a Cursor page.
 6. **ElevenLabs:** click **Connect ElevenLabs** while signed out if practical.
    Sign in, use **Open API keys page** in the still-open guide, create a key
    named **AI Limits** with **User → Read** and no generation/write scopes,

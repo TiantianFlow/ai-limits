@@ -1539,6 +1539,61 @@ describe("generic provider instance service", () => {
     await expect(readCredentialWithRevision(SECOND)).resolves.toMatchObject({ value: "second-secret" });
   });
 
+  test("startup reconciliation preserves Cursor snapshot and history when scripting is newly required", async () => {
+    const cursor: ProviderInstanceRecord = {
+      id: "cursor:default",
+      providerKind: "cursor",
+      config: { kind: "fixed" },
+      access: "granted",
+      createdAt: NOW,
+      snapshot: {
+        providerKind: "cursor",
+        source: "web-session",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "quota",
+            id: "monthly",
+            label: "Monthly usage",
+            scope: "general",
+            usedRatio: 0.4,
+          },
+        ],
+      },
+      history: [
+        {
+          observedAt: NOW,
+          metrics: [
+            {
+              type: "quota",
+              metricId: "monthly",
+              usedRatio: 0.4,
+            },
+          ],
+        },
+      ],
+    };
+    await connectionRepository.create(cursor);
+    vi.mocked(browser.permissions.contains).mockImplementation(
+      async (permissions) =>
+        !permissions.permissions?.includes("scripting") as never,
+    );
+    const request = vi.spyOn(browser.permissions, "request");
+    const service = createProviderService({ clock: () => NOW });
+
+    await service.reconcilePermissions();
+
+    await expect(connectionRepository.get(cursor.id)).resolves.toEqual({
+      ...cursor,
+      access: "required",
+    });
+    expect(browser.permissions.contains).toHaveBeenCalledWith({
+      origins: ["https://cursor.com/*"],
+      permissions: ["scripting"],
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
   test("external removal leaves an unrelated instance unchanged", async () => {
     await seed(newApiInstance(FIRST), "first-secret");
     await seed({

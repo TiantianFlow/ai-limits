@@ -1,12 +1,24 @@
-import type { CounterMetric, ProviderHealth, QuotaMetric } from "../../domain/model";
+import type {
+  BalanceMetric,
+  CounterMetric,
+  ProviderHealth,
+  QuotaMetric,
+} from "../../domain/model";
 import type {
   CollectionContext,
   CollectionResult,
   ProviderCollector,
 } from "../types";
 import { retryAtFromResponse } from "../retry-after";
+import type { CursorDashboardJson } from "./page-dashboard";
 import {
+  cursorCreditGrantSchema,
+  cursorCreditGrantsBalanceSchema,
+  cursorGrokStatusSchema,
   cursorUsageSummarySchema,
+  type CursorCreditGrant,
+  type CursorCreditGrantsBalance,
+  type CursorGrokStatus,
   type CursorPlanQuota,
   type CursorQuota,
   type CursorUsageSummary,
@@ -178,7 +190,147 @@ function normalizeQuotas(summary: CursorUsageSummary): QuotaMetric[] {
     : [monthlyWindow("monthly", "Monthly usage", "general", fallback)];
 }
 
-async function collectCursor({ fetch, now, signal }: CollectionContext): Promise<CollectionResult> {
+function normalizeDashboardJson<T, Metric extends QuotaMetric | BalanceMetric>(
+  value: unknown,
+  schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } },
+  normalize: (value: T) => Metric | undefined,
+): Metric | undefined {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? normalize(parsed.data) : undefined;
+}
+
+function normalizeGrokStatus(status: CursorGrokStatus): QuotaMetric | undefined {
+  if (
+    !status.hasAvailableUsage ||
+    !status.hasNonZeroIncludedLimit ||
+    status.usagePercent === undefined ||
+    status.currentPeriodStart === undefined ||
+    status.nextResetTimestampUtc === undefined
+  ) {
+    return undefined;
+  }
+
+  const startedAt = Date.parse(status.currentPeriodStart);
+  const resetsAt = Date.parse(status.nextResetTimestampUtc);
+  const usedRatio = percentage(status.usagePercent);
+  if (
+    usedRatio === undefined ||
+    !Number.isFinite(startedAt) ||
+    !Number.isFinite(resetsAt) ||
+    resetsAt <= startedAt
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: "quota",
+    id: "grok-bot-weekly",
+    label: "Grok Bot",
+    scope: "feature",
+    usedRatio,
+    cycle: {
+      cadence: "rolling",
+      startedAt,
+      resetsAt,
+      durationMs: resetsAt - startedAt,
+    },
+  };
+}
+
+type CursorCreditAmounts = Pick<
+  CursorCreditGrantsBalance | CursorCreditGrant,
+  "total_cents" | "used_cents" | "totalCents" | "usedCents"
+>;
+
+type CreditRemainder =
+  | { kind: "absent" }
+  | { kind: "incomplete" }
+  | { kind: "invalid" }
+  | { kind: "valid"; remainingCents: number };
+
+function safeCents(value: number | undefined): value is number {
+  return (
+    value !== undefined &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+  );
+}
+
+function remainingCreditCents(credit: CursorCreditAmounts): CreditRemainder {
+  const snakePresent =
+    supplied(credit.total_cents) || supplied(credit.used_cents);
+  const camelPresent = supplied(credit.totalCents) || supplied(credit.usedCents);
+  const snakeComplete =
+    supplied(credit.total_cents) && supplied(credit.used_cents);
+  const camelComplete =
+    supplied(credit.totalCents) && supplied(credit.usedCents);
+  if (!snakePresent && !camelPresent) return { kind: "absent" };
+  if (snakePresent && camelPresent) return { kind: "invalid" };
+  if (!snakeComplete && !camelComplete) return { kind: "incomplete" };
+
+  const totalCents = snakeComplete ? credit.total_cents : credit.totalCents;
+  const usedCents = snakeComplete ? credit.used_cents : credit.usedCents;
+  if (
+    !safeCents(totalCents) ||
+    !safeCents(usedCents) ||
+    usedCents > totalCents
+  ) {
+    return { kind: "invalid" };
+  }
+
+  return { kind: "valid", remainingCents: totalCents - usedCents };
+}
+
+function normalizeExtraUsageCredits(
+  balance: CursorCreditGrantsBalance,
+): BalanceMetric | undefined {
+  const aggregate = remainingCreditCents(balance);
+  let remainingCents: number | undefined;
+  if (aggregate.kind === "valid") {
+    remainingCents = aggregate.remainingCents;
+  } else if (aggregate.kind === "invalid") {
+    return undefined;
+  } else {
+    const grantsAliases = [
+      balance.credit_grants,
+      balance.creditGrants,
+      balance.grants,
+    ].filter((grants) => grants !== undefined);
+    const [grants] = grantsAliases;
+    if (grantsAliases.length !== 1 || !Array.isArray(grants)) return undefined;
+
+    const parsedGrants = grants.map((grant) =>
+      cursorCreditGrantSchema.safeParse(grant),
+    );
+    if (parsedGrants.some((grant) => !grant.success)) return undefined;
+
+    let total = 0;
+    for (const grant of parsedGrants) {
+      if (!grant.success) return undefined;
+      const remainder = remainingCreditCents(grant.data);
+      if (remainder.kind !== "valid") return undefined;
+      total += remainder.remainingCents;
+      if (!Number.isSafeInteger(total)) return undefined;
+    }
+    remainingCents = total;
+  }
+
+  if (remainingCents === undefined || remainingCents <= 0) return undefined;
+
+  return {
+    type: "balance",
+    id: "extra-usage-credits",
+    label: "Extra usage credits",
+    scope: "product",
+    unit: "USD",
+    value: remainingCents / 100,
+  };
+}
+
+export async function collectCursor(
+  { fetch, now, signal }: CollectionContext,
+  dashboard: CursorDashboardJson = {},
+): Promise<CollectionResult> {
   try {
     const response = await fetch(USAGE_ENDPOINT, { ...REQUEST_INIT, signal });
     if (!response.ok) {
@@ -194,6 +346,22 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
       return { ok: false, health: { kind: "provider_changed" } };
     }
     const counters = onDemandCounter(parsed.data);
+    const grok = normalizeDashboardJson(
+      dashboard.grok,
+      cursorGrokStatusSchema,
+      normalizeGrokStatus,
+    );
+    const extraUsageCredits = normalizeDashboardJson(
+      dashboard["credits"],
+      cursorCreditGrantsBalanceSchema,
+      normalizeExtraUsageCredits,
+    );
+    const metrics = [
+      ...quotas,
+      ...counters,
+      ...(grok === undefined ? [] : [grok]),
+      ...(extraUsageCredits === undefined ? [] : [extraUsageCredits]),
+    ];
     return {
       ok: true,
       snapshot: {
@@ -201,12 +369,12 @@ async function collectCursor({ fetch, now, signal }: CollectionContext): Promise
         planLabel: parsed.data.membershipType,
         source: "web-session",
         fetchedAt: now,
-        metrics: [...quotas, ...counters],
+        metrics,
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            metricIds: [...quotas, ...counters].map((metric) => metric.id),
+            metricIds: metrics.map((metric) => metric.id),
           },
         ],
       },

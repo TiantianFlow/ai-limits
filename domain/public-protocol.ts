@@ -60,6 +60,7 @@ export {
 export {
   providerCatalog,
   providerNames,
+  providerPlanLabel,
   providerPresentation,
   type ProviderPresentation,
 } from "./provider-presentation";

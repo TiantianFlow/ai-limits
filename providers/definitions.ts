@@ -35,7 +35,7 @@ export const providerDefinitions = {
     credentialKind: "none",
     configKind: "fixed",
     optionalOrigins: ["https://cursor.com/*"],
-    optionalPermissions: [],
+    optionalPermissions: ["scripting"],
   },
   elevenlabs: {
     cardinality: "single",

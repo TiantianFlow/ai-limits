@@ -1,7 +1,7 @@
 import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
 import type { ProviderKind } from "./catalog";
-import { cursorAdapter } from "./cursor/adapter";
+import { cursorPackage } from "./cursor/package";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { kimiPackage } from "./kimi/package";
 import { newApiAdapter } from "./newapi/adapter";
@@ -66,15 +66,7 @@ export const providerRegistry = {
     ),
   }),
   kimi: kimiPackage,
-  cursor: createBrowserSessionPackage({
-    kind: "cursor",
-    adapter: cursorAdapter,
-    cardinality: providerDefinitions.cursor.cardinality,
-    requiredPermissions: fixedPermissions(
-      providerDefinitions.cursor.optionalOrigins,
-      providerDefinitions.cursor.optionalPermissions,
-    ),
-  }),
+  cursor: cursorPackage,
   elevenlabs: createApiKeyPackage({
     kind: "elevenlabs",
     adapter: elevenLabsAdapter,

@@ -6,7 +6,6 @@ import type {
 } from "../domain/model";
 import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
-import { cursorAdapter } from "./cursor/adapter";
 import { providerDefinitions } from "./definitions";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { createFixtureState } from "./fixtures";
@@ -51,6 +50,40 @@ const services: ProviderRuntimeServices = {
 const apiKey: ProviderCredential = { kind: "api-key", value: " secret " };
 
 describe("provider registry", () => {
+  test("scheduled Cursor collection performs only the base usage request", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        billingCycleStart: "2030-04-01T00:00:00.000Z",
+        billingCycleEnd: "2030-05-01T00:00:00.000Z",
+        membershipType: "ultra",
+        individualUsage: {
+          plan: {
+            enabled: true,
+            autoPercentUsed: 17,
+            apiPercentUsed: 25,
+          },
+        },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(
+      providerRegistry.cursor.collect(instance("cursor", fixed), {
+        ...services,
+        fetch,
+        interaction: "forbidden",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://cursor.com/api/usage-summary",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   test("is exhaustive and owns exact cardinality, config, credentials, and permissions", () => {
     expect(providerKinds).toEqual([
       "chatgpt",
@@ -116,7 +149,10 @@ describe("provider registry", () => {
         configKind: "fixed",
         accepted: fixed,
         rejected: undefined,
-        permissions: { origins: ["https://cursor.com/*"] },
+        permissions: {
+          origins: ["https://cursor.com/*"],
+          permissions: ["scripting"],
+        },
       },
       {
         kind: "elevenlabs",
@@ -176,7 +212,7 @@ describe("provider registry", () => {
         credentialKind: "none",
         configKind: "fixed",
         optionalOrigins: ["https://cursor.com/*"],
-        optionalPermissions: [],
+        optionalPermissions: ["scripting"],
       },
       elevenlabs: {
         cardinality: "single",
@@ -204,7 +240,6 @@ describe("provider registry", () => {
       chatgpt: chatGptAdapter,
       claude: claudeAdapter,
       kimi: kimiAdapter,
-      cursor: cursorAdapter,
       elevenlabs: elevenLabsAdapter,
       newapi: newApiAdapter,
     };
@@ -231,7 +266,9 @@ describe("provider registry", () => {
         services,
         credential,
       );
-      expect(adapterSpies[kind]).toHaveBeenCalledTimes(1);
+      if (kind !== "cursor") {
+        expect(adapterSpies[kind]).toHaveBeenCalledTimes(1);
+      }
     }
 
     expect(adapterSpies.chatgpt).toHaveBeenCalledWith({
