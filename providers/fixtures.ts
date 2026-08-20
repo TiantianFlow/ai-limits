@@ -150,6 +150,28 @@ export function createFixtureState(
       }, now),
     },
     {
+      id: "grok:default",
+      providerKind: "grok",
+      access: "granted",
+      createdAt: now - DAY,
+      history: [],
+      snapshot: fixtureSnapshot({
+        providerKind: "grok",
+        accountLabel: "Grok SuperGrok",
+        planLabel: "SuperGrok",
+        metrics: [
+          quota("weekly-pool", "Weekly usage pool", "general", 0.42, {
+            cadence: "calendar",
+            resetsAt: now + 5 * DAY,
+            durationMs: 7 * DAY,
+          }),
+        ],
+        usageGroups: [
+          { id: "usage-pool", label: "Usage pool", metricIds: ["weekly-pool"] },
+        ],
+      }, now),
+    },
+    {
       id: "elevenlabs:default",
       providerKind: "elevenlabs",
       access: "granted",

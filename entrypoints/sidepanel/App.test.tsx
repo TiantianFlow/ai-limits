@@ -946,7 +946,7 @@ describe("side-panel App", () => {
       name: "all attempted providers succeed",
       state: createFixtureState(NOW),
       outcomes: successfulOutcomes(createFixtureState(NOW)),
-      expected: "Updated 6 providers.",
+      expected: "Updated 7 providers.",
     },
     {
       name: "Kimi is the only provider needing a session",
@@ -955,7 +955,7 @@ describe("side-panel App", () => {
         ...successfulOutcomes(createFixtureState(NOW)),
         kimi: { kind: "deferred", reason: "session_required" } as const,
       },
-      expected: "Updated 5 of 6. Kimi needs a browser session.",
+      expected: "Updated 6 of 7. Kimi needs a browser session.",
     },
     {
       name: "mixed non-success outcomes need attention",

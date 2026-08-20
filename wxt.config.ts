@@ -16,7 +16,7 @@ export default defineConfig({
   manifest: {
     name: "AI Limits",
     description:
-      "Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.",
+      "Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
     optional_host_permissions: providers.flatMap(

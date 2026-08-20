@@ -8,6 +8,7 @@ import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
 import { providerDefinitions } from "./definitions";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
+import { grokAdapter } from "./grok/adapter";
 import { createFixtureState } from "./fixtures";
 import { kimiAdapter } from "./kimi/adapter";
 import { newApiAdapter } from "./newapi/adapter";
@@ -90,6 +91,7 @@ describe("provider registry", () => {
       "claude",
       "kimi",
       "cursor",
+      "grok",
       "elevenlabs",
       "newapi",
     ]);
@@ -155,6 +157,15 @@ describe("provider registry", () => {
         },
       },
       {
+        kind: "grok",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://grok.com/*"] },
+      },
+      {
         kind: "elevenlabs",
         cardinality: "single",
         credentialKind: "api-key",
@@ -214,6 +225,13 @@ describe("provider registry", () => {
         optionalOrigins: ["https://cursor.com/*"],
         optionalPermissions: ["scripting"],
       },
+      grok: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: ["https://grok.com/*"],
+        optionalPermissions: [],
+      },
       elevenlabs: {
         cardinality: "single",
         credentialKind: "api-key",
@@ -240,6 +258,7 @@ describe("provider registry", () => {
       chatgpt: chatGptAdapter,
       claude: claudeAdapter,
       kimi: kimiAdapter,
+      grok: grokAdapter,
       elevenlabs: elevenLabsAdapter,
       newapi: newApiAdapter,
     };

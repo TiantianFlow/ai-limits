@@ -20,7 +20,7 @@
 - **Settings** 中的 **Automatic refresh** 必须保持开启。
 - 至少有一个服务保持连接；没有已连接服务时，AI Limits 会删除刷新闹钟。
 - Chrome 仍然保留该服务的可选访问权限。
-- 对于 ChatGPT、Claude、Kimi 和 Cursor，服务商的浏览器登录会话仍然可用；
+- 对于 ChatGPT、Claude、Kimi、Cursor 和 Grok，服务商的浏览器登录会话仍然可用；
   ElevenLabs 和 New API 则需要已保存且处于有效状态的 API 密钥；New API 还
   需要其精确实例权限。
 - Chrome 正在运行，并且能够运行后台扩展。
@@ -36,7 +36,7 @@ Chrome 完全关闭或设备休眠时，AI Limits 无法刷新。恢复运行后
 
 ## 手动刷新成功后，自动刷新也一定能成功吗？
 
-对于 ChatGPT、Claude 和 Cursor 的基础用量，只要权限和浏览器会话仍然有效，通常可以；
+对于 ChatGPT、Claude、Cursor 的基础用量以及 Grok，只要权限和浏览器会话仍然有效，通常可以；
 对于 ElevenLabs 或 New API，只要保存的密钥和主机权限仍处于有效状态，通常也可以。但手动刷新可以
 绕过定时退避，自动刷新则会遵守退避时间。Kimi 手动刷新还可能执行交互式会话
 恢复。Cursor 手动刷新还可能通过已经打开的 Cursor 页面请求 Grok Bot 和额外

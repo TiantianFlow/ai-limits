@@ -80,7 +80,7 @@ History screen and verifies that its chart and current-cycle surface fit inside
 the panel frame. The privacy image opens the real Settings view through its real
 button, then verifies that the nonpersonal **Demo relay A** and **Demo relay B**
 New API instance rows and their per-instance actions both fit inside the panel
-frame. The overview provider line lists all six supported providers.
+frame. The overview provider line lists all seven supported providers.
 
 Never generate store artwork from a browser profile, extension storage,
 provider website, network credential, or live provider response. Representative

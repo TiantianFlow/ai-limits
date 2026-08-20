@@ -3,6 +3,7 @@ import { claudeAdapter } from "./claude/adapter";
 import type { ProviderKind } from "./catalog";
 import { cursorPackage } from "./cursor/package";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
+import { grokAdapter } from "./grok/adapter";
 import { kimiPackage } from "./kimi/package";
 import { newApiAdapter } from "./newapi/adapter";
 import {
@@ -67,6 +68,15 @@ export const providerRegistry = {
   }),
   kimi: kimiPackage,
   cursor: cursorPackage,
+  grok: createBrowserSessionPackage({
+    kind: "grok",
+    adapter: grokAdapter,
+    cardinality: providerDefinitions.grok.cardinality,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.grok.optionalOrigins,
+      providerDefinitions.grok.optionalPermissions,
+    ),
+  }),
   elevenlabs: createApiKeyPackage({
     kind: "elevenlabs",
     adapter: elevenLabsAdapter,

@@ -39,21 +39,21 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs from six providers. ChatGPT, Claude, Kimi, and Cursor use accounts
+graphs from seven providers. ChatGPT, Claude, Kimi, Cursor, and Grok use accounts
 already signed in within the user's browser profile; ElevenLabs and New API use
 keys the user connects through guided setup.
 
 ## Short description
 
-Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.
+Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.
 
 ## Detailed description
 
 AI Limits keeps subscription limits visible without switching among provider
-account pages. Connect ChatGPT, Claude, Kimi, Cursor, ElevenLabs, or New API
+account pages. Connect ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, or New API
 individually, approve that provider's optional access, and view the usage
 windows, reset times, credits, and plan labels that the provider makes
-available. The first four providers use the signed-in browser session.
+available. ChatGPT, Claude, Kimi, Cursor, and Grok use the signed-in browser session.
 Cursor Connect or manual Refresh can additionally use one already-open
 `cursor.com` page for two fixed dashboard JSON requests; scheduled refresh
 never injects into a Cursor page, and the extension never creates or activates
@@ -117,7 +117,7 @@ permission while retaining their nonsecret configuration, normalized usage,
 refresh status, History, and inactive saved key.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
-endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor,
+endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI,
 ElevenLabs, the New API project, or their affiliates. Browser-session provider endpoints are private
 and unsupported. ElevenLabs and New API use documented endpoints, but provider response
 and authorization behavior can still change without notice.
@@ -156,6 +156,8 @@ These origins are requested one provider at a time after the user clicks
 - `https://cursor.com/*`: reads the signed-in user's base Cursor usage. During
   Connect or manual Refresh only, it can also run bundled read-only code in one
   already-open exact-origin page to request Grok Bot and credit-grant JSON.
+- `https://grok.com/*`: reads the signed-in user's Grok session, rate-limit, and
+  subscription responses. This is consumer Grok on grok.com, not Cursor's Grok Bot.
 - `https://api.elevenlabs.io/*`: sends the user-created API key as the
   `xi-api-key` header only to the read-only subscription request, then
   normalizes monthly credits and supported voice limits. The extension does
@@ -264,11 +266,11 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Six-provider test flow
+## Seven-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm the side panel opens with six permission-required cards.
+   confirm the side panel opens with seven permission-required cards.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -289,8 +291,12 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    created or activated. Then close all Cursor tabs and refresh again: base
    monthly/on-demand usage should remain available while page-only Grok Bot and
    extra-credit data are omitted. Scheduled refresh must not inspect or inject
-   into a Cursor page.
-6. **ElevenLabs:** click **Connect ElevenLabs** while signed out if practical.
+    into a Cursor page.
+6. **Grok:** sign in at `grok.com`, click **Connect** on Grok, approve only the
+   Grok origin, and confirm a SuperGrok-family or Free plan plus the reported
+   query window appears. Use the card's **Refresh** action once. No extra
+   `cookies` or `scripting` permission should be requested.
+7. **ElevenLabs:** click **Connect ElevenLabs** while signed out if practical.
    Sign in, use **Open API keys page** in the still-open guide, create a key
    named **AI Limits** with **User → Read** and no generation/write scopes,
    paste it, then select **Validate & connect** and approve only
@@ -298,7 +304,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    available voice limits. Close all ElevenLabs tabs and refresh again; no tab
    should open. If possible, revoke the key at ElevenLabs and confirm AI Limits
    stops scheduled attempts, preserves stale data, and offers **Replace key**.
-7. **New API:** click **Connect New API** twice, use two nonpersonal labels, and
+8. **New API:** click **Connect New API** twice, use two nonpersonal labels, and
    connect two reviewer-controlled keys for the same origin (a site URL or a
    `/v1/messages` URL is accepted). Confirm onboarding normalizes each URL,
    Chrome asks only for that exact origin, both independent cards appear, and
@@ -310,7 +316,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
    while nonsecret configuration, normalized usage, refresh state, and History
    remain. Account wallet, subscriptions, admin data, and other keys remain out
    of scope.
-8. Use the header refresh and confirm connected providers retain their previous
+9. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history while counter/spend and balance samples remain ungraphed. In Settings, turn automatic

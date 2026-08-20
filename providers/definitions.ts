@@ -37,6 +37,13 @@ export const providerDefinitions = {
     optionalOrigins: ["https://cursor.com/*"],
     optionalPermissions: ["scripting"],
   },
+  grok: {
+    cardinality: "single",
+    credentialKind: "none",
+    configKind: "fixed",
+    optionalOrigins: ["https://grok.com/*"],
+    optionalPermissions: [],
+  },
   elevenlabs: {
     cardinality: "single",
     credentialKind: "api-key",

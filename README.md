@@ -13,7 +13,7 @@ Chrome Web Store releases can lag while review or publishing is pending; the
 Store badge shows the currently published version. GitHub Releases preserve
 the corresponding source and validated upload archive.
 
-AI Limits supports six providers: ChatGPT, Claude, Kimi, Cursor, ElevenLabs,
+AI Limits supports seven providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs,
 and New API. It is a Chrome side-panel extension that shows their current
 subscription usage and local quota-history graphs in one compact view. It
 normalizes provider-specific reporting into one **Used** or **Left** display
@@ -23,7 +23,7 @@ usage only after you connect an individual provider and approve that
 provider's optional access.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
-endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor,
+endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI,
 ElevenLabs, the New API project, or their affiliates.
 
 ![AI Limits Chrome side panel showing representative subscription usage in Used mode, reset timing, pace indicators, and provider navigation](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
@@ -32,7 +32,7 @@ ElevenLabs, the New API project, or their affiliates.
 
 - Each provider is opt-in. Chrome asks for only that provider's exact host
   access.
-- ChatGPT, Claude, Kimi, and Cursor use the signed-in browser session. The
+- ChatGPT, Claude, Kimi, Cursor, and Grok use the signed-in browser session. The
   extension sends low-frequency, read-only requests to their own web-session
   usage services and does not scrape rendered page content. Cursor's base
   usage refresh remains a background request; Connect or manual Refresh may
@@ -154,7 +154,7 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.3.4-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.3.5-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility

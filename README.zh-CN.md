@@ -12,7 +12,7 @@
 Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。
 GitHub Releases 会保留对应的源代码和已验证上传包。
 
-AI Limits 支持六个服务：ChatGPT、Claude、Kimi、Cursor、ElevenLabs 和 New API。
+AI Limits 支持七个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs 和 New API。
 它是一款 Chrome 侧边栏扩展，可在一个紧凑的界面中查看这些服务的当前订阅用量
 及本地配额历史图表。它会将不同服务商的用量统一为“已用”或“剩余”视图；当
 服务商提供完整的重置周期信息时，还会将配额消耗与已过时间比较，显示用量节奏。
@@ -20,7 +20,7 @@ AI Limits 支持六个服务：ChatGPT、Claude、Kimi、Cursor、ElevenLabs 和
 后，才会读取其用量。
 
 AI Limits 是 TiantianFlow 开发的独立项目，与 OpenAI、Anthropic、Moonshot AI、
-Cursor、ElevenLabs、New API 项目或其关联方不存在隶属、背书或授权关系。
+Cursor、xAI、ElevenLabs、New API 项目或其关联方不存在隶属、背书或授权关系。
 
 > 当前扩展界面为英文。下图的中文文字是项目介绍文案；嵌入的实际扩展界面
 > 仍为英文。后续完成扩展本身的简体中文支持后，我们会重新生成截图。
@@ -30,7 +30,7 @@ Cursor、ElevenLabs、New API 项目或其关联方不存在隶属、背书或�
 ## 工作原理
 
 - 每个服务都需要单独启用。Chrome 只会请求该服务的精确主机访问权限。
-- ChatGPT、Claude、Kimi 和 Cursor 使用浏览器中已登录的会话。扩展以较低
+- ChatGPT、Claude、Kimi、Cursor 和 Grok 使用浏览器中已登录的会话。扩展以较低
   频率向这些服务自己的网站会话用量接口发送只读请求，不会抓取页面中渲染的
   内容。Cursor 的基础用量仍由后台请求刷新；Connect 或手动 Refresh 还可能在
   一个已经打开的 `cursor.com` 页面中运行扩展自带的只读代码，请求两个固定的
@@ -130,7 +130,7 @@ macOS 文件选择器中正常显示。点击扩展工具栏图标即可打开�
 pnpm verify:zip
 ```
 
-该命令会重新构建扩展，创建 `.output/ai-limits-0.3.4-chrome.zip`，打开压缩包，
+该命令会重新构建扩展，创建 `.output/ai-limits-0.3.5-chrome.zip`，打开压缩包，
 并验证清单、入口文件、权限和禁止包含的文件规则。
 
 ## 服务兼容性

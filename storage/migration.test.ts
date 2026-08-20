@@ -478,7 +478,7 @@ describe("published 0.2.3 storage migration", () => {
     (origin) => {
       const result = migrateLegacyStorage(
         legacyInput({
-          aiLimitsConnectionSuppressions: ["claude", "kimi", "cursor"],
+          aiLimitsConnectionSuppressions: ["claude", "kimi", "cursor", "grok"],
         }),
         now,
         { origins: [origin] },
@@ -500,7 +500,7 @@ describe("published 0.2.3 storage migration", () => {
   test("treats a broad granted HTTPS pattern as covering a dynamic New API origin", () => {
     const result = migrateLegacyStorage(
       legacyInput({
-        aiLimitsConnectionSuppressions: ["chatgpt", "claude", "kimi", "cursor"],
+        aiLimitsConnectionSuppressions: ["chatgpt", "claude", "kimi", "cursor", "grok"],
         aiLimitsCredentials: {
           version: 1,
           providers: {

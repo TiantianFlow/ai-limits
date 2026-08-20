@@ -249,7 +249,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "One Chrome side panel",
       title: "Every AI limit, in one quiet view.",
       description:
-        "See six providers and multiple independent New API instances as Used or Left, with reset timing and local History.",
+        "See seven providers and multiple independent New API instances as Used or Left, with reset timing and local History.",
     },
     pacing: {
       eyebrow: "Plan your usage",
@@ -277,10 +277,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "6 providers · Multiple New API instances",
+      description: "7 providers · Multiple New API instances",
     },
     chromeSidePanelLabel: "Chrome side panel",
-    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
+    providerLine: "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
       "Provider access is opt-in",
@@ -299,7 +299,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "一个 Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
       description:
-        "统一查看六个服务和多个相互独立的 New API 实例，包括已用或剩余、重置时间和本地历史。",
+        "统一查看七个服务和多个相互独立的 New API 实例，包括已用或剩余、重置时间和本地历史。",
     },
     pacing: {
       eyebrow: "规划你的用量",
@@ -327,10 +327,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
-      description: "6 个服务 · 多个 New API 实例",
+      description: "7 个服务 · 多个 New API 实例",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
-    providerLine: "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
+    providerLine: "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
       "服务访问需主动授权",

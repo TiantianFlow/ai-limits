@@ -199,23 +199,23 @@ describe("store artwork copy", () => {
     expect(previewContent.en.social).toEqual({
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "6 providers · Multiple New API instances",
+      description: "7 providers · Multiple New API instances",
     });
     expect(previewContent.en.socialNotes).toEqual([
       "Used or Left · Reset timing · Pace · Local history",
       "Local history. No remote backend.",
     ]);
     expect(previewContent.zh_CN.social.description).toBe(
-      "6 个服务 · 多个 New API 实例",
+      "7 个服务 · 多个 New API 实例",
     );
   });
 
-  it("names all six supported providers in the overview artwork", () => {
+  it("names all seven supported providers in the overview artwork", () => {
     expect(previewContent.en.providerLine).toBe(
-      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
+      "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
     );
     expect(previewContent.zh_CN.providerLine).toBe(
-      "ChatGPT · Claude · Kimi · Cursor · ElevenLabs · New API",
+      "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
     );
   });
 

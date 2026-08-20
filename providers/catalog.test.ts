@@ -21,6 +21,7 @@ describe("provider catalog", () => {
       "claude",
       "kimi",
       "cursor",
+      "grok",
     ];
     const apiKeyKinds: ApiKeyProviderKind[] = ["elevenlabs", "newapi"];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
@@ -95,6 +96,15 @@ describe("provider catalog", () => {
         ],
         manualRefreshDisclosure:
           "Cursor page enrichment uses only an already-open Cursor tab. It never creates or activates a tab, and scheduled or automatic refresh never injects into a page.",
+      },
+      {
+        providerId: "grok",
+        markPath: "/provider-marks/grok.svg",
+        darkMarkPath: "/provider-marks/grok-dark.svg",
+        connectionLabel: "Connect Grok",
+        connectionDisclosure:
+          "Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.",
+        capabilities: ["Usage pool", "Plan tier"],
       },
       {
         providerId: "elevenlabs",

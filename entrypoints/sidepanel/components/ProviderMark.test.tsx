@@ -22,12 +22,13 @@ describe("ProviderMark", () => {
     );
 
     const marks = Array.from(document.querySelectorAll("img"));
-    expect(marks).toHaveLength(7);
+    expect(marks).toHaveLength(8);
     expect(marks.map((mark) => mark.getAttribute("src"))).toEqual([
       "/provider-marks/chatgpt.svg",
       "/provider-marks/claude.svg",
       "/provider-marks/kimi.svg",
       "/provider-marks/cursor.svg",
+      "/provider-marks/grok.svg",
       "/provider-marks/elevenlabs.svg",
       "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
@@ -39,10 +40,11 @@ describe("ProviderMark", () => {
     ).toEqual([
       "/provider-marks/kimi-dark.svg",
       "/provider-marks/cursor-dark.svg",
+      "/provider-marks/grok-dark.svg",
     ]);
-    expect(new Set(marks.slice(0, 6).map((mark) => mark.src))).toHaveProperty(
+    expect(new Set(marks.slice(0, 7).map((mark) => mark.src))).toHaveProperty(
       "size",
-      6,
+      7,
     );
     expect(marks.every((mark) => mark.getAttribute("aria-hidden") === "true")).toBe(
       true,
@@ -52,7 +54,7 @@ describe("ProviderMark", () => {
       true,
     );
     expect(
-      marks.slice(0, 6).map((mark) =>
+      marks.slice(0, 7).map((mark) =>
         [...mark.classList].find((className) =>
           className.startsWith("provider-mark--provider-"),
         ),
@@ -62,6 +64,7 @@ describe("ProviderMark", () => {
       "provider-mark--provider-claude",
       "provider-mark--provider-kimi",
       "provider-mark--provider-cursor",
+      "provider-mark--provider-grok",
       "provider-mark--provider-elevenlabs",
       "provider-mark--provider-newapi",
     ]);
@@ -71,9 +74,9 @@ describe("ProviderMark", () => {
     expect(
       marks.some((mark) => mark.classList.contains("mark-contrast-tile")),
     ).toBe(false);
-    expect(marks[5]).toHaveClass("provider-mark--fallback");
+    expect(marks[6]).toHaveClass("provider-mark--fallback");
     expect(
-      marks.slice(0, 5).every((mark) =>
+      marks.slice(0, 6).every((mark) =>
         !mark.classList.contains("provider-mark--fallback"),
       ),
     ).toBe(true);
