@@ -84,4 +84,33 @@ describe("side panel layout stylesheet", () => {
       controls.some((rule) => /flex-wrap:\s*wrap/.test(rule.declarations)),
     ).toBe(true);
   });
+
+  it("paints stacked meter segments above the generic fill, including patterns", () => {
+    // `.meter > span { background: var(--quota) }` is 0,1,1 and resets
+    // background-image. Segment paint must use `.meter > .meter__segment--N`
+    // (0,2,0), matching `.meter > .meter__fill--accent`, and must restore
+    // the colourblind stripe/dot images the legend already shows.
+    const first = rulesFor(".meter > .meter__segment--1");
+    const second = rulesFor(".meter > .meter__segment--2");
+    const third = rulesFor(".meter > .meter__segment--3");
+    expect(first.length).toBeGreaterThan(0);
+    expect(second.length).toBeGreaterThan(0);
+    expect(third.length).toBeGreaterThan(0);
+    expect(
+      first.some((rule) =>
+        /background-color:\s*#a78bfa/.test(rule.declarations) &&
+        /repeating-linear-gradient/.test(rule.declarations),
+      ),
+    ).toBe(true);
+    expect(
+      second.some((rule) => /background-color:\s*#7c3aed/.test(rule.declarations)),
+    ).toBe(true);
+    expect(
+      third.some(
+        (rule) =>
+          /background-color:\s*#5b21b6/.test(rule.declarations) &&
+          /radial-gradient/.test(rule.declarations),
+      ),
+    ).toBe(true);
+  });
 });

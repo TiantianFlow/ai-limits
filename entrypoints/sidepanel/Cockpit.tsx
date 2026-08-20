@@ -293,7 +293,9 @@ export function providerView(
   const values = snapshot?.metrics
     ? [
         ...counterMetrics(snapshot).map(counterView),
-        ...balanceMetrics(snapshot).map(balanceView),
+        ...balanceMetrics(snapshot)
+          .filter((metric) => metric.value !== 0)
+          .map(balanceView),
       ]
     : [];
   const plan = providerPlanLabel(

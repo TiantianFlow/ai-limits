@@ -92,6 +92,26 @@ are used only to identify the corresponding provider beside its visible name.
   Cursor accurately. They are used unmodified as secondary provider identifiers
   and never as AI Limits' own identity.
 
+## `grok.svg` and `grok-dark.svg`
+
+- Upstream source: Grok's official homepage-declared
+  [`/images/favicon.svg`](https://grok.com/images/favicon.svg).
+- Retrieved: 2026-08-17.
+- Modified: the official Figma export's `foreignObject` blur, drop shadow,
+  and outline stroke were removed so Chromium can theme-switch a local SVG
+  without a runtime request. The rounded-square field and two glyph paths are
+  unchanged. `grok-dark.svg` inverts the official near-black field and
+  off-white glyph so the mark remains legible on dark surfaces. Upstream
+  SHA-256 is
+  `c3db0dfaf760b702b8490c6cbefe07fd8bfe00db43cae6a0acccf768f44d6179`;
+  bundled wrapper SHA-256 values are
+  `2f70f569bd9fdc4f8e5987b75142bfd09431b72a54f56fd334526047fa5614a8`
+  and `114e71a4a068dcc690a0dde645079d5ddc6dfd2dfcad3988c0611e9d4b57fe03`.
+- Ownership: xAI; the Grok name and favicon artwork remain its property.
+- Conditions: used only as a secondary provider identifier beside the Grok
+  name. No general public trademark license was located; availability as a
+  favicon does not transfer ownership or imply endorsement.
+
 ## `elevenlabs.svg`
 
 - Upstream source: [ElevenLabs brand guidelines](https://elevenlabs.io/brand)

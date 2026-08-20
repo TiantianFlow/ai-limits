@@ -6,7 +6,7 @@ AI Limits is a locally running Chrome extension by TiantianFlow. This policy
 describes version 0.3.2.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
-or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, ElevenLabs, the New
+or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI, ElevenLabs, the New
 API project, or their affiliates.
 
 ## Data AI Limits accesses
@@ -50,7 +50,7 @@ data, or other relay keys.
 
 ## Provider authentication and requests
 
-ChatGPT, Claude, Kimi, and Cursor use signed-in browser sessions. AI Limits
+ChatGPT, Claude, Kimi, Cursor, and Grok use signed-in browser sessions. AI Limits
 sends read-only requests to those providers' own web-session services, and
 browser cookies may accompany requests to the same provider origin. Requests
 normally run directly from the extension; the manual Cursor enrichment

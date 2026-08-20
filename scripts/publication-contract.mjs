@@ -49,15 +49,15 @@ const requiredVisibleElevenLabsStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports six providers: ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API.",
-    error: "README is missing the rendered six-provider statement.",
+      "AI Limits supports seven providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API.",
+    error: "README is missing the rendered seven-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持六个服务：ChatGPT、Claude、Kimi、Cursor、ElevenLabs 和 New API。",
+      "AI Limits 支持七个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs 和 New API。",
     error:
-      "Simplified Chinese README is missing the rendered six-provider statement.",
+      "Simplified Chinese README is missing the rendered seven-provider statement.",
   },
   {
     key: "faq",
@@ -181,9 +181,9 @@ const requiredVisibleElevenLabsStatements = [
   {
     key: "listing",
     statement:
-      "confirm the side panel opens with six permission-required cards.",
+      "confirm the side panel opens with seven permission-required cards.",
     error:
-      "Store listing reviewer flow must expect six permission-required cards.",
+      "Store listing reviewer flow must expect seven permission-required cards.",
   },
 ];
 const requiredVisibleV030Statements = [

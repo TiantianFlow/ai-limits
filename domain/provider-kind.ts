@@ -3,6 +3,7 @@ export const providerKinds = [
   "claude",
   "kimi",
   "cursor",
+  "grok",
   "elevenlabs",
   "newapi",
 ] as const;
@@ -12,7 +13,8 @@ export type BrowserSessionProviderKind =
   | "chatgpt"
   | "claude"
   | "kimi"
-  | "cursor";
+  | "cursor"
+  | "grok";
 export type ApiKeyProviderKind = "elevenlabs" | "newapi";
 
 export function isProviderKind(value: unknown): value is ProviderKind {

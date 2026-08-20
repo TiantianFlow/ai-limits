@@ -28,7 +28,7 @@ const publicRouteGate =
 const paceAvailabilityStatement =
   "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
 const storeShortDescription =
-  "Track ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
+  "Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
 const kimiAutoRefreshStatement =
   "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.";
 const kimiAutoRefreshStatementZh =
@@ -37,15 +37,15 @@ const elevenLabsPublicationStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports six providers: ChatGPT, Claude, Kimi, Cursor, ElevenLabs, and New API.",
-    error: "README is missing the rendered six-provider statement.",
+      "AI Limits supports seven providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API.",
+    error: "README is missing the rendered seven-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持六个服务：ChatGPT、Claude、Kimi、Cursor、ElevenLabs 和 New API。",
+      "AI Limits 支持七个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs 和 New API。",
     error:
-      "Simplified Chinese README is missing the rendered six-provider statement.",
+      "Simplified Chinese README is missing the rendered seven-provider statement.",
   },
   {
     key: "faq",
@@ -169,9 +169,9 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "confirm the side panel opens with six permission-required cards.",
+      "confirm the side panel opens with seven permission-required cards.",
     error:
-      "Store listing reviewer flow must expect six permission-required cards.",
+      "Store listing reviewer flow must expect seven permission-required cards.",
   },
 ];
 const v030PublicationStatements = [

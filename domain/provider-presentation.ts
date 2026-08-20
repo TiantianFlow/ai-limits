@@ -63,6 +63,16 @@ export const providerCatalog = {
         "Cursor page enrichment uses only an already-open Cursor tab. It never creates or activates a tab, and scheduled or automatic refresh never injects into a page.",
     },
   },
+  grok: {
+    displayName: "Grok",
+    presentation: {
+      markPath: "/provider-marks/grok.svg",
+      darkMarkPath: "/provider-marks/grok-dark.svg",
+      connectionLabel: "Connect Grok",
+      connectionDisclosure: browserSessionDisclosure,
+      capabilities: ["Usage pool", "Plan tier"],
+    },
+  },
   elevenlabs: {
     displayName: "ElevenLabs",
     presentation: {

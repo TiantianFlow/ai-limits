@@ -81,6 +81,14 @@ describe("QuotaBars", () => {
         segment.getAttribute("style"),
       ),
     ).toEqual(["width: 3%;", "width: 7%;"]);
+    const barClasses = Array.from(usedMeter.children).map(
+      (segment) => segment.className,
+    );
+    expect(barClasses).toEqual([
+      "meter__segment meter__segment--1",
+      "meter__segment meter__segment--2",
+    ]);
+    expect(barClasses[0]).not.toEqual(barClasses[1]);
     expect(screen.getByText("Work 3%")).toBeVisible();
     expect(screen.getByText("Code 7%")).toBeVisible();
     expect(screen.queryByText("Total 10% used")).not.toBeInTheDocument();

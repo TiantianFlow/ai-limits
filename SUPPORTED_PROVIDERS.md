@@ -2,7 +2,7 @@
 
 English | [简体中文](SUPPORTED_PROVIDERS.zh-CN.md)
 
-AI Limits supports six provider connections. Each provider is opt-in, and the
+AI Limits supports seven provider connections. Each provider is opt-in, and the
 extension keeps normalized usage and History in the local Chrome profile.
 
 | Provider | Connection | What AI Limits reads | Important nuance |
@@ -11,6 +11,7 @@ extension keeps normalized usage and History in the local Chrome profile.
 | Claude | Signed-in browser session | General and model-specific limits plus extra usage when reported | Uses private web-session interfaces. Organization selection is request-local; a provider-supplied display label may be retained. |
 | Kimi | Browser session with targeted credential recovery | Subscription total and Kimi Code limits | May read the exact legacy `kimi-auth` cookie or `localStorage.access_token`. Manual Connect or Refresh may briefly open one inactive Kimi tab so Kimi can refresh its own session. Automatic refresh never opens a tab and may defer when no usable session is available. |
 | Cursor | Signed-in browser session plus manual page enrichment | Cursor-model and other-model monthly limits, Grok Bot weekly usage, and on-demand/extra-credit data when reported | Base usage refreshes in the background. Connect or manual Refresh can request Grok Bot and extra-credit JSON through one already-open `cursor.com` tab. Chrome attaches signed-in Cursor cookies to those fixed same-origin requests, but AI Limits does not inspect cookie values directly. It never creates or activates a Cursor tab; automatic refresh never injects and therefore cannot add those page-only metrics. |
+| Grok | Signed-in browser session | Weekly or monthly usage pool as the subscription limit, with Grok Build and Chat composition when those buckets account for the whole pool, plus the SuperGrok-family plan label. Per-mode chat rate limits (`fast`, `expert`, `heavy`, `auto`) appear only as a fallback when no pool is available | Uses private web-session usage interfaces on `grok.com`. The browser may attach Grok cookies; account identifiers and raw subscription payloads are not persisted. This is consumer Grok, not Cursor's Grok Bot. |
 | ElevenLabs | User-created API key | Subscription credit and voice-capacity limits | The guide recommends **User → Read**. AI Limits calls the documented subscription endpoint and stores the validated key locally; no browser session is reused. |
 | New API | One instance URL, label, and relay key per connection; multiple connections supported | Each key's granted, used, and remaining quota, or absolute usage for an unlimited key | AI Limits calls `/api/status` and the read-only `/api/usage/token/` endpoint. The request is read-only, but each relay key may still be capable of model calls. |
 
@@ -69,7 +70,7 @@ credential or raw provider response.
 
 ## Compatibility boundary
 
-ChatGPT, Claude, Kimi, and Cursor depend on private provider interfaces that may
+ChatGPT, Claude, Kimi, Cursor, and Grok depend on private provider interfaces that may
 change without notice. ElevenLabs and New API use documented endpoints, but
 their response and authorization behavior can also change. AI Limits rejects
 malformed or contradictory usage rather than inventing a percentage, reset, or

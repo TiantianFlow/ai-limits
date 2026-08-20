@@ -803,6 +803,35 @@ describe("Cockpit", () => {
     ]);
   });
 
+  it("hides a collected extra-usage-credits balance of zero from the card", () => {
+    const provider = createFixtureState(NOW).instances.find(
+      (instance) => instance.providerKind === "grok",
+    )!;
+    provider.snapshot!.metrics = [
+      ...provider.snapshot!.metrics,
+      {
+        type: "balance",
+        id: "extra-usage-credits",
+        label: "Extra usage credits",
+        scope: "product",
+        unit: "USD",
+        value: 0,
+      },
+    ];
+    provider.snapshot!.usageGroups = [
+      {
+        id: "usage-pool",
+        label: "Usage pool",
+        metricIds: ["weekly-pool", "extra-usage-credits"],
+      },
+    ];
+
+    const view = providerView(provider, "used", NOW);
+    expect(view.values).toEqual([]);
+    expect(view.usageGroups[0]?.values).toEqual([]);
+    expect(view.usageGroups[0]?.quotas[0]?.id).toBe("weekly-pool");
+  });
+
   it("renders quota rows through provider-authored semantic groups", () => {
     const state = createEmptyFixtureState();
     const provider = createFixtureState(NOW).instances[0]!;
@@ -903,6 +932,7 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Connect Grok" })).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Connect ElevenLabs" }),
     ).toBeVisible();
@@ -913,7 +943,7 @@ describe("Cockpit", () => {
       screen.getByRole("heading", { level: 1, name: "AI Limits" }),
     ).toBeVisible();
     expect(screen.getByText(/One panel for every AI subscription quota/)).toBeVisible();
-    expect(screen.getByText("Supported providers · 6")).toBeVisible();
+    expect(screen.getByText("Supported providers · 7")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Refresh usage" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
   });
@@ -1355,7 +1385,7 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
-    expect(screen.getAllByText(/^Can show:/)).toHaveLength(5);
+    expect(screen.getAllByText(/^Can show:/)).toHaveLength(6);
     expect(screen.getByText(/Connect asks for permission for that provider only/)).toBeVisible();
   });
 
@@ -1729,7 +1759,7 @@ describe("Cockpit", () => {
     ).toBeVisible();
     expect(
       within(appHeader as HTMLElement).getByText(
-        "Last refresh just now · 6 providers",
+        "Last refresh just now · 7 providers",
       ),
     ).toBeVisible();
     expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
@@ -1806,14 +1836,14 @@ describe("Cockpit", () => {
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByRole("article", { name: "ChatGPT" })).toBeVisible();
-    expect(state.instances).toHaveLength(6);
+    expect(state.instances).toHaveLength(7);
     expect(onRefresh).not.toHaveBeenCalled();
 
     view.rerender(
       <Cockpit
         state={state}
         now={NOW}
-        refreshAnnouncement="Updated 6 providers."
+        refreshAnnouncement="Updated 7 providers."
         refreshAnnouncementId={12}
         onDisplayModeChange={vi.fn()}
         onRefresh={onRefresh}
@@ -1821,7 +1851,7 @@ describe("Cockpit", () => {
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Updated 6 providers.",
+      "Updated 7 providers.",
     );
   });
 
@@ -1920,7 +1950,7 @@ describe("Cockpit", () => {
     renderCockpit(state);
 
     expect(
-      screen.getByText("Last refresh 3 minutes ago · 6 providers"),
+      screen.getByText("Last refresh 3 minutes ago · 7 providers"),
     ).toBeVisible();
   });
 
@@ -2331,7 +2361,7 @@ describe("Cockpit", () => {
 
     expect(
       screen.getAllByRole("button", { name: /^Open .* history for / }),
-    ).toHaveLength(11);
+    ).toHaveLength(12);
     const chatGpt = screen.getByRole("article", { name: "ChatGPT" });
     const historyButton = within(chatGpt).getByRole("button", {
       name: "Open ChatGPT history for 5-hour messages",
@@ -2698,7 +2728,7 @@ describe("Cockpit", () => {
     const localMarks = Array.from(
       document.querySelectorAll<HTMLImageElement>("img.provider-mark"),
     );
-    expect(localMarks).toHaveLength(6);
+    expect(localMarks).toHaveLength(7);
     expect(
       localMarks.every((mark) => mark.classList.contains("provider-mark")),
     ).toBe(true);

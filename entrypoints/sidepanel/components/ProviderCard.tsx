@@ -217,6 +217,11 @@ export function ProviderCard({
               aria-label={group.label}
               key={group.id}
             >
+              {group.description ? (
+                <p className="provider-card__group-description">
+                  {group.description}
+                </p>
+              ) : null}
               {group.quotas.map((quota) => (
                 <QuotaBars
                   key={quota.id}
