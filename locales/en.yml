@@ -1,0 +1,526 @@
+meta:
+  localeTag: en
+  direction: ltr
+
+manifest:
+  name: AI Limits
+  description: Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.
+  actionTitle: Open AI Limits
+
+common:
+  used: Used
+  left: Left
+  usedCompact: used
+  leftCompact: left
+  settings: Settings
+  overview: Overview
+  retry: Retry
+  back: Back
+  save: Save
+  cancel: Cancel
+  connect: Connect
+  reconnect: Reconnect
+  disconnect: Disconnect
+  refresh: Refresh
+  rename: Rename
+  provider: Provider
+  defaultInstance: default
+  apiKey: API key
+  browserSession: Browser session
+  readOnly: read-only
+  now: Now
+  window: Window
+  history: History
+  addProvider: Add provider
+  replaceKey: Replace key
+
+navigation:
+  showUsedOrLeft: Show used or left
+  connectYourProviders: Connect your providers
+
+header:
+  refreshingProviders: Refreshing providers…
+  lastRefresh: "Last refresh {age} · {providers}"
+  refreshUsage: Refresh usage
+  refreshingUsage: Refreshing usage
+  providerCount:
+    zero: "{count} providers"
+    one: "{count} provider"
+    two: "{count} providers"
+    few: "{count} providers"
+    many: "{count} providers"
+    other: "{count} providers"
+
+refresh:
+  connectBeforeRefreshing: Connect a provider before refreshing.
+  noneUpdated: No providers updated. Existing data is unchanged.
+  kimiNeedsSession: Kimi needs a browser session.
+  someNeedAttention: Some providers need attention.
+  updatedProviders:
+    zero: "Updated {count} providers."
+    one: "Updated {count} provider."
+    two: "Updated {count} providers."
+    few: "Updated {count} providers."
+    many: "Updated {count} providers."
+    other: "Updated {count} providers."
+  updatedOfAttempted: "Updated {successCount} of {attemptedCount}. {detail}"
+  confirmationFailure: "Couldn’t confirm the {subject} result. Check the latest usage before retrying."
+  confirmationSubjectRefresh: refresh
+  confirmationSubjectNamed: "{label} refresh"
+  displayModeFailed: Couldn’t update the display mode.
+  retryLater: Refresh will retry later.
+  waitingForSession: Refresh is waiting for a browser session.
+  kimiScheduledNeedsTab: Automatic refresh couldn't update Kimi. Manual Refresh may briefly open an inactive Kimi tab.
+  kimiWaitingWithValues: Kimi needs a browser session. Existing values stay visible while the read waits.
+
+firstRun:
+  brand: AI Limits
+  title: Connect your providers
+  introduction: Connect the providers you pay for and see every reported quota window in one place.
+  bulletPanel: One panel for every AI subscription quota you track.
+  bulletOptIn: Access is opt-in per provider. Nothing is read until you connect it.
+  bulletLocal: Readings and history stay in this browser. No account, no sync.
+  supportedProviders: "Supported providers · {count}"
+  noDemo: Connect one provider at a time. There is no auto-discovery or demo usage; numbers appear only after a successful provider read.
+
+addProvider:
+  screen: Add provider
+  title: Add provider
+  subtitle: Access is granted one provider at a time
+  available: "Available · {count}"
+  allConnected: All supported providers are connected.
+  permissionNote: Connect asks for permission for that provider only, then attempts an authenticated read. Nothing is pre-detected, and credentials are not stored with normalized usage.
+
+connections:
+  canShow: "Can show: {capabilities}"
+  connectProvider: "Connect {provider}"
+  reconnectProvider: "Reconnect {provider}"
+  requestingPermission: Requesting permission…
+  fetchingUsage: Fetching usage…
+  waitingForKimi: Waiting for Kimi…
+
+overview:
+  screen: Overview
+  addProvider: Add provider
+  replaceKey: Replace key
+  replaceKeyNamed: "Replace {label} API key"
+  refreshNamed: "Refresh {label}"
+
+providerDetail:
+  screenUnavailable: Provider unavailable
+  titleUnavailable: Provider unavailable
+  subtitleUnavailable: This provider is no longer connected
+  unavailableNote: Its usage is unavailable until you connect it again from Add provider.
+  returnToOverview: Return to Overview
+  screenNamed: "{label} detail"
+  subtitle: "{provider} · Provider usage"
+  subtitleWithPlan: "{provider} · {plan} · Provider usage"
+  refreshNamed: "Refresh {label}"
+  settingsNamed: "Settings for {label}"
+  showingLastKnown: Showing last known values
+  usageGroup: Usage group
+  openHistory: Open history
+  openHistoryNamed: "Open {label} history"
+  connectionTitle: Connection and capabilities
+  scheduledNoTab: Scheduled refresh reads the existing session without opening a tab.
+  manageInSettings: Manage or disconnect in Settings
+  manageNamed: "Manage {label} in Settings"
+  countersNote: Counters and balances are stored as point-in-time observations.
+
+history:
+  unavailableScreen: History unavailable
+  unavailableTitle: History unavailable
+  unavailableSubtitle: No current quota metric is available
+  titleNamed: "{label} history"
+  subtitle: "{provider} · Local quota observations · 30-day retention on this device"
+  range: History range
+  range48h: 48 hours
+  range7d: 7 days
+  range30d: 30 days
+  range48hShort: 48H
+  range7dShort: 7D
+  range30dShort: 30D
+  chart: Usage history chart
+  scopeQuota: "{scope} quota"
+  currentCycle: Current cycle
+  quotaMetric: Quota metric
+  empty: History starts after another successful refresh.
+  noMetricHistory: "No {label} history is stored yet."
+  chartName: "{provider} {label} usage history"
+  rangeAccessible: "History range from {start} to now"
+  hoursAgo:
+    zero: "{count} hours ago"
+    one: "{count} hour ago"
+    two: "{count} hours ago"
+    few: "{count} hours ago"
+    many: "{count} hours ago"
+    other: "{count} hours ago"
+  daysAgo:
+    zero: "{count} days ago"
+    one: "{count} day ago"
+    two: "{count} days ago"
+    few: "{count} days ago"
+    many: "{count} days ago"
+    other: "{count} days ago"
+  latestPercent: "{percent}% {mode}"
+  legendObserved: "Observed quota {mode}"
+  legendNone: No observations
+  legendBreak: Reset or missing observations · line breaks
+  summary: "{observations} across {segments}. Latest value is {percent}% {mode}."
+  observations:
+    zero: "{count} observations"
+    one: "{count} observation"
+    two: "{count} observations"
+    few: "{count} observations"
+    many: "{count} observations"
+    other: "{count} observations"
+  segments:
+    zero: "{count} chart segments"
+    one: "{count} chart segment"
+    two: "{count} chart segments"
+    few: "{count} chart segments"
+    many: "{count} chart segments"
+    other: "{count} chart segments"
+  note: Only successful, normalized quota observations are plotted. The line breaks at resets and periods without an observation rather than implying zero usage. The newest 48 hours stay at collection resolution; older retained history is compacted hourly and kept for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
+
+settings:
+  screen: Provider settings
+  title: Settings
+  subtitle: Everything here is local to this browser
+  automaticRefresh: Automatic refresh
+  automaticRefreshDescription: Checks connected providers about every 15 minutes. Scheduled refresh stays non-interactive and never takes over the browser.
+  automaticOn: On · about every 15 minutes
+  automaticOff: Off · refresh manually from the header
+  connectedProviders: Connected providers
+  instanceSettings: "{label} settings"
+  identityNamed: "{provider} · {label}"
+  freshnessMethod: "{freshness} · {method} · {readOnly}"
+  apiKeySaved: API key saved
+  noProviders: No providers connected.
+  disconnectExplanation: Disconnecting removes the provider from Overview and deletes its stored local history.
+  renameGroup: "Rename {label}"
+  instanceLabel: Instance label
+  saveLabelNamed: "Save label for {label}"
+  cancelRenameNamed: "Cancel renaming {label}"
+  renaming: Renaming…
+  renameFailed: Couldn’t rename this connection. Try again.
+  renameNamed: "Rename {label}"
+  replaceKeyNamed: "Replace {label} API key"
+  reconnectNamed: "Reconnect {label}"
+  disconnectNamed: "Disconnect {label}"
+  deleteTitle: Delete all local data
+  deleteExplanation: Removes every connection, all retained history, and all settings from this browser. There is no cloud copy, so this cannot be undone.
+  confirmGroup: Confirm local data deletion
+  confirmWarning: This removes stored usage and disconnects every provider.
+  confirmDelete: Confirm delete
+  confirmDeleteNamed: Confirm delete all local data
+  cancelDeleteNamed: Cancel delete all local data
+  deleteAll: Delete all local data
+  community: Community & support
+  localOnlyNote: AI Limits has no account and no cloud sync. Quota readings, history, and preferences live only in this browser profile.
+
+footer:
+  heading: Built in the open
+  copy: Inspect how provider usage is read, follow development, or help shape what comes next.
+  version: "Version {version}"
+  viewSource: View source
+  shareFeedback: Share feedback
+  secretsWarning: Do not include cookies, access credentials, private usage data, or other secrets in an issue.
+
+status:
+  stale: "Stale · {freshness}"
+  staleFallback: last known values
+  attention: "Attention · {freshness}"
+  needsAttention: Needs attention
+  notConnected: Not connected
+  noUsageYet: No usage yet
+
+freshness:
+  justNow: just now
+  updatedJustNow: Updated just now
+  updatedAge: "Updated {age}"
+  noSuccessfulRead: No successful read yet
+  minutesAgo:
+    zero: "{count} minutes ago"
+    one: "{count} minute ago"
+    two: "{count} minutes ago"
+    few: "{count} minutes ago"
+    many: "{count} minutes ago"
+    other: "{count} minutes ago"
+  unavailable: unavailable
+
+pace:
+  unavailable: Pace unavailable
+  onPace: On pace
+  ahead: "{points} pts over pace"
+  behind: "{points} pts under pace"
+
+quota:
+  percentMode: "{percent}% {mode}"
+  percentUsed: "{percent}% used"
+  percentLeft: "{percent}% left"
+  historyFor: "Open history for {label}"
+  historyNamed: "Open {instance} history for {label}"
+  meterQuota: "{label} quota {mode}"
+  meterTimeElapsed: "{label} time elapsed"
+  meterTimeRemaining: "{label} time remaining"
+  noResetTiming: No reset timing
+  segmentPercent: "{label} {percent}%"
+  resets: "Resets {when}"
+  elapsedHours:
+    zero: "{amount} / {total} hours elapsed"
+    one: "{amount} / {total} hour elapsed"
+    two: "{amount} / {total} hours elapsed"
+    few: "{amount} / {total} hours elapsed"
+    many: "{amount} / {total} hours elapsed"
+    other: "{amount} / {total} hours elapsed"
+  remainingHours:
+    zero: "{amount} / {total} hours remaining"
+    one: "{amount} / {total} hour remaining"
+    two: "{amount} / {total} hours remaining"
+    few: "{amount} / {total} hours remaining"
+    many: "{amount} / {total} hours remaining"
+    other: "{amount} / {total} hours remaining"
+  elapsedDays:
+    zero: "{amount} / {total} days elapsed"
+    one: "{amount} / {total} day elapsed"
+    two: "{amount} / {total} days elapsed"
+    few: "{amount} / {total} days elapsed"
+    many: "{amount} / {total} days elapsed"
+    other: "{amount} / {total} days elapsed"
+  remainingDays:
+    zero: "{amount} / {total} days remaining"
+    one: "{amount} / {total} day remaining"
+    two: "{amount} / {total} days remaining"
+    few: "{amount} / {total} days remaining"
+    many: "{amount} / {total} days remaining"
+    other: "{amount} / {total} days remaining"
+  valuePair: "{shown} / {limit}"
+  spent: "{amount} spent"
+  used: "{amount} used"
+  remaining: "{amount} remaining"
+  withLimit: "{value} / {limit}"
+
+card:
+  openDetails: "Open {label} details"
+  values: "{provider} values"
+  countersAndBalances: Counters and balances
+  noUsageStored: "No {provider} usage has been stored yet."
+  identityNamed: "{provider} {instance}"
+
+announcements:
+  dismiss: Dismiss refresh summary
+  connectFailed: "Couldn’t connect {provider}. Reload AI Limits and try again."
+  notConnected: "{provider} was not connected."
+  openApiKeysFailed: Couldn’t open the ElevenLabs API keys page. Try the link again.
+  validationTemporary: "{label} could not be validated right now. Try again later."
+  accessUnchanged: "{label} access was not changed."
+  connected: "Connected {label}."
+  invalidKeyNamed: "Enter a valid {provider} API key."
+  elevenlabsScope: Allow User → Read and check any IP restrictions, then try again.
+  newapiScope: This relay key could not read its usage. Check the key and any IP restrictions.
+  invalidSite: This site did not return compatible New API status and usage data.
+  autoRefreshOn: Automatic refresh turned on.
+  autoRefreshOff: Automatic refresh turned off.
+  autoRefreshFailed: Couldn’t update automatic refresh.
+  disconnected: "Disconnected {label} and deleted its stored usage."
+  disconnectedPartial: "Deleted {label}’s local usage. Browser access could not be removed."
+  disconnectFailed: "Couldn’t disconnect {label}."
+  renamed: "Renamed connection to {label}."
+  renameFailed: "Couldn’t rename {label}."
+  localDataDeleted: Local usage data deleted and providers disconnected.
+  localDataPartial: Local usage data deleted. Some provider access could not be removed.
+  localDataFailed: Couldn’t delete local data.
+
+loading:
+  failed: Couldn’t load usage.
+  retry: Retry loading usage
+  loading: Loading usage…
+
+apiKey:
+  invalidKey: Enter a valid ElevenLabs API key.
+  insufficientScope: Allow User → Read and check any IP restrictions, then try again.
+  invalidSite: The provider site could not be validated. Check its address and try again.
+  temporary: ElevenLabs could not be validated right now. Your existing data and key are unchanged.
+  permissionDeclined: ElevenLabs access was not changed. Allow access when you are ready to try again.
+  connectTitle: Connect ElevenLabs
+  replaceTitle: Replace ElevenLabs API key
+  subtitle: Read-only subscription usage
+  capabilities: Monthly credits · Voice limits
+  step1Title: Open the ElevenLabs API keys page
+  step1Copy: Sign in first if ElevenLabs asks you to, then reopen the page.
+  openKeysPage: Open API keys page
+  step2Title: Create a key named AI Limits
+  step2Prefix: Select
+  step2Suffix: . Leave generation and write permissions off. ElevenLabs does not publish the exact endpoint-to-scope mapping, so validation confirms access.
+  step3Title: Paste the key and validate
+  formName: ElevenLabs API key setup
+  fieldLabel: ElevenLabs API key
+  fieldHelp: Saved locally and never shown again in AI Limits.
+  validating: Validating…
+  submitConnect: Validate & connect
+  submitReplace: Validate & replace
+
+newapi:
+  invalidSite: This site did not return compatible New API status and usage data. Check the URL and try again.
+  invalidKey: Enter a valid relay key for this New API instance.
+  insufficientScope: This relay key could not read its usage. Check the key and any IP restrictions.
+  temporary: New API could not be validated right now. Your existing data and key are unchanged.
+  permissionDeclined: New API access was not changed. Allow access when you are ready to try again.
+  connectTitle: Connect New API
+  replaceTitle: Replace New API connection
+  subtitle: Independent instance · Independent relay key
+  subtitleNamed: "{label} · Independent instance · Independent relay key"
+  capabilities: Key-specific quota · Capped or unlimited
+  explanation: Each New API connection keeps its own relay key, label, usage, and history. It shows key-specific granted, used, and remaining quota. Unlimited keys show absolute usage without an invented percentage. Same-origin connections share only Chrome's host permission.
+  formName: New API relay key setup
+  labelField: Instance label (optional)
+  labelPlaceholder: Personal relay
+  labelHelp: Used to distinguish this connection. If blank, AI Limits uses the reported account name or relay hostname.
+  urlField: New API site URL
+  urlPlaceholder: https://new-api.example.com
+  urlHelp: Paste the homepage, dashboard URL, or an API URL such as /v1/messages. AI Limits removes known console and API suffixes, then validates the instance through /api/status. HTTPS is required, except localhost for development.
+  keyField: New API relay key
+  keyHelp: AI Limits calls only the read-only /api/usage/token/ endpoint and stores the key locally. The request is read-only, but the relay key itself may still call models; apply key limits in New API if needed.
+  excluded: This mode does not read account wallet, subscriptions, admin data, or other relay keys. Each configured instance is read independently.
+
+errors:
+  signedOut: Sign in to the provider and try again.
+  credentialInvalid: The API key is invalid. Enter a valid key and try again.
+  credentialScopeRequired: The API key cannot read usage. Update its permissions and try again.
+  challengeBlocked: Open the provider and complete its security check before trying again.
+  providerChanged: AI Limits could not read this provider's usage response.
+  temporaryError: AI Limits could not refresh this provider. Try again later.
+  kimiRetrySession: Kimi was still starting. Try Refresh once more, or open or reload Kimi.
+
+metrics:
+  scope:
+    general: general
+    model: model
+    feature: feature
+    product: product
+  groups:
+    usage: Usage
+    usagePool: Usage pool
+    rateLimits: Chat rate limits
+  grokPoolUnavailable: Usage-pool details are unavailable
+  units:
+    credits: credits
+    voices: voices
+    actions: actions
+    quotaUnits: quota units
+  chatgpt:
+    fiveHourMessages: 5-hour messages
+    weeklyMessages: Weekly messages
+    nDayMessages: "{count}-day messages"
+    nHourMessages: "{count}-hour messages"
+    credits: Credits
+  claude:
+    fiveHourMessages: 5-hour messages
+    weeklyMessages: Weekly messages
+    weeklyOpus: Weekly Opus
+    weeklySonnet: Weekly Sonnet
+    weeklyModel: "Weekly {model}"
+    extraUsage: Extra usage
+  kimi:
+    monthlyTotal: Monthly total
+    fiveHourCoding: 5-hour coding
+    weeklyCoding: Weekly coding
+    work: Work
+    code: Code
+  cursor:
+    cursorModels: Cursor models
+    otherModels: Other models
+    monthlyUsage: Monthly usage
+    grokBot: Grok Bot
+    onDemandSpend: On-demand spend
+    extraUsageCredits: Extra usage credits
+  elevenlabs:
+    monthlyCredits: Monthly credits
+    voiceSlots: Voice slots
+    professionalVoiceSlots: Professional voice slots
+    voiceAddEdits: Voice add/edits
+  newapi:
+    apiKeyUsage: API key usage
+    apiKeyQuota: API key quota
+  grok:
+    weeklyPool: Weekly usage pool
+    monthlyPool: Monthly usage pool
+    extraUsageCredits: Extra usage credits
+    grokBuild: Grok Build
+    chat: Chat
+    weeklyKind: "Weekly {mode} {kind}"
+    nDayKind: "{count}-day {mode} {kind}"
+    nHourKind: "{count}-hour {mode} {kind}"
+    queries: queries
+    tokens: tokens
+
+providers:
+  chatgpt:
+    name: ChatGPT
+    connect: Connect ChatGPT
+    connectionDisclosure: Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.
+    capabilities:
+      messageLimits: Message limits
+      credits: Credits
+    plans:
+      plus: Plus
+  claude:
+    name: Claude
+    connect: Connect Claude
+    connectionDisclosure: Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.
+    capabilities:
+      messageLimits: Message limits
+      extraUsage: Extra usage
+  kimi:
+    name: Kimi
+    connect: Connect Kimi
+    connectionDisclosure: With permission, AI Limits may read the exact value of Kimi's signed-in kimi-auth cookie or the page's localStorage.access_token on kimi.com. It stores normalized usage locally, not the credential.
+    manualRefreshDisclosure: Connect and manual Refresh may briefly open one inactive Kimi tab when recovery is needed. Scheduled or automatic refresh never opens a tab.
+    capabilities:
+      subscriptionUsage: Subscription usage
+      codingLimits: Coding limits
+  cursor:
+    name: Cursor
+    connect: Connect Cursor
+    connectionDisclosure: Reads base usage from your signed-in Cursor session and refreshes it about every 15 minutes. On Connect or manual Refresh, AI Limits may run bundled read-only code in one already-open cursor.com page to request Grok Bot and extra-credit JSON. It does not inspect page content, browser storage, or cookie values directly; Chrome attaches signed-in Cursor cookies to those fixed same-origin requests.
+    manualRefreshDisclosure: Cursor page enrichment uses only an already-open Cursor tab. It never creates or activates a tab, and scheduled or automatic refresh never injects into a page.
+    capabilities:
+      monthlyUsage: Monthly usage
+      grokBotUsage: Grok Bot usage
+      onDemandSpend: On-demand spend
+      extraUsageCredits: Extra usage credits
+    plans:
+      ultra: Ultra
+  grok:
+    name: Grok
+    connect: Connect Grok
+    connectionDisclosure: Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.
+    capabilities:
+      usagePool: Usage pool
+      planTier: Plan tier
+    plans:
+      free: Free
+      superGrok: SuperGrok
+      heavy: SuperGrok Heavy
+      plus: SuperGrok Plus
+      lite: SuperGrok Lite
+  elevenlabs:
+    name: ElevenLabs
+    connect: Connect ElevenLabs
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      monthlyCredits: Monthly credits
+      voiceLimits: Voice limits
+    plans:
+      free: Free
+  newapi:
+    name: New API
+    connect: Connect New API
+    connectionDisclosure: Supports multiple independent connections. Each stores its own New API instance URL, relay key, label, usage, and History locally; same-origin connections share only Chrome's host permission.
+    capabilities:
+      apiKeyQuota: API key quota
+      unlimitedKeyUsage: Unlimited-key usage
+
+accessibility:
+  refreshProvider: "Refresh {provider}"

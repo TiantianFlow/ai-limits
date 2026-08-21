@@ -4,7 +4,7 @@ import { providerDefinitions } from "./providers/definitions";
 const providers = Object.values(providerDefinitions);
 
 export default defineConfig({
-  modules: ["@wxt-dev/module-react"],
+  modules: ["@wxt-dev/module-react", "@wxt-dev/i18n/module"],
   hooks: {
     "entrypoints:found": (_wxt, entrypoints) => {
       const productionEntrypoints = entrypoints.filter(
@@ -14,9 +14,9 @@ export default defineConfig({
     },
   },
   manifest: {
-    name: "AI Limits",
-    description:
-      "Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.",
+    name: "__MSG_manifest_name__",
+    description: "__MSG_manifest_description__",
+    default_locale: "en",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
     optional_host_permissions: providers.flatMap(
@@ -34,7 +34,7 @@ export default defineConfig({
       128: "icons/128.png",
     },
     action: {
-      default_title: "Open AI Limits",
+      default_title: "__MSG_manifest_actionTitle__",
       default_icon: {
         16: "icons/16.png",
         32: "icons/32.png",
