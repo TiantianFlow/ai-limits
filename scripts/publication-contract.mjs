@@ -315,7 +315,7 @@ const requiredVisibleV030Statements = [
   {
     key: "listing",
     statement:
-      "Successful normalized quota, counter or spend, and balance observations are retained per instance, while version 0.3.0 graphs quota metrics only.",
+      "Successful normalized quota, counter or spend, and balance observations are retained per instance; History graphs quota metrics, while counter or spend and balance observations remain stored but ungraphed.",
     error: "Store listing is missing typed history and quota-only graph behavior.",
   },
 ];

@@ -1,7 +1,15 @@
 # Chrome Web Store listing draft
 
-This document describes AI Limits version 0.4.0. It is submission copy and a
-review checklist, not a claim that any provider has approved the extension.
+This document describes AI Limits version 0.4.0. It is a reviewer and
+reference appendix, not a claim that any provider has approved the extension.
+
+Paste-ready store copy lives in
+[`store-assets/chrome-web-store/listing-en.md`](store-assets/chrome-web-store/listing-en.md)
+(English) and
+[`store-assets/chrome-web-store/listing-zh_CN.md`](store-assets/chrome-web-store/listing-zh_CN.md)
+(Simplified Chinese). This file keeps store configuration, artwork inventory,
+permission justifications, data-disclosure answers, reviewer prerequisites, and
+the seven-provider test flow.
 
 ## Store configuration
 
@@ -35,105 +43,6 @@ representative fixture data. Upload the files in this order:
 Regeneration and validation instructions are in
 [`store-assets/README.md`](store-assets/README.md).
 
-## Single purpose
-
-AI Limits gives a user one Chrome side panel for viewing current subscription
-usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs across seven supported providers (see the screenshots for the full
-roster). Browser-session providers use an account already signed in within the
-user's browser profile; API-key providers use a key the user connects through
-guided setup.
-
-## Short description
-
-Track subscription usage, resets, pace, and local history for your connected AI providers in one Chrome side panel.
-
-## Detailed description
-
-AI Limits keeps subscription limits visible without switching among provider
-account pages. Connect a provider individually, approve that provider's
-optional access, and view the usage windows, reset times, credits, and plan
-labels it makes available. The panel supports two kinds of providers:
-browser-session providers, which read the account already signed in to that
-provider's site, and API-key providers, which use a key the user creates and
-connects through guided setup. The screenshots below show the full set of
-seven supported providers side by side.
-
-ChatGPT and Claude read the signed-in account's plan, usage windows, resets,
-and available credits from each provider's own usage response. Kimi reads the
-signed-in session's usage and subscription data and can prompt a brief,
-user-visible recovery step if that session needs to be refreshed. Cursor reads
-the signed-in account's base usage; Cursor Connect or manual Refresh can
-additionally use one already-open `cursor.com` page for two fixed read-only
-dashboard JSON requests, scheduled refresh never injects into a Cursor page,
-and the extension never creates or activates a Cursor tab. Grok reads the
-signed-in consumer `grok.com` session's plan and rate-limit window.
-
-ElevenLabs uses a user-created API key and its documented read-only
-subscription request. AI Limits supports multiple independent New API
-instances, including multiple separately labeled keys on the same origin. Each
-instance keeps its own normalized base URL, label, key, usage, refresh state,
-replacement/rejection status, and History. AI Limits validates `/api/status`
-and reads that key's documented read-only `/api/usage/token/` response. Capped
-keys show used and remaining quota; unlimited keys show absolute usage. Account
-wallet, subscriptions, admin data, and other relay keys are not read.
-
-Providers use different conventions: some report quota consumed, while others
-report quota remaining. AI Limits normalizes them into a single display and lets
-the user switch between **Used** and **Left** without changing stored data. For
-quota windows with a reliable reset time plus either a start time or window
-duration, a pace signal compares quota consumed with elapsed time. When that
-timing information is unavailable, the extension leaves pace unavailable
-instead of estimating it.
-
-Each quota window can open a dedicated History screen with a local quota graph.
-
-ElevenLabs' legacy `character_*` subscription fields are presented as monthly
-credits. Voice slots and professional voice slots are shown as current
-occupancy/capacity, so deleting a voice can free a slot. Voice add/edit counts
-are shown only when the response includes a valid used/maximum pair. AI Limits
-does not attach the monthly credit reset or a pace signal to these voice limits
-because the response does not provide their own reset boundary. Invoice,
-payment-attempt, coupon, payment-identifier, and currency-overage fields are
-excluded.
-
-Successful normalized quota, counter or spend, and balance observations are
-retained per instance, while version 0.3.0 graphs quota metrics only. History
-is retained for up to 30 days, subject to a 1,024-observation per-instance
-safety cap. The newest 48 hours remain at collection resolution; older retained
-observations keep only the latest value in each UTC hour. Currency-denominated
-spend counters and balances are normalized usage data, not raw payment
-transaction history. History begins with one valid locally stored current
-snapshot on upgrade or with subsequent successful refreshes. The extension
-does not reconstruct earlier provider history, store credentials or raw
-provider responses in History, or transmit History to the developer.
-
-The extension stores normalized results in the local Chrome profile. Refresh
-can be manual or automatic about every 15 minutes. ElevenLabs setup opens the
-official API-keys page and allows the user to reopen it after signing in. The
-guide asks for **User → Read** without generation or write permissions and
-validates the real request because ElevenLabs does not formally document the
-exact endpoint-to-scope mapping. Once connected, ElevenLabs refreshes in the
-background without opening tabs. New API onboarding accepts a homepage,
-dashboard, `/v1`, `/v1/messages`, or usage-endpoint URL, removes known suffixes,
-and requests only the exact normalized instance origin. Same-origin instances
-share only Chrome's browser-global origin permission, never keys, labels,
-usage, or History. Settings let the user turn automatic refresh off, disconnect
-one instance and remove only its saved configuration, usage, credential, and
-History, or delete all saved usage and credentials while attempting to revoke
-every provider permission. A shared grant remains while another active instance
-owns it; final-owner permission cleanup is best-effort with durable retry
-evidence. External permission removal marks affected instances as requiring
-permission while retaining their nonsecret configuration, normalized usage,
-refresh status, History, and inactive saved key.
-
-AI Limits is an independent project by TiantianFlow. It is not affiliated
-with, endorsed by, or authorized by any of the connected service providers,
-their parent companies, or their affiliates. Browser-session provider
-endpoints are private and unsupported. API-key providers use documented
-endpoints, but provider response and authorization behavior can still change
-without notice.
-
 ## Permission justifications
 
 ### Required permissions
@@ -141,14 +50,13 @@ without notice.
 - `storage`: saves display and refresh preferences, provider access state,
   normalized quota/counter/balance snapshots, up to 30 days of typed
   per-instance History, and sanitized refresh status in
-  `chrome.storage.local`. Version 0.3.0 graphs quota metrics only. It also holds temporary
-  Kimi tab-cleanup lease metadata in `chrome.storage.session`. Browser-session
-  cookies and access credentials are not persisted. After validation, the
-  user-created ElevenLabs or New API key is persisted in a separate
-  `chrome.storage.local` credential record whose Chrome storage access level is
-  restricted to trusted extension contexts. It is not OS-keychain encrypted
-  and may be inspectable from an unlocked Chrome profile, extension DevTools,
-  or profile files.
+  `chrome.storage.local`. It also holds temporary Kimi tab-cleanup lease
+  metadata in `chrome.storage.session`. Browser-session cookies and access
+  credentials are not persisted. After validation, the user-created ElevenLabs
+  or New API key is persisted in a separate `chrome.storage.local` credential
+  record whose Chrome storage access level is restricted to trusted extension
+  contexts. It is not OS-keychain encrypted and may be inspectable from an
+  unlocked Chrome profile, extension DevTools, or profile files.
 - `alarms`: schedules the approximately 15-minute refresh cycle only while
   automatic refresh is enabled and at least one provider is connected.
 - `sidePanel`: displays the extension's only application interface in Chrome's
@@ -227,9 +135,9 @@ does not create or activate provider tabs and never injects into provider pages.
 - **Financial and payment information:** Yes, limited to provider-reported
   usage-credit balances, extra-usage amounts or limits, and on-demand spend
   values/limits included in a usage response. These normalized counters and
-  balances may be retained in local per-instance History, but version 0.3.0
-  does not graph them. Payment cards, bank details, raw provider responses, and
-  transaction histories are not accessed or retained.
+  balances may be retained in local per-instance History. Payment cards, bank
+  details, raw provider responses, and transaction histories are not accessed
+  or retained.
 - **Web history:** Yes, narrowly and conservatively classified. During Kimi
   collection, AI Limits may check for an already-open tab matching the exact
   Kimi origin. During Cursor Connect or manual Refresh, it may check for one
@@ -244,7 +152,10 @@ does not create or activate provider tabs and never injects into provider pages.
 - **Sale or unrelated sharing:** No. Data is not sold and is not sent to the
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
-- **Retention and controls:** Successful normalized quota, counter/spend, and
+- **Retention and controls:** Successful normalized quota, counter or spend, and
+  balance observations are retained per instance; History graphs quota metrics,
+  while counter or spend and balance observations remain stored but ungraphed.
+  Successful normalized quota, counter/spend, and
   balance observations stay in the local Chrome profile per instance for up to
   30 days, subject to a 1,024-observation per-instance safety cap. Within that
   cap, observations from the newest 48 hours stay at collection resolution;
