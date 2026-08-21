@@ -4,7 +4,7 @@ meta:
 
 manifest:
   name: AI Limits
-  description: 在同一个 Chrome 侧边栏中跟踪 ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs 和 New API 的用量、重置时间、消耗节奏和本地历史。
+  description: 在同一个 Chrome 侧边栏中跟踪已连接 AI 服务的用量、重置时间、消耗节奏和本地历史。
   actionTitle: 打开 AI Limits
 
 common:
