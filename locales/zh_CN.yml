@@ -1,0 +1,526 @@
+meta:
+  localeTag: zh-CN
+  direction: ltr
+
+manifest:
+  name: AI Limits
+  description: 在同一个 Chrome 侧边栏中跟踪 ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs 和 New API 的用量、重置时间、消耗节奏和本地历史。
+  actionTitle: 打开 AI Limits
+
+common:
+  used: 已用
+  left: 剩余
+  usedCompact: 已用
+  leftCompact: 剩余
+  settings: 设置
+  overview: 总览
+  retry: 重试
+  back: 返回
+  save: 保存
+  cancel: 取消
+  connect: 连接
+  reconnect: 重新连接
+  disconnect: 断开连接
+  refresh: 刷新
+  rename: 重命名
+  provider: 服务
+  defaultInstance: 默认
+  apiKey: API 密钥
+  browserSession: 浏览器会话
+  readOnly: 只读
+  now: 现在
+  window: 窗口
+  history: 历史
+  addProvider: 添加服务
+  replaceKey: 更换密钥
+
+navigation:
+  showUsedOrLeft: 显示已用或剩余
+  connectYourProviders: 连接你的服务
+
+header:
+  refreshingProviders: 正在刷新服务…
+  lastRefresh: "上次刷新 {age} · {providers}"
+  refreshUsage: 刷新用量
+  refreshingUsage: 正在刷新用量
+  providerCount:
+    zero: "{count} 个服务"
+    one: "{count} 个服务"
+    two: "{count} 个服务"
+    few: "{count} 个服务"
+    many: "{count} 个服务"
+    other: "{count} 个服务"
+
+refresh:
+  connectBeforeRefreshing: 请先连接一个服务再刷新。
+  noneUpdated: 没有服务被更新。现有数据保持不变。
+  kimiNeedsSession: Kimi 需要浏览器会话。
+  someNeedAttention: 部分服务需要处理。
+  updatedProviders:
+    zero: "已更新 {count} 个服务。"
+    one: "已更新 {count} 个服务。"
+    two: "已更新 {count} 个服务。"
+    few: "已更新 {count} 个服务。"
+    many: "已更新 {count} 个服务。"
+    other: "已更新 {count} 个服务。"
+  updatedOfAttempted: "已更新 {successCount} / {attemptedCount}。{detail}"
+  confirmationFailure: "无法确认{subject}结果。请先查看最新用量再重试。"
+  confirmationSubjectRefresh: 刷新
+  confirmationSubjectNamed: "{label} 刷新"
+  displayModeFailed: 无法更新显示模式。
+  retryLater: 刷新将稍后重试。
+  waitingForSession: 刷新正在等待浏览器会话。
+  kimiScheduledNeedsTab: 自动刷新未能更新 Kimi。手动刷新时可能会短暂打开一个不活动的 Kimi 标签页。
+  kimiWaitingWithValues: Kimi 需要浏览器会话。读取等待期间会继续显示现有数值。
+
+firstRun:
+  brand: AI Limits
+  title: 连接你的服务
+  introduction: 连接你付费使用的服务，在同一处查看所有已报告的额度窗口。
+  bulletPanel: 一个面板跟踪你关注的每一项 AI 订阅额度。
+  bulletOptIn: 按服务单独授权。在你连接之前不会读取任何数据。
+  bulletLocal: 读数和历史只保存在此浏览器。无需账号，也不会同步。
+  supportedProviders: "支持的服务 · {count}"
+  noDemo: 请一次连接一个服务。没有自动发现或演示数据；只有成功读取后才会显示数字。
+
+addProvider:
+  screen: 添加服务
+  title: 添加服务
+  subtitle: 访问权限按服务逐个授予
+  available: "可添加 · {count}"
+  allConnected: 所有支持的服务均已连接。
+  permissionNote: 连接只会请求该服务的权限，然后尝试一次已认证读取。不会预先探测，凭据也不会与标准化用量一起存储。
+
+connections:
+  canShow: "可显示：{capabilities}"
+  connectProvider: "连接 {provider}"
+  reconnectProvider: "重新连接 {provider}"
+  requestingPermission: 正在请求权限…
+  fetchingUsage: 正在获取用量…
+  waitingForKimi: 正在等待 Kimi…
+
+overview:
+  screen: 总览
+  addProvider: 添加服务
+  replaceKey: 更换密钥
+  replaceKeyNamed: "更换 {label} 的 API 密钥"
+  refreshNamed: "刷新 {label}"
+
+providerDetail:
+  screenUnavailable: 服务不可用
+  titleUnavailable: 服务不可用
+  subtitleUnavailable: 此服务已不再连接
+  unavailableNote: 在你从“添加服务”重新连接之前，其用量不可用。
+  returnToOverview: 返回总览
+  screenNamed: "{label} 详情"
+  subtitle: "{provider} · 服务用量"
+  subtitleWithPlan: "{provider} · {plan} · 服务用量"
+  refreshNamed: "刷新 {label}"
+  settingsNamed: "{label} 的设置"
+  showingLastKnown: 正在显示上次已知数值
+  usageGroup: 用量组
+  openHistory: 打开历史
+  openHistoryNamed: "打开 {label} 的历史"
+  connectionTitle: 连接与能力
+  scheduledNoTab: 定时刷新会读取现有会话，不会打开标签页。
+  manageInSettings: 在设置中管理或断开连接
+  manageNamed: "在设置中管理 {label}"
+  countersNote: 计数和余额按时间点观察值存储。
+
+history:
+  unavailableScreen: 历史不可用
+  unavailableTitle: 历史不可用
+  unavailableSubtitle: 当前没有可用的额度指标
+  titleNamed: "{label} 历史"
+  subtitle: "{provider} · 本地额度观察 · 本设备保留 30 天"
+  range: 历史范围
+  range48h: 48 小时
+  range7d: 7 天
+  range30d: 30 天
+  range48hShort: 48H
+  range7dShort: 7D
+  range30dShort: 30D
+  chart: 用量历史图表
+  scopeQuota: "{scope}额度"
+  currentCycle: 当前周期
+  quotaMetric: 额度指标
+  empty: 再次成功刷新后才会开始记录历史。
+  noMetricHistory: "尚未存储 {label} 的历史。"
+  chartName: "{provider} {label} 用量历史"
+  rangeAccessible: "历史范围从 {start} 到现在"
+  hoursAgo:
+    zero: "{count} 小时前"
+    one: "{count} 小时前"
+    two: "{count} 小时前"
+    few: "{count} 小时前"
+    many: "{count} 小时前"
+    other: "{count} 小时前"
+  daysAgo:
+    zero: "{count} 天前"
+    one: "{count} 天前"
+    two: "{count} 天前"
+    few: "{count} 天前"
+    many: "{count} 天前"
+    other: "{count} 天前"
+  latestPercent: "{percent}% {mode}"
+  legendObserved: "观察到的额度（{mode}）"
+  legendNone: 无观察记录
+  legendBreak: 重置或缺少观察 · 折线中断
+  summary: "{observations}，分布在 {segments}。最新值为 {percent}% {mode}。"
+  observations:
+    zero: "{count} 条观察"
+    one: "{count} 条观察"
+    two: "{count} 条观察"
+    few: "{count} 条观察"
+    many: "{count} 条观察"
+    other: "{count} 条观察"
+  segments:
+    zero: "{count} 段图表"
+    one: "{count} 段图表"
+    two: "{count} 段图表"
+    few: "{count} 段图表"
+    many: "{count} 段图表"
+    other: "{count} 段图表"
+  note: 仅绘制成功且已标准化的额度观察。折线会在重置和没有观察的时段断开，而不会暗示用量为零。最近 48 小时保持采集分辨率；更早的保留历史按小时压缩，并在本设备保存最多 30 天。计数和余额观察会被存储，但不能作为图表示列。
+
+settings:
+  screen: 服务设置
+  title: 设置
+  subtitle: 这里的一切都只保存在此浏览器
+  automaticRefresh: 自动刷新
+  automaticRefreshDescription: 大约每 15 分钟检查已连接的服务。定时刷新保持非交互，不会接管浏览器。
+  automaticOn: 开 · 大约每 15 分钟
+  automaticOff: 关 · 请从顶部手动刷新
+  connectedProviders: 已连接的服务
+  instanceSettings: "{label} 设置"
+  identityNamed: "{provider} · {label}"
+  freshnessMethod: "{freshness} · {method} · {readOnly}"
+  apiKeySaved: 已保存 API 密钥
+  noProviders: 尚未连接服务。
+  disconnectExplanation: 断开连接会将该服务从总览中移除，并删除其本地历史。
+  renameGroup: "重命名 {label}"
+  instanceLabel: 实例标签
+  saveLabelNamed: "保存 {label} 的标签"
+  cancelRenameNamed: "取消重命名 {label}"
+  renaming: 正在重命名…
+  renameFailed: 无法重命名此连接。请重试。
+  renameNamed: "重命名 {label}"
+  replaceKeyNamed: "更换 {label} 的 API 密钥"
+  reconnectNamed: "重新连接 {label}"
+  disconnectNamed: "断开 {label}"
+  deleteTitle: 删除全部本地数据
+  deleteExplanation: 将从此浏览器移除所有连接、保留的历史和全部设置。没有云端副本，因此无法撤销。
+  confirmGroup: 确认删除本地数据
+  confirmWarning: 这将删除已存储的用量并断开所有服务。
+  confirmDelete: 确认删除
+  confirmDeleteNamed: 确认删除全部本地数据
+  cancelDeleteNamed: 取消删除全部本地数据
+  deleteAll: 删除全部本地数据
+  community: 社区与支持
+  localOnlyNote: AI Limits 没有账号，也不会云同步。额度读数、历史和偏好仅保存在此浏览器配置中。
+
+footer:
+  heading: 开源构建
+  copy: 查看服务用量的读取方式，关注开发进展，或帮助决定下一步。
+  version: "版本 {version}"
+  viewSource: 查看源码
+  shareFeedback: 分享反馈
+  secretsWarning: 请勿在 issue 中包含 cookie、访问凭据、私人用量数据或其他密钥。
+
+status:
+  stale: "已过期 · {freshness}"
+  staleFallback: 上次已知数值
+  attention: "需注意 · {freshness}"
+  needsAttention: 需要处理
+  notConnected: 未连接
+  noUsageYet: 尚无用量
+
+freshness:
+  justNow: 刚刚
+  updatedJustNow: 刚刚更新
+  updatedAge: "更新于 {age}"
+  noSuccessfulRead: 尚未成功读取
+  minutesAgo:
+    zero: "{count} 分钟前"
+    one: "{count} 分钟前"
+    two: "{count} 分钟前"
+    few: "{count} 分钟前"
+    many: "{count} 分钟前"
+    other: "{count} 分钟前"
+  unavailable: 不可用
+
+pace:
+  unavailable: 节奏不可用
+  onPace: 节奏正常
+  ahead: "超前 {points} 点"
+  behind: "落后 {points} 点"
+
+quota:
+  percentMode: "{percent}% {mode}"
+  percentUsed: "{percent}% 已用"
+  percentLeft: "{percent}% 剩余"
+  historyFor: "打开 {label} 的历史"
+  historyNamed: "打开 {instance} 的 {label} 历史"
+  meterQuota: "{label} 额度（{mode}）"
+  meterTimeElapsed: "{label} 已用时间"
+  meterTimeRemaining: "{label} 剩余时间"
+  noResetTiming: 无重置时间
+  segmentPercent: "{label} {percent}%"
+  resets: "{when} 重置"
+  elapsedHours:
+    zero: "已用 {amount} / {total} 小时"
+    one: "已用 {amount} / {total} 小时"
+    two: "已用 {amount} / {total} 小时"
+    few: "已用 {amount} / {total} 小时"
+    many: "已用 {amount} / {total} 小时"
+    other: "已用 {amount} / {total} 小时"
+  remainingHours:
+    zero: "剩余 {amount} / {total} 小时"
+    one: "剩余 {amount} / {total} 小时"
+    two: "剩余 {amount} / {total} 小时"
+    few: "剩余 {amount} / {total} 小时"
+    many: "剩余 {amount} / {total} 小时"
+    other: "剩余 {amount} / {total} 小时"
+  elapsedDays:
+    zero: "已用 {amount} / {total} 天"
+    one: "已用 {amount} / {total} 天"
+    two: "已用 {amount} / {total} 天"
+    few: "已用 {amount} / {total} 天"
+    many: "已用 {amount} / {total} 天"
+    other: "已用 {amount} / {total} 天"
+  remainingDays:
+    zero: "剩余 {amount} / {total} 天"
+    one: "剩余 {amount} / {total} 天"
+    two: "剩余 {amount} / {total} 天"
+    few: "剩余 {amount} / {total} 天"
+    many: "剩余 {amount} / {total} 天"
+    other: "剩余 {amount} / {total} 天"
+  valuePair: "{shown} / {limit}"
+  spent: "已花费 {amount}"
+  used: "已用 {amount}"
+  remaining: "剩余 {amount}"
+  withLimit: "{value} / {limit}"
+
+card:
+  openDetails: "打开 {label} 详情"
+  values: "{provider} 数值"
+  countersAndBalances: 计数与余额
+  noUsageStored: "尚未存储 {provider} 用量。"
+  identityNamed: "{provider} {instance}"
+
+announcements:
+  dismiss: 关闭刷新摘要
+  connectFailed: "无法连接 {provider}。请重新加载 AI Limits 后再试。"
+  notConnected: "未连接 {provider}。"
+  openApiKeysFailed: 无法打开 ElevenLabs API 密钥页面。请再试一次该链接。
+  validationTemporary: "暂时无法验证 {label}。请稍后再试。"
+  accessUnchanged: "{label} 的访问权限未更改。"
+  connected: "已连接 {label}。"
+  invalidKeyNamed: "请输入有效的 {provider} API 密钥。"
+  elevenlabsScope: 请允许 User → Read 并检查 IP 限制，然后重试。
+  newapiScope: 此中继密钥无法读取用量。请检查密钥和任何 IP 限制。
+  invalidSite: 此站点未返回兼容的 New API 状态和用量数据。
+  autoRefreshOn: 已开启自动刷新。
+  autoRefreshOff: 已关闭自动刷新。
+  autoRefreshFailed: 无法更新自动刷新。
+  disconnected: "已断开 {label} 并删除其存储的用量。"
+  disconnectedPartial: "已删除 {label} 的本地用量。无法移除浏览器访问权限。"
+  disconnectFailed: "无法断开 {label}。"
+  renamed: "已将连接重命名为 {label}。"
+  renameFailed: "无法重命名 {label}。"
+  localDataDeleted: 已删除本地用量数据并断开所有服务。
+  localDataPartial: 已删除本地用量数据。部分服务的访问权限未能移除。
+  localDataFailed: 无法删除本地数据。
+
+loading:
+  failed: 无法加载用量。
+  retry: 重试加载用量
+  loading: 正在加载用量…
+
+apiKey:
+  invalidKey: 请输入有效的 ElevenLabs API 密钥。
+  insufficientScope: 请允许 User → Read 并检查 IP 限制，然后重试。
+  invalidSite: 无法验证该服务站点。请检查地址后重试。
+  temporary: 暂时无法验证 ElevenLabs。现有数据和密钥保持不变。
+  permissionDeclined: ElevenLabs 访问权限未更改。准备好后请允许访问再试。
+  connectTitle: 连接 ElevenLabs
+  replaceTitle: 更换 ElevenLabs API 密钥
+  subtitle: 只读订阅用量
+  capabilities: 每月额度 · 语音限制
+  step1Title: 打开 ElevenLabs API 密钥页面
+  step1Copy: 如果 ElevenLabs 要求登录，请先登录，然后重新打开该页面。
+  openKeysPage: 打开 API 密钥页面
+  step2Title: 创建一个名为 AI Limits 的密钥
+  step2Prefix: 选择
+  step2Suffix: 。不要打开生成和写入权限。ElevenLabs 未公布端点与权限范围的精确对应关系，因此需要通过验证确认访问。
+  step3Title: 粘贴密钥并验证
+  formName: ElevenLabs API 密钥设置
+  fieldLabel: ElevenLabs API 密钥
+  fieldHelp: 保存在本地，之后不会再在 AI Limits 中显示。
+  validating: 正在验证…
+  submitConnect: 验证并连接
+  submitReplace: 验证并更换
+
+newapi:
+  invalidSite: 此站点未返回兼容的 New API 状态和用量数据。请检查网址后重试。
+  invalidKey: 请输入此 New API 实例的有效中继密钥。
+  insufficientScope: 此中继密钥无法读取用量。请检查密钥和任何 IP 限制。
+  temporary: 暂时无法验证 New API。现有数据和密钥保持不变。
+  permissionDeclined: New API 访问权限未更改。准备好后请允许访问再试。
+  connectTitle: 连接 New API
+  replaceTitle: 更换 New API 连接
+  subtitle: 独立实例 · 独立中继密钥
+  subtitleNamed: "{label} · 独立实例 · 独立中继密钥"
+  capabilities: 按密钥额度 · 有上限或无上限
+  explanation: 每个 New API 连接都保留自己的中继密钥、标签、用量和历史。它显示该密钥已授予、已用和剩余额度。无上限密钥只显示绝对用量，不会虚构百分比。同源连接仅共享 Chrome 的主机权限。
+  formName: New API 中继密钥设置
+  labelField: 实例标签（可选）
+  labelPlaceholder: 个人中继
+  labelHelp: 用于区分此连接。如果留空，AI Limits 会使用报告的账户名或中继主机名。
+  urlField: New API 站点网址
+  urlPlaceholder: https://new-api.example.com
+  urlHelp: 粘贴首页、控制台网址，或类似 /v1/messages 的 API 网址。AI Limits 会去掉已知的控制台和 API 后缀，然后通过 /api/status 验证实例。必须使用 HTTPS，本地开发的 localhost 除外。
+  keyField: New API 中继密钥
+  keyHelp: AI Limits 只会调用只读的 /api/usage/token/ 端点，并将密钥保存在本地。请求本身是只读的，但中继密钥仍可能调用模型；如有需要，请在 New API 中为密钥设置限制。
+  excluded: 此模式不会读取账户钱包、订阅、管理数据或其他中继密钥。每个配置的实例都独立读取。
+
+errors:
+  signedOut: 请登录该服务后再试。
+  credentialInvalid: API 密钥无效。请输入有效密钥后再试。
+  credentialScopeRequired: 此 API 密钥无法读取用量。请更新其权限后再试。
+  challengeBlocked: 请打开该服务并完成安全验证后再试。
+  providerChanged: AI Limits 无法读取此服务的用量响应。
+  temporaryError: AI Limits 无法刷新此服务。请稍后再试。
+  kimiRetrySession: Kimi 仍在启动。请再点一次刷新，或打开/重新加载 Kimi。
+
+metrics:
+  scope:
+    general: 通用
+    model: 模型
+    feature: 功能
+    product: 产品
+  groups:
+    usage: 用量
+    usagePool: 用量池
+    rateLimits: 对话速率限制
+  grokPoolUnavailable: 用量池详情不可用
+  units:
+    credits: 额度
+    voices: 语音
+    actions: 操作
+    quotaUnits: 额度单位
+  chatgpt:
+    fiveHourMessages: 5 小时消息
+    weeklyMessages: 每周消息
+    nDayMessages: "{count} 天消息"
+    nHourMessages: "{count} 小时消息"
+    credits: 额度
+  claude:
+    fiveHourMessages: 5 小时消息
+    weeklyMessages: 每周消息
+    weeklyOpus: 每周 Opus
+    weeklySonnet: 每周 Sonnet
+    weeklyModel: "每周 {model}"
+    extraUsage: 额外用量
+  kimi:
+    monthlyTotal: 每月总计
+    fiveHourCoding: 5 小时编程
+    weeklyCoding: 每周编程
+    work: 工作
+    code: 编程
+  cursor:
+    cursorModels: Cursor 模型
+    otherModels: 其他模型
+    monthlyUsage: 每月用量
+    grokBot: Grok Bot
+    onDemandSpend: 按需花费
+    extraUsageCredits: 额外用量额度
+  elevenlabs:
+    monthlyCredits: 每月额度
+    voiceSlots: 语音槽位
+    professionalVoiceSlots: 专业语音槽位
+    voiceAddEdits: 语音添加/编辑
+  newapi:
+    apiKeyUsage: API 密钥用量
+    apiKeyQuota: API 密钥额度
+  grok:
+    weeklyPool: 每周用量池
+    monthlyPool: 每月用量池
+    extraUsageCredits: 额外用量额度
+    grokBuild: Grok Build
+    chat: Chat
+    weeklyKind: "每周 {mode} {kind}"
+    nDayKind: "{count} 天 {mode} {kind}"
+    nHourKind: "{count} 小时 {mode} {kind}"
+    queries: 查询
+    tokens: 令牌
+
+providers:
+  chatgpt:
+    name: ChatGPT
+    connect: 连接 ChatGPT
+    connectionDisclosure: 从你已登录的浏览器会话读取用量，在本地存储标准化用量，并大约每 15 分钟刷新一次。
+    capabilities:
+      messageLimits: 消息限制
+      credits: 额度
+    plans:
+      plus: Plus
+  claude:
+    name: Claude
+    connect: 连接 Claude
+    connectionDisclosure: 从你已登录的浏览器会话读取用量，在本地存储标准化用量，并大约每 15 分钟刷新一次。
+    capabilities:
+      messageLimits: 消息限制
+      extraUsage: 额外用量
+  kimi:
+    name: Kimi
+    connect: 连接 Kimi
+    connectionDisclosure: 在获得许可后，AI Limits 可能会读取 Kimi 已登录的 kimi-auth cookie 的精确值，或 kimi.com 页面 localStorage.access_token。它只在本地存储标准化用量，不存储凭据。
+    manualRefreshDisclosure: 连接和手动刷新在需要恢复时可能会短暂打开一个不活动的 Kimi 标签页。定时或自动刷新永远不会打开标签页。
+    capabilities:
+      subscriptionUsage: 订阅用量
+      codingLimits: 编程限制
+  cursor:
+    name: Cursor
+    connect: 连接 Cursor
+    connectionDisclosure: 从你已登录的 Cursor 会话读取基础用量，并大约每 15 分钟刷新一次。在连接或手动刷新时，AI Limits 可能在一个已经打开的 cursor.com 页面中运行捆绑的只读代码，以请求 Grok Bot 和额外额度 JSON。它不会直接检查页面内容、浏览器存储或 cookie 值；Chrome 会把已登录的 Cursor cookie 附加到这些固定的同源请求。
+    manualRefreshDisclosure: Cursor 页面补充信息只会使用已经打开的 Cursor 标签页。它不会创建或激活标签页，定时或自动刷新也永远不会注入页面。
+    capabilities:
+      monthlyUsage: 每月用量
+      grokBotUsage: Grok Bot 用量
+      onDemandSpend: 按需花费
+      extraUsageCredits: 额外用量额度
+    plans:
+      ultra: Ultra
+  grok:
+    name: Grok
+    connect: 连接 Grok
+    connectionDisclosure: 从你已登录的浏览器会话读取用量，在本地存储标准化用量，并大约每 15 分钟刷新一次。
+    capabilities:
+      usagePool: 用量池
+      planTier: 套餐等级
+    plans:
+      free: Free
+      superGrok: SuperGrok
+      heavy: SuperGrok Heavy
+      plus: SuperGrok Plus
+      lite: SuperGrok Lite
+  elevenlabs:
+    name: ElevenLabs
+    connect: 连接 ElevenLabs
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      monthlyCredits: 每月额度
+      voiceLimits: 语音限制
+    plans:
+      free: Free
+  newapi:
+    name: New API
+    connect: 连接 New API
+    connectionDisclosure: 支持多个独立连接。每个连接在本地分别存储自己的 New API 实例网址、中继密钥、标签、用量和历史；同源连接仅共享 Chrome 的主机权限。
+    capabilities:
+      apiKeyQuota: API 密钥额度
+      unlimitedKeyUsage: 无上限密钥用量
+
+accessibility:
+  refreshProvider: "刷新 {provider}"
