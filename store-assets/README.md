@@ -23,6 +23,13 @@ sizes.
 Upload the four screenshots in the listed order. Upload the final file to the
 Chrome Web Store's small promotional tile slot.
 
+Paste-ready Chrome Web Store listing copy also lives in this directory:
+
+- `chrome-web-store/listing-en.md` — English Single purpose, Short
+  description, and Detailed description for the CWS submission form.
+- `chrome-web-store/listing-zh_CN.md` — the same three fields in Simplified
+  Chinese.
+
 ### Simplified Chinese project media
 
 1. `chrome-web-store/zh_CN/screenshot-overview-1280x800.png` — localized
