@@ -22,7 +22,16 @@ import {
   type RefreshReport,
   type RuntimeCommand,
 } from "../../domain/public-protocol";
-import { l10n, type AnnouncementTone } from "../../i18n/index";
+import {
+  applyDocumentLocale,
+  applyLocaleOverride,
+  getLocaleOverride,
+  hydrateLocaleOverride,
+  isLocaleHydrated,
+  l10n,
+  type AnnouncementTone,
+  type SupportedLocale,
+} from "../../i18n/index";
 import { localizeProviderName } from "../../i18n/presentation";
 import { Cockpit } from "./Cockpit";
 import type { ApiKeySubmission } from "./Cockpit";
@@ -138,6 +147,10 @@ export function App() {
     tone: "success",
   });
   const [isAutoRefreshPending, setIsAutoRefreshPending] = useState(false);
+  const [localeReady, setLocaleReady] = useState(isLocaleHydrated);
+  const [localeOverride, setLocaleOverride] = useState<
+    SupportedLocale | undefined
+  >(() => (isLocaleHydrated() ? getLocaleOverride() : undefined));
   const autoRefreshGuard = useRef<AutoRefreshGuard | undefined>(undefined);
   const [providerOperations, setProviderOperations] =
     useState<ProviderOperations>({});
@@ -166,6 +179,38 @@ export function App() {
     commitViewState(project(requested.state));
     return true;
   };
+
+  useEffect(() => {
+    let mounted = true;
+    if (isLocaleHydrated()) {
+      setLocaleOverride(getLocaleOverride());
+      setLocaleReady(true);
+      return () => {
+        mounted = false;
+      };
+    }
+    void hydrateLocaleOverride()
+      .then((stored) => {
+        if (!mounted) return;
+        try {
+          applyDocumentLocale(document);
+        } finally {
+          setLocaleOverride(stored);
+          setLocaleReady(true);
+        }
+      })
+      .catch(() => {
+        if (!mounted) return;
+        try {
+          applyDocumentLocale(document);
+        } finally {
+          setLocaleReady(true);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -606,6 +651,14 @@ export function App() {
     }
   };
 
+  const handleLocaleOverrideChange = async (
+    locale: SupportedLocale | undefined,
+  ) => {
+    await applyLocaleOverride(locale);
+    applyDocumentLocale(document);
+    setLocaleOverride(locale);
+  };
+
   const handleAutoRefreshChange = async (enabled: boolean) => {
     const current = viewStateRef.current;
     if (!current || autoRefreshGuard.current) return;
@@ -724,6 +777,10 @@ export function App() {
     }
   };
 
+  if (!localeReady) {
+    return <main className="loading-state" />;
+  }
+
   if (!viewState) {
     if (loadFailed) {
       return (
@@ -755,6 +812,7 @@ export function App() {
       refreshAnnouncementTone={announcement.tone}
       refreshAnnouncementId={announcement.id}
       autoRefreshPending={isAutoRefreshPending}
+      localeOverride={localeOverride}
       providerOperations={providerOperations}
       onDisplayModeChange={handleDisplayModeChange}
       onRefresh={() => void handleRefresh()}
@@ -763,6 +821,7 @@ export function App() {
       onSubmitApiKey={handleSubmitApiKey}
       onRefreshInstance={(instanceId) => void handleRefreshInstance(instanceId)}
       onAutoRefreshChange={(enabled) => void handleAutoRefreshChange(enabled)}
+      onLocaleOverrideChange={(locale) => void handleLocaleOverrideChange(locale)}
       onDisconnectInstance={(instanceId) => void handleDisconnectInstance(instanceId)}
       onRenameInstance={handleRenameInstance}
       onDeleteLocalData={() => void handleDeleteLocalData()}
