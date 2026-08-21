@@ -2202,6 +2202,31 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-weight: 600;
 }
 
+.settings-language {
+  display: flex;
+  min-height: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.settings-language__select {
+  flex: 0 0 auto;
+  min-height: 32px;
+  max-width: 168px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-language__select:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .settings-surface__heading {
   justify-content: space-between;
 }

@@ -6,6 +6,8 @@ import {
 } from "@wxt-dev/i18n/build";
 import { describe, expect, it } from "vitest";
 
+import { SUPPORTED_LOCALES as APP_LOCALES } from "./locales";
+
 const localeSources = import.meta.glob("../locales/*.{yml,yaml}", {
   query: "?raw",
   import: "default",
@@ -178,8 +180,15 @@ describe("i18n catalog contract", () => {
       const metaDirection = messages.find(
         (message) => dottedKey(message) === "meta.direction",
       );
+      const metaDisplayName = messages.find(
+        (message) => dottedKey(message) === "meta.displayName",
+      );
       expect(metaTag?.type).toBe("simple");
       expect(metaDirection?.type).toBe("simple");
+      expect(metaDisplayName?.type).toBe("simple");
+      if (metaDisplayName?.type === "simple") {
+        expect(metaDisplayName.message.length).toBeGreaterThan(0);
+      }
       if (metaTag?.type === "simple") {
         expect(() => new Intl.NumberFormat(metaTag.message)).not.toThrow();
       }
@@ -200,8 +209,8 @@ describe("i18n catalog contract", () => {
     expect(leftover).toEqual([]);
   });
 
-  it("emits complete Chrome message catalogs for en and zh_CN", () => {
-    for (const locale of ["en", "zh_CN"] as const) {
+  it("emits complete Chrome message catalogs for every registered locale", () => {
+    for (const locale of APP_LOCALES) {
       const path = Object.keys(localeSources).find(
         (candidate) => localeFromPath(candidate) === locale,
       );

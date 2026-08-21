@@ -1,6 +1,7 @@
 meta:
   localeTag: zh-CN
   direction: ltr
+  displayName: 简体中文
 
 manifest:
   name: AI Limits
@@ -191,6 +192,9 @@ settings:
   automaticRefreshDescription: 大约每 15 分钟检查已连接的服务。定时刷新保持非交互，不会接管浏览器。
   automaticOn: 开 · 大约每 15 分钟
   automaticOff: 关 · 请从顶部手动刷新
+  language: 语言
+  languageDescription: 仅作用于本侧边栏。Chrome 自身的菜单和扩展名称仍跟随 Chrome 的语言。
+  languageFollowChrome: 跟随 Chrome
   connectedProviders: 已连接的服务
   instanceSettings: "{label} 设置"
   identityNamed: "{provider} · {label}"

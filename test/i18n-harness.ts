@@ -30,9 +30,15 @@ export function loadCatalog(locale: TestLocale): ParsedMessage[] {
   return parsed;
 }
 
-export function installI18nLocale(locale: TestLocale): void {
+export function chromeMessages(
+  locale: TestLocale,
+): Record<string, { message: string }> {
   loadCatalog(locale);
-  const messages = chromeCatalogs.get(locale) ?? {};
+  return chromeCatalogs.get(locale) ?? {};
+}
+
+export function installI18nLocale(locale: TestLocale): void {
+  const messages = chromeMessages(locale);
   vi.spyOn(browser.i18n, "getMessage").mockImplementation((key: string) => {
     return messages[key]?.message ?? "";
   });

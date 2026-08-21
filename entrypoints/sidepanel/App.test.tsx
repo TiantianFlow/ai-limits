@@ -21,6 +21,7 @@ import {
   createFixtureState,
 } from "../../providers/fixtures";
 import { providerRegistry } from "../../providers/registry";
+import { LOCALE_OVERRIDE_STORAGE_KEY } from "../../i18n/index";
 import { App } from "./App";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
@@ -1654,5 +1655,53 @@ describe("side-panel App", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Local usage data deleted. Some provider access could not be removed.",
     );
+  });
+
+  test("applies a language override live without leaving Settings", async () => {
+    const state = createFixtureState(NOW);
+    vi.spyOn(browser.runtime, "sendMessage").mockResolvedValue(state as never);
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Language" }), {
+      target: { value: "zh_CN" },
+    });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "设置" }),
+    ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveValue("zh_CN");
+    await expect(
+      browser.storage.local.get(LOCALE_OVERRIDE_STORAGE_KEY),
+    ).resolves.toEqual({ [LOCALE_OVERRIDE_STORAGE_KEY]: "zh_CN" });
+
+    fireEvent.change(screen.getByRole("combobox", { name: "语言" }), {
+      target: { value: "" },
+    });
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Settings" }),
+    ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Language" })).toHaveValue("");
+    await expect(
+      browser.storage.local.get(LOCALE_OVERRIDE_STORAGE_KEY),
+    ).resolves.toEqual({});
+  });
+
+  test("restores the stored language override after a remount", async () => {
+    await browser.storage.local.set({
+      [LOCALE_OVERRIDE_STORAGE_KEY]: "zh_CN",
+    });
+    const state = createFixtureState(NOW);
+    vi.spyOn(browser.runtime, "sendMessage").mockResolvedValue(state as never);
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "设置" }),
+    ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveValue("zh_CN");
   });
 });

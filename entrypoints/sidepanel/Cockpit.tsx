@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { l10n, type AnnouncementTone } from "../../i18n/index";
+import { l10n, type AnnouncementTone, type SupportedLocale } from "../../i18n/index";
 import { formatAmount, formatDateTime, formatNumber } from "../../i18n/format";
 import {
   localizeBalanceValue,
@@ -81,6 +81,7 @@ export interface CockpitProps {
   refreshAnnouncementTone?: AnnouncementTone;
   refreshAnnouncementId?: number;
   autoRefreshPending?: boolean;
+  localeOverride?: SupportedLocale;
   providerOperations?: Partial<Record<ProviderInstanceId, ProviderOperation>>;
   onDisplayModeChange: (mode: DisplayMode) => void;
   onRefresh: () => void;
@@ -89,6 +90,7 @@ export interface CockpitProps {
   onSubmitApiKey?: (submission: ApiKeySubmission) => Promise<ApiKeyConnectAttemptResult>;
   onRefreshInstance?: (instanceId: ProviderInstanceId) => void;
   onAutoRefreshChange?: (enabled: boolean) => void;
+  onLocaleOverrideChange?: (locale: SupportedLocale | undefined) => void;
   onDisconnectInstance?: (instanceId: ProviderInstanceId) => void;
   onRenameInstance?: (
     instanceId: ProviderInstanceId,
@@ -384,6 +386,7 @@ export function Cockpit({
   refreshAnnouncementTone = "success",
   refreshAnnouncementId = 0,
   autoRefreshPending = false,
+  localeOverride,
   providerOperations = {},
   onDisplayModeChange,
   onRefresh,
@@ -392,6 +395,7 @@ export function Cockpit({
   onSubmitApiKey = async () => "temporary_error",
   onRefreshInstance = () => undefined,
   onAutoRefreshChange = () => undefined,
+  onLocaleOverrideChange = () => undefined,
   onDisconnectInstance = () => undefined,
   onRenameInstance = async () => true,
   onDeleteLocalData = () => undefined,
@@ -738,6 +742,7 @@ export function Cockpit({
         <SettingsView
           autoRefresh={state.preferences.autoRefresh}
           autoRefreshPending={autoRefreshPending}
+          localeOverride={localeOverride}
           instances={state.instances}
           providers={state.providers}
           now={now}
@@ -753,6 +758,7 @@ export function Cockpit({
             pushScreen({ name: "add-provider" }, "settings-add-provider")
           }
           onAutoRefreshChange={onAutoRefreshChange}
+          onLocaleOverrideChange={onLocaleOverrideChange}
           onReconnectProvider={connectProvider}
           onDisconnectInstance={onDisconnectInstance}
           onRenameInstance={onRenameInstance}

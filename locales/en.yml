@@ -1,6 +1,7 @@
 meta:
   localeTag: en
   direction: ltr
+  displayName: English
 
 manifest:
   name: AI Limits
@@ -191,6 +192,9 @@ settings:
   automaticRefreshDescription: Checks connected providers about every 15 minutes. Scheduled refresh stays non-interactive and never takes over the browser.
   automaticOn: On · about every 15 minutes
   automaticOff: Off · refresh manually from the header
+  language: Language
+  languageDescription: Applies to this side panel. Chrome’s own menus and the extension name stay in Chrome’s language.
+  languageFollowChrome: Follow Chrome
   connectedProviders: Connected providers
   instanceSettings: "{label} settings"
   identityNamed: "{provider} · {label}"

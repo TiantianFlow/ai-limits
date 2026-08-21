@@ -1,7 +1,13 @@
 import type { Ref } from "react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { l10n } from "../../../i18n/index";
+import {
+  isSupportedLocale,
+  l10n,
+  localeDisplayName,
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from "../../../i18n/index";
 import {
   localizeConnectionDisclosure,
   localizeManualRefreshDisclosure,
@@ -24,6 +30,7 @@ import { ProviderMark } from "../components/ProviderMark";
 export interface SettingsViewProps {
   autoRefresh: boolean;
   autoRefreshPending: boolean;
+  localeOverride?: SupportedLocale;
   instances: ProviderInstanceView[];
   providers: ProviderAvailabilityView[];
   now: number;
@@ -33,6 +40,7 @@ export interface SettingsViewProps {
   onClose: () => void;
   onAddProvider: () => void;
   onAutoRefreshChange: (enabled: boolean) => void;
+  onLocaleOverrideChange: (locale: SupportedLocale | undefined) => void;
   onReconnectProvider: (providerKind: ProviderKind) => void;
   onDisconnectInstance: (instanceId: ProviderInstanceId) => void;
   onReplaceApiKey: (
@@ -66,6 +74,7 @@ function freshness(instance: ProviderInstanceView, now: number): string {
 export function SettingsView({
   autoRefresh,
   autoRefreshPending,
+  localeOverride,
   instances,
   providers,
   now,
@@ -75,6 +84,7 @@ export function SettingsView({
   onClose,
   onAddProvider,
   onAutoRefreshChange,
+  onLocaleOverrideChange,
   onReconnectProvider,
   onDisconnectInstance,
   onReplaceApiKey,
@@ -129,6 +139,35 @@ export function SettingsView({
       />
 
       <div className="settings-screen screen-body">
+        <section className="settings-surface" aria-labelledby="language-title">
+          <div className="settings-language">
+            <span className="settings-toggle__copy">
+              <strong id="language-title">{l10n.t("settings.language")}</strong>
+              <small>{l10n.t("settings.languageDescription")}</small>
+            </span>
+            <select
+              className="settings-language__select"
+              aria-label={l10n.t("settings.language")}
+              value={localeOverride ?? ""}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                onLocaleOverrideChange(
+                  isSupportedLocale(value) ? value : undefined,
+                );
+              }}
+            >
+              <option value="">
+                {l10n.t("settings.languageFollowChrome")}
+              </option>
+              {SUPPORTED_LOCALES.map((locale) => (
+                <option key={locale} value={locale}>
+                  {localeDisplayName(locale)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+
         <section className="settings-surface" aria-labelledby="automatic-refresh-title">
           <label className="settings-toggle">
             <span className="settings-toggle__copy">
