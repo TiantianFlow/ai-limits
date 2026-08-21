@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const buildVersion = "0.3.5";
+const buildVersion = "0.4.0";
 const documentedReleaseVersion = "0.3.2";
 
 function read(relativePath) {
@@ -12,7 +12,7 @@ function read(relativePath) {
 }
 
 describe("release version", () => {
-  it("uses 0.3.5 as the package and verified manifest version", () => {
+  it("uses 0.4.0 as the package and verified manifest version", () => {
     const packageJson = JSON.parse(read("package.json"));
     const artifactContract = read("scripts/artifact-contract.mjs");
 
@@ -25,7 +25,7 @@ describe("release version", () => {
     );
   });
 
-  it("names the 0.3.5 archive in build documentation", () => {
+  it("names the 0.4.0 archive in build documentation", () => {
     for (const relativePath of ["README.md", "README.zh-CN.md"]) {
       const contents = read(relativePath);
 
