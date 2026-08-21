@@ -309,13 +309,14 @@ const v030PublicationStatements = [
 ];
 const listingLinks = [
   {
-    markdown: "[Artwork instructions](store-assets/README.md)",
+    markdown: "[Artwork instructions](../README.md)",
     error:
-      "Store listing is missing the root-relative artwork instructions link: store-assets/README.md.",
+      "Store listing is missing the listing-relative artwork instructions link: ../README.md.",
   },
   {
-    markdown: "[Privacy policy](PRIVACY.md)",
-    error: "Store listing is missing the root-relative privacy link: PRIVACY.md.",
+    markdown: "[Privacy policy](../../PRIVACY.md)",
+    error:
+      "Store listing is missing the listing-relative privacy link: ../../PRIVACY.md.",
   },
 ];
 const listingDefaults = [
@@ -956,7 +957,7 @@ describe("publication content", () => {
   });
 
   it.each(listingLinks)(
-    "rejects a missing root-relative listing link from $markdown",
+    "rejects a missing listing-relative listing link from $markdown",
     ({ markdown, error }) => {
       const errors = validatePublicationDocuments({
         ...valid,

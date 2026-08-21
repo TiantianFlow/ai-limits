@@ -35,7 +35,7 @@ describe("release version", () => {
   });
 
   it("keeps the current Store archive reference at 0.4.0", () => {
-    expect(read("STORE_LISTING.md")).toContain(
+    expect(read("store-assets/chrome-web-store/listing-en.md")).toContain(
       `ai-limits-${documentedReleaseVersion}-chrome.zip`,
     );
   });
@@ -44,7 +44,7 @@ describe("release version", () => {
     expect(read("PRIVACY.md")).toContain(
       `describes version ${documentedReleaseVersion}.`,
     );
-    expect(read("STORE_LISTING.md")).toContain(
+    expect(read("store-assets/chrome-web-store/listing-en.md")).toContain(
       `describes AI Limits version ${documentedReleaseVersion}.`,
     );
     expect(read("SECURITY.md")).toContain("latest 0.4.x release");

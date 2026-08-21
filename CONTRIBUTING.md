@@ -23,8 +23,10 @@ must use synthetic data.
 - Preserve the local-only data model and never persist browser-session
   credentials.
 - Add or update behavior-based tests before changing runtime behavior.
-- Update `PRIVACY.md` and `STORE_LISTING.md` when data access,
-  permissions, retention, or provider behavior changes.
+- Update `PRIVACY.md` and the Chrome Web Store listing packs
+  (`store-assets/chrome-web-store/listing-en.md` and
+  `listing-zh_CN.md`) when data access, permissions, retention, or
+  provider behavior changes.
 - Describe unsupported provider-endpoint assumptions without claiming provider
   affiliation, endorsement, or authorization.
 

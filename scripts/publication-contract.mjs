@@ -333,13 +333,14 @@ const requiredListingDefaults = [
 ];
 const requiredListingLinks = [
   {
-    destination: "store-assets/README.md",
+    destination: "../README.md",
     error:
-      "Store listing is missing the root-relative artwork instructions link: store-assets/README.md.",
+      "Store listing is missing the listing-relative artwork instructions link: ../README.md.",
   },
   {
-    destination: "PRIVACY.md",
-    error: "Store listing is missing the root-relative privacy link: PRIVACY.md.",
+    destination: "../../PRIVACY.md",
+    error:
+      "Store listing is missing the listing-relative privacy link: ../../PRIVACY.md.",
   },
 ];
 const requiredFaqNavigationLinks = [

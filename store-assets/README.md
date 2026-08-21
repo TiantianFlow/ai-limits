@@ -23,12 +23,13 @@ sizes.
 Upload the four screenshots in the listed order. Upload the final file to the
 Chrome Web Store's small promotional tile slot.
 
-Paste-ready Chrome Web Store listing copy also lives in this directory:
+The complete Chrome Web Store submission packs also live in this directory:
 
-- `chrome-web-store/listing-en.md` — English Single purpose, Short
-  description, and Detailed description for the CWS submission form.
-- `chrome-web-store/listing-zh_CN.md` — the same three fields in Simplified
-  Chinese.
+- `chrome-web-store/listing-en.md` — English store configuration, artwork
+  inventory, listing copy, permission justifications, data-disclosure
+  answers, reviewer prerequisites, and the seven-provider test flow.
+- `chrome-web-store/listing-zh_CN.md` — the same complete submission pack
+  in Simplified Chinese.
 
 ### Simplified Chinese project media
 

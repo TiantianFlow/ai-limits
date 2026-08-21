@@ -11,13 +11,10 @@ const documents = {
   supportedZh: await readFile(resolve("SUPPORTED_PROVIDERS.zh-CN.md"), "utf8"),
   privacy: await readFile(resolve("PRIVACY.md"), "utf8"),
   security: await readFile(resolve("SECURITY.md"), "utf8"),
-  listing:
-    (await readFile(resolve("STORE_LISTING.md"), "utf8")) +
-    "\n" +
-    (await readFile(
-      resolve("store-assets/chrome-web-store/listing-en.md"),
-      "utf8",
-    )),
+  listing: await readFile(
+    resolve("store-assets/chrome-web-store/listing-en.md"),
+    "utf8",
+  ),
   license: await readFile(resolve("LICENSE"), "utf8"),
 };
 
