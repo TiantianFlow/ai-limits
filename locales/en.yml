@@ -4,7 +4,7 @@ meta:
 
 manifest:
   name: AI Limits
-  description: Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.
+  description: Track subscription usage, resets, pace, and local history for your connected AI providers in one Chrome side panel.
   actionTitle: Open AI Limits
 
 common:

@@ -39,25 +39,36 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs from seven providers. ChatGPT, Claude, Kimi, Cursor, and Grok use accounts
-already signed in within the user's browser profile; ElevenLabs and New API use
-keys the user connects through guided setup.
+graphs across seven supported providers (see the screenshots for the full
+roster). Browser-session providers use an account already signed in within the
+user's browser profile; API-key providers use a key the user connects through
+guided setup.
 
 ## Short description
 
-Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.
+Track subscription usage, resets, pace, and local history for your connected AI providers in one Chrome side panel.
 
 ## Detailed description
 
 AI Limits keeps subscription limits visible without switching among provider
-account pages. Connect ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, or New API
-individually, approve that provider's optional access, and view the usage
-windows, reset times, credits, and plan labels that the provider makes
-available. ChatGPT, Claude, Kimi, Cursor, and Grok use the signed-in browser session.
-Cursor Connect or manual Refresh can additionally use one already-open
-`cursor.com` page for two fixed dashboard JSON requests; scheduled refresh
-never injects into a Cursor page, and the extension never creates or activates
-a Cursor tab.
+account pages. Connect a provider individually, approve that provider's
+optional access, and view the usage windows, reset times, credits, and plan
+labels it makes available. The panel supports two kinds of providers:
+browser-session providers, which read the account already signed in to that
+provider's site, and API-key providers, which use a key the user creates and
+connects through guided setup. The screenshots below show the full set of
+seven supported providers side by side.
+
+ChatGPT and Claude read the signed-in account's plan, usage windows, resets,
+and available credits from each provider's own usage response. Kimi reads the
+signed-in session's usage and subscription data and can prompt a brief,
+user-visible recovery step if that session needs to be refreshed. Cursor reads
+the signed-in account's base usage; Cursor Connect or manual Refresh can
+additionally use one already-open `cursor.com` page for two fixed read-only
+dashboard JSON requests, scheduled refresh never injects into a Cursor page,
+and the extension never creates or activates a Cursor tab. Grok reads the
+signed-in consumer `grok.com` session's plan and rate-limit window.
+
 ElevenLabs uses a user-created API key and its documented read-only
 subscription request. AI Limits supports multiple independent New API
 instances, including multiple separately labeled keys on the same origin. Each
@@ -116,11 +127,12 @@ evidence. External permission removal marks affected instances as requiring
 permission while retaining their nonsecret configuration, normalized usage,
 refresh status, History, and inactive saved key.
 
-AI Limits is an independent project by TiantianFlow. It is not affiliated with,
-endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI,
-ElevenLabs, the New API project, or their affiliates. Browser-session provider endpoints are private
-and unsupported. ElevenLabs and New API use documented endpoints, but provider response
-and authorization behavior can still change without notice.
+AI Limits is an independent project by TiantianFlow. It is not affiliated
+with, endorsed by, or authorized by any of the connected service providers,
+their parent companies, or their affiliates. Browser-session provider
+endpoints are private and unsupported. API-key providers use documented
+endpoints, but provider response and authorization behavior can still change
+without notice.
 
 ## Permission justifications
 

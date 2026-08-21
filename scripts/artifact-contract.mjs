@@ -3,7 +3,7 @@ import path from "node:path";
 import { unzipSync } from "fflate";
 
 export const EXPECTED_DESCRIPTION =
-  "Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
+  "Track subscription usage, resets, pace, and local history for your connected AI providers in one Chrome side panel.";
 
 export const EXPECTED_REQUIRED_PERMISSIONS = ["alarms", "sidePanel", "storage"];
 export const EXPECTED_OPTIONAL_PERMISSIONS = ["cookies", "scripting"];

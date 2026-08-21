@@ -28,7 +28,7 @@ const publicRouteGate =
 const paceAvailabilityStatement =
   "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
 const storeShortDescription =
-  "Track ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API usage, resets, pace, and local history in one Chrome side panel.";
+  "Track subscription usage, resets, pace, and local history for your connected AI providers in one Chrome side panel.";
 const kimiAutoRefreshStatement =
   "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.";
 const kimiAutoRefreshStatementZh =
