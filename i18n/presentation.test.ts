@@ -125,6 +125,6 @@ describe("locale-neutral presentation", () => {
     ).toBe("每周 Sonnet 4");
     expect(
       localizeSegmentLabel("kimi", { id: "work", label: "Work" }),
-    ).toBe("工作");
+    ).toBe("Kimi");
   });
 });

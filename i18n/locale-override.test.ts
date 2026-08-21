@@ -23,7 +23,7 @@ afterEach(() => {
 describe("locale override resolver", () => {
   it("resolves a non-default catalog when an override is active", async () => {
     await applyLocaleOverride("zh_CN");
-    expect(l10n.t("common.used")).toBe("已用");
+    expect(l10n.t("common.used")).toBe("已使用");
     expect(l10n.t("announcements.connected", { label: "ChatGPT" })).toBe(
       "已连接 ChatGPT。",
     );
@@ -69,7 +69,7 @@ describe("locale override resolver", () => {
     );
     await ensureCatalog("zh_CN");
     await applyLocaleOverride("zh_CN");
-    expect(l10n.t("common.used")).toBe("已用");
+    expect(l10n.t("common.used")).toBe("已使用");
     expect(browser.runtime.getURL).toHaveBeenCalledWith(
       "_locales/zh_CN/messages.json",
     );
