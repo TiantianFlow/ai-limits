@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const buildVersion = "0.4.0";
-const documentedReleaseVersion = "0.3.2";
+const documentedReleaseVersion = "0.4.0";
 
 function read(relativePath) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
@@ -34,7 +34,7 @@ describe("release version", () => {
     }
   });
 
-  it("keeps the current Store archive reference at 0.3.2", () => {
+  it("keeps the current Store archive reference at 0.4.0", () => {
     expect(read("STORE_LISTING.md")).toContain(
       `ai-limits-${documentedReleaseVersion}-chrome.zip`,
     );
@@ -47,7 +47,7 @@ describe("release version", () => {
     expect(read("STORE_LISTING.md")).toContain(
       `describes AI Limits version ${documentedReleaseVersion}.`,
     );
-    expect(read("SECURITY.md")).toContain("latest 0.3.x release");
+    expect(read("SECURITY.md")).toContain("latest 0.4.x release");
   });
 
   it("keeps personal email addresses out of public capture fixtures", () => {
