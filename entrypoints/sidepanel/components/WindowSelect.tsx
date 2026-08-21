@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
+import { l10n } from "../../../i18n/index";
+
 export interface WindowSelectOption {
   id: string;
   label: string;
@@ -129,7 +131,7 @@ export function WindowSelect({
       ref={containerRef}
       onKeyDown={onKeyDown}
     >
-      <span id={labelId}>Window</span>
+      <span id={labelId}>{l10n.t("common.window")}</span>
       <div className="window-select__control">
         <button
           ref={triggerRef}

@@ -1,5 +1,8 @@
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
+import { formatPercent as formatPercentNumber } from "../../../i18n/format";
+import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import type { DisplayMode, PaceKind } from "../../../domain/public-protocol";
 import { PaceSignal } from "./PaceSignal";
 
@@ -29,7 +32,7 @@ export interface QuotaBarsProps {
 }
 
 function formatPercent(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+  return formatPercentNumber(value);
 }
 
 function quotaTone(usedPercent: number): "accent" | "warning" | "critical" {
@@ -68,7 +71,7 @@ export function QuotaBars({
           <button
             className="quota-bars__history"
             type="button"
-            aria-label={historyLabel ?? `Open history for ${label}`}
+            aria-label={historyLabel ?? l10n.t("quota.historyFor", { label })}
             data-focus-key={historyFocusKey}
             onClick={() => onOpenHistory(id)}
           >
@@ -80,7 +83,13 @@ export function QuotaBars({
         <p className="quota-bars__value">
           {valueLabel ? <span>{valueLabel}</span> : null}
           <strong>
-            {formatPercent(quotaPercent)}% {mode}
+            {mode === "used"
+              ? l10n.t("quota.percentUsed", {
+                  percent: formatPercent(quotaPercent),
+                })
+              : l10n.t("quota.percentLeft", {
+                  percent: formatPercent(quotaPercent),
+                })}
           </strong>
         </p>
       </div>
@@ -88,7 +97,10 @@ export function QuotaBars({
       <div
         className="meter meter--quota"
         role="meter"
-        aria-label={`${label} quota ${mode}`}
+        aria-label={l10n.t("quota.meterQuota", {
+          label,
+          mode: localizeDisplayModeCompact(mode),
+        })}
         aria-valuenow={quotaPercent}
         aria-valuemin={0}
         aria-valuemax={100}
@@ -113,7 +125,11 @@ export function QuotaBars({
         <div
           className="meter meter--time"
           role="meter"
-          aria-label={`${label} time ${mode === "used" ? "elapsed" : "remaining"}`}
+          aria-label={
+            mode === "used"
+              ? l10n.t("quota.meterTimeElapsed", { label })
+              : l10n.t("quota.meterTimeRemaining", { label })
+          }
           aria-valuenow={timePercent}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -125,7 +141,7 @@ export function QuotaBars({
       <div className="quota-bars__meta">
         <div className="quota-bars__meta-primary">
           <span className="quota-bars__timing">
-            {timeLabel ? <span>{timeLabel}</span> : <span>No reset timing</span>}
+            {timeLabel ? <span>{timeLabel}</span> : <span>{l10n.t("quota.noResetTiming")}</span>}
           </span>
           <PaceSignal kind={paceKind} label={paceLabel} />
         </div>
@@ -147,7 +163,10 @@ export function QuotaBars({
                 aria-hidden="true"
                 className={`segment-key segment-key--${(index % 3) + 1}`}
               />
-              {segment.label} {formatPercent(segment.percent)}%
+              {l10n.t("quota.segmentPercent", {
+                label: segment.label,
+                percent: formatPercent(segment.percent),
+              })}
             </li>
           ))}
         </ul>

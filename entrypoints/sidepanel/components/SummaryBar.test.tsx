@@ -7,17 +7,24 @@ import { SummaryBar } from "./SummaryBar";
 afterEach(cleanup);
 
 describe("SummaryBar", () => {
-  it.each([
-    "Updated 2 of 4. Some providers need attention.",
-    "Local usage data deleted. Some provider access could not be removed.",
-  ])("uses the attention treatment for an actionable result: %s", (message) => {
-    render(<SummaryBar message={message} />);
+  it("uses the attention treatment from a semantic tone, not message text", () => {
+    render(
+      <SummaryBar
+        message="Updated 2 of 4. Some providers need attention."
+        tone="attention"
+      />,
+    );
 
     expect(screen.getByRole("status")).toHaveClass("summary-bar--attention");
   });
 
-  it("keeps a complete refresh neutral", () => {
-    render(<SummaryBar message="Updated 4 providers." />);
+  it("keeps a complete refresh success tone even if the copy mentions attention words", () => {
+    render(
+      <SummaryBar
+        message="Updated 4 providers. Some providers need attention."
+        tone="success"
+      />,
+    );
 
     expect(screen.getByRole("status")).not.toHaveClass(
       "summary-bar--attention",

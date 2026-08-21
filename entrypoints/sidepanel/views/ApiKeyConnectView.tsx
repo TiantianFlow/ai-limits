@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 
+import { l10n } from "../../../i18n/index";
+import { localizeProviderName } from "../../../i18n/presentation";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
 
@@ -19,18 +21,22 @@ export interface ApiKeyConnectViewProps {
   onSubmit: (apiKey: string) => Promise<ApiKeyConnectAttemptResult>;
 }
 
-const feedbackByResult: Record<ApiKeyConnectAttemptResult, string> = {
-  connected: "",
-  invalid_key: "Enter a valid ElevenLabs API key.",
-  insufficient_scope:
-    "Allow User → Read and check any IP restrictions, then try again.",
-  invalid_site:
-    "The provider site could not be validated. Check its address and try again.",
-  temporary_error:
-    "ElevenLabs could not be validated right now. Your existing data and key are unchanged.",
-  permission_declined:
-    "ElevenLabs access was not changed. Allow access when you are ready to try again.",
-};
+function feedbackFor(result: ApiKeyConnectAttemptResult): string {
+  switch (result) {
+    case "connected":
+      return "";
+    case "invalid_key":
+      return l10n.t("apiKey.invalidKey");
+    case "insufficient_scope":
+      return l10n.t("apiKey.insufficientScope");
+    case "invalid_site":
+      return l10n.t("apiKey.invalidSite");
+    case "temporary_error":
+      return l10n.t("apiKey.temporary");
+    case "permission_declined":
+      return l10n.t("apiKey.permissionDeclined");
+  }
+}
 
 export function ApiKeyConnectView({
   mode,
@@ -43,15 +49,19 @@ export function ApiKeyConnectView({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const replace = mode === "replace";
-  const submitLabel = replace ? "Validate & replace" : "Validate & connect";
-  const title = replace ? "Replace ElevenLabs API key" : "Connect ElevenLabs";
+  const submitLabel = replace
+    ? l10n.t("apiKey.submitReplace")
+    : l10n.t("apiKey.submitConnect");
+  const title = replace
+    ? l10n.t("apiKey.replaceTitle")
+    : l10n.t("apiKey.connectTitle");
   const invalidLength = apiKey.trim().length === 0 || apiKey.length > 4_096;
 
   return (
     <section className="screen api-key-guide" aria-label={title}>
       <PageHeader
         title={title}
-        subtitle="Read-only subscription usage"
+        subtitle={l10n.t("apiKey.subtitle")}
         backLabel={backLabel}
         onBack={onBack}
       />
@@ -60,8 +70,8 @@ export function ApiKeyConnectView({
         <div className="api-key-guide__identity">
           <ProviderMark providerId="elevenlabs" size="md" />
           <div>
-            <h2>ElevenLabs</h2>
-            <p>Monthly credits · Voice limits</p>
+            <h2>{localizeProviderName("elevenlabs")}</h2>
+            <p>{l10n.t("apiKey.capabilities")}</p>
           </div>
         </div>
 
@@ -69,50 +79,50 @@ export function ApiKeyConnectView({
           <li>
             <span className="api-key-guide__number" aria-hidden="true">1</span>
             <div>
-              <h3>Open the ElevenLabs API keys page</h3>
-              <p>Sign in first if ElevenLabs asks you to, then reopen the page.</p>
+              <h3>{l10n.t("apiKey.step1Title")}</h3>
+              <p>{l10n.t("apiKey.step1Copy")}</p>
               <button
                 className="button button--secondary"
                 type="button"
                 onClick={onOpenSetup}
               >
-                Open API keys page
+                {l10n.t("apiKey.openKeysPage")}
               </button>
             </div>
           </li>
           <li>
             <span className="api-key-guide__number" aria-hidden="true">2</span>
             <div>
-              <h3>Create a key named AI Limits</h3>
+              <h3>{l10n.t("apiKey.step2Title")}</h3>
               <p>
-                Select <strong>User → Read</strong>. Leave generation and write
-                permissions off. ElevenLabs does not publish the exact
-                endpoint-to-scope mapping, so validation confirms access.
+                {l10n.t("apiKey.step2Prefix")}{" "}
+                <strong>User → Read</strong>
+                {l10n.t("apiKey.step2Suffix")}
               </p>
             </div>
           </li>
           <li>
             <span className="api-key-guide__number" aria-hidden="true">3</span>
             <div>
-              <h3>Paste the key and validate</h3>
+              <h3>{l10n.t("apiKey.step3Title")}</h3>
               <form
                 className="api-key-guide__form"
-                aria-label="ElevenLabs API key setup"
+                aria-label={l10n.t("apiKey.formName")}
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (invalidLength || submitting) return;
                   setSubmitting(true);
                   setFeedback("");
                   void onSubmit(apiKey)
-                    .then((result) => setFeedback(feedbackByResult[result]))
-                    .catch(() => setFeedback(feedbackByResult.temporary_error))
+                    .then((result) => setFeedback(feedbackFor(result)))
+                    .catch(() => setFeedback(feedbackFor("temporary_error")))
                     .finally(() => {
                       setApiKey("");
                       setSubmitting(false);
                     });
                 }}
               >
-                <label htmlFor="elevenlabs-api-key">ElevenLabs API key</label>
+                <label htmlFor="elevenlabs-api-key">{l10n.t("apiKey.fieldLabel")}</label>
                 <input
                   id="elevenlabs-api-key"
                   type="password"
@@ -123,7 +133,7 @@ export function ApiKeyConnectView({
                   onChange={(event) => setApiKey(event.currentTarget.value)}
                 />
                 <small id="elevenlabs-api-key-help">
-                  Saved locally and never shown again in AI Limits.
+                  {l10n.t("apiKey.fieldHelp")}
                 </small>
                 <button
                   className="button button--primary"
@@ -131,7 +141,7 @@ export function ApiKeyConnectView({
                   disabled={invalidLength || submitting}
                   aria-busy={submitting}
                 >
-                  {submitting ? "Validating…" : submitLabel}
+                  {submitting ? l10n.t("apiKey.validating") : submitLabel}
                 </button>
               </form>
             </div>

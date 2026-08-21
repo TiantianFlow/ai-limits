@@ -10,8 +10,9 @@ import {
 function validManifest() {
   return {
     manifest_version: 3,
-    name: "AI Limits",
-    description: EXPECTED_DESCRIPTION,
+    name: "__MSG_manifest_name__",
+    description: "__MSG_manifest_description__",
+    default_locale: "en",
     version: "0.3.5",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
@@ -23,7 +24,7 @@ function validManifest() {
       48: "icons/48.png",
       128: "icons/128.png",
     },
-    action: { default_title: "Open AI Limits" },
+    action: { default_title: "__MSG_manifest_actionTitle__" },
     background: { service_worker: "background.js" },
     side_panel: { default_path: "sidepanel.html" },
   };

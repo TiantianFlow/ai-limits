@@ -41,7 +41,7 @@ describe("usageGroupViews", () => {
       },
     ];
 
-    expect(usageGroupViews(groups, quotas, values)).toEqual([
+    expect(usageGroupViews("claude", groups, quotas, values)).toEqual([
       {
         id: "priority",
         label: "Priority usage",
@@ -59,7 +59,7 @@ describe("usageGroupViews", () => {
   });
 
   test("uses one generic Usage group when provider-authored groups are absent", () => {
-    expect(usageGroupViews(undefined, quotas, values)).toEqual([
+    expect(usageGroupViews("claude", undefined, quotas, values)).toEqual([
       {
         id: "usage",
         label: "Usage",

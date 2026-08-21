@@ -1,5 +1,6 @@
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
 import type { ProviderKind, ProviderOperation } from "../../../domain/public-protocol";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderConnectRow } from "../components/ProviderConnectRow";
@@ -23,15 +24,21 @@ export function AddProviderView({
   onConnectProvider,
 }: AddProviderViewProps) {
   return (
-    <section className="screen" aria-label="Add provider">
+    <section className="screen" aria-label={l10n.t("addProvider.screen")}>
       <PageHeader
-        title="Add provider"
-        subtitle="Access is granted one provider at a time"
-        backLabel={origin === "settings" ? "Settings" : "Overview"}
+        title={l10n.t("addProvider.title")}
+        subtitle={l10n.t("addProvider.subtitle")}
+        backLabel={
+          origin === "settings"
+            ? l10n.t("common.settings")
+            : l10n.t("common.overview")
+        }
         onBack={onBack}
       />
       <div className="screen-body screen-body--connections">
-        <h2 className="section-label">Available · {providers.length}</h2>
+        <h2 className="section-label">
+          {l10n.t("addProvider.available", { count: providers.length })}
+        </h2>
         {providers.length ? (
           <div className="provider-list">
             {providers.map(
@@ -48,13 +55,9 @@ export function AddProviderView({
             )}
           </div>
         ) : (
-          <p className="empty-surface">All supported providers are connected.</p>
+          <p className="empty-surface">{l10n.t("addProvider.allConnected")}</p>
         )}
-        <p className="illustrative-note">
-          Connect asks for permission for that provider only, then attempts an
-          authenticated read. Nothing is pre-detected, and credentials are not
-          stored with normalized usage.
-        </p>
+        <p className="illustrative-note">{l10n.t("addProvider.permissionNote")}</p>
       </div>
     </section>
   );

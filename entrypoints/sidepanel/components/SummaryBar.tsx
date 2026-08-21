@@ -1,21 +1,25 @@
 import React from "react";
 
+import type { AnnouncementTone } from "../../../i18n/index";
+import { l10n } from "../../../i18n/index";
 import { Icon } from "./Icon";
 
 export interface SummaryBarProps {
   message: string;
+  tone?: AnnouncementTone;
   onDismiss?: () => void;
 }
 
-export function SummaryBar({ message, onDismiss }: SummaryBarProps) {
+export function SummaryBar({
+  message,
+  tone = "success",
+  onDismiss,
+}: SummaryBarProps) {
   if (!message) {
     return null;
   }
 
-  const needsAttention =
-    /couldn.t|could not|\bneeds?\b|unchanged|not connected|not updated/i.test(
-      message,
-    );
+  const needsAttention = tone === "attention";
 
   return (
     <div
@@ -29,7 +33,7 @@ export function SummaryBar({ message, onDismiss }: SummaryBarProps) {
         <button
           className="summary-bar__dismiss"
           type="button"
-          aria-label="Dismiss refresh summary"
+          aria-label={l10n.t("announcements.dismiss")}
           onClick={onDismiss}
         >
           <span aria-hidden="true">×</span>

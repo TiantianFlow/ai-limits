@@ -1,5 +1,6 @@
+import { l10n } from "../../i18n/index";
+import { localizeProviderName } from "../../i18n/presentation";
 import {
-  providerNames,
   type ProviderInstanceId,
   type ProviderInstanceView,
 } from "../../domain/public-protocol";
@@ -25,7 +26,7 @@ export function instanceLabel(instance: ProviderInstanceView): string {
     nonBlank(instance.userLabel) ??
     nonBlank(instance.snapshot?.accountLabel) ??
     dynamicOriginHostname(instance) ??
-    providerNames[instance.providerKind]
+    localizeProviderName(instance.providerKind)
   );
 }
 
@@ -52,14 +53,16 @@ function stableUniqueSuffix(
 ): string {
   const preferred = uniqueCandidate(instance, collisions, (candidate) => {
     const identity = idTail(candidate);
-    return identity === "default" ? identity : identity.slice(0, 8);
+    return identity === "default"
+      ? l10n.t("common.defaultInstance")
+      : identity.slice(0, 8);
   });
   if (preferred) return preferred;
 
   const provider = uniqueCandidate(
     instance,
     collisions,
-    (candidate) => providerNames[candidate.providerKind],
+    (candidate) => localizeProviderName(candidate.providerKind),
   );
   if (provider) return provider;
 

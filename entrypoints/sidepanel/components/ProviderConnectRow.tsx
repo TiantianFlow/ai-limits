@@ -1,8 +1,17 @@
 import React from "react";
 
+import { formatList } from "../../../i18n/format";
+import { l10n } from "../../../i18n/index";
 import {
-  providerNames,
-  providerPresentation,
+  localizeCapability,
+  localizeConnectLabel,
+  localizeConnectionDisclosure,
+  localizeManualRefreshDisclosure,
+  localizeOperation,
+  localizeProviderName,
+  providerCapabilityIds,
+} from "../../../i18n/presentation";
+import {
   type ProviderKind,
   type ProviderOperation,
 } from "../../../domain/public-protocol";
@@ -16,12 +25,6 @@ export interface ProviderConnectRowProps {
   onConnect: (providerKind: ProviderKind) => void;
 }
 
-const operationLabels: Record<ProviderOperation, string> = {
-  requesting_permission: "Requesting permission…",
-  fetching: "Fetching usage…",
-  waiting_for_session: "Waiting for Kimi…",
-};
-
 export function ProviderConnectRow({
   providerKind,
   credentialKind,
@@ -29,13 +32,21 @@ export function ProviderConnectRow({
   operation,
   onConnect,
 }: ProviderConnectRowProps) {
-  const name = providerNames[providerKind];
-  const presentation = providerPresentation(providerKind);
+  const name = localizeProviderName(providerKind);
   const connectionMethod =
     credentialKind === "api-key"
-      ? "API key"
-      : "Browser session";
+      ? l10n.t("common.apiKey")
+      : l10n.t("common.browserSession");
   const headingId = `connect-${providerKind}`;
+  const capabilities = formatList(
+    providerCapabilityIds(providerKind).map((id) =>
+      localizeCapability(providerKind, id),
+    ),
+  );
+  const manualDisclosure = localizeManualRefreshDisclosure(providerKind);
+  const actionLabel = isReconnect
+    ? l10n.t("connections.reconnectProvider", { provider: name })
+    : localizeConnectLabel(providerKind);
 
   return (
     <article className="provider-connect-row" aria-labelledby={headingId}>
@@ -44,15 +55,13 @@ export function ProviderConnectRow({
           <ProviderMark providerId={providerKind} size="md" />
           <div>
             <h3 id={headingId}>{name}</h3>
-            <p>Can show: {presentation.capabilities.join(" · ")}</p>
+            <p>{l10n.t("connections.canShow", { capabilities })}</p>
           </div>
         </div>
         <button
           className="provider-connect-row__action"
           type="button"
-          aria-label={
-            isReconnect ? `Reconnect ${name}` : presentation.connectionLabel
-          }
+          aria-label={actionLabel}
           data-focus-key={`connect-provider-${providerKind}`}
           aria-busy={operation !== undefined}
           disabled={operation !== undefined}
@@ -64,20 +73,22 @@ export function ProviderConnectRow({
             className="provider-connect-row__action-surface"
             style={{ height: 32 }}
           >
-            {isReconnect ? "Reconnect" : "Connect"}
+            {isReconnect ? l10n.t("common.reconnect") : l10n.t("common.connect")}
           </span>
         </button>
       </div>
       <p className="provider-connect-row__disclosure">
         <strong>{connectionMethod}</strong> —{" "}
-        <span>{presentation.connectionDisclosure}</span>
+        <span>{localizeConnectionDisclosure(providerKind)}</span>
       </p>
-      {presentation.manualRefreshDisclosure ? (
+      {manualDisclosure ? (
         <p className="provider-connect-row__manual-disclosure">
-          {presentation.manualRefreshDisclosure}
+          {manualDisclosure}
         </p>
       ) : null}
-      {operation ? <p className="operation-copy">{operationLabels[operation]}</p> : null}
+      {operation ? (
+        <p className="operation-copy">{localizeOperation(operation)}</p>
+      ) : null}
     </article>
   );
 }
