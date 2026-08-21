@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Security fixes are made against the current source and latest 0.3.x release.
+Security fixes are made against the current source and latest 0.4.x release.
 Older development builds may not receive separate fixes.
 
 ## Report a vulnerability
