@@ -197,7 +197,7 @@ describe("Kimi adapter", () => {
           {
             type: "quota",
             id: "monthly-total",
-            label: "Monthly total",
+            label: "Total usage",
             scope: "general",
             usedRatio: 0.019,
             cycle: { cadence: "calendar", startedAt: Date.parse(MONTHLY_START), resetsAt: Date.parse(MONTHLY_RESET) },
@@ -205,7 +205,7 @@ describe("Kimi adapter", () => {
           {
             type: "quota",
             id: "five-hour-coding",
-            label: "5-hour coding",
+            label: "5-hour usage",
             scope: "feature",
             usedRatio: 0.2476,
             cycle: { cadence: "rolling", resetsAt: Date.parse(FIVE_HOUR_RESET), durationMs: 5 * 60 * 60 * 1_000 },
@@ -213,7 +213,7 @@ describe("Kimi adapter", () => {
           {
             type: "quota",
             id: "weekly-coding",
-            label: "Weekly coding",
+            label: "7-day usage",
             scope: "feature",
             usedRatio: 0.0495,
             cycle: { cadence: "rolling", resetsAt: Date.parse(WEEKLY_RESET), durationMs: 7 * 24 * 60 * 60 * 1_000 },
@@ -384,10 +384,44 @@ describe("Kimi adapter", () => {
           {
             type: "quota",
             id: "five-hour-coding",
-            label: "5-hour coding",
+            label: "5-hour usage",
             scope: "feature",
             usedRatio: 0,
             cycle: { cadence: "rolling", resetsAt: Date.parse(FIVE_HOUR_RESET), durationMs: 5 * 60 * 60 * 1_000 },
+          },
+        ]),
+      },
+    });
+  });
+
+  test("normalizes an enabled weekly limit to zero when Kimi omits its ratio", async () => {
+    const result = await kimiAdapter.collect(
+      context(
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            statsFixture({
+              ratelimitCode7d: {
+                enabled: true,
+                resetTime: WEEKLY_RESET,
+              },
+            }),
+          ),
+        ),
+        vi.fn().mockResolvedValue({ value: "secret-cookie" }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: expect.arrayContaining([
+          {
+            type: "quota",
+            id: "weekly-coding",
+            label: "7-day usage",
+            scope: "feature",
+            usedRatio: 0,
+            cycle: { cadence: "rolling", resetsAt: Date.parse(WEEKLY_RESET), durationMs: 7 * 24 * 60 * 60 * 1_000 },
           },
         ]),
       },
@@ -421,11 +455,6 @@ describe("Kimi adapter", () => {
       name: "five-hour limit without a reset",
       ratelimitCode5h: { enabled: true },
       ratelimitCode7d: null,
-    },
-    {
-      name: "weekly limit without a ratio",
-      ratelimitCode5h: null,
-      ratelimitCode7d: { enabled: true, resetTime: WEEKLY_RESET },
     },
     {
       name: "five-hour limit with a non-positive reset timestamp",
