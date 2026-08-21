@@ -177,7 +177,7 @@ describe("Grok adapter", () => {
           {
             id: "rate-limits",
             label: "Chat rate limits",
-            description: POOL_NOT_FOUND,
+            description: "not_found",
             metricIds: RATE_LIMIT_MODES.map((mode) => `2-hour-${mode}-queries`),
           },
         ],
@@ -622,8 +622,8 @@ describe("Grok adapter", () => {
       expect(disabledResult.snapshot.metrics.map((metric) => metric.id)).toEqual(
         RATE_LIMIT_MODES.map((mode) => `2-hour-${mode}-queries`),
       );
-      expect(disabledResult.snapshot.usageGroups?.[0]?.description).toMatch(
-        /^Grok usage-pool disabled: is_unified_billing_user is false\./,
+      expect(disabledResult.snapshot.usageGroups?.[0]?.description).toBe(
+        "disabled",
       );
     }
   });
@@ -636,8 +636,8 @@ describe("Grok adapter", () => {
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
       expect(result.snapshot.metrics[0]?.id).toBe("2-hour-fast-queries");
-      expect(result.snapshot.usageGroups?.[0]?.description).toMatch(
-        /^Grok usage-pool is missing is_unified_billing_user\./,
+      expect(result.snapshot.usageGroups?.[0]?.description).toBe(
+        "flag_missing",
       );
     }
   });
@@ -648,7 +648,7 @@ describe("Grok adapter", () => {
     expect(missingResult).toMatchObject({
       ok: true,
       snapshot: {
-        usageGroups: [expect.objectContaining({ description: POOL_NOT_FOUND })],
+        usageGroups: [expect.objectContaining({ description: "not_found" })],
       },
     });
     if (missingResult.ok) {
@@ -667,9 +667,7 @@ describe("Grok adapter", () => {
       snapshot: {
         usageGroups: [
           expect.objectContaining({
-            description: expect.stringMatching(
-              /^Grok usage-pool grpc-status=5\./,
-            ),
+            description: "unavailable",
           }),
         ],
       },
@@ -693,8 +691,8 @@ describe("Grok adapter", () => {
     const result = await grokAdapter.collect(context(injectedFetch));
     expect(result).toMatchObject({ ok: true });
     if (result.ok) {
-      expect(result.snapshot.usageGroups?.[0]?.description).toMatch(
-        /^Grok usage-pool missing required field: current_period.end/,
+      expect(result.snapshot.usageGroups?.[0]?.description).toBe(
+        "unparseable",
       );
       expect(result.snapshot.metrics[0]?.id).toBe("2-hour-fast-queries");
     }

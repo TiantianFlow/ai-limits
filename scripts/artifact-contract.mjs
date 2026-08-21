@@ -66,15 +66,25 @@ export function validateBuildManifest(manifest, packageVersion) {
   if (manifest.version !== packageVersion || manifest.version !== "0.3.5") {
     errors.push("Expected manifest version 0.3.5 derived from package.json.");
   }
-  if (manifest.name !== "AI Limits") {
-    errors.push('Expected manifest name to be "AI Limits".');
+  if (manifest.default_locale !== "en") {
+    errors.push('Expected manifest default_locale to be "en".');
   }
-  if (
-    manifest.description !== EXPECTED_DESCRIPTION ||
-    EXPECTED_DESCRIPTION.length > 132
-  ) {
+  if (manifest.name !== "__MSG_manifest_name__") {
+    errors.push('Expected manifest name to be "__MSG_manifest_name__".');
+  }
+  if (manifest.description !== "__MSG_manifest_description__") {
     errors.push(
-      "Expected the manifest description to match the Chrome Web Store short description within 132 characters.",
+      'Expected manifest description to be "__MSG_manifest_description__".',
+    );
+  }
+  if (EXPECTED_DESCRIPTION.length > 132) {
+    errors.push(
+      "Expected the English catalog description to stay within 132 characters.",
+    );
+  }
+  if (manifest.action?.default_title !== "__MSG_manifest_actionTitle__") {
+    errors.push(
+      'Expected action.default_title to be "__MSG_manifest_actionTitle__".',
     );
   }
   if (manifest.side_panel?.default_path !== "sidepanel.html") {

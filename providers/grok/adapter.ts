@@ -512,7 +512,11 @@ async function collectGrok({
 
     let modeMetrics: QuotaMetric[] = [];
     const poolMetric = pool.kind === "metric" ? pool.metric : undefined;
+    const poolReason = pool.kind === "explained" ? pool.reason : undefined;
     const poolNote = pool.kind === "explained" ? pool.message : undefined;
+    if (poolNote !== undefined) {
+      console.debug("[grok] usage-pool:", poolReason, poolNote);
+    }
     const extraCredits = pool.extraCredits;
 
     if (poolMetric === undefined) {
@@ -585,7 +589,7 @@ async function collectGrok({
           poolMetric,
           modeMetrics,
           extraCredits,
-          poolNote,
+          poolReason,
         ),
       },
     };
@@ -681,10 +685,12 @@ function grokUsageGroups(
   poolMetric: QuotaMetric | undefined,
   modeMetrics: readonly QuotaMetric[],
   extraCredits: BalanceMetric | undefined,
-  poolNote: string | undefined,
+  poolReason: PoolExplainReason | undefined,
 ): UsageGroup[] {
   const groups: UsageGroup[] = [];
   const extraId = extraCredits === undefined ? [] : [extraCredits.id];
+  const unavailable =
+    poolReason === undefined ? {} : { description: poolReason };
   if (poolMetric !== undefined) {
     groups.push({
       id: "usage-pool",
@@ -696,9 +702,7 @@ function grokUsageGroups(
     groups.push({
       id: "rate-limits",
       label: "Chat rate limits",
-      ...(poolNote === undefined || poolMetric !== undefined
-        ? {}
-        : { description: poolNote }),
+      ...(poolMetric !== undefined ? {} : unavailable),
       metricIds: [
         ...modeMetrics.map((metric) => metric.id),
         ...(poolMetric === undefined ? extraId : []),
@@ -708,7 +712,7 @@ function grokUsageGroups(
     groups.push({
       id: "usage-pool",
       label: "Usage pool",
-      ...(poolNote === undefined ? {} : { description: poolNote }),
+      ...unavailable,
       metricIds: extraId,
     });
   }

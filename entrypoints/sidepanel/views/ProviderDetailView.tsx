@@ -1,7 +1,14 @@
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
 import {
-  providerPresentation,
+  localizeCapability,
+  localizeConnectionDisclosure,
+  localizeManualRefreshDisclosure,
+  localizeOperation,
+  providerCapabilityIds,
+} from "../../../i18n/presentation";
+import {
   type ProviderInstanceId,
   type ProviderOperation,
 } from "../../../domain/public-protocol";
@@ -27,26 +34,22 @@ export interface ProviderDetailViewProps {
   onOpenSettings: () => void;
 }
 
-const operationLabels: Record<ProviderOperation, string> = {
-  requesting_permission: "Requesting permission…",
-  fetching: "Fetching usage…",
-  waiting_for_session: "Waiting for Kimi…",
-};
-
 function statusFor(
   provider: ProviderCardProps,
   operation: ProviderOperation | undefined,
 ): { label: string; attention: boolean } {
   if (operation) {
     return {
-      label: operationLabels[operation],
+      label: localizeOperation(operation),
       attention: operation === "waiting_for_session",
     };
   }
 
   if (provider.stale) {
     return {
-      label: `Stale · ${provider.freshness ?? "last known values"}`,
+      label: l10n.t("status.stale", {
+        freshness: provider.freshness ?? l10n.t("status.staleFallback"),
+      }),
       attention: true,
     };
   }
@@ -54,14 +57,14 @@ function statusFor(
   if (provider.attemptMessage) {
     return {
       label: provider.freshness
-        ? `Attention · ${provider.freshness}`
-        : "Needs attention",
+        ? l10n.t("status.attention", { freshness: provider.freshness })
+        : l10n.t("status.needsAttention"),
       attention: true,
     };
   }
 
   return {
-    label: provider.freshness ?? "No usage yet",
+    label: provider.freshness ?? l10n.t("status.noUsageYet"),
     attention: false,
   };
 }
@@ -77,26 +80,25 @@ export function ProviderDetailView({
 }: ProviderDetailViewProps) {
   if (!provider) {
     return (
-      <section className="screen" aria-label="Provider unavailable">
+      <section className="screen" aria-label={l10n.t("providerDetail.screenUnavailable")}>
         <PageHeader
-          title="Provider unavailable"
-          subtitle="This provider is no longer connected"
-          backLabel="Overview"
+          title={l10n.t("providerDetail.titleUnavailable")}
+          subtitle={l10n.t("providerDetail.subtitleUnavailable")}
+          backLabel={l10n.t("common.overview")}
           onBack={onBack}
         />
         <div className="screen-body">
           <p className="illustrative-note">
-            Its usage is unavailable until you connect it again from Add provider.
+            {l10n.t("providerDetail.unavailableNote")}
           </p>
           <button className="button button--secondary" type="button" onClick={onHome}>
-            Return to Overview
+            {l10n.t("providerDetail.returnToOverview")}
           </button>
         </div>
       </section>
     );
   }
 
-  const presentation = providerPresentation(provider.providerId);
   const status = statusFor(provider, operation);
   const showingLastKnown =
     provider.hasSnapshot &&
@@ -105,23 +107,39 @@ export function ProviderDetailView({
   const interactionMessage =
     provider.attemptMessage ??
     (operation === "waiting_for_session"
-      ? "Kimi needs a browser session. Existing values stay visible while the read waits."
+      ? l10n.t("refresh.kimiWaitingWithValues")
       : undefined);
 
   return (
-    <section className="screen" aria-label={`${provider.instanceLabel} detail`}>
+    <section
+      className="screen"
+      aria-label={l10n.t("providerDetail.screenNamed", {
+        label: provider.instanceLabel,
+      })}
+    >
       <PageHeader
         title={provider.instanceLabel}
-        subtitle={[provider.name, provider.plan, "Provider usage"].filter(Boolean).join(" · ")}
-        backLabel="Overview"
+        subtitle={
+          provider.plan
+            ? l10n.t("providerDetail.subtitleWithPlan", {
+                provider: provider.name,
+                plan: provider.plan,
+              })
+            : l10n.t("providerDetail.subtitle", { provider: provider.name })
+        }
+        backLabel={l10n.t("common.overview")}
         onBack={onBack}
         actions={
           <>
             <button
               className="icon-button"
               type="button"
-              aria-label={`Refresh ${provider.instanceLabel}`}
-              title={`Refresh ${provider.instanceLabel}`}
+              aria-label={l10n.t("providerDetail.refreshNamed", {
+                label: provider.instanceLabel,
+              })}
+              title={l10n.t("providerDetail.refreshNamed", {
+                label: provider.instanceLabel,
+              })}
               data-focus-key={`provider-refresh-${provider.instanceId}`}
               disabled={operation !== undefined}
               onClick={() => onRefreshInstance(provider.instanceId)}
@@ -131,8 +149,12 @@ export function ProviderDetailView({
             <button
               className="icon-button"
               type="button"
-              aria-label={`Settings for ${provider.instanceLabel}`}
-              title={`Settings for ${provider.instanceLabel}`}
+              aria-label={l10n.t("providerDetail.settingsNamed", {
+                label: provider.instanceLabel,
+              })}
+              title={l10n.t("providerDetail.settingsNamed", {
+                label: provider.instanceLabel,
+              })}
               data-focus-key={`provider-settings-${provider.instanceId}`}
               onClick={onOpenSettings}
             >
@@ -149,7 +171,9 @@ export function ProviderDetailView({
             label={status.label}
             tone={status.attention ? "attention" : "neutral"}
           />
-          {showingLastKnown ? <span>Showing last known values</span> : null}
+          {showingLastKnown ? (
+            <span>{l10n.t("providerDetail.showingLastKnown")}</span>
+          ) : null}
         </div>
 
         {interactionMessage ? (
@@ -167,7 +191,7 @@ export function ProviderDetailView({
                 >
                   <div className="detail-group__heading">
                     <h2 id={headingId}>{group.label}</h2>
-                    <span>Usage group</span>
+                    <span>{l10n.t("providerDetail.usageGroup")}</span>
                   </div>
                   {group.description ? <p>{group.description}</p> : null}
                   {group.quotas.length ? (
@@ -181,7 +205,10 @@ export function ProviderDetailView({
                             key={quota.id}
                             {...quota}
                             mode={provider.mode}
-                            historyLabel={`Open ${provider.instanceLabel} history for ${quota.label}`}
+                            historyLabel={l10n.t("quota.historyNamed", {
+                              instance: provider.instanceLabel,
+                              label: quota.label,
+                            })}
                             historyFocusKey={historyFocusKey}
                             onOpenHistory={(metricId) =>
                               onOpenHistory(
@@ -203,7 +230,7 @@ export function ProviderDetailView({
                           <strong>{metric.value}</strong>
                         </div>
                       ))}
-                      <p>Counters and balances are stored as point-in-time observations.</p>
+                      <p>{l10n.t("providerDetail.countersNote")}</p>
                     </div>
                   ) : null}
                 </section>
@@ -217,34 +244,40 @@ export function ProviderDetailView({
           <button
             className="detail-history-action"
             type="button"
-            aria-label={`Open ${provider.instanceLabel} history`}
+            aria-label={l10n.t("providerDetail.openHistoryNamed", {
+              label: provider.instanceLabel,
+            })}
             data-focus-key={`provider-history-${provider.instanceId}`}
             onClick={() => onOpenHistory(provider.instanceId, firstWindow?.id)}
           >
             <Icon name="trending-up" />
-            Open history
+            {l10n.t("providerDetail.openHistory")}
           </button>
         ) : null}
 
         <section className="connection-surface" aria-labelledby="connection-title">
-          <h2 id="connection-title">Connection and capabilities</h2>
-          <p>{presentation.connectionDisclosure}</p>
+          <h2 id="connection-title">{l10n.t("providerDetail.connectionTitle")}</h2>
+          <p>{localizeConnectionDisclosure(provider.providerId)}</p>
           <ul>
-            {presentation.capabilities.map((capability) => (
-              <li key={capability}>{capability}</li>
+            {providerCapabilityIds(provider.providerId).map((capabilityId) => (
+              <li key={capabilityId}>
+                {localizeCapability(provider.providerId, capabilityId)}
+              </li>
             ))}
           </ul>
-          {presentation.manualRefreshDisclosure ? (
-            <p>{presentation.manualRefreshDisclosure}</p>
+          {localizeManualRefreshDisclosure(provider.providerId) ? (
+            <p>{localizeManualRefreshDisclosure(provider.providerId)}</p>
           ) : (
-            <p>Scheduled refresh reads the existing session without opening a tab.</p>
+            <p>{l10n.t("providerDetail.scheduledNoTab")}</p>
           )}
           <button
             type="button"
-            aria-label={`Manage ${provider.instanceLabel} in Settings`}
+            aria-label={l10n.t("providerDetail.manageNamed", {
+              label: provider.instanceLabel,
+            })}
             onClick={onOpenSettings}
           >
-            Manage or disconnect in Settings
+            {l10n.t("providerDetail.manageInSettings")}
           </button>
         </section>
       </article>

@@ -1,5 +1,7 @@
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
+import { localizeOperation } from "../../../i18n/presentation";
 import type {
   DisplayMode,
   PaceKind,
@@ -81,12 +83,6 @@ export interface ProviderCardProps {
   onOpenHistory?: (metricId: string) => void;
 }
 
-const operationLabels: Record<ProviderOperation, string> = {
-  requesting_permission: "Requesting permission…",
-  fetching: "Fetching usage…",
-  waiting_for_session: "Waiting for Kimi…",
-};
-
 export function ProviderCard({
   providerId,
   instanceId,
@@ -115,14 +111,19 @@ export function ProviderCard({
   const headingId = `provider-name-${identitySuffix}`;
   const quotaGroups = usageGroups.filter((group) => group.quotas.length > 0);
   const statusLabel = operation
-    ? operationLabels[operation]
+    ? localizeOperation(operation)
     : stale
-      ? `Stale · ${freshness ?? "last known values"}`
+      ? l10n.t("status.stale", {
+          freshness: freshness ?? l10n.t("status.staleFallback"),
+        })
       : attemptMessage
         ? freshness
-          ? `Attention · ${freshness}`
-          : "Needs attention"
-        : freshness ?? (access === "required" ? "Not connected" : "No usage yet");
+          ? l10n.t("status.attention", { freshness })
+          : l10n.t("status.needsAttention")
+        : freshness ??
+          (access === "required"
+            ? l10n.t("status.notConnected")
+            : l10n.t("status.noUsageYet"));
   const statusAttention =
     operation === "waiting_for_session" || stale || Boolean(attemptMessage);
 
@@ -155,14 +156,21 @@ export function ProviderCard({
   return (
     <article
       className="provider-card"
-      aria-label={instanceLabel === name ? name : `${name} ${instanceLabel}`}
+      aria-label={
+        instanceLabel === name
+          ? name
+          : l10n.t("card.identityNamed", {
+              provider: name,
+              instance: instanceLabel,
+            })
+      }
     >
       <header className="provider-card__header">
         {onOpenDetails ? (
           <button
             className="provider-card__details provider-card__identity"
             type="button"
-            aria-label={`Open ${instanceLabel} details`}
+            aria-label={l10n.t("card.openDetails", { label: instanceLabel })}
             data-focus-key={openDetailsFocusKey}
             onClick={onOpenDetails}
           >
@@ -227,7 +235,10 @@ export function ProviderCard({
                   key={quota.id}
                   {...quota}
                   mode={mode}
-                  historyLabel={`Open ${instanceLabel} history for ${quota.label}`}
+                  historyLabel={l10n.t("quota.historyNamed", {
+                    instance: instanceLabel,
+                    label: quota.label,
+                  })}
                   historyFocusKey={`provider-history-${instanceId}-${quota.id}`}
                   onOpenHistory={onOpenHistory}
                 />
@@ -238,8 +249,13 @@ export function ProviderCard({
       ) : null}
 
       {values.length ? (
-        <section className="metric-values" aria-label={`${name} values`}>
-          <h3 className="visually-hidden">Counters and balances</h3>
+        <section
+          className="metric-values"
+          aria-label={l10n.t("card.values", { provider: name })}
+        >
+          <h3 className="visually-hidden">
+            {l10n.t("card.countersAndBalances")}
+          </h3>
           {values.map((metric) => (
             <div className="credit-row" key={metric.id}>
               <span>{metric.label}</span>

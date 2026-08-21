@@ -1,6 +1,7 @@
 import type { Ref } from "react";
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
 import type {
   ApiKeyProviderKind,
   ProviderInstanceId,
@@ -47,7 +48,7 @@ export function OverviewView({
   return (
     <section aria-labelledby="overview-title">
       <h2 className="visually-hidden" id="overview-title">
-        Overview
+        {l10n.t("overview.screen")}
       </h2>
       <div className="provider-list">
         {providers.map(({ instanceId, providerKind, card, needsApiKeyReplacement }) => {
@@ -69,9 +70,13 @@ export function OverviewView({
                   ? undefined
                   : needsApiKeyReplacement
                     ? {
-                        label: "Replace key",
-                        accessibleLabel: `Replace ${card.instanceLabel} API key`,
-                        title: `Replace ${card.instanceLabel} API key`,
+                        label: l10n.t("overview.replaceKey"),
+                        accessibleLabel: l10n.t("overview.replaceKeyNamed", {
+                          label: card.instanceLabel,
+                        }),
+                        title: l10n.t("overview.replaceKeyNamed", {
+                          label: card.instanceLabel,
+                        }),
                         icon: "key",
                         focusKey: `overview-replace-api-key-${instanceId}`,
                         onClick: () =>
@@ -81,8 +86,10 @@ export function OverviewView({
                           ),
                       }
                   : {
-                      label: "Refresh",
-                      accessibleLabel: `Refresh ${card.instanceLabel}`,
+                      label: l10n.t("common.refresh"),
+                      accessibleLabel: l10n.t("overview.refreshNamed", {
+                        label: card.instanceLabel,
+                      }),
                       focusKey: `overview-refresh-${instanceId}`,
                       onClick: () => onRefreshInstance(instanceId),
                     }
@@ -98,7 +105,7 @@ export function OverviewView({
         onClick={(event) => onAddProvider(event.currentTarget)}
       >
         <span aria-hidden="true">+</span>
-        Add provider
+        {l10n.t("overview.addProvider")}
       </button>
       <OpenSourceFooter />
     </section>

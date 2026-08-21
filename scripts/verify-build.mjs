@@ -36,6 +36,14 @@ await access(
   resolve(outputDirectory, manifest.background.service_worker),
   constants.F_OK,
 );
+await access(
+  resolve(outputDirectory, "_locales/en/messages.json"),
+  constants.F_OK,
+);
+await access(
+  resolve(outputDirectory, "_locales/zh_CN/messages.json"),
+  constants.F_OK,
+);
 const stagedManifest = JSON.parse(
   await readFile(resolve(stagedDirectory, "manifest.json"), "utf8"),
 );

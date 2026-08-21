@@ -9,7 +9,6 @@ import {
   parsePermissionIntentResponse,
   parseRefreshResponse,
   providerAvailability,
-  providerNames,
   providerPresentation,
   type AppViewState,
   type ApiKeyProviderKind,
@@ -23,6 +22,8 @@ import {
   type RefreshReport,
   type RuntimeCommand,
 } from "../../domain/public-protocol";
+import { l10n, type AnnouncementTone } from "../../i18n/index";
+import { localizeProviderName } from "../../i18n/presentation";
 import { Cockpit } from "./Cockpit";
 import type { ApiKeySubmission } from "./Cockpit";
 import { instanceLabels } from "./instance-label";
@@ -31,6 +32,7 @@ import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 interface Announcement {
   id: number;
   message: string;
+  tone: AnnouncementTone;
 }
 
 interface AutoRefreshGuard {
@@ -51,21 +53,33 @@ function presentationLabel(
   return state ? instanceLabels(state.instances).get(instanceId) : undefined;
 }
 
-function manualSummary(report: RefreshReport, state: AppViewState): string {
+function manualSummary(
+  report: RefreshReport,
+  state: AppViewState,
+): { message: string; tone: AnnouncementTone } {
   const attempted = report.results.filter(
     ({ outcome }) =>
       !(outcome.kind === "skipped" && outcome.reason === "permission_required"),
   );
   if (attempted.length === 0) {
-    return "Connect a provider before refreshing.";
+    return {
+      message: l10n.t("refresh.connectBeforeRefreshing"),
+      tone: "attention",
+    };
   }
 
   const successes = attempted.filter(({ outcome }) => outcome.kind === "success");
   if (successes.length === attempted.length) {
-    return `Updated ${successes.length} provider${successes.length === 1 ? "" : "s"}.`;
+    return {
+      message: l10n.count("refresh.updatedProviders", successes.length),
+      tone: "success",
+    };
   }
   if (successes.length === 0) {
-    return "No providers updated. Existing data is unchanged.";
+    return {
+      message: l10n.t("refresh.noneUpdated"),
+      tone: "attention",
+    };
   }
 
   const nonSuccesses = attempted.filter(
@@ -79,16 +93,23 @@ function manualSummary(report: RefreshReport, state: AppViewState): string {
     onlyNonSuccess?.outcome.kind === "deferred" &&
     onlyNonSuccess.outcome.reason === "session_required";
 
-  return `Updated ${successes.length} of ${attempted.length}. ${
-    kimiIsOnlyNonSuccess
-      ? "Kimi needs a browser session."
-      : "Some providers need attention."
-  }`;
+  return {
+    message: l10n.t("refresh.updatedOfAttempted", {
+      successCount: successes.length,
+      attemptedCount: attempted.length,
+      detail: kimiIsOnlyNonSuccess
+        ? l10n.t("refresh.kimiNeedsSession")
+        : l10n.t("refresh.someNeedAttention"),
+    }),
+    tone: "attention",
+  };
 }
 
 function confirmationFailure(label?: string): string {
-  const subject = label ? `${label} refresh` : "refresh";
-  return `Couldn’t confirm the ${subject} result. Check the latest usage before retrying.`;
+  const subject = label
+    ? l10n.t("refresh.confirmationSubjectNamed", { label })
+    : l10n.t("refresh.confirmationSubjectRefresh");
+  return l10n.t("refresh.confirmationFailure", { subject });
 }
 
 function rawProviderConfig(
@@ -114,6 +135,7 @@ export function App() {
   const [announcement, setAnnouncement] = useState<Announcement>({
     id: 0,
     message: "",
+    tone: "success",
   });
   const [isAutoRefreshPending, setIsAutoRefreshPending] = useState(false);
   const autoRefreshGuard = useRef<AutoRefreshGuard | undefined>(undefined);
@@ -222,11 +244,18 @@ export function App() {
   };
 
   const clearAnnouncement = () => {
-    setAnnouncement((current) => ({ id: current.id + 1, message: "" }));
+    setAnnouncement((current) => ({
+      id: current.id + 1,
+      message: "",
+      tone: "success",
+    }));
   };
 
-  const announce = (message: string) => {
-    setAnnouncement((current) => ({ id: current.id + 1, message }));
+  const announce = (
+    message: string,
+    tone: AnnouncementTone = "success",
+  ) => {
+    setAnnouncement((current) => ({ id: current.id + 1, message, tone }));
   };
 
   const handleDisplayModeChange = (mode: DisplayMode) => {
@@ -264,7 +293,7 @@ export function App() {
           }
         }
         if (mutation === displayMutationSequence.current) {
-          announce("Couldn’t update the display mode.");
+          announce(l10n.t("refresh.displayModeFailed"), "attention");
         }
       });
   };
@@ -344,7 +373,12 @@ export function App() {
     try {
       prepared = await preparePermission(providerKind, config, existingInstanceId);
     } catch {
-      announce(`Couldn’t connect ${providerNames[providerKind]}. Reload AI Limits and try again.`);
+      announce(
+        l10n.t("announcements.connectFailed", {
+          provider: localizeProviderName(providerKind),
+        }),
+        "attention",
+      );
       return;
     }
     setProviderOperation(prepared.instanceId, "requesting_permission");
@@ -352,12 +386,22 @@ export function App() {
     try {
       granted = await requestPreparedPermission(prepared);
     } catch {
-      announce(`Couldn’t connect ${providerNames[providerKind]}. Reload AI Limits and try again.`);
+      announce(
+        l10n.t("announcements.connectFailed", {
+          provider: localizeProviderName(providerKind),
+        }),
+        "attention",
+      );
       setProviderOperation(prepared.instanceId);
       return;
     }
     if (!granted) {
-      announce(`${providerNames[providerKind]} was not connected.`);
+      announce(
+        l10n.t("announcements.notConnected", {
+          provider: localizeProviderName(providerKind),
+        }),
+        "attention",
+      );
       setProviderOperation(prepared.instanceId);
       return;
     }
@@ -372,10 +416,14 @@ export function App() {
         } satisfies RuntimeCommand),
       );
       commitViewState(response.state);
-      announce(manualSummary(response.report, response.state));
+      const summary = manualSummary(response.report, response.state);
+      announce(summary.message, summary.tone);
     } catch {
       await abandonPermissionIntent(prepared.permissionIntentId);
-      announce(confirmationFailure(providerNames[providerKind]));
+      announce(
+        confirmationFailure(localizeProviderName(providerKind)),
+        "attention",
+      );
     } finally {
       setProviderOperation(prepared.instanceId);
     }
@@ -385,7 +433,7 @@ export function App() {
     const setupUrl = providerPresentation(providerKind).apiKeySetupUrl;
     if (!setupUrl) return;
     void browser.tabs.create({ url: setupUrl }).catch(() => {
-      announce("Couldn’t open the ElevenLabs API keys page. Try the link again.");
+      announce(l10n.t("announcements.openApiKeysFailed"), "attention");
     });
   };
 
@@ -402,7 +450,7 @@ export function App() {
     const submittedLabel =
       (instanceId
         ? presentationLabel(viewStateRef.current, instanceId)
-        : userLabel?.trim()) || providerNames[providerKind];
+        : userLabel?.trim()) || localizeProviderName(providerKind);
     const currentState = viewStateRef.current;
     if (!currentState) return "temporary_error";
     const config = rawProviderConfig(currentState, providerKind, baseUrl);
@@ -416,7 +464,10 @@ export function App() {
         userLabel,
       );
     } catch {
-      announce(`${submittedLabel} could not be validated right now. Try again later.`);
+      announce(
+        l10n.t("announcements.validationTemporary", { label: submittedLabel }),
+        "attention",
+      );
       return "temporary_error";
     }
     setProviderOperation(prepared.instanceId, "requesting_permission");
@@ -424,12 +475,18 @@ export function App() {
     try {
       granted = await requestPreparedPermission(prepared);
     } catch {
-      announce(`${submittedLabel} could not be validated right now. Try again later.`);
+      announce(
+        l10n.t("announcements.validationTemporary", { label: submittedLabel }),
+        "attention",
+      );
       setProviderOperation(prepared.instanceId);
       return "temporary_error";
     }
     if (!granted) {
-      announce(`${submittedLabel} access was not changed.`);
+      announce(
+        l10n.t("announcements.accessUnchanged", { label: submittedLabel }),
+        "attention",
+      );
       setProviderOperation(prepared.instanceId);
       return "permission_declined";
     }
@@ -451,30 +508,46 @@ export function App() {
       switch (response.result) {
         case "connected":
           announce(
-            `Connected ${presentationLabel(response.state, prepared.instanceId) ?? submittedLabel}.`,
+            l10n.t("announcements.connected", {
+              label:
+                presentationLabel(response.state, prepared.instanceId) ??
+                submittedLabel,
+            }),
           );
           break;
         case "invalid_key":
-          announce(`Enter a valid ${providerNames[providerKind]} API key.`);
+          announce(
+            l10n.t("announcements.invalidKeyNamed", {
+              provider: localizeProviderName(providerKind),
+            }),
+            "attention",
+          );
           break;
         case "insufficient_scope":
           announce(
             providerKind === "elevenlabs"
-              ? "Allow User → Read and check any IP restrictions, then try again."
-              : "This relay key could not read its usage. Check the key and any IP restrictions.",
+              ? l10n.t("announcements.elevenlabsScope")
+              : l10n.t("announcements.newapiScope"),
+            "attention",
           );
           break;
         case "invalid_site":
-          announce("This site did not return compatible New API status and usage data.");
+          announce(l10n.t("announcements.invalidSite"), "attention");
           break;
         case "temporary_error":
-          announce(`${submittedLabel} could not be validated right now. Try again later.`);
+          announce(
+            l10n.t("announcements.validationTemporary", { label: submittedLabel }),
+            "attention",
+          );
           break;
       }
       return response.result;
     } catch {
       await abandonPermissionIntent(prepared.permissionIntentId);
-      announce(`${submittedLabel} could not be validated right now. Try again later.`);
+      announce(
+        l10n.t("announcements.validationTemporary", { label: submittedLabel }),
+        "attention",
+      );
       return "temporary_error";
     } finally {
       setProviderOperation(prepared.instanceId);
@@ -497,9 +570,10 @@ export function App() {
         } satisfies RuntimeCommand),
       );
       commitViewState(response.state);
-      announce(manualSummary(response.report, response.state));
+      const summary = manualSummary(response.report, response.state);
+      announce(summary.message, summary.tone);
     } catch {
-      announce(confirmationFailure(label));
+      announce(confirmationFailure(label), "attention");
     } finally {
       setProviderOperation(instanceId);
     }
@@ -522,9 +596,10 @@ export function App() {
         await browser.runtime.sendMessage({ type: "REFRESH_ALL" } satisfies RuntimeCommand),
       );
       commitViewState(response.state);
-      announce(manualSummary(response.report, response.state));
+      const summary = manualSummary(response.report, response.state);
+      announce(summary.message, summary.tone);
     } catch {
-      announce(confirmationFailure());
+      announce(confirmationFailure(), "attention");
     } finally {
       setProviderOperations({});
       setIsRefreshing(false);
@@ -549,7 +624,11 @@ export function App() {
         autoRefreshGuard.current = undefined;
         commitViewState(authoritative);
       }
-      announce(`Automatic refresh turned ${enabled ? "on" : "off"}.`);
+      announce(
+        enabled
+          ? l10n.t("announcements.autoRefreshOn")
+          : l10n.t("announcements.autoRefreshOff"),
+      );
     } catch {
       if (autoRefreshGuard.current === guard) autoRefreshGuard.current = undefined;
       try {
@@ -558,7 +637,7 @@ export function App() {
       } catch {
         // The prior rendered view remains authoritative enough for recovery.
       }
-      announce("Couldn’t update automatic refresh.");
+      announce(l10n.t("announcements.autoRefreshFailed"), "attention");
     } finally {
       setIsAutoRefreshPending(false);
     }
@@ -581,11 +660,12 @@ export function App() {
       commitViewState(response.state);
       announce(
         response.result.ok
-          ? `Disconnected ${label} and deleted its stored usage.`
-          : `Deleted ${label}’s local usage. Browser access could not be removed.`,
+          ? l10n.t("announcements.disconnected", { label })
+          : l10n.t("announcements.disconnectedPartial", { label }),
+        response.result.ok ? "success" : "attention",
       );
     } catch {
-      announce(`Couldn’t disconnect ${label}.`);
+      announce(l10n.t("announcements.disconnectFailed", { label }), "attention");
     }
   };
 
@@ -609,11 +689,16 @@ export function App() {
       );
       commitViewState(next);
       announce(
-        `Renamed connection to ${presentationLabel(next, instanceId) ?? currentLabel}.`,
+        l10n.t("announcements.renamed", {
+          label: presentationLabel(next, instanceId) ?? currentLabel,
+        }),
       );
       return true;
     } catch {
-      announce(`Couldn’t rename ${currentLabel}.`);
+      announce(
+        l10n.t("announcements.renameFailed", { label: currentLabel }),
+        "attention",
+      );
       return false;
     }
   };
@@ -630,11 +715,12 @@ export function App() {
       setProviderOperations({});
       announce(
         response.result === "deleted"
-          ? "Local usage data deleted and providers disconnected."
-          : "Local usage data deleted. Some provider access could not be removed.",
+          ? l10n.t("announcements.localDataDeleted")
+          : l10n.t("announcements.localDataPartial"),
+        response.result === "deleted" ? "success" : "attention",
       );
     } catch {
-      announce("Couldn’t delete local data.");
+      announce(l10n.t("announcements.localDataFailed"), "attention");
     }
   };
 
@@ -642,22 +728,22 @@ export function App() {
     if (loadFailed) {
       return (
         <main className="loading-state">
-          <p>Couldn’t load usage.</p>
+          <p>{l10n.t("loading.failed")}</p>
           <button
             className="button button--secondary"
             type="button"
-            aria-label="Retry loading usage"
+            aria-label={l10n.t("loading.retry")}
             onClick={() => {
               setLoadFailed(false);
               setLoadAttempt((attempt) => attempt + 1);
             }}
           >
-            Retry
+            {l10n.t("common.retry")}
           </button>
         </main>
       );
     }
-    return <main className="loading-state">Loading usage…</main>;
+    return <main className="loading-state">{l10n.t("loading.loading")}</main>;
   }
 
   return (
@@ -666,6 +752,7 @@ export function App() {
       now={now}
       isRefreshing={isRefreshing}
       refreshAnnouncement={announcement.message}
+      refreshAnnouncementTone={announcement.tone}
       refreshAnnouncementId={announcement.id}
       autoRefreshPending={isAutoRefreshPending}
       providerOperations={providerOperations}

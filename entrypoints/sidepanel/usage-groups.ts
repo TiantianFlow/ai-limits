@@ -1,4 +1,8 @@
-import type { UsageGroup } from "../../domain/public-protocol";
+import type { ProviderKind, UsageGroup } from "../../domain/public-protocol";
+import {
+  localizeGroupDescription,
+  localizeGroupLabel,
+} from "../../i18n/presentation";
 import type {
   MetricValueView,
   QuotaView,
@@ -6,6 +10,7 @@ import type {
 } from "./components/ProviderCard";
 
 export function usageGroupViews(
+  providerKind: ProviderKind,
   groups: readonly UsageGroup[] | undefined,
   quotas: readonly QuotaView[],
   values: readonly MetricValueView[],
@@ -20,19 +25,20 @@ export function usageGroupViews(
     },
   ];
 
-  return authoredGroups.map((group) => ({
-    id: group.id,
-    label: group.label,
-    ...(group.description === undefined
-      ? {}
-      : { description: group.description }),
-    quotas: group.metricIds.flatMap((id) => {
-      const quota = quotaById.get(id);
-      return quota === undefined ? [] : [quota];
-    }),
-    values: group.metricIds.flatMap((id) => {
-      const metric = valueById.get(id);
-      return metric === undefined ? [] : [metric];
-    }),
-  }));
+  return authoredGroups.map((group) => {
+    const description = localizeGroupDescription(providerKind, group);
+    return {
+      id: group.id,
+      label: localizeGroupLabel(providerKind, group),
+      ...(description === undefined ? {} : { description }),
+      quotas: group.metricIds.flatMap((id) => {
+        const quota = quotaById.get(id);
+        return quota === undefined ? [] : [quota];
+      }),
+      values: group.metricIds.flatMap((id) => {
+        const metric = valueById.get(id);
+        return metric === undefined ? [] : [metric];
+      }),
+    };
+  });
 }

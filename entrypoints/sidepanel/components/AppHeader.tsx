@@ -1,6 +1,8 @@
 import type { Ref } from "react";
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
+import { localizeDisplayMode } from "../../../i18n/presentation";
 import type { DisplayMode } from "../../../domain/public-protocol";
 import { Icon } from "./Icon";
 
@@ -27,12 +29,16 @@ export function AppHeader({
   onRefresh,
   onOpenSettings,
 }: AppHeaderProps) {
+  const refreshLabel = isRefreshing
+    ? l10n.t("header.refreshingUsage")
+    : l10n.t("header.refreshUsage");
+
   return (
     <header className="app-header app-header--compact">
       <div
         className="segmented-control"
         role="radiogroup"
-        aria-label="Show used or left"
+        aria-label={l10n.t("navigation.showUsedOrLeft")}
       >
         {(["used", "left"] as const).map((option) => (
           <button
@@ -43,15 +49,18 @@ export function AppHeader({
             onClick={() => onDisplayModeChange(option)}
           >
             <span className="segmented-control__option">
-              {option === "used" ? "Used" : "Left"}
+              {localizeDisplayMode(option)}
             </span>
           </button>
         ))}
       </div>
       <p className="app-header__status" aria-live="polite">
         {isRefreshing
-          ? "Refreshing providers…"
-          : `Last refresh ${lastRefreshLabel} · ${providerCount} provider${providerCount === 1 ? "" : "s"}`}
+          ? l10n.t("header.refreshingProviders")
+          : l10n.t("header.lastRefresh", {
+              age: lastRefreshLabel,
+              providers: l10n.count("header.providerCount", providerCount),
+            })}
       </p>
       <div className="app-actions">
         <button
@@ -60,8 +69,8 @@ export function AppHeader({
           onClick={onRefresh}
           disabled={isRefreshing}
           aria-busy={isRefreshing}
-          aria-label={isRefreshing ? "Refreshing usage" : "Refresh usage"}
-          title={isRefreshing ? "Refreshing usage" : "Refresh usage"}
+          aria-label={refreshLabel}
+          title={refreshLabel}
         >
           <span className="control-surface">
             <Icon
@@ -74,8 +83,8 @@ export function AppHeader({
           ref={settingsButtonRef}
           className="icon-button"
           type="button"
-          aria-label="Settings"
-          title="Settings"
+          aria-label={l10n.t("common.settings")}
+          title={l10n.t("common.settings")}
           aria-expanded={settingsOpen}
           onClick={(event) => onOpenSettings(event.currentTarget)}
         >

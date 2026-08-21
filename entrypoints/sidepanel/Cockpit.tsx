@@ -1,5 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import { l10n, type AnnouncementTone } from "../../i18n/index";
+import { formatAmount, formatDateTime, formatNumber } from "../../i18n/format";
+import {
+  localizeBalanceValue,
+  localizeConnectionDisclosure,
+  localizeCounterValue,
+  localizeFailure,
+  localizeManualRefreshDisclosure,
+  localizeMetricLabel,
+  localizePlanLabel,
+  localizeProviderName,
+  localizeQuotaValue,
+  localizeRecoveryGuidance,
+  localizeSegmentLabel,
+} from "../../i18n/presentation";
 import {
   canCreateProviderInstance,
   displayRatio,
@@ -7,10 +22,7 @@ import {
   paceStatus,
   providerAvailability,
   providerKinds,
-  providerNames,
-  providerPlanLabel,
   providerPresentation,
-  sanitizedFailureMessage,
   type ApiKeyProviderKind,
   type AppViewState,
   type BalanceMetric,
@@ -66,6 +78,7 @@ export interface CockpitProps {
   now: number;
   isRefreshing?: boolean;
   refreshAnnouncement?: string;
+  refreshAnnouncementTone?: AnnouncementTone;
   refreshAnnouncementId?: number;
   autoRefreshPending?: boolean;
   providerOperations?: Partial<Record<ProviderInstanceId, ProviderOperation>>;
@@ -107,36 +120,48 @@ function formatDuration(
   const hour = 60 * 60 * 1_000;
   const day = 24 * hour;
   const unitMs = duration >= day ? day : hour;
-  const unit = duration >= day ? "days" : "hours";
   const total = Math.round(duration / unitMs);
   const amount = Math.round((duration * ratio) / unitMs);
+  const family =
+    duration >= day
+      ? noun === "elapsed"
+        ? "quota.elapsedDays"
+        : "quota.remainingDays"
+      : noun === "elapsed"
+        ? "quota.elapsedHours"
+        : "quota.remainingHours";
 
-  return `${amount} / ${total} ${unit} ${noun}`;
+  return l10n.count(family, total, {
+    amount: formatNumber(amount),
+    total: formatNumber(total),
+  });
 }
 
 function formatReset(resetsAt: number): string {
-  return `Resets ${new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(resetsAt))}`;
+  return l10n.t("quota.resets", { when: formatDateTime(resetsAt) });
 }
 
 function formatPace(status: PaceStatus | undefined): string {
   if (!status) {
-    return "Pace unavailable";
+    return l10n.t("pace.unavailable");
   }
 
   if (status.kind === "on-pace") {
-    return "On pace";
+    return l10n.t("pace.onPace");
   }
 
-  const points = Math.abs(status.deltaPoints);
-  return `${points} pts ${status.kind === "ahead" ? "over" : "under"} pace`;
+  const points = formatNumber(Math.abs(status.deltaPoints));
+  return status.kind === "ahead"
+    ? l10n.t("pace.ahead", { points })
+    : l10n.t("pace.behind", { points });
 }
 
-function quotaView(metric: QuotaMetric, mode: DisplayMode, now: number): QuotaView {
+function quotaView(
+  providerKind: ProviderKind,
+  metric: QuotaMetric,
+  mode: DisplayMode,
+  now: number,
+): QuotaView {
   const elapsed = metric.cycle ? elapsedRatio(metric.cycle, now) : undefined;
   const pace = elapsed === undefined ? undefined : paceStatus(metric.usedRatio, elapsed);
   const timeRatio = elapsed === undefined ? undefined : displayRatio(elapsed, mode);
@@ -150,11 +175,11 @@ function quotaView(metric: QuotaMetric, mode: DisplayMode, now: number): QuotaVi
   const valueLabel =
     shownCount === undefined || metric.limit === undefined
       ? undefined
-      : `${shownCount.toLocaleString(undefined, { maximumFractionDigits: 2 })} / ${metric.limit.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      : localizeQuotaValue(shownCount, metric.limit);
 
   return {
     id: metric.id,
-    label: metric.label,
+    label: localizeMetricLabel(providerKind, metric),
     quotaPercent: percent(displayRatio(metric.usedRatio, mode)),
     usedPercent: percent(metric.usedRatio),
     valueLabel,
@@ -170,34 +195,39 @@ function quotaView(metric: QuotaMetric, mode: DisplayMode, now: number): QuotaVi
     paceLabel: formatPace(pace),
     segments: metric.segments?.map((segment) => ({
       id: segment.id,
-      label: segment.label,
+      label: localizeSegmentLabel(providerKind, segment),
       percent: percent(segment.usedRatio),
     })),
   };
 }
 
-function formatAmount(value: number, unit: string): string {
-  if (unit === "USD") {
-    return `$${value.toFixed(2)}`;
-  }
-
-  return `${value.toLocaleString()} ${unit}`;
-}
-
-function counterView(metric: CounterMetric): MetricValueView {
-  const limit = metric.limit === undefined ? undefined : formatAmount(metric.limit, metric.unit);
+function counterView(
+  providerKind: ProviderKind,
+  metric: CounterMetric,
+): MetricValueView {
+  const amount = formatAmount(metric.value, metric.unit);
+  const limit =
+    metric.limit === undefined
+      ? undefined
+      : formatAmount(metric.limit, metric.unit);
+  const value = limit
+    ? l10n.t("quota.withLimit", { value: amount, limit })
+    : amount;
   return {
     id: metric.id,
-    label: metric.label,
-    value: `${formatAmount(metric.value, metric.unit)}${limit ? ` / ${limit}` : ""} ${metric.semantic === "spent" ? "spent" : "used"}`,
+    label: localizeMetricLabel(providerKind, metric),
+    value: localizeCounterValue(value, metric.semantic),
   };
 }
 
-function balanceView(metric: BalanceMetric): MetricValueView {
+function balanceView(
+  providerKind: ProviderKind,
+  metric: BalanceMetric,
+): MetricValueView {
   return {
     id: metric.id,
-    label: metric.label,
-    value: `${formatAmount(metric.value, metric.unit)} remaining`,
+    label: localizeMetricLabel(providerKind, metric),
+    value: localizeBalanceValue(formatAmount(metric.value, metric.unit)),
   };
 }
 
@@ -205,10 +235,20 @@ function formatFreshness(fetchedAt: number, now: number): string {
   const minutes = Math.max(0, Math.floor((now - fetchedAt) / 60_000));
 
   if (minutes < 1) {
-    return "Updated just now";
+    return l10n.t("freshness.updatedJustNow");
   }
 
-  return `Updated ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  return l10n.t("freshness.updatedAge", {
+    age: l10n.count("freshness.minutesAgo", minutes),
+  });
+}
+
+function freshnessAge(fetchedAt: number, now: number): string {
+  const minutes = Math.max(0, Math.floor((now - fetchedAt) / 60_000));
+  if (minutes < 1) {
+    return l10n.t("freshness.justNow");
+  }
+  return l10n.count("freshness.minutesAgo", minutes);
 }
 
 function lastRefreshLabel(state: AppViewState, now: number): string {
@@ -225,14 +265,13 @@ function lastRefreshLabel(state: AppViewState, now: number): string {
   }, undefined);
 
   return latest === undefined
-    ? "unavailable"
-    : formatFreshness(latest, now).replace(/^Updated /, "");
+    ? l10n.t("freshness.unavailable")
+    : freshnessAge(latest, now);
 }
 
 function attemptMessage(
   provider: ProviderInstanceView,
   stale: boolean,
-  recoveryGuidance?: string,
 ): string | undefined {
   const outcome = provider.lastAttempt?.outcome;
   if (!outcome || outcome.kind === "success") {
@@ -241,7 +280,7 @@ function attemptMessage(
 
   if (outcome.kind === "deferred") {
     if (outcome.reason === "backoff") {
-      return "Refresh will retry later.";
+      return l10n.t("refresh.retryLater");
     }
 
     if (
@@ -249,13 +288,13 @@ function attemptMessage(
       provider.lastAttempt?.trigger === "scheduled"
     ) {
       return stale || !provider.snapshot
-        ? "Automatic refresh couldn't update Kimi. Manual Refresh may briefly open an inactive Kimi tab."
+        ? l10n.t("refresh.kimiScheduledNeedsTab")
         : undefined;
     }
 
     return provider.providerKind === "kimi"
-      ? "Kimi needs a browser session."
-      : "Refresh is waiting for a browser session.";
+      ? l10n.t("refresh.kimiNeedsSession")
+      : l10n.t("refresh.waitingForSession");
   }
 
   if (
@@ -268,13 +307,10 @@ function attemptMessage(
   }
 
   if (outcome.guidance === "retry_session") {
-    return (
-      recoveryGuidance ??
-      sanitizedFailureMessage(outcome.category, outcome.message)
-    );
+    return localizeRecoveryGuidance(provider.providerKind);
   }
 
-  return sanitizedFailureMessage(outcome.category, outcome.message);
+  return localizeFailure(outcome.category);
 }
 
 export function providerView(
@@ -282,43 +318,43 @@ export function providerView(
   mode: DisplayMode,
   now: number,
   resolvedInstanceLabel = instanceLabels([provider]).get(provider.id)!,
-  recoveryGuidance?: string,
+  _recoveryGuidance?: string,
 ): ProviderCardProps {
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
-  const presentation = providerPresentation(provider.providerKind);
   const quotas = snapshot?.metrics
-    ? quotaMetrics(snapshot).map((metric) => quotaView(metric, mode, now))
+    ? quotaMetrics(snapshot).map((metric) =>
+        quotaView(provider.providerKind, metric, mode, now),
+      )
     : [];
   const values = snapshot?.metrics
     ? [
-        ...counterMetrics(snapshot).map(counterView),
+        ...counterMetrics(snapshot).map((metric) =>
+          counterView(provider.providerKind, metric),
+        ),
         ...balanceMetrics(snapshot)
           .filter((metric) => metric.value !== 0)
-          .map(balanceView),
+          .map((metric) => balanceView(provider.providerKind, metric)),
       ]
     : [];
-  const plan = providerPlanLabel(
-    provider.providerKind,
-    snapshot?.planLabel,
-  );
+  const plan = localizePlanLabel(provider.providerKind, snapshot?.planLabel);
 
   return {
     instanceId: provider.id,
     instanceLabel: resolvedInstanceLabel,
     providerId: provider.providerKind,
-    name: providerNames[provider.providerKind],
+    name: localizeProviderName(provider.providerKind),
     plan,
     mode,
     values,
     usageGroups:
       snapshot === undefined
         ? []
-        : usageGroupViews(snapshot.usageGroups, quotas, values),
+        : usageGroupViews(provider.providerKind, snapshot.usageGroups, quotas, values),
     freshness: snapshot ? formatFreshness(snapshot.fetchedAt, now) : undefined,
     stale,
     access: provider.access,
-    attemptMessage: attemptMessage(provider, stale, recoveryGuidance),
+    attemptMessage: attemptMessage(provider, stale),
     hasSnapshot: snapshot !== undefined,
     history: snapshot
       ? {
@@ -329,11 +365,13 @@ export function providerView(
       : undefined,
     emptyDescription:
       provider.access === "required"
-        ? presentation.connectionDisclosure
-        : `No ${providerNames[provider.providerKind]} usage has been stored yet.`,
+        ? localizeConnectionDisclosure(provider.providerKind)
+        : l10n.t("card.noUsageStored", {
+            provider: localizeProviderName(provider.providerKind),
+          }),
     extraDisclosure:
-      provider.access === "required" && provider.providerKind === "kimi"
-        ? presentation.manualRefreshDisclosure
+      provider.access === "required"
+        ? localizeManualRefreshDisclosure(provider.providerKind)
         : undefined,
   };
 }
@@ -343,6 +381,7 @@ export function Cockpit({
   now,
   isRefreshing = false,
   refreshAnnouncement = "",
+  refreshAnnouncementTone = "success",
   refreshAnnouncementId = 0,
   autoRefreshPending = false,
   providerOperations = {},
@@ -506,30 +545,32 @@ export function Cockpit({
   const previousScreen = navigation.backStack.at(-1);
   const labelForInstance = (instanceId: ProviderInstanceId): string => {
     const instance = state.instances.find((candidate) => candidate.id === instanceId);
-    return instance ? labelsByInstance.get(instance.id)! : "Provider";
+    return instance
+      ? labelsByInstance.get(instance.id)!
+      : l10n.t("common.provider");
   };
   const historyBackLabel =
     previousScreen?.name === "provider"
       ? labelForInstance(previousScreen.instanceId)
       : previousScreen?.name === "overview"
-        ? "Overview"
+        ? l10n.t("common.overview")
         : previousScreen?.name === "settings"
-          ? "Settings"
-          : "Back";
+          ? l10n.t("common.settings")
+          : l10n.t("common.back");
   const apiKeyBackLabel =
     previousScreen?.name === "provider"
       ? labelForInstance(previousScreen.instanceId)
       : previousScreen?.name === "add-provider"
-        ? "Add provider"
+        ? l10n.t("common.addProvider")
       : previousScreen?.name === "settings"
-          ? "Settings"
+          ? l10n.t("common.settings")
           : previousScreen?.name === "overview" &&
               connectedInstances.length === 0 &&
               view.name === "api-key-connect" &&
               providerAvailability(state, view.providerKind).configKind ===
                 "dynamic-origin"
-            ? "Connect your providers"
-          : "Overview";
+            ? l10n.t("navigation.connectYourProviders")
+          : l10n.t("common.overview");
   const detailRecord =
     view.name === "provider"
       ? state.instances.find(
@@ -629,6 +670,7 @@ export function Cockpit({
               ? ""
               : refreshAnnouncement
           }
+          tone={refreshAnnouncementTone}
           onDismiss={() =>
             setDismissedRefreshAnnouncementId(refreshAnnouncementId)
           }
@@ -704,7 +746,7 @@ export function Cockpit({
           closeLabel={
             previousScreen?.name === "provider"
               ? labelForInstance(previousScreen.instanceId)
-              : "Overview"
+              : l10n.t("common.overview")
           }
           onClose={popScreen}
           onAddProvider={() =>

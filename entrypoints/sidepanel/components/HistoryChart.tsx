@@ -1,5 +1,8 @@
 import React, { useEffect, useId, useState } from "react";
 
+import { l10n } from "../../../i18n/index";
+import { formatDateTime } from "../../../i18n/format";
+import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import {
   quotaHistorySegments,
   type MetricHistoryPoint,
@@ -80,26 +83,19 @@ function percent(ratio: number): number {
   return Math.round(ratio * 100);
 }
 
-function formatRangeTime(value: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatRangeStart(rangeHours: number | undefined, rangeStart: number): string {
+function formatRangeStart(
+  rangeHours: number | undefined,
+  rangeStart: number,
+): string {
   if (rangeHours === undefined) {
-    return formatRangeTime(rangeStart);
+    return formatDateTime(rangeStart);
   }
 
   if (rangeHours >= 72 && rangeHours % 24 === 0) {
-    const days = rangeHours / 24;
-    return `${days} day${days === 1 ? "" : "s"} ago`;
+    return l10n.count("history.daysAgo", rangeHours / 24);
   }
 
-  return `${rangeHours} hour${rangeHours === 1 ? "" : "s"} ago`;
+  return l10n.count("history.hoursAgo", rangeHours);
 }
 
 export function HistoryChart({
@@ -150,17 +146,25 @@ export function HistoryChart({
     ? percent(displayedRatio(latestPoint, mode))
     : undefined;
   const summary = latestPoint
-    ? `${points.length} observation${points.length === 1 ? "" : "s"} across ${segments.length} chart segment${segments.length === 1 ? "" : "s"}. Latest value is ${latestValue}% ${mode}.`
-    : `No ${selectedMetric.label} history is stored yet.`;
-  const accessibleName = `${providerName} ${selectedMetric.label} usage history`;
+    ? l10n.t("history.summary", {
+        observations: l10n.count("history.observations", points.length),
+        segments: l10n.count("history.segments", segments.length),
+        percent: latestValue ?? 0,
+        mode: localizeDisplayModeCompact(mode),
+      })
+    : l10n.t("history.noMetricHistory", { label: selectedMetric.label });
+  const accessibleName = l10n.t("history.chartName", {
+    provider: providerName,
+    label: selectedMetric.label,
+  });
 
   return (
     <div className="history-chart">
       {metrics.length > 1 ? (
         <div className="history-chart__toolbar">
-          <h3>History</h3>
+          <h3>{l10n.t("common.history")}</h3>
           <label htmlFor={metricSelectId}>
-            <span>Quota metric</span>
+            <span>{l10n.t("history.quotaMetric")}</span>
             <select
               id={metricSelectId}
               value={selectedMetric.id}
@@ -180,13 +184,16 @@ export function HistoryChart({
 
       {latestValue === undefined ? null : (
         <strong className="history-chart__latest">
-          {latestValue}% {mode}
+          {l10n.t("history.latestPercent", {
+            percent: latestValue,
+            mode: localizeDisplayModeCompact(mode),
+          })}
         </strong>
       )}
 
       {points.length < 2 ? (
         <p className="history-chart__empty">
-          History starts after another successful refresh.
+          {l10n.t("history.empty")}
         </p>
       ) : (
         <svg
@@ -303,17 +310,19 @@ export function HistoryChart({
       {firstPoint ? (
         <p
           className="history-chart__range"
-          aria-label={`History range from ${formatRangeStart(rangeHours, rangeStart)} to now`}
+          aria-label={l10n.t("history.rangeAccessible", {
+            start: formatRangeStart(rangeHours, rangeStart),
+          })}
         >
           <span>{formatRangeStart(rangeHours, rangeStart)}</span>
-          <span>Now</span>
+          <span>{l10n.t("common.now")}</span>
         </p>
       ) : null}
       {points.length >= 2 ? (
         <ul className="history-chart__legend">
-          <li><span className="history-chart__legend-line" aria-hidden="true" />Observed quota {mode}</li>
-          <li><span className="history-chart__legend-gap" aria-hidden="true" />No observations</li>
-          <li><span className="history-chart__legend-break" aria-hidden="true" />Reset or missing observations · line breaks</li>
+          <li><span className="history-chart__legend-line" aria-hidden="true" />{l10n.t("history.legendObserved", { mode: localizeDisplayModeCompact(mode) })}</li>
+          <li><span className="history-chart__legend-gap" aria-hidden="true" />{l10n.t("history.legendNone")}</li>
+          <li><span className="history-chart__legend-break" aria-hidden="true" />{l10n.t("history.legendBreak")}</li>
         </ul>
       ) : null}
       <p className="visually-hidden" id={summaryId}>

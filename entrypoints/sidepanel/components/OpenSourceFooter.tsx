@@ -1,5 +1,6 @@
 import React from "react";
 
+import { l10n } from "../../../i18n/index";
 import { Icon } from "./Icon";
 
 const REPOSITORY_URL = "https://github.com/TiantianFlow/ai-limits";
@@ -26,30 +27,28 @@ export function OpenSourceFooter({ showIssues = true }: OpenSourceFooterProps) {
         width="20"
       />
       <div>
-        <h2>Built in the open</h2>
-        <p>
-          Inspect how provider usage is read, follow development, or help shape
-          what comes next.
-        </p>
+        <h2>{l10n.t("footer.heading")}</h2>
+        <p>{l10n.t("footer.copy")}</p>
         {version ? (
-          <p className="open-source-footer__version">Version {version}</p>
+          <p className="open-source-footer__version">
+            {l10n.t("footer.version", { version })}
+          </p>
         ) : null}
         <div className="open-source-footer__links">
           <a href={REPOSITORY_URL} rel={SAFE_LINK_REL} target="_blank">
             <Icon name="code" />
-            View source
+            {l10n.t("footer.viewSource")}
           </a>
           {showIssues ? (
             <a href={ISSUES_URL} rel={SAFE_LINK_REL} target="_blank">
               <Icon name="feedback" />
-              Share feedback
+              {l10n.t("footer.shareFeedback")}
             </a>
           ) : null}
         </div>
         {showIssues ? (
           <p className="open-source-footer__warning">
-            Do not include cookies, access credentials, private usage data, or
-            other secrets in an issue.
+            {l10n.t("footer.secretsWarning")}
           </p>
         ) : null}
       </div>

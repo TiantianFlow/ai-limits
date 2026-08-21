@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from "react";
 
+import { l10n, type MessageKey } from "../../../i18n/index";
+import {
+  localizeDisplayMode,
+  localizeMetricLabel,
+  localizeMetricScope,
+  localizeProviderName,
+} from "../../../i18n/presentation";
 import type {
   DisplayMode,
   ProviderInstanceId,
   ProviderInstanceView,
 } from "../../../domain/public-protocol";
-import { providerNames } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";
 import { HistoryChart } from "../components/HistoryChart";
@@ -28,9 +34,9 @@ export interface HistoryViewProps {
 }
 
 const RANGE_OPTIONS = [
-  { hours: 48, short: "48H", label: "48 hours" },
-  { hours: 7 * 24, short: "7D", label: "7 days" },
-  { hours: 30 * 24, short: "30D", label: "30 days" },
+  { hours: 48, shortKey: "history.range48hShort", labelKey: "history.range48h" },
+  { hours: 7 * 24, shortKey: "history.range7dShort", labelKey: "history.range7d" },
+  { hours: 30 * 24, shortKey: "history.range30dShort", labelKey: "history.range30d" },
 ] as const;
 
 export function HistoryView({
@@ -66,10 +72,10 @@ export function HistoryView({
 
   if (!instance || !selectedMetric) {
     return (
-      <section className="screen" aria-label="History unavailable">
+      <section className="screen" aria-label={l10n.t("history.unavailableScreen")}>
         <PageHeader
-          title="History unavailable"
-          subtitle="No current quota metric is available"
+          title={l10n.t("history.unavailableTitle")}
+          subtitle={l10n.t("history.unavailableSubtitle")}
           backLabel={backLabel}
           onBack={onBack}
         />
@@ -77,21 +83,26 @@ export function HistoryView({
     );
   }
 
-  const providerName = providerNames[instance.providerKind];
+  const providerName = localizeProviderName(instance.providerKind);
   const label = labelsByInstance.get(instance.id)!;
+  const selectedLabel = localizeMetricLabel(instance.providerKind, selectedMetric);
+  const localizedMetrics = metrics.map((metric) => ({
+    ...metric,
+    label: localizeMetricLabel(instance.providerKind, metric),
+  }));
 
   return (
-    <section className="screen" aria-label={`${label} history`}>
+    <section className="screen" aria-label={l10n.t("history.titleNamed", { label })}>
       <PageHeader
-        title={`${label} history`}
-        subtitle={`${providerName} · Local quota observations · 30-day retention on this device`}
+        title={l10n.t("history.titleNamed", { label })}
+        subtitle={l10n.t("history.subtitle", { provider: providerName })}
         backLabel={backLabel}
         onBack={onBack}
       />
 
       <div className="history-screen screen-body">
         <WindowSelect
-          options={metrics.map((metric) => ({
+          options={localizedMetrics.map((metric) => ({
             id: metric.id,
             label: metric.label,
           }))}
@@ -103,7 +114,7 @@ export function HistoryView({
           <div
             className="compact-choice"
             role="radiogroup"
-            aria-label="Show used or left"
+            aria-label={l10n.t("navigation.showUsedOrLeft")}
           >
             {(["used", "left"] as const).map((option) => (
               <button
@@ -113,39 +124,45 @@ export function HistoryView({
                 aria-checked={mode === option}
                 onClick={() => onDisplayModeChange(option)}
               >
-                <span>{option === "used" ? "Used" : "Left"}</span>
+                <span>{localizeDisplayMode(option)}</span>
               </button>
             ))}
           </div>
           <div
             className="compact-choice"
             role="radiogroup"
-            aria-label="History range"
+            aria-label={l10n.t("history.range")}
           >
             {RANGE_OPTIONS.map((option) => (
               <button
                 key={option.hours}
                 role="radio"
                 type="button"
-                aria-label={option.label}
+                aria-label={l10n.t(option.labelKey as MessageKey)}
                 aria-checked={rangeHours === option.hours}
                 onClick={() => setRangeHours(option.hours)}
               >
-                <span>{option.short}</span>
+                <span>{l10n.t(option.shortKey as MessageKey)}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <section className="history-surface" aria-label="Usage history chart">
+        <section className="history-surface" aria-label={l10n.t("history.chart")}>
           <div className="history-surface__heading">
-            <h2>{selectedMetric.label}</h2>
-            <span>{selectedMetric.scope} quota</span>
+            <h2>{selectedLabel}</h2>
+            <span>
+              {l10n.t("history.scopeQuota", {
+                scope: localizeMetricScope(selectedMetric.scope),
+              })}
+            </span>
           </div>
           <HistoryChart
             providerName={label}
             mode={mode}
-            metrics={[selectedMetric]}
+            metrics={localizedMetrics.filter(
+              (metric) => metric.id === selectedMetric.id,
+            )}
             history={instance.history}
             now={now}
             rangeHours={rangeHours}
@@ -153,20 +170,16 @@ export function HistoryView({
         </section>
 
         {currentQuota?.id === selectedMetric.id ? (
-          <section className="current-cycle-surface" aria-label="Current cycle">
-            <h2>Current cycle</h2>
+          <section
+            className="current-cycle-surface"
+            aria-label={l10n.t("history.currentCycle")}
+          >
+            <h2>{l10n.t("history.currentCycle")}</h2>
             <QuotaBars {...currentQuota} mode={mode} />
           </section>
         ) : null}
 
-        <p className="illustrative-note">
-          Only successful, normalized quota observations are plotted. The line
-          breaks at resets and periods without an observation rather than
-          implying zero usage. The newest 48 hours stay at collection resolution;
-          older retained history is compacted hourly and kept for up to 30 days
-          on this device. Counter and balance observations are stored but are not
-          available as graph series.
-        </p>
+        <p className="illustrative-note">{l10n.t("history.note")}</p>
       </div>
     </section>
   );

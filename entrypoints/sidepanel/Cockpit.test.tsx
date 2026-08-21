@@ -2017,7 +2017,12 @@ describe("Cockpit", () => {
       />,
     );
 
-    const weekly = within(screen.getByRole("group", { name: "Weekly messages" }));
+    const weekly = within(
+      within(screen.getByRole("article", { name: "ChatGPT" })).getByRole(
+        "group",
+        { name: "Weekly messages" },
+      ),
+    );
     const pace = weekly.getByText(/pts (over|under) pace|On pace/).textContent;
 
     expect(
@@ -2054,7 +2059,10 @@ describe("Cockpit", () => {
 
     expect(screen.getByText("28% left")).toBeVisible();
     const remainingWeekly = within(
-      screen.getByRole("group", { name: "Weekly messages" }),
+      within(screen.getByRole("article", { name: "ChatGPT" })).getByRole(
+        "group",
+        { name: "Weekly messages" },
+      ),
     );
     expect(
       remainingWeekly.getByRole("meter", {

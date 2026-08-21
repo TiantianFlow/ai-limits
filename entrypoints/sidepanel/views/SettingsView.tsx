@@ -1,15 +1,19 @@
 import type { Ref } from "react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { l10n } from "../../../i18n/index";
+import {
+  localizeConnectionDisclosure,
+  localizeManualRefreshDisclosure,
+  localizePlanLabel,
+  localizeProviderName,
+} from "../../../i18n/presentation";
 import {
   type ApiKeyProviderKind,
   type ProviderInstanceId,
   type ProviderInstanceView,
   type ProviderAvailabilityView,
   type ProviderKind,
-  providerNames,
-  providerPlanLabel,
-  providerPresentation,
 } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
 import { Icon } from "../components/Icon";
@@ -46,15 +50,17 @@ export interface SettingsViewProps {
 function freshness(instance: ProviderInstanceView, now: number): string {
   const fetchedAt = instance.snapshot?.fetchedAt;
   if (fetchedAt === undefined) {
-    return "No successful read yet";
+    return l10n.t("freshness.noSuccessfulRead");
   }
 
   const minutes = Math.max(0, Math.floor((now - fetchedAt) / 60_000));
   if (minutes < 1) {
-    return "Updated just now";
+    return l10n.t("freshness.updatedJustNow");
   }
 
-  return `Updated ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  return l10n.t("freshness.updatedAge", {
+    age: l10n.count("freshness.minutesAgo", minutes),
+  });
 }
 
 export function SettingsView({
@@ -65,7 +71,7 @@ export function SettingsView({
   now,
   confirmDelete,
   addProviderButtonRef,
-  closeLabel = "Overview",
+  closeLabel = l10n.t("common.overview"),
   onClose,
   onAddProvider,
   onAutoRefreshChange,
@@ -114,10 +120,10 @@ export function SettingsView({
   }, [renameError, renamePending]);
 
   return (
-    <section className="screen settings-panel" aria-label="Provider settings">
+    <section className="screen settings-panel" aria-label={l10n.t("settings.screen")}>
       <PageHeader
-        title="Settings"
-        subtitle="Everything here is local to this browser"
+        title={l10n.t("settings.title")}
+        subtitle={l10n.t("settings.subtitle")}
         backLabel={closeLabel}
         onBack={onClose}
       />
@@ -126,17 +132,16 @@ export function SettingsView({
         <section className="settings-surface" aria-labelledby="automatic-refresh-title">
           <label className="settings-toggle">
             <span className="settings-toggle__copy">
-              <strong id="automatic-refresh-title">Automatic refresh</strong>
-              <small>
-                Checks connected providers about every 15 minutes. Scheduled
-                refresh stays non-interactive and never takes over the browser.
-              </small>
+              <strong id="automatic-refresh-title">
+                {l10n.t("settings.automaticRefresh")}
+              </strong>
+              <small>{l10n.t("settings.automaticRefreshDescription")}</small>
             </span>
             <span className="settings-toggle__control">
               <input
                 type="checkbox"
                 role="switch"
-                aria-label="Automatic refresh"
+                aria-label={l10n.t("settings.automaticRefresh")}
                 checked={autoRefresh}
                 disabled={autoRefreshPending}
                 aria-busy={autoRefreshPending}
@@ -151,14 +156,16 @@ export function SettingsView({
           </label>
           <p className="settings-state">
             {autoRefresh
-              ? "On · about every 15 minutes"
-              : "Off · refresh manually from the header"}
+              ? l10n.t("settings.automaticOn")
+              : l10n.t("settings.automaticOff")}
           </p>
         </section>
 
         <section className="settings-surface" aria-labelledby="connected-providers-title">
           <div className="settings-surface__heading">
-            <h2 id="connected-providers-title">Connected providers</h2>
+            <h2 id="connected-providers-title">
+              {l10n.t("settings.connectedProviders")}
+            </h2>
             <button
               ref={addProviderButtonRef}
               className="settings-add-action"
@@ -166,23 +173,21 @@ export function SettingsView({
               onClick={onAddProvider}
             >
               <span aria-hidden="true">+</span>
-              Add provider
+              {l10n.t("common.addProvider")}
             </button>
           </div>
           {instances.length ? (
             <ul className="settings-provider-list">
               {instances.map((instance) => {
-                const name = providerNames[instance.providerKind];
+                const name = localizeProviderName(instance.providerKind);
                 const label = labelsByInstance.get(instance.id)!;
-                const presentation = providerPresentation(instance.providerKind);
                 const usesApiKey = providers.find(
                   (provider) => provider.providerKind === instance.providerKind,
                 )?.credentialKind === "api-key";
-                const connectionMethod =
-                  usesApiKey
-                    ? "API key"
-                    : "Browser session";
-                const planLabel = providerPlanLabel(
+                const connectionMethod = usesApiKey
+                  ? l10n.t("common.apiKey")
+                  : l10n.t("common.browserSession");
+                const planLabel = localizePlanLabel(
                   instance.providerKind,
                   instance.snapshot?.planLabel,
                 );
@@ -192,7 +197,7 @@ export function SettingsView({
                   <li
                     key={instance.id}
                     className={editing ? "settings-provider-row--renaming" : undefined}
-                    aria-label={`${label} settings`}
+                    aria-label={l10n.t("settings.instanceSettings", { label })}
                   >
                     <ProviderMark providerId={instance.providerKind} size="sm" />
                     <div className="settings-provider-content">
@@ -200,7 +205,14 @@ export function SettingsView({
                         <p
                           role="heading"
                           aria-level={3}
-                          aria-label={label === name ? name : `${name} · ${label}`}
+                          aria-label={
+                            label === name
+                              ? name
+                              : l10n.t("settings.identityNamed", {
+                                  provider: name,
+                                  label,
+                                })
+                          }
                         >
                           <strong>{name}</strong>
                           {label !== name ? (
@@ -208,21 +220,31 @@ export function SettingsView({
                           ) : null}
                         </p>
                         <small>
-                          {freshness(instance, now)} · {connectionMethod} · read-only
+                          {l10n.t("settings.freshnessMethod", {
+                            freshness: freshness(instance, now),
+                            method: connectionMethod,
+                            readOnly: l10n.t("common.readOnly"),
+                          })}
                         </small>
                         {planLabel ? (
                           <small>{planLabel}</small>
                         ) : null}
-                        {usesApiKey ? <small>API key saved</small> : null}
-                        <small>{presentation.connectionDisclosure}</small>
-                        {presentation.manualRefreshDisclosure ? (
-                          <small>{presentation.manualRefreshDisclosure}</small>
+                        {usesApiKey ? (
+                          <small>{l10n.t("settings.apiKeySaved")}</small>
+                        ) : null}
+                        <small>
+                          {localizeConnectionDisclosure(instance.providerKind)}
+                        </small>
+                        {localizeManualRefreshDisclosure(instance.providerKind) ? (
+                          <small>
+                            {localizeManualRefreshDisclosure(instance.providerKind)}
+                          </small>
                         ) : null}
                       </div>
                       <div className="settings-provider-actions">
                         {editing ? (
-                          <div className="settings-rename" role="group" aria-label={`Rename ${label}`}>
-                            <label htmlFor={inputId}>Instance label</label>
+                          <div className="settings-rename" role="group" aria-label={l10n.t("settings.renameGroup", { label })}>
+                            <label htmlFor={inputId}>{l10n.t("settings.instanceLabel")}</label>
                             <input
                               ref={renameInputRef}
                               id={inputId}
@@ -238,7 +260,7 @@ export function SettingsView({
                             />
                             <button
                               type="button"
-                              aria-label={`Save label for ${label}`}
+                              aria-label={l10n.t("settings.saveLabelNamed", { label })}
                               aria-busy={renamePending}
                               disabled={renamePending}
                               onClick={() => {
@@ -253,7 +275,7 @@ export function SettingsView({
                                     if (!success) {
                                       restoreRenameInputFocus.current = true;
                                       setRenameError(
-                                        "Couldn’t rename this connection. Try again.",
+                                        l10n.t("settings.renameFailed"),
                                       );
                                       return;
                                     }
@@ -262,18 +284,16 @@ export function SettingsView({
                                   })
                                   .catch(() => {
                                     restoreRenameInputFocus.current = true;
-                                    setRenameError(
-                                      "Couldn’t rename this connection. Try again.",
-                                    );
+                                    setRenameError(l10n.t("settings.renameFailed"));
                                   })
                                   .finally(() => setRenamePending(false));
                               }}
                             >
-                              <span aria-hidden="true">Save</span>
+                              <span aria-hidden="true">{l10n.t("common.save")}</span>
                             </button>
                             <button
                               type="button"
-                              aria-label={`Cancel renaming ${label}`}
+                              aria-label={l10n.t("settings.cancelRenameNamed", { label })}
                               disabled={renamePending}
                               onClick={() => {
                                 restoreRenameInputFocus.current = false;
@@ -282,11 +302,11 @@ export function SettingsView({
                                 setRenamingInstanceId(undefined);
                               }}
                             >
-                              <span aria-hidden="true">Cancel</span>
+                              <span aria-hidden="true">{l10n.t("common.cancel")}</span>
                             </button>
                             {renamePending ? (
                               <p className="settings-rename__feedback" role="status">
-                                Renaming…
+                                {l10n.t("settings.renaming")}
                               </p>
                             ) : renameError ? (
                               <p className="settings-rename__feedback" role="alert">
@@ -300,7 +320,7 @@ export function SettingsView({
                               renameTriggerRefs.current[instance.id] = element;
                             }}
                             type="button"
-                            aria-label={`Rename ${label}`}
+                            aria-label={l10n.t("settings.renameNamed", { label })}
                             data-focus-key={`settings-rename-${instance.id}`}
                             onClick={() => {
                               restoreRenameInputFocus.current = false;
@@ -309,13 +329,13 @@ export function SettingsView({
                               setRenamingInstanceId(instance.id);
                             }}
                           >
-                            <span aria-hidden="true">Rename</span>
+                            <span aria-hidden="true">{l10n.t("common.rename")}</span>
                           </button>
                         )}
                         {usesApiKey ? (
                           <button
                             type="button"
-                            aria-label={`Replace ${label} API key`}
+                            aria-label={l10n.t("settings.replaceKeyNamed", { label })}
                             data-focus-key={`settings-replace-api-key-${instance.id}`}
                             onClick={() =>
                               onReplaceApiKey(
@@ -324,28 +344,28 @@ export function SettingsView({
                               )
                             }
                           >
-                            <span aria-hidden="true">Replace key</span>
+                            <span aria-hidden="true">{l10n.t("common.replaceKey")}</span>
                           </button>
                         ) : null}
                         {!usesApiKey && instance.access === "required" ? (
                           <button
                             type="button"
-                            aria-label={`Reconnect ${label}`}
+                            aria-label={l10n.t("settings.reconnectNamed", { label })}
                             data-focus-key={`settings-reconnect-${instance.id}`}
                             onClick={() =>
                               onReconnectProvider(instance.providerKind)
                             }
                           >
-                            <span aria-hidden="true">Reconnect</span>
+                            <span aria-hidden="true">{l10n.t("common.reconnect")}</span>
                           </button>
                         ) : null}
                         <button
                           type="button"
-                          aria-label={`Disconnect ${label}`}
+                          aria-label={l10n.t("settings.disconnectNamed", { label })}
                           data-focus-key={`settings-disconnect-${instance.id}`}
                           onClick={() => onDisconnectInstance(instance.id)}
                         >
-                          <span aria-hidden="true">Disconnect</span>
+                          <span aria-hidden="true">{l10n.t("common.disconnect")}</span>
                         </button>
                       </div>
                     </div>
@@ -354,46 +374,42 @@ export function SettingsView({
               })}
             </ul>
           ) : (
-            <p className="settings-copy">No providers connected.</p>
+            <p className="settings-copy">{l10n.t("settings.noProviders")}</p>
           )}
           <p className="settings-copy">
-            Disconnecting removes the provider from Overview and deletes its
-            stored local history.
+            {l10n.t("settings.disconnectExplanation")}
           </p>
         </section>
 
         <section className="danger-zone settings-surface" aria-labelledby="local-data-title">
-          <h2 id="local-data-title">Delete all local data</h2>
-          <p>
-            Removes every connection, all retained history, and all settings
-            from this browser. There is no cloud copy, so this cannot be undone.
-          </p>
+          <h2 id="local-data-title">{l10n.t("settings.deleteTitle")}</h2>
+          <p>{l10n.t("settings.deleteExplanation")}</p>
           {confirmDelete ? (
-            <div className="delete-confirmation" role="group" aria-label="Confirm local data deletion">
-              <p>This removes stored usage and disconnects every provider.</p>
+            <div className="delete-confirmation" role="group" aria-label={l10n.t("settings.confirmGroup")}>
+              <p>{l10n.t("settings.confirmWarning")}</p>
               <div className="confirmation-actions">
                 <button
                   className="button button--danger"
                   type="button"
-                  aria-label="Confirm delete all local data"
+                  aria-label={l10n.t("settings.confirmDeleteNamed")}
                   autoFocus
                   onClick={() => {
                     onConfirmDeleteChange(false);
                     onDeleteLocalData();
                   }}
                 >
-                  Confirm delete
+                  {l10n.t("settings.confirmDelete")}
                 </button>
                 <button
                   className="button button--secondary"
                   type="button"
-                  aria-label="Cancel delete all local data"
+                  aria-label={l10n.t("settings.cancelDeleteNamed")}
                   onClick={() => {
                     restoreDeleteFocus.current = true;
                     onConfirmDeleteChange(false);
                   }}
                 >
-                  Cancel
+                  {l10n.t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -402,25 +418,24 @@ export function SettingsView({
               ref={deleteTriggerRef}
               className="button button--danger-outline danger-zone__trigger"
               type="button"
-              aria-label="Delete all local data"
+              aria-label={l10n.t("settings.deleteAll")}
               onClick={() => onConfirmDeleteChange(true)}
             >
               <span className="danger-zone__trigger-surface">
                 <Icon name="trash" />
-                Delete all local data
+                {l10n.t("settings.deleteAll")}
               </span>
             </button>
           )}
         </section>
 
         <section className="settings-surface community-surface" aria-labelledby="community-title">
-          <h2 id="community-title">Community &amp; support</h2>
+          <h2 id="community-title">{l10n.t("settings.community")}</h2>
           <OpenSourceFooter />
         </section>
 
         <p className="illustrative-note">
-          AI Limits has no account and no cloud sync. Quota readings, history,
-          and preferences live only in this browser profile.
+          {l10n.t("settings.localOnlyNote")}
         </p>
       </div>
     </section>
