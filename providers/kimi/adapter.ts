@@ -208,7 +208,7 @@ function normalizeCurrentStats(body: unknown): QuotaMetric[] | undefined {
     metrics.push({
       type: "quota",
       id: "monthly-total",
-      label: "Monthly total",
+      label: "Total usage",
       scope: "general",
       usedRatio: balance.data.amountUsedRatio,
       ...(startedAt === undefined && resetsAt === undefined
@@ -228,16 +228,16 @@ function normalizeCurrentStats(body: unknown): QuotaMetric[] | undefined {
     {
       value: envelope.data.ratelimitCode5h,
       id: "five-hour-coding",
-      label: "5-hour coding",
+      label: "5-hour usage",
       durationMs: 5 * HOUR_MS,
       acceptsOmittedZero: true,
     },
     {
       value: envelope.data.ratelimitCode7d,
       id: "weekly-coding",
-      label: "Weekly coding",
+      label: "7-day usage",
       durationMs: 7 * DAY_MS,
-      acceptsOmittedZero: false,
+      acceptsOmittedZero: true,
     },
   ] as const;
 
@@ -305,7 +305,7 @@ function normalizeLegacyUsage(body: unknown): QuotaMetric[] | undefined {
 
   const weekly = normalizeWindow(
     coding.data.detail,
-    { id: "weekly-coding", label: "Weekly coding" },
+    { id: "weekly-coding", label: "7-day usage" },
     7 * DAY_MS,
   );
   if (!weekly) {
@@ -325,7 +325,7 @@ function normalizeLegacyUsage(body: unknown): QuotaMetric[] | undefined {
   const fiveHour = fiveHourLimits[0]
     ? normalizeWindow(
         fiveHourLimits[0].detail,
-        { id: "five-hour-coding", label: "5-hour coding" },
+        { id: "five-hour-coding", label: "5-hour usage" },
         5 * HOUR_MS,
       )
     : undefined;
