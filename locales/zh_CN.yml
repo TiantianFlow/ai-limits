@@ -9,9 +9,9 @@ manifest:
   actionTitle: 打开 AI Limits
 
 common:
-  used: 已用
+  used: 已使用
   left: 剩余
-  usedCompact: 已用
+  usedCompact: 已使用
   leftCompact: 剩余
   settings: 设置
   overview: 总览
@@ -36,7 +36,7 @@ common:
   replaceKey: 更换密钥
 
 navigation:
-  showUsedOrLeft: 显示已用或剩余
+  showUsedOrLeft: 显示已使用或剩余
   connectYourProviders: 连接你的服务
 
 header:
@@ -261,7 +261,7 @@ pace:
 
 quota:
   percentMode: "{percent}% {mode}"
-  percentUsed: "{percent}% 已用"
+  percentUsed: "{percent}% 已使用"
   percentLeft: "{percent}% 剩余"
   historyFor: "打开 {label} 的历史"
   historyNamed: "打开 {instance} 的 {label} 历史"
@@ -301,7 +301,7 @@ quota:
     other: "剩余 {amount} / {total} 天"
   valuePair: "{shown} / {limit}"
   spent: "已花费 {amount}"
-  used: "已用 {amount}"
+  used: "已使用 {amount}"
   remaining: "剩余 {amount}"
   withLimit: "{value} / {limit}"
 
@@ -376,7 +376,7 @@ newapi:
   subtitle: 独立实例 · 独立中继密钥
   subtitleNamed: "{label} · 独立实例 · 独立中继密钥"
   capabilities: 按密钥额度 · 有上限或无上限
-  explanation: 每个 New API 连接都保留自己的中继密钥、标签、用量和历史。它显示该密钥已授予、已用和剩余额度。无上限密钥只显示绝对用量，不会虚构百分比。同源连接仅共享 Chrome 的主机权限。
+  explanation: 每个 New API 连接都保留自己的中继密钥、标签、用量和历史。它显示该密钥已授予、已使用和剩余额度。无上限密钥只显示绝对用量，不会虚构百分比。同源连接仅共享 Chrome 的主机权限。
   formName: New API 中继密钥设置
   labelField: 实例标签（可选）
   labelPlaceholder: 个人中继
@@ -427,11 +427,11 @@ metrics:
     weeklyModel: "每周 {model}"
     extraUsage: 额外用量
   kimi:
-    monthlyTotal: 每月总计
-    fiveHourCoding: 5 小时编程
-    weeklyCoding: 每周编程
-    work: 工作
-    code: 编程
+    monthlyTotal: 总使用量
+    fiveHourCoding: 5 小时用量
+    weeklyCoding: 7 天用量
+    work: Kimi
+    code: Code
   cursor:
     cursorModels: Cursor 模型
     otherModels: 其他模型
@@ -452,7 +452,7 @@ metrics:
     monthlyPool: 每月用量池
     extraUsageCredits: 额外用量额度
     grokBuild: Grok Build
-    chat: Chat
+    chat: 聊天
     weeklyKind: "每周 {mode} {kind}"
     nDayKind: "{count} 天 {mode} {kind}"
     nHourKind: "{count} 小时 {mode} {kind}"

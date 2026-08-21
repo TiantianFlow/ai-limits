@@ -427,10 +427,10 @@ metrics:
     weeklyModel: "Weekly {model}"
     extraUsage: Extra usage
   kimi:
-    monthlyTotal: Monthly total
-    fiveHourCoding: 5-hour coding
-    weeklyCoding: Weekly coding
-    work: Work
+    monthlyTotal: Total usage
+    fiveHourCoding: 5-hour usage
+    weeklyCoding: 7-day usage
+    work: Kimi
     code: Code
   cursor:
     cursorModels: Cursor models

@@ -20,7 +20,7 @@ describe("l10n facade", () => {
 
   it("looks up Chinese copy for the same keys", async () => {
     installI18nLocale("zh_CN");
-    expect(l10n.t("common.used")).toBe("已用");
+    expect(l10n.t("common.used")).toBe("已使用");
     expect(l10n.t("common.left")).toBe("剩余");
     expect(l10n.localeTag()).toBe("zh-CN");
     expect(l10n.t("announcements.connected", { label: "ChatGPT" })).toBe(
