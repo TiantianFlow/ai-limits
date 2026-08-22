@@ -1,10 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 
 import {
+  clearCursorDashboardStashAtExpectedOrigin,
   dashboardJsonFromProbe,
   findCursorDashboardJson,
   rankCursorTabs,
   readCursorDashboardJsonAtExpectedOrigin,
+  readCursorDashboardStashAtExpectedOrigin,
+  startCursorDashboardStashAtExpectedOrigin,
   tabLooksAsleep,
 } from "./page-dashboard";
 
@@ -419,5 +422,136 @@ describe("Cursor page dashboard bridge", () => {
       kind: "wrong_origin",
       origin: "https://www.cursor.com",
     });
+  });
+
+  test("names a thenable MAIN-world result as unusable", async () => {
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript: vi.fn().mockImplementation(async ({ func }) => {
+          if (func === readCursorDashboardJsonAtExpectedOrigin) {
+            return [{ result: { then: () => undefined } }];
+          }
+          return [];
+        }),
+      }),
+    ).resolves.toEqual({
+      kind: "inject_unusable",
+      detail: "thenable typeof=object",
+    });
+  });
+
+  test("prefers the direct async read when it returns a usable object", async () => {
+    const executeScript = vi.fn().mockResolvedValue([
+      {
+        result: {
+          grok: { ok: true, value: { usagePercent: 97 } },
+          credits: { ok: false },
+          aggregated: { ok: false },
+        },
+      },
+    ]);
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript,
+      }),
+    ).resolves.toMatchObject({
+      kind: "read",
+      grok: { ok: true, value: { usagePercent: 97 } },
+    });
+    expect(executeScript).toHaveBeenCalledTimes(1);
+    expect(executeScript.mock.calls[0]?.[0]?.func).toBe(
+      readCursorDashboardJsonAtExpectedOrigin,
+    );
+  });
+
+  test("falls back to a two-step stash when the direct read returns nothing usable", async () => {
+    const executeScript = vi.fn().mockImplementation(async ({ func }) => {
+      if (func === readCursorDashboardJsonAtExpectedOrigin) return [{}];
+      if (func === startCursorDashboardStashAtExpectedOrigin) {
+        return [{ result: { started: true } }];
+      }
+      if (func === readCursorDashboardStashAtExpectedOrigin) {
+        return [
+          {
+            result: {
+              status: "ready",
+              grok: { ok: true, value: { usagePercent: 97 } },
+              credits: { ok: true, value: {} },
+              aggregated: { ok: true, value: { aggregations: [] } },
+            },
+          },
+        ];
+      }
+      if (func === clearCursorDashboardStashAtExpectedOrigin) {
+        return [{ result: { cleared: true } }];
+      }
+      return [];
+    });
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript,
+        delay: async () => undefined,
+      }),
+    ).resolves.toEqual({
+      kind: "read",
+      grok: { ok: true, value: { usagePercent: 97 } },
+      credits: { ok: true, value: {} },
+      aggregated: { ok: true, value: { aggregations: [] } },
+    });
+    expect(
+      executeScript.mock.calls.map(([details]) => details.func),
+    ).toEqual([
+      readCursorDashboardJsonAtExpectedOrigin,
+      startCursorDashboardStashAtExpectedOrigin,
+      readCursorDashboardStashAtExpectedOrigin,
+      clearCursorDashboardStashAtExpectedOrigin,
+    ]);
+  });
+
+  test("times the two-step stash out instead of hanging", async () => {
+    let clock = 0;
+    const executeScript = vi.fn().mockImplementation(async ({ func }) => {
+      if (func === startCursorDashboardStashAtExpectedOrigin) {
+        return [{ result: { started: true } }];
+      }
+      if (func === readCursorDashboardStashAtExpectedOrigin) {
+        return [{ result: { status: "pending" } }];
+      }
+      if (func === clearCursorDashboardStashAtExpectedOrigin) {
+        return [{ result: { cleared: true } }];
+      }
+      return [{}];
+    });
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript,
+        now: () => clock,
+        delay: async (ms) => {
+          clock += ms;
+        },
+      }),
+    ).resolves.toEqual({
+      kind: "inject_empty",
+      detail: "two-step stash timed out",
+    });
+    expect(executeScript.mock.calls.some(([details]) =>
+      details.func === clearCursorDashboardStashAtExpectedOrigin,
+    )).toBe(true);
   });
 });
