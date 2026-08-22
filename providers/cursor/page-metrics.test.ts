@@ -4,6 +4,7 @@ import type { UsageSnapshot } from "../../domain/model";
 import type { CollectionResult } from "../types";
 import {
   applyCursorPageMetrics,
+  classifyCursorCredits,
   classifyCursorGrokStatus,
   cursorPageDescriptionToken,
 } from "./page-metrics";
@@ -70,6 +71,26 @@ function previous(): UsageSnapshot {
 }
 
 describe("Cursor page-metric carry-forward", () => {
+  test("treats an observed empty credit-grants body as no grants, not a failure", () => {
+    // Shape observed live: POST get-credit-grants-balance → HTTP 200, body {}.
+    // Values: none. This is a valid "no credit grants" answer.
+    expect(classifyCursorCredits({})).toBe("empty");
+    const result = applyCursorPageMetrics(
+      baseResult(),
+      undefined,
+      {
+        kind: "read",
+        grok: { ok: false },
+        credits: { ok: true, value: {} },
+        aggregated: { ok: false },
+      },
+      NOW,
+    );
+    expect(result.ok && result.snapshot.metrics.map((metric) => metric.id)).toEqual(
+      ["cursor-models-monthly"],
+    );
+  });
+
   test("classifies observed Grok Bot payloads without inventing fields", () => {
     expect(classifyCursorGrokStatus(undefined)).toBe("absent");
     expect(classifyCursorGrokStatus({ hasAvailableUsage: "yes" })).toBe("mismatch");

@@ -424,7 +424,7 @@ describe("Cursor adapter", () => {
   });
 
   test.each([
-    ["an empty response", {}],
+    ["an observed empty credit-grants body", {}],
     ["zero remaining credits", { total_cents: 200, used_cents: 200 }],
     ["malformed numeric data", { total_cents: "1250", used_cents: 200 }],
     ["an unsupported balance form", { balance_cents: 1250 }],
