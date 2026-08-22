@@ -61,8 +61,12 @@ export function DetailTables({
                   <tbody>
                     {table.rows.map((row) => (
                       <tr key={row.id}>
-                        {table.columns.map((column) => {
+                        {table.columns.map((column, columnIndex) => {
                           const cell = row.cells[column.key];
+                          const labeled =
+                            columnIndex === 0 && row.badgeKey !== undefined
+                              ? translate(row.badgeKey)
+                              : undefined;
                           return (
                             <td
                               key={column.key}
@@ -72,9 +76,11 @@ export function DetailTables({
                                   : undefined
                               }
                             >
-                              {cell === undefined
-                                ? "—"
-                                : formatDetailCell(column.type, cell)}
+                              {labeled !== undefined
+                                ? labeled
+                                : cell === undefined
+                                  ? "—"
+                                  : formatDetailCell(column.type, cell)}
                             </td>
                           );
                         })}

@@ -412,6 +412,11 @@ metrics:
     includedUsage: 包含的用量
     model: 模型
     tokens: Token
+    input: 输入
+    output: 输出
+    cost: 费用
+    total: 合计
+    unknownTier: 未映射的用量档
     percent: 用量
     event: 事件
     time: 时间

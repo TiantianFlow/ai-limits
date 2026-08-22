@@ -412,6 +412,11 @@ metrics:
     includedUsage: Included usage
     model: Model
     tokens: Tokens
+    input: Input
+    output: Output
+    cost: Cost
+    total: Total
+    unknownTier: Unmapped usage tier
     percent: Usage
     event: Event
     time: Time

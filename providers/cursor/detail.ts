@@ -1,127 +1,103 @@
 import {
+  DETAIL_TABLE_MAX_TABLES,
   DETAIL_TABLE_ROW_CAP,
   type DetailTable,
 } from "../../domain/model";
 
-// INFERRED from the billing-page UI (model / Tokens / Usage(%)), not from a
-// captured get-aggregated-usage-events body. Unknown keys are ignored.
-// A mismatch returns undefined rather than inventing rows.
+// Shape observed live from POST /api/dashboard/get-aggregated-usage-events.
+// cacheWriteTokens / cacheReadTokens / totalCacheWriteTokens /
+// totalCacheReadTokens are on the wire and omitted from v1 — six data
+// columns plus cache would not fit the side panel. They were not missed.
 
 export const CURSOR_DETAIL_COLUMNS = [
   { key: "model", labelKey: "metrics.detail.model", type: "text" as const },
-  { key: "tokens", labelKey: "metrics.detail.tokens", type: "tokens" as const },
-  { key: "percent", labelKey: "metrics.detail.percent", type: "percent" as const },
+  { key: "input", labelKey: "metrics.detail.input", type: "tokens" as const },
+  { key: "output", labelKey: "metrics.detail.output", type: "tokens" as const },
+  { key: "cost", labelKey: "metrics.detail.cost", type: "money" as const },
 ] as const;
 
-const CURSOR_BUCKET = {
-  id: "cursor-models",
-  labelKey: "metrics.cursor.cursorModels",
-  keys: new Set([
-    "cursormodels",
-    "cursor-models",
-    "auto",
-    "automodels",
-    "includedcursor",
-  ]),
+const KNOWN_TIERS = {
+  2: { id: "cursor-models", labelKey: "metrics.cursor.cursorModels" },
+  1: { id: "other-models", labelKey: "metrics.cursor.otherModels" },
 } as const;
 
-const OTHER_BUCKET = {
-  id: "other-models",
-  labelKey: "metrics.cursor.otherModels",
-  keys: new Set([
-    "othermodels",
-    "other-models",
-    "api",
-    "apimodels",
-    "includedapi",
-  ]),
-} as const;
+type ParsedRow = {
+  id: string;
+  model: string;
+  input: number;
+  output: number;
+  costCents: number;
+  tier: number;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function asFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+function parseNonNegativeNumberString(value: unknown): number | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!/^(?:\d+|\d+\.\d+)$/.test(trimmed)) return undefined;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+  return parsed;
 }
 
-function asName(value: unknown): string | undefined {
+function parseNonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function parseModelIntent(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const name = value.trim();
   return name.length > 0 && name.length <= 128 ? name : undefined;
 }
 
-function rowName(row: Record<string, unknown>): string | undefined {
-  return (
-    asName(row.modelIntent) ??
-    asName(row.modelName) ??
-    asName(row.model) ??
-    asName(row.name) ??
-    asName(row.label)
-  );
-}
-
-function rowTokens(row: Record<string, unknown>): number | undefined {
-  const total = asFiniteNumber(row.totalTokens) ?? asFiniteNumber(row.tokens);
-  if (total !== undefined && total >= 0) return total;
-  const input = asFiniteNumber(row.inputTokens);
-  const output = asFiniteNumber(row.outputTokens);
-  if (input !== undefined && output !== undefined && input >= 0 && output >= 0) {
-    return input + output;
-  }
-  return undefined;
-}
-
-function rowPercent(row: Record<string, unknown>): number | undefined {
-  const percent =
-    asFiniteNumber(row.usagePercent) ??
-    asFiniteNumber(row.percentUsed) ??
-    asFiniteNumber(row.percent);
-  return percent !== undefined && percent >= 0 && percent <= 100
-    ? percent
-    : undefined;
-}
-
-function parseRow(
-  value: unknown,
-  index: number,
-): { id: string; name: string; tokens?: number; percent?: number } | undefined {
+function parseRow(value: unknown): ParsedRow | undefined {
   if (!isRecord(value)) return undefined;
-  const name = rowName(value);
-  if (name === undefined) return undefined;
-  const tokens = rowTokens(value);
-  const percent = rowPercent(value);
-  if (tokens === undefined && percent === undefined) return undefined;
+  const model = parseModelIntent(value.modelIntent);
+  const input = parseNonNegativeNumberString(value.inputTokens);
+  const output = parseNonNegativeNumberString(value.outputTokens);
+  const costCents = parseNonNegativeNumber(value.totalCents);
+  const tier = parseNonNegativeNumber(value.tier);
+  if (
+    model === undefined ||
+    input === undefined ||
+    output === undefined ||
+    costCents === undefined ||
+    tier === undefined ||
+    !Number.isInteger(tier)
+  ) {
+    return undefined;
+  }
+  return { id: model, model, input, output, costCents, tier };
+}
+
+function centsToDollars(cents: number): number {
+  return cents / 100;
+}
+
+function toCells(row: Pick<ParsedRow, "model" | "input" | "output" | "costCents">) {
   return {
-    id: asName(value.id) ?? `${name}:${index}`,
-    name,
-    ...(tokens === undefined ? {} : { tokens }),
-    ...(percent === undefined ? {} : { percent }),
+    model: row.model,
+    input: row.input,
+    output: row.output,
+    cost: centsToDollars(row.costCents),
   };
 }
 
-function capRows(
-  rows: readonly {
-    id: string;
-    name: string;
-    tokens?: number;
-    percent?: number;
-  }[],
-): Pick<DetailTable, "rows" | "omittedRowCount"> {
+function capRows(rows: readonly ParsedRow[]): Pick<DetailTable, "rows" | "omittedRowCount"> {
   const ranked = [...rows].sort((left, right) => {
-    const leftMagnitude = left.tokens ?? left.percent ?? 0;
-    const rightMagnitude = right.tokens ?? right.percent ?? 0;
-    return rightMagnitude - leftMagnitude;
+    if (right.costCents !== left.costCents) return right.costCents - left.costCents;
+    return right.input + right.output - (left.input + left.output);
   });
   const omittedRowCount = Math.max(0, ranked.length - DETAIL_TABLE_ROW_CAP);
   return {
     rows: ranked.slice(0, DETAIL_TABLE_ROW_CAP).map((row) => ({
       id: row.id,
-      cells: {
-        model: row.name,
-        ...(row.tokens === undefined ? {} : { tokens: row.tokens }),
-        ...(row.percent === undefined ? {} : { percent: row.percent }),
-      },
+      cells: toCells(row),
     })),
     ...(omittedRowCount > 0 ? { omittedRowCount } : {}),
   };
@@ -130,53 +106,59 @@ function capRows(
 function tableFromRows(
   id: string,
   labelKey: string,
-  rows: readonly {
-    id: string;
-    name: string;
-    tokens?: number;
-    percent?: number;
-  }[],
+  rows: readonly ParsedRow[],
   observedAt: number,
   expiresAt: number | undefined,
 ): DetailTable | undefined {
   if (rows.length === 0) return undefined;
-  const capped = capRows(rows);
   return {
     id,
     labelKey,
     columns: [...CURSOR_DETAIL_COLUMNS],
-    ...capped,
+    ...capRows(rows),
     observedAt,
     ...(expiresAt === undefined ? {} : { expiresAt }),
   };
 }
 
-function arraysFromObject(
-  value: Record<string, unknown>,
-): { key: string; rows: unknown[] }[] {
-  return Object.entries(value).flatMap(([key, candidate]) =>
-    Array.isArray(candidate) ? [{ key, rows: candidate }] : [],
+function bucketForTier(tier: number): { id: string; labelKey: string } {
+  return (
+    KNOWN_TIERS[tier as keyof typeof KNOWN_TIERS] ?? {
+      id: `tier-${tier}`,
+      labelKey: "metrics.detail.unknownTier",
+    }
   );
 }
 
-function bucketForKey(key: string): typeof CURSOR_BUCKET | typeof OTHER_BUCKET | undefined {
-  const normalized = key.toLowerCase().replace(/[^a-z]/g, "");
-  if (CURSOR_BUCKET.keys.has(normalized) || CURSOR_BUCKET.keys.has(key)) {
-    return CURSOR_BUCKET;
+function totalsTable(
+  value: Record<string, unknown>,
+  observedAt: number,
+  expiresAt: number | undefined,
+): DetailTable | undefined {
+  const input = parseNonNegativeNumberString(value.totalInputTokens);
+  const output = parseNonNegativeNumberString(value.totalOutputTokens);
+  const costCents = parseNonNegativeNumber(value.totalCostCents);
+  if (input === undefined || output === undefined || costCents === undefined) {
+    return undefined;
   }
-  if (OTHER_BUCKET.keys.has(normalized) || OTHER_BUCKET.keys.has(key)) {
-    return OTHER_BUCKET;
-  }
-  return undefined;
-}
-
-function parseRowList(
-  values: readonly unknown[],
-): { id: string; name: string; tokens?: number; percent?: number }[] {
-  return values.flatMap((value, index) => {
-    const row = parseRow(value, index);
-    return row === undefined ? [] : [row];
-  });
+  return {
+    id: "included-usage-totals",
+    labelKey: "metrics.detail.total",
+    columns: [...CURSOR_DETAIL_COLUMNS],
+    rows: [
+      {
+        id: "total",
+        cells: {
+          input,
+          output,
+          cost: centsToDollars(costCents),
+        },
+        badgeKey: "metrics.detail.total",
+      },
+    ],
+    observedAt,
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+  };
 }
 
 export function parseCursorAggregatedUsage(
@@ -184,85 +166,37 @@ export function parseCursorAggregatedUsage(
   observedAt: number,
   expiresAt?: number,
 ): DetailTable[] | undefined {
-  if (value === undefined) return undefined;
-  if (Array.isArray(value)) {
+  if (!isRecord(value) || !Array.isArray(value.aggregations)) return undefined;
+
+  const grouped = new Map<number, ParsedRow[]>();
+  for (const candidate of value.aggregations) {
+    const row = parseRow(candidate);
+    if (row === undefined) continue;
+    const bucket = grouped.get(row.tier);
+    if (bucket) bucket.push(row);
+    else grouped.set(row.tier, [row]);
+  }
+  if (grouped.size === 0) return undefined;
+
+  const orderedTiers = [
+    ...[2, 1].filter((tier) => grouped.has(tier)),
+    ...[...grouped.keys()].filter((tier) => tier !== 2 && tier !== 1).sort((left, right) => left - right),
+  ];
+  const modelTables = orderedTiers.flatMap((tier) => {
+    const bucket = bucketForTier(tier);
     const table = tableFromRows(
-      "included-usage",
-      "metrics.detail.includedUsage",
-      parseRowList(value),
+      bucket.id,
+      bucket.labelKey,
+      grouped.get(tier) ?? [],
       observedAt,
       expiresAt,
     );
-    return table === undefined ? undefined : [table];
-  }
-  if (!isRecord(value)) return undefined;
-
-  const nestedArrays = arraysFromObject(value);
-  if (nestedArrays.length === 0 && isRecord(value.data)) {
-    return parseCursorAggregatedUsage(value.data, observedAt, expiresAt);
-  }
-
-  const bucketed = new Map<string, {
-    labelKey: string;
-    rows: { id: string; name: string; tokens?: number; percent?: number }[];
-  }>();
-  const leftovers: { id: string; name: string; tokens?: number; percent?: number }[] = [];
-
-  for (const group of nestedArrays) {
-    const rows = parseRowList(group.rows);
-    if (rows.length === 0) continue;
-    const bucket = bucketForKey(group.key);
-    if (bucket === undefined) {
-      leftovers.push(...rows);
-      continue;
-    }
-    const existing = bucketed.get(bucket.id);
-    if (existing) {
-      existing.rows.push(...rows);
-    } else {
-      bucketed.set(bucket.id, { labelKey: bucket.labelKey, rows: [...rows] });
-    }
-  }
-
-  const tables = [
-    ...[CURSOR_BUCKET, OTHER_BUCKET].flatMap((bucket) => {
-      const grouped = bucketed.get(bucket.id);
-      if (grouped === undefined) return [];
-      const table = tableFromRows(
-        bucket.id,
-        grouped.labelKey,
-        grouped.rows,
-        observedAt,
-        expiresAt,
-      );
-      return table === undefined ? [] : [table];
-    }),
+    return table === undefined ? [] : [table];
+  });
+  const totals = totalsTable(value, observedAt, expiresAt);
+  const room = Math.max(0, DETAIL_TABLE_MAX_TABLES - (totals === undefined ? 0 : 1));
+  return [
+    ...modelTables.slice(0, room),
+    ...(totals === undefined ? [] : [totals]),
   ];
-
-  if (tables.length > 0) {
-    if (leftovers.length > 0) {
-      const extra = tableFromRows(
-        "included-usage",
-        "metrics.detail.includedUsage",
-        leftovers,
-        observedAt,
-        expiresAt,
-      );
-      return extra === undefined ? tables : [...tables, extra];
-    }
-    return tables;
-  }
-
-  const fallback = tableFromRows(
-    "included-usage",
-    "metrics.detail.includedUsage",
-    leftovers.length > 0
-      ? leftovers
-      : parseRowList(
-          nestedArrays.flatMap((group) => group.rows),
-        ),
-    observedAt,
-    expiresAt,
-  );
-  return fallback === undefined ? undefined : [fallback];
 }
