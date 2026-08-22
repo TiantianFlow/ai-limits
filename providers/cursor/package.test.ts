@@ -91,6 +91,22 @@ type CursorCollect = (
 ) => Promise<CollectionResult>;
 
 describe("Cursor provider package", () => {
+  test("startup cleanup failure does not block package registration", async () => {
+    const collect = vi.fn<CursorCollect>();
+    const findDashboardJson = vi.fn();
+    const providerPackage = createCursorPackage({
+      collect,
+      findDashboardJson,
+      cleanupAbandonedOwnedTab: vi
+        .fn()
+        .mockRejectedValue(new Error("cleanup-private")),
+    });
+
+    await expect(providerPackage.startup?.()).resolves.toBeUndefined();
+    expect(findDashboardJson).not.toHaveBeenCalled();
+    expect(collect).not.toHaveBeenCalled();
+  });
+
   test("scheduled collection never looks for or injects into a Cursor page", async () => {
     const collect = vi.fn<CursorCollect>().mockResolvedValue(baseCollection());
     const findDashboardJson = vi.fn();

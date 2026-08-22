@@ -1,6 +1,6 @@
 # Chrome Web Store listing
 
-This document describes AI Limits version 0.4.4. It is the complete
+This document describes AI Limits version 0.4.1. It is the complete
 Chrome Web Store submission pack, including the paste-ready listing copy
 and the reviewer reference material. It is not a claim that any provider
 has approved the extension.
@@ -90,8 +90,8 @@ parent companies, or their affiliates.
 - `storage`: saves display and refresh preferences, provider access state,
   normalized quota/counter/balance snapshots, up to 30 days of typed
   per-instance History, and sanitized refresh status in
-  `chrome.storage.local`. It also holds temporary Kimi tab-cleanup lease
-  metadata in `chrome.storage.session`. Browser-session cookies and access
+  `chrome.storage.local`. It also holds temporary Kimi and Cursor tab-cleanup
+  lease metadata in `chrome.storage.session`. Browser-session cookies and access
   credentials are not persisted. After validation, the user-created ElevenLabs
   or New API key is persisted in a separate `chrome.storage.local` credential
   record whose Chrome storage access level is restricted to trusted extension
@@ -115,7 +115,8 @@ These origins are requested one provider at a time after the user clicks
   the bounded interactive session-access and recovery flow.
 - `https://cursor.com/*`: reads the signed-in user's base Cursor usage. During
   Connect or manual Refresh only, it can also run bundled read-only code in one
-  already-open exact-origin page to request Grok Bot and credit-grant JSON.
+  already-open exact-origin page, or briefly open one inactive spending tab if
+  none is open, to request Grok Bot and credit-grant JSON.
 - `https://grok.com/*`: reads the signed-in user's Grok session, rate-limit, and
   subscription responses. This is consumer Grok on grok.com, not Cursor's Grok Bot.
 - `https://api.elevenlabs.io/*`: sends the user-created API key as the
@@ -142,12 +143,14 @@ These origins are requested one provider at a time after the user clicks
   stops waiting for a credential after 10 seconds and attempts best-effort
   cleanup of only its owned tab; shutdown or browser API errors can delay or
   prevent cleanup. For Cursor, Connect or manual Refresh can run a bundled
-  exact-origin function in one already-open `cursor.com` page. That function
-  sends POST requests with the fixed `{}` body only to the Grok Bot and credit-grant
-  dashboard endpoints, returns only their JSON, and does not inspect rendered
-  content, browser storage, or cookie values directly. Chrome attaches the
-  signed-in Cursor cookies to those same-origin requests. Cursor never creates
-  or activates a tab, and scheduled refresh never injects into a Cursor page.
+  exact-origin function in one already-open `cursor.com` page. If none is open,
+  that interactive path may create one inactive spending tab, wait up to 10
+  seconds, and close only the tab it created. That function sends POST requests
+  with the fixed `{}` body only to the Grok Bot and credit-grant dashboard
+  endpoints, returns only their JSON, and does not inspect rendered content,
+  browser storage, or cookie values directly. Chrome attaches the signed-in
+  Cursor cookies to those same-origin requests. Cursor never activates a tab,
+  and scheduled refresh never opens or injects into a Cursor page.
 
 The manifest does not request the broad `tabs` permission. Scheduled refresh
 does not create or activate provider tabs and never injects into provider pages.
@@ -217,7 +220,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.4.4-chrome.zip` upload artifact.
+- The validated `ai-limits-0.4.1-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
   provider sites in the same Chrome profile. ElevenLabs review additionally
   requires the reviewer to create a temporary **User → Read** API key in their

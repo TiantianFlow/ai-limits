@@ -181,6 +181,88 @@ describe("Cursor page dashboard bridge", () => {
     expect(executeScript).not.toHaveBeenCalled();
   });
 
+  test("prefers an already-open Cursor tab and does not create one", async () => {
+    const dashboard = {
+      grok: { ok: true as const, value: { usagePercent: 25 } },
+      credits: { ok: false as const, status: 401 },
+      aggregated: { ok: false as const, status: 403 },
+    };
+    const openOwnedTab = vi.fn();
+    const executeScript = vi.fn().mockResolvedValue([{ result: dashboard }]);
+
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 17, url: "https://cursor.com/dashboard/spending" },
+        ]),
+        executeScript,
+        openOwnedTab,
+      }),
+    ).resolves.toEqual({ kind: "read", ...dashboard });
+    expect(openOwnedTab).not.toHaveBeenCalled();
+    expect(executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { tabId: 17 } }),
+    );
+  });
+
+  test("opens one owned spending tab when none exists, then releases only that tab", async () => {
+    const dashboard = {
+      grok: { ok: true as const, value: { usagePercent: 40 } },
+      credits: { ok: false as const },
+      aggregated: { ok: false as const },
+    };
+    const release = vi.fn();
+    const openOwnedTab = vi.fn().mockResolvedValue({ tabId: 88, release });
+    const executeScript = vi.fn().mockResolvedValue([{ result: dashboard }]);
+
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([]),
+        executeScript,
+        openOwnedTab,
+      }),
+    ).resolves.toEqual({ kind: "read", ...dashboard });
+    expect(openOwnedTab).toHaveBeenCalledOnce();
+    expect(executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { tabId: 88 } }),
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  test("releases the owned tab when injection fails after create", async () => {
+    const release = vi.fn();
+    const openOwnedTab = vi.fn().mockResolvedValue({ tabId: 88, release });
+    const executeScript = vi.fn().mockRejectedValue(new Error("inject failed"));
+
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([]),
+        executeScript,
+        openOwnedTab,
+      }),
+    ).resolves.toEqual({
+      kind: "inject_threw",
+      detail: "inject failed",
+    });
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  test("returns no_tab when owned-tab creation is unavailable", async () => {
+    const executeScript = vi.fn();
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([]),
+        executeScript,
+        openOwnedTab: vi.fn().mockResolvedValue(undefined),
+      }),
+    ).resolves.toEqual({ kind: "no_tab" });
+    expect(executeScript).not.toHaveBeenCalled();
+  });
+
   test("keeps a valid Grok Bot read when aggregated is missing or malformed", async () => {
     const grok = {
       hasAvailableUsage: true,

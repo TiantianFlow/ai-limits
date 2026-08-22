@@ -10,7 +10,7 @@ History 只保存在当前 Chrome 配置文件中。
 | ChatGPT | 浏览器登录会话 | 服务商报告的消息窗口和 Credits | 使用未公开的网站会话接口。浏览器可能附带 ChatGPT Cookie；请求期间使用的账号标识不会持久化。 |
 | Claude | 浏览器登录会话 | 通用及模型专属限制，以及服务商报告的 Extra usage | 使用未公开的网站会话接口。组织选择只在请求期间使用；服务商提供的显示标签可能被保留。 |
 | Kimi | 浏览器会话及定向凭据恢复 | 订阅总用量和 Kimi Code 限制 | 可能读取名称完全匹配的旧版 `kimi-auth` Cookie 或 `localStorage.access_token`。手动 Connect 或 Refresh 可能短暂打开一个非活动 Kimi 标签页，让 Kimi 自己刷新会话。自动刷新绝不会打开标签页；没有可用会话时可能延后。 |
-| Cursor | 浏览器登录会话及手动页面增强 | Cursor 模型和其他模型的独立月度限制、Grok Bot 每周用量，以及服务商报告的按量支出/额外 Credits 数据 | 基础用量在后台刷新。Connect 或手动 Refresh 可通过一个已经打开的 `cursor.com` 标签页请求 Grok Bot 和额外 Credits JSON。Chrome 会把已登录的 Cursor Cookie 附加到这些固定的同源请求，但 AI Limits 不会直接检查 Cookie 值。扩展绝不会创建或激活 Cursor 标签页；自动刷新绝不会注入代码。上次有效的页面数值会保留到 Grok Bot 的每周重置，卡片会说明为何未能刷新。 |
+| Cursor | 浏览器登录会话及手动页面增强 | Cursor 模型和其他模型的独立月度限制、Grok Bot 每周用量，以及服务商报告的按量支出/额外 Credits 数据 | 基础用量在后台刷新。Connect 或手动 Refresh 可通过一个已经打开的 `cursor.com` 标签页请求 Grok Bot 和额外 Credits JSON；如果当前没有打开的标签页，可能会短暂打开一个非活动的用量页。Chrome 会把已登录的 Cursor Cookie 附加到这些固定的同源请求，但 AI Limits 不会直接检查 Cookie 值。扩展不会激活 Cursor 标签页，并且只关闭它自己创建的标签页。自动刷新绝不会打开标签页或注入代码。上次有效的页面数值会保留到 Grok Bot 的每周重置，卡片会说明为何未能刷新。 |
 | Grok | 浏览器登录会话 | 以每周或每月用量池为订阅限额，并在 Grok Build 与 Chat 桶合计等于整池时显示构成，以及 SuperGrok 系列套餐标签。按聊天模式（`fast`、`expert`、`heavy`、`auto`）的短窗速率限制仅在没有用量池时作为回退显示 | 使用 `grok.com` 上未公开的网站会话接口。浏览器可能附带 Grok Cookie；账号标识和原始订阅响应不会持久化。这是面向消费者的 Grok，不是 Cursor 的 Grok Bot。 |
 | ElevenLabs | 用户创建的 API 密钥 | 订阅 Credits 和语音容量限制 | 指南建议使用 **User → Read**。AI Limits 调用有文档的订阅接口并在本地保存验证成功的密钥，不复用浏览器会话。 |
 | New API | 每个连接各自使用实例网址、标签和一个 Relay Key；支持多个连接 | 每个密钥的总额、已用和剩余配额；无限额密钥则显示绝对用量 | AI Limits 调用 `/api/status` 和只读的 `/api/usage/token/` 接口。请求本身只读，但每个 Relay Key 仍可能具备调用模型的能力。 |

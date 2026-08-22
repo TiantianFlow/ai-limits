@@ -46,7 +46,8 @@ key and host permission remain active.
 However, manual refresh bypasses scheduled backoff, while automatic refresh
 respects it. Kimi manual refresh may additionally perform interactive session
 recovery. Cursor manual refresh may additionally request Grok Bot and
-extra-credit JSON through an already-open Cursor page; automatic refresh never
+extra-credit JSON through an already-open Cursor page, or by briefly opening
+one inactive spending tab when none is open; automatic refresh never opens or
 injects into a page. Scheduled refresh keeps last-good page values until Grok
 Bot's weekly reset and explains when they could not be refreshed.
 
@@ -57,15 +58,17 @@ Kimi has an additional limitation described below.
 Cursor's base monthly and on-demand usage refreshes in the background. Its
 Grok Bot and extra-credit dashboard endpoints reject cross-origin POSTs
 (`Invalid origin for state-changing request`), so AI Limits reads them only
-during Connect or an explicit manual Refresh and only when a `cursor.com` tab
-is already open. The extension runs a bundled exact-origin function that sends
-two fixed read-only dashboard requests and returns their JSON for schema
-validation in the extension. It does not inspect rendered content, browser
-storage, or cookie values directly; Chrome attaches the signed-in Cursor
-cookies to those fixed same-origin requests. It never creates or activates a
-Cursor tab, and scheduled refresh never injects into a Cursor page. Last-good
-Grok Bot and extra-credit values stay on the card until Grok Bot's weekly
-reset; the card says why they could not be refreshed.
+during Connect or an explicit manual Refresh. It prefers an already-open
+`cursor.com` tab. If none is open, it may briefly create one inactive spending
+tab, wait up to 10 seconds, and close only the tab it created. The extension
+runs a bundled exact-origin function that sends two fixed read-only dashboard
+requests and returns their JSON for schema validation in the extension. It
+does not inspect rendered content, browser storage, or cookie values directly;
+Chrome attaches the signed-in Cursor cookies to those fixed same-origin
+requests. It never activates a Cursor tab, and scheduled refresh never opens
+or injects into a Cursor page. Last-good Grok Bot and extra-credit values stay
+on the card until Grok Bot's weekly reset; the card says why they could not be
+refreshed.
 
 ## Why doesn't Kimi automatic refresh always work, and why can manual refresh open a background tab?
 
@@ -156,10 +159,11 @@ full boundary.
 
 No. Scheduled refresh is non-interactive and never creates provider tabs. Only
 an interactive Kimi **Connect** or **Refresh** may briefly create an inactive
-Kimi tab for session recovery. ElevenLabs opens its normal API-keys page only
-when you explicitly start setup or choose **Open API keys page**.
-Cursor manual enrichment can inspect an already-open exact-origin tab but does
-not create or activate one. New API setup and refresh do not open provider tabs.
+Kimi tab for session recovery. An interactive Cursor **Connect** or **Refresh**
+may briefly create one inactive spending tab when no `cursor.com` tab is already
+open, waits up to 10 seconds, and closes only the tab it created. ElevenLabs
+opens its normal API-keys page only when you explicitly start setup or choose
+**Open API keys page**. New API setup and refresh do not open provider tabs.
 
 ## What does History store, and for how long?
 

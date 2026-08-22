@@ -3,7 +3,7 @@
 Last updated: August 14, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
-describes version 0.4.4.
+describes version 0.4.1.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
 or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI, ElevenLabs, the New
@@ -54,7 +54,8 @@ ChatGPT, Claude, Kimi, Cursor, and Grok use signed-in browser sessions. AI Limit
 sends read-only requests to those providers' own web-session services, and
 browser cookies may accompany requests to the same provider origin. Requests
 normally run directly from the extension; the manual Cursor enrichment
-described below runs in an already-open exact-origin page. ChatGPT and Kimi access credentials, the derived ChatGPT
+described below runs in an already-open exact-origin page or, if none is
+open, in one inactive spending tab created for that attempt. ChatGPT and Kimi access credentials, the derived ChatGPT
 account identifier, and the selected Claude organization UUID and capabilities
 may be held in memory long enough to complete the related collection attempt
 and request sequence. Those values are not written to persistent extension
@@ -82,17 +83,28 @@ For Cursor, the base monthly and on-demand request runs from the extension.
 During Connect or an explicit manual Refresh only, AI Limits checks for one
 already-open tab matching `https://cursor.com/*`. If one exists, it uses the
 optional `scripting` permission to run a bundled function in that page's main
-JavaScript world. The function verifies the exact `https://cursor.com` origin,
-sends POST requests with the fixed `{}` body only to the Grok Bot and credit-grant
-dashboard endpoints, and returns only their JSON responses for schema
-validation in the extension context. It does not read rendered page content,
-local or session storage, or cookie values directly. Chrome does attach the
-signed-in Cursor cookies to these fixed same-origin requests. AI Limits never
-creates or activates a Cursor tab. Scheduled refresh never queries for or
-injects into a Cursor page. Page-only Grok Bot and extra-credit metrics are
-refreshed only by Connect or manual Refresh; last-good normalized values may
-remain visible until Grok Bot's weekly reset. Raw dashboard JSON is
-request-local and is not persisted.
+JavaScript world. If none exists, the same interactive path may create one
+inactive `https://cursor.com/dashboard/spending` tab. That create-wait-read
+path has a 10-second deadline. When it finishes or times out, the extension
+attempts best-effort cleanup of only the tab and lease it owns; browser
+shutdown or API errors can delay or prevent cleanup. The function verifies the
+exact `https://cursor.com` origin, sends POST requests with the fixed `{}`
+body only to the Grok Bot and credit-grant dashboard endpoints, and returns
+only their JSON responses for schema validation in the extension context. It
+does not read rendered page content, local or session storage, or cookie
+values directly. Chrome does attach the signed-in Cursor cookies to these
+fixed same-origin requests. AI Limits never activates a Cursor tab. Scheduled
+refresh never queries for, opens, or injects into a Cursor page. Page-only
+Grok Bot and extra-credit metrics are refreshed only by Connect or manual
+Refresh; last-good normalized values may remain visible until Grok Bot's
+weekly reset. Raw dashboard JSON is request-local and is not persisted.
+
+While that owned Cursor tab is active, the extension stores only a generated
+lease identifier with the temporary tab ID and creation timestamp in
+`chrome.storage.session`. This transient metadata supports cleanup if the
+background worker is interrupted. AI Limits attempts to remove it when the
+owned tab is released and also performs best-effort abandoned-lease cleanup
+when the background worker starts.
 
 For conservative Chrome Web Store disclosure, AI Limits classifies its
 current-tab exact-provider-origin checks as **Web history** access. For Kimi and

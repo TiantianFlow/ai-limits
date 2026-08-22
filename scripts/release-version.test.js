@@ -4,15 +4,15 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const buildVersion = "0.4.4";
-const documentedReleaseVersion = "0.4.4";
+const buildVersion = "0.4.1";
+const documentedReleaseVersion = "0.4.1";
 
 function read(relativePath) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
 describe("release version", () => {
-  it("uses 0.4.4 as the package and verified manifest version", () => {
+  it("uses 0.4.1 as the package and verified manifest version", () => {
     const packageJson = JSON.parse(read("package.json"));
     const artifactContract = read("scripts/artifact-contract.mjs");
 
@@ -25,7 +25,7 @@ describe("release version", () => {
     );
   });
 
-  it("names the 0.4.4 archive in build documentation", () => {
+  it("names the 0.4.1 archive in build documentation", () => {
     for (const relativePath of ["README.md", "README.zh-CN.md"]) {
       const contents = read(relativePath);
 
@@ -34,7 +34,7 @@ describe("release version", () => {
     }
   });
 
-  it("keeps the current Store archive reference at 0.4.4", () => {
+  it("keeps the current Store archive reference at 0.4.1", () => {
     expect(read("store-assets/chrome-web-store/listing-en.md")).toContain(
       `ai-limits-${documentedReleaseVersion}-chrome.zip`,
     );

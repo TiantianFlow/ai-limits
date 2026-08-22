@@ -33,8 +33,9 @@ Cursor、xAI、ElevenLabs、New API 项目或其关联方不存在隶属、背�
 - ChatGPT、Claude、Kimi、Cursor 和 Grok 使用浏览器中已登录的会话。扩展以较低
   频率向这些服务自己的网站会话用量接口发送只读请求，不会抓取页面中渲染的
   内容。Cursor 的基础用量仍由后台请求刷新；Connect 或手动 Refresh 还可能在
-  一个已经打开的 `cursor.com` 页面中运行扩展自带的只读代码，请求两个固定的
-  Dashboard JSON 响应。
+  一个已经打开的 `cursor.com` 页面中运行扩展自带的只读代码；如果当前没有打开
+  的标签页，可能会短暂打开一个非活动用量页，以请求两个固定的 Dashboard JSON
+  响应。
 - ElevenLabs 使用由用户创建的 API 密钥，因为其公开且有文档的 API 不提供
   其他服务所采用的免设置网页会话方式。扩展只会把该密钥发送到 ElevenLabs API，
   用于只读订阅请求。
@@ -57,12 +58,14 @@ Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多
 扩展会先检查旧版 Kimi Cookie，再读取已打开 Kimi 页面中名称完全匹配的
 `access_token` 项；浏览器关闭或 API 错误可能延迟或阻止尽力清理。
 
-Cursor Connect 或手动 Refresh 可能使用一个已经打开的 `cursor.com` 标签页，
-在页面的同源上下文中请求 Grok Bot 和额外 Credits JSON。AI Limits 不会创建或
-激活 Cursor 标签页，也不会直接检查页面渲染内容、浏览器存储或 Cookie 值；
-Chrome 仍会把已登录的 Cursor Cookie 附加到这些固定的同源请求。定时或自动刷新
-绝不会向 Cursor 页面注入代码。它会刷新基础月度和按量用量，并保留上次有效的
-Grok Bot 和额外 Credits，直到 Grok Bot 的每周重置，而不会把它们记成新的观测。
+Cursor Connect 或手动 Refresh 会优先使用一个已经打开的 `cursor.com` 标签页，
+在页面的同源上下文中请求 Grok Bot 和额外 Credits JSON。如果当前没有打开的
+标签页，它们可能会短暂打开一个非活动用量页，最多等待 10 秒，并且只关闭自己
+创建的标签页。AI Limits 不会激活 Cursor 标签页，也不会直接检查页面渲染内容、
+浏览器存储或 Cookie 值；Chrome 仍会把已登录的 Cursor Cookie 附加到这些固定
+的同源请求。定时或自动刷新绝不会打开标签页或向 Cursor 页面注入代码。它会
+刷新基础月度和按量用量，并保留上次有效的 Grok Bot 和额外 Credits，直到
+Grok Bot 的每周重置，而不会把它们记成新的观测。
 
 ElevenLabs 设置流程会在普通标签页中打开其官方 API 密钥页面。如果你需要先
 登录，指南会保持打开，并允许再次打开该页面。指南要求创建仅含 **User → Read**
@@ -130,7 +133,7 @@ macOS 文件选择器中正常显示。点击扩展工具栏图标即可打开�
 pnpm verify:zip
 ```
 
-该命令会重新构建扩展，创建 `.output/ai-limits-0.4.4-chrome.zip`，打开压缩包，
+该命令会重新构建扩展，创建 `.output/ai-limits-0.4.1-chrome.zip`，打开压缩包，
 并验证清单、入口文件、权限和禁止包含的文件规则。
 
 ## 服务兼容性

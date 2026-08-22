@@ -535,8 +535,8 @@ providers:
   cursor:
     name: Cursor
     connect: Connect Cursor
-    connectionDisclosure: Reads base usage from your signed-in Cursor session and refreshes it about every 15 minutes. On Connect or manual Refresh, AI Limits may run bundled read-only code in one already-open cursor.com page to request Grok Bot and extra-credit JSON. It does not inspect page content, browser storage, or cookie values directly; Chrome attaches signed-in Cursor cookies to those fixed same-origin requests.
-    manualRefreshDisclosure: Cursor page enrichment uses only an already-open Cursor tab. It never creates or activates a tab, and scheduled or automatic refresh never injects into a page.
+    connectionDisclosure: Reads base usage from your signed-in Cursor session and refreshes it about every 15 minutes. On Connect or manual Refresh, AI Limits may run bundled read-only code in one already-open cursor.com page, or briefly open one inactive spending tab if none is open, to request Grok Bot and extra-credit JSON. It does not inspect page content, browser storage, or cookie values directly; Chrome attaches signed-in Cursor cookies to those fixed same-origin requests.
+    manualRefreshDisclosure: Connect and manual Refresh prefer an already-open Cursor tab. If none is open, they may briefly open one inactive spending tab. Scheduled or automatic refresh never opens or injects into a tab.
     capabilities:
       monthlyUsage: Monthly usage
       grokBotUsage: Grok Bot usage

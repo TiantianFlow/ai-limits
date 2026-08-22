@@ -35,7 +35,8 @@ them or copy them into reports, logs, or History.
 
 Cursor Connect or manual Refresh may use `chrome.scripting` to run a bundled
 function in the main JavaScript world of one already-open exact-origin Cursor
-page. Main-world code can be observed or interfered with by the provider page,
+page, or of one inactive spending tab created for that attempt. Main-world
+code can be observed or interfered with by the provider page,
 so the returned dashboard JSON is treated as untrusted and must pass the same
 extension-context schemas and semantic validation as any provider response.
 The function verifies `https://cursor.com`, uses only two fixed `{}`-body POST

@@ -535,8 +535,8 @@ providers:
   cursor:
     name: Cursor
     connect: 连接 Cursor
-    connectionDisclosure: 从你已登录的 Cursor 会话读取基础用量，并大约每 15 分钟刷新一次。在连接或手动刷新时，AI Limits 可能在一个已经打开的 cursor.com 页面中运行捆绑的只读代码，以请求 Grok Bot 和额外额度 JSON。它不会直接检查页面内容、浏览器存储或 cookie 值；Chrome 会把已登录的 Cursor cookie 附加到这些固定的同源请求。
-    manualRefreshDisclosure: Cursor 页面补充信息只会使用已经打开的 Cursor 标签页。它不会创建或激活标签页，定时或自动刷新也永远不会注入页面。
+    connectionDisclosure: 从你已登录的 Cursor 会话读取基础用量，并大约每 15 分钟刷新一次。在连接或手动刷新时，AI Limits 可能在一个已经打开的 cursor.com 页面中运行捆绑的只读代码；如果当前没有打开的标签页，可能会短暂打开一个非活动用量页，以请求 Grok Bot 和额外额度 JSON。它不会直接检查页面内容、浏览器存储或 cookie 值；Chrome 会把已登录的 Cursor cookie 附加到这些固定的同源请求。
+    manualRefreshDisclosure: 连接和手动刷新会优先使用已经打开的 Cursor 标签页。如果当前没有打开的标签页，它们可能会短暂打开一个非活动用量页。定时或自动刷新永远不会打开标签页或注入页面。
     capabilities:
       monthlyUsage: 每月用量
       grokBotUsage: Grok Bot 用量

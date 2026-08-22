@@ -1,3 +1,7 @@
+export const CURSOR_OWNED_TAB_URL = "https://cursor.com/dashboard/spending";
+export const CURSOR_OWNED_TAB_LEASE_PREFIX = "cursorDashboardTabLease";
+export const CURSOR_OWNED_TAB_TIMEOUT_MS = 10_000;
+
 export interface CursorDashboardJson {
   readonly grok?: unknown;
   readonly credits?: unknown;
@@ -50,6 +54,7 @@ interface CursorDashboardBridge {
   }): Promise<CursorScriptResult[]>;
   now?(): number;
   delay?(ms: number): Promise<void>;
+  openOwnedTab?(): Promise<{ tabId: number; release: () => void } | undefined>;
 }
 
 const EXPECTED_ORIGIN = "https://cursor.com";
@@ -401,65 +406,103 @@ async function readStashFallback(
   }
 }
 
+async function injectIntoTabIds(
+  tabIds: readonly number[],
+  executeScript: CursorDashboardBridge["executeScript"],
+  now: () => number,
+  delay: (ms: number) => Promise<void>,
+): Promise<{
+  probe?: CursorDashboardProbe;
+  lastWrongOrigin?: { kind: "wrong_origin"; origin: string };
+  firstFailure?: InjectFailure;
+}> {
+  let lastWrongOrigin: { kind: "wrong_origin"; origin: string } | undefined;
+  let firstFailure: InjectFailure | undefined;
+  for (const tabId of tabIds) {
+    const direct = await runInjected(
+      executeScript,
+      tabId,
+      readCursorDashboardJsonAtExpectedOrigin,
+    );
+    if (direct.kind === "value") {
+      const wrongOrigin = asWrongOrigin(direct.value);
+      if (wrongOrigin) {
+        lastWrongOrigin = wrongOrigin;
+        continue;
+      }
+      if (!isThenable(direct.value)) {
+        const read = asReadResult(direct.value);
+        if (read) return { probe: read };
+      }
+      firstFailure ??= {
+        kind: "inject_unusable",
+        detail: describeInjectedValue(direct.value),
+      };
+    } else if (direct.kind === "inject_threw") {
+      firstFailure ??= direct;
+      continue;
+    } else {
+      firstFailure ??= direct;
+    }
+
+    const fallback = await readStashFallback(executeScript, tabId, now, delay);
+    if (fallback.kind === "read") return { probe: fallback };
+    if (fallback.kind === "wrong_origin") {
+      lastWrongOrigin = fallback;
+      continue;
+    }
+    firstFailure =
+      fallback.detail.startsWith("two-step stash")
+        ? fallback
+        : (firstFailure ?? fallback);
+  }
+  return { lastWrongOrigin, firstFailure };
+}
+
 export async function findCursorDashboardJson({
   hasPagePermission,
   queryTabs,
   executeScript,
   now = Date.now,
   delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  openOwnedTab,
 }: CursorDashboardBridge): Promise<CursorDashboardProbe> {
   try {
     if (!(await hasPagePermission())) return { kind: "permission_missing" };
     const tabs = await queryTabs({ url: "https://cursor.com/*" });
     const candidates = tabs.filter((tab) => tab.id !== undefined);
-    if (candidates.length === 0) return { kind: "no_tab" };
-    const onlyAsleep = candidates.every(tabLooksAsleep);
-    const tabIds = rankCursorTabs(candidates);
-
-    let lastWrongOrigin: { kind: "wrong_origin"; origin: string } | undefined;
-    let firstFailure: InjectFailure | undefined;
-    for (const tabId of tabIds) {
-      const direct = await runInjected(
-        executeScript,
-        tabId,
-        readCursorDashboardJsonAtExpectedOrigin,
-      );
-      if (direct.kind === "value") {
-        const wrongOrigin = asWrongOrigin(direct.value);
-        if (wrongOrigin) {
-          lastWrongOrigin = wrongOrigin;
-          continue;
-        }
-        if (!isThenable(direct.value)) {
-          const read = asReadResult(direct.value);
-          if (read) return read;
-        }
-        firstFailure ??= {
-          kind: "inject_unusable",
-          detail: describeInjectedValue(direct.value),
-        };
-      } else if (direct.kind === "inject_threw") {
-        firstFailure ??= direct;
-        continue;
-      } else {
-        firstFailure ??= direct;
+    if (candidates.length === 0) {
+      if (!openOwnedTab) return { kind: "no_tab" };
+      const owned = await openOwnedTab();
+      if (!owned) return { kind: "no_tab" };
+      try {
+        const opened = await injectIntoTabIds(
+          [owned.tabId],
+          executeScript,
+          now,
+          delay,
+        );
+        return (
+          opened.probe ??
+          opened.lastWrongOrigin ??
+          opened.firstFailure ?? { kind: "no_tab" }
+        );
+      } finally {
+        owned.release();
       }
-
-      const fallback = await readStashFallback(executeScript, tabId, now, delay);
-      if (fallback.kind === "read") return fallback;
-      if (fallback.kind === "wrong_origin") {
-        lastWrongOrigin = fallback;
-        continue;
-      }
-      firstFailure =
-        fallback.detail.startsWith("two-step stash")
-          ? fallback
-          : (firstFailure ?? fallback);
     }
-    if (lastWrongOrigin) return lastWrongOrigin;
+    const onlyAsleep = candidates.every(tabLooksAsleep);
+    const existing = await injectIntoTabIds(
+      rankCursorTabs(candidates),
+      executeScript,
+      now,
+      delay,
+    );
+    if (existing.probe) return existing.probe;
+    if (existing.lastWrongOrigin) return existing.lastWrongOrigin;
     if (onlyAsleep) return { kind: "tab_asleep" };
     return (
-      firstFailure ?? {
+      existing.firstFailure ?? {
         kind: "inject_empty",
         detail: "no injection attempt produced a result",
       }
