@@ -65,7 +65,7 @@ status, and History until reconnect or explicit disconnect/delete.
 
 Successful quota, counter/spend, and balance observations are retained per
 instance under the common 48-hour raw, hourly compaction, 30-day, and 1,024
-observation policy. Version 0.3.0 graphs quota metrics only. History contains no
+observation policy. History graphs quota metrics only. History contains no
 credential or raw provider response.
 
 ## Compatibility boundary

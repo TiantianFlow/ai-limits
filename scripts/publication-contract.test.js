@@ -178,14 +178,14 @@ const v030PublicationStatements = [
   {
     key: "faq",
     statement:
-      "Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. Version 0.3.0 graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
+      "Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
     error:
       "English FAQ introduction is missing typed History and quota-only graph behavior.",
   },
   {
     key: "faqZh",
     statement:
-      "两者都会。成功的 Connect、单个服务 Refresh、顶部刷新按钮或定时自动刷新，都会新增一条标准化类型化 History 观测，其中包含该服务本次返回的配额、计数或支出以及余额指标。0.3.0 只绘制配额指标；计数或支出和余额观测仍会保存，但不会绘图。",
+      "两者都会。成功的 Connect、单个服务 Refresh、顶部刷新按钮或定时自动刷新，都会新增一条标准化类型化 History 观测，其中包含该服务本次返回的配额、计数或支出以及余额指标。History 只绘制配额指标；计数或支出和余额观测仍会保存，但不会绘图。",
     error:
       "Simplified Chinese FAQ introduction is missing typed History and quota-only graph behavior.",
   },
@@ -268,7 +268,7 @@ const v030PublicationStatements = [
   {
     key: "privacy",
     statement:
-      "In version 0.3.0, History graphs plot quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
+      "History graphs plot quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
     error: "Privacy policy is missing the quota-only graph disclosure.",
   },
   {
@@ -785,7 +785,7 @@ describe("publication content", () => {
   );
 
   it.each(v030PublicationStatements)(
-    "requires the rendered 0.3.0 disclosure in $key: $error",
+    "requires the rendered History graph disclosure in $key: $error",
     ({ key, statement, error }) => {
       const errors = validatePublicationDocuments({
         ...valid,

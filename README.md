@@ -18,9 +18,10 @@ and New API. It is a Chrome side-panel extension that shows their current
 subscription usage and local quota-history graphs in one compact view. It
 normalizes provider-specific reporting into one **Used** or **Left** display
 and, when a provider exposes a complete reset window, compares quota
-consumption with elapsed time to show a pace signal. It starts empty and reads
-usage only after you connect an individual provider and approve that
-provider's optional access.
+consumption with elapsed time to show a pace signal. Cursor also shows weekly
+Grok Bot usage next to its monthly Cursor-model and Other-model limits, plus a
+per-model included-usage breakdown. It starts empty and reads usage only after
+you connect an individual provider and approve that provider's optional access.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
 endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI,
@@ -38,7 +39,7 @@ ElevenLabs, the New API project, or their affiliates.
   usage refresh remains a background request; Connect or manual Refresh may
   additionally run bundled read-only code in one already-open `cursor.com`
   page, or briefly open one inactive spending tab if none is open, to request
-  two fixed dashboard JSON responses.
+  Grok Bot, extra-credit, and per-model included-usage JSON.
 - ElevenLabs uses a user-created API key because its documented public API does
   not offer the same zero-setup web-session route used by the other providers.
   The extension sends that key only to the ElevenLabs API for its read-only
@@ -54,7 +55,7 @@ ElevenLabs, the New API project, or their affiliates.
   balance observations are stored per instance for up to 30 days, subject to a
   1,024-observation per-instance safety cap. The newest 48 hours stay at
   collection resolution; older retained observations keep the latest value in
-  each UTC hour. Version 0.3.0 graphs quota metrics only. It does not graph the
+  each UTC hour. History graphs quota metrics only. It does not graph the
   retained counters or balances, reconstruct earlier provider history, or
   store raw provider responses or credentials in History.
 - Browser-session cookies and access credentials are used only for the current
@@ -72,16 +73,21 @@ recovery, and closes only the tab it created. The extension checks the legacy
 Kimi cookie first, then the exact `access_token` entry in an already-open Kimi
 page. Browser shutdown or API errors can delay or prevent best-effort cleanup.
 
-Cursor Connect or manual Refresh prefer one already-open `cursor.com` tab to
-request Grok Bot and extra-credit JSON in the page's same-origin context. If
-none is open, they may briefly open one inactive spending tab, wait up to 10
-seconds, and close only the tab they created. AI Limits does not activate a
-Cursor tab and does not inspect its rendered content, browser storage, or
-cookie values directly. Chrome still attaches the signed-in Cursor cookies to
+Cursor Connect or manual Refresh prefer one already-open `cursor.com` tab. If
+none is open, they may briefly open one inactive
+`https://cursor.com/dashboard/spending` tab, wait up to 10 seconds, read from
+it, and close only the tab they created. That owned-tab path uses the same
+shared helper as Kimi. AI Limits never activates a tab and never closes a tab
+the user opened. It does not inspect rendered content, browser storage, or
+cookie values directly; Chrome still attaches the signed-in Cursor cookies to
 those fixed same-origin requests. Scheduled or automatic refresh never opens
-or injects into a Cursor page. It refreshes base monthly and on-demand usage
-and keeps last-good Grok Bot and extra-credit values until Grok Bot's weekly
-reset, without presenting them as a new observation.
+or injects into a Cursor page. The card shows monthly Cursor-model and
+Other-model limits plus weekly Grok Bot usage. A detail view lists included
+usage by model, grouped into Cursor Models and Other Models, with input,
+output, and cost plus provider totals. That detail surface is generic so other
+providers can adopt it later; today only Cursor fills it. Last-good Grok Bot,
+extra-credit, and detail values stay until Grok Bot's weekly reset, without
+presenting them as a new observation.
 
 ElevenLabs setup opens its official API-keys page in a normal tab. If you need
 to sign in first, the guide remains open and lets you reopen that page. It asks

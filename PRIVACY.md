@@ -89,8 +89,9 @@ path has a 10-second deadline. When it finishes or times out, the extension
 attempts best-effort cleanup of only the tab and lease it owns; browser
 shutdown or API errors can delay or prevent cleanup. The function verifies the
 exact `https://cursor.com` origin, sends POST requests with the fixed `{}`
-body only to the Grok Bot and credit-grant dashboard endpoints, and returns
-only their JSON responses for schema validation in the extension context. It
+body only to the Grok Bot, credit-grant, and aggregated-usage dashboard
+endpoints, and returns only their JSON responses for schema validation in the
+extension context. It
 does not read rendered page content, local or session storage, or cookie
 values directly. Chrome does attach the signed-in Cursor cookies to these
 fixed same-origin requests. AI Limits never activates a Cursor tab. Scheduled
@@ -165,7 +166,7 @@ Successful normalized quota, counter or spend, and balance observations are
 stored per instance for up to 30 days, subject to a 1,024-observation
 per-instance safety cap. Within that cap, the newest 48 hours remain at
 collection resolution and older retained observations are compacted to the
-latest observation in each UTC hour. In version 0.3.0, History graphs plot
+latest observation in each UTC hour. History graphs plot
 quota metrics only; counter or spend and balance observations remain stored but
 are not graphed. Currency-denominated spend counters and balances are
 normalized usage data, not raw payment transaction history. History never

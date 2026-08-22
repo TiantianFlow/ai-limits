@@ -76,8 +76,8 @@ Metric meaning must be explicit:
 
 Stable metric IDs identify History series within one provider instance. Keep
 them independent from localized or provider-controlled labels. Successful
-quota, counter/spend, and balance observations may be retained; the 0.3.0 graph
-selects quota metrics only.
+quota, counter/spend, and balance observations may be retained; History graphs
+select quota metrics only.
 
 Do not persist browser-session credentials, request-local account identifiers,
 or raw provider responses. A reviewed API-key package keeps one key per instance

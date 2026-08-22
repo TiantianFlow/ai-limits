@@ -68,8 +68,12 @@ your usage has trended over time, right on your device.
 **ChatGPT** and **Claude** show your plan, usage windows, resets, and available
 credits straight from your signed-in account. **Kimi** reads your usage and
 subscription status directly, with a brief, visible recovery step if your
-session ever needs refreshing. **Cursor** shows your account's usage at a
-glance. **Grok** reads your signed-in consumer plan and rate-limit window.
+session ever needs refreshing. **Cursor** shows monthly Cursor-model and
+Other-model limits plus weekly Grok Bot usage, and a per-model included-usage
+breakdown grouped into Cursor Models and Other Models with input, output, cost,
+and provider totals. That detail view is a generic per-provider surface; today
+only Cursor fills it. **Grok** reads your signed-in consumer plan and
+rate-limit window.
 **ElevenLabs** connects with a scoped, read-only API key you create yourself.
 **New API** connects self-hosted or third-party API-compatible instances with a
 key you provide. AI Limits supports multiple independent New API instances,
@@ -116,7 +120,8 @@ These origins are requested one provider at a time after the user clicks
 - `https://cursor.com/*`: reads the signed-in user's base Cursor usage. During
   Connect or manual Refresh only, it can also run bundled read-only code in one
   already-open exact-origin page, or briefly open one inactive spending tab if
-  none is open, to request Grok Bot and credit-grant JSON.
+  none is open, to request Grok Bot, credit-grant, and aggregated included-usage
+  JSON.
 - `https://grok.com/*`: reads the signed-in user's Grok session, rate-limit, and
   subscription responses. This is consumer Grok on grok.com, not Cursor's Grok Bot.
 - `https://api.elevenlabs.io/*`: sends the user-created API key as the
@@ -144,13 +149,15 @@ These origins are requested one provider at a time after the user clicks
   cleanup of only its owned tab; shutdown or browser API errors can delay or
   prevent cleanup. For Cursor, Connect or manual Refresh can run a bundled
   exact-origin function in one already-open `cursor.com` page. If none is open,
-  that interactive path may create one inactive spending tab, wait up to 10
-  seconds, and close only the tab it created. That function sends POST requests
-  with the fixed `{}` body only to the Grok Bot and credit-grant dashboard
-  endpoints, returns only their JSON, and does not inspect rendered content,
-  browser storage, or cookie values directly. Chrome attaches the signed-in
-  Cursor cookies to those same-origin requests. Cursor never activates a tab,
-  and scheduled refresh never opens or injects into a Cursor page.
+  that interactive path may create one inactive
+  `https://cursor.com/dashboard/spending` tab, wait up to 10 seconds, and close
+  only the tab it created. It never activates a tab and never closes a tab the
+  user opened. That function sends POST requests with the fixed `{}` body only
+  to the Grok Bot, credit-grant, and aggregated-usage dashboard endpoints,
+  returns only their JSON, and does not inspect rendered content, browser
+  storage, or cookie values directly. Chrome attaches the signed-in Cursor
+  cookies to those same-origin requests. Scheduled refresh never opens or
+  injects into a Cursor page.
 
 The manifest does not request the broad `tabs` permission. Scheduled refresh
 does not create or activate provider tabs and never injects into provider pages.
@@ -166,8 +173,9 @@ does not create or activate provider tabs and never injects into provider pages.
   and never sent to the developer.
 - **Website content:** Yes. AI Limits handles private provider session, usage,
   subscription, and organization-response JSON plus Kimi's exact
-  `access_token` browser-storage entry and Cursor's two manual page-context
-  dashboard JSON responses. It does not read rendered page text, prompts,
+  `access_token` browser-storage entry and Cursor's manual page-context
+  dashboard JSON responses (Grok Bot, credit-grant, and aggregated included
+  usage). It does not read rendered page text, prompts,
   conversations, or generated responses.
 - **Account identifiers and personally identifiable information:** Yes,
   narrowly handled. A ChatGPT account identifier derived from the access
@@ -250,15 +258,22 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    waiting for a credential after 10 seconds and attempts best-effort cleanup;
    do not treat delayed cleanup during shutdown or browser API errors as a
    guarantee violation.
-5. **Cursor:** sign in at `cursor.com` and keep one Cursor page open. Click
-   **Connect** on Cursor, approve the Cursor origin plus `scripting`, and confirm
-   provider-reported monthly, Grok Bot, on-demand, and extra-credit data may
-   appear. Use the card's **Refresh** action once. Confirm no Cursor tab is
-    created or activated. Then close all Cursor tabs and refresh again: base
-    monthly/on-demand usage should remain available. Previously collected Grok
-    Bot and extra-credit values should remain visible as earlier page values
-    until Grok Bot's weekly reset, and the card should explain why they were not
-    refreshed. Scheduled refresh must not inspect or inject into a Cursor page.
+5. **Cursor:** sign in at `cursor.com`. You do **not** need to leave a Cursor
+   tab open. Click **Connect** on Cursor and approve the Cursor origin plus
+   `scripting`. Confirm monthly Cursor-model and Other-model limits plus weekly
+   Grok Bot usage may appear, along with a detail view of included usage grouped
+   into Cursor Models and Other Models (input, output, cost, and provider
+   totals). If no `cursor.com` tab was already open, one inactive
+   `https://cursor.com/dashboard/spending` tab may appear, be read, and close;
+   confirm it is never activated and that no tab the reviewer opened is closed.
+   Use the card's **Refresh** action once with a Cursor tab already open and
+   confirm the existing tab is reused rather than a second tab being created.
+   Then close all Cursor tabs and start a **scheduled** cycle (or wait for
+   automatic refresh): base monthly/on-demand usage should remain available,
+   no Cursor tab should open, and no page injection should occur. Previously
+   collected Grok Bot, extra-credit, and detail values may remain visible as
+   earlier page values until Grok Bot's weekly reset, and the card should
+   explain why they were not refreshed.
 6. **Grok:** sign in at `grok.com`, click **Connect** on Grok, approve only the
    Grok origin, and confirm a SuperGrok-family or Free plan plus the reported
    query window appears. Use the card's **Refresh** action once. No extra

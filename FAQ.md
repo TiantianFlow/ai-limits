@@ -4,7 +4,7 @@ English | [简体中文](FAQ.zh-CN.md)
 
 ## Does History update after manual refresh, automatic refresh, or both?
 
-Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. Version 0.3.0 graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.
+Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.
 
 Failed, deferred, skipped, superseded, or malformed refreshes do not add a
 history observation. They also do not insert a zero or copy the last value
@@ -61,7 +61,7 @@ Grok Bot and extra-credit dashboard endpoints reject cross-origin POSTs
 during Connect or an explicit manual Refresh. It prefers an already-open
 `cursor.com` tab. If none is open, it may briefly create one inactive spending
 tab, wait up to 10 seconds, and close only the tab it created. The extension
-runs a bundled exact-origin function that sends two fixed read-only dashboard
+runs a bundled exact-origin function that sends three fixed read-only dashboard
 requests and returns their JSON for schema validation in the extension. It
 does not inspect rendered content, browser storage, or cookie values directly;
 Chrome attaches the signed-in Cursor cookies to those fixed same-origin
@@ -169,7 +169,7 @@ opens its normal API-keys page only when you explicitly start setup or choose
 
 History stores successful normalized quota, counter or spend, and balance
 observations per instance. Currency-denominated spend counters and balances are
-normalized usage data, not raw payment transaction history. Version 0.3.0
+normalized usage data, not raw payment transaction history. History
 graphs quota metrics only; counter/spend and balance observations remain stored
 but are not graphed. History never stores credentials, raw provider responses,
 or reconstructed provider history. Failed, deferred, skipped, or malformed

@@ -39,7 +39,7 @@ page, or of one inactive spending tab created for that attempt. Main-world
 code can be observed or interfered with by the provider page,
 so the returned dashboard JSON is treated as untrusted and must pass the same
 extension-context schemas and semantic validation as any provider response.
-The function verifies `https://cursor.com`, uses only two fixed `{}`-body POST
+The function verifies `https://cursor.com`, uses only three fixed `{}`-body POST
 requests, and does not inspect rendered content, browser storage, or cookie
 values directly. Chrome attaches signed-in Cursor cookies to those same-origin
 requests. Scheduled refresh never injects into a Cursor page, and no raw
@@ -58,7 +58,7 @@ This local boundary is not OS-keychain encryption. Someone with access to the
 unlocked Chrome profile, extension DevTools, or local profile files may be able
 to inspect saved keys. Per-instance History contains normalized quota,
 counter/spend, and balance observations, never credentials or raw responses;
-version 0.3.0 graphs quota metrics only. Browser-session provider endpoints are private and
+History graphs quota metrics only. Browser-session provider endpoints are private and
 unsupported; ElevenLabs uses a documented endpoint, but provider responses,
 authorization behavior, and security flows can still change without notice.
 Reports about a provider's own service should be sent to that provider rather
