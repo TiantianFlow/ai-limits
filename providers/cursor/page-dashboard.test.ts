@@ -13,6 +13,8 @@ function jsonResponse(value: unknown, status = 200): Response {
   });
 }
 
+const granted = vi.fn().mockResolvedValue(true);
+
 describe("Cursor page dashboard bridge", () => {
   test("reads only the two fixed dashboard JSON responses from the exact Cursor origin", async () => {
     const grok = { usagePercent: 25 };
@@ -140,7 +142,11 @@ describe("Cursor page dashboard bridge", () => {
     const executeScript = vi.fn().mockResolvedValue([{ result: dashboard }]);
 
     await expect(
-      findCursorDashboardJson({ queryTabs, executeScript }),
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs,
+        executeScript,
+      }),
     ).resolves.toEqual({
       kind: "read",
       ...dashboard,
@@ -159,6 +165,7 @@ describe("Cursor page dashboard bridge", () => {
 
     await expect(
       findCursorDashboardJson({
+        hasPagePermission: granted,
         queryTabs: vi.fn().mockResolvedValue([]),
         executeScript,
       }),
@@ -176,6 +183,7 @@ describe("Cursor page dashboard bridge", () => {
     };
     await expect(
       findCursorDashboardJson({
+        hasPagePermission: granted,
         queryTabs: vi.fn().mockResolvedValue([{ id: 4 }]),
         executeScript: vi.fn().mockResolvedValue([
           {
@@ -197,6 +205,7 @@ describe("Cursor page dashboard bridge", () => {
   test("maps injection exceptions to a failed probe instead of throwing", async () => {
     await expect(
       findCursorDashboardJson({
+        hasPagePermission: granted,
         queryTabs: vi.fn().mockRejectedValue(new Error("tabs failed")),
         executeScript: vi.fn(),
       }),
@@ -216,5 +225,20 @@ describe("Cursor page dashboard bridge", () => {
       aggregated: { aggregations: [] },
     });
     expect(dashboardJsonFromProbe({ kind: "no_tab" })).toEqual({});
+    expect(dashboardJsonFromProbe({ kind: "permission_missing" })).toEqual({});
+  });
+
+  test("does not inject when scripting or host permission is missing", async () => {
+    const queryTabs = vi.fn();
+    const executeScript = vi.fn();
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: vi.fn().mockResolvedValue(false),
+        queryTabs,
+        executeScript,
+      }),
+    ).resolves.toEqual({ kind: "permission_missing" });
+    expect(queryTabs).not.toHaveBeenCalled();
+    expect(executeScript).not.toHaveBeenCalled();
   });
 });

@@ -432,6 +432,7 @@ metrics:
     carried: "包含的用量来自更早的页面刷新。{reason}"
     scheduled: 在已打开 cursor.com 标签页时连接或刷新，即可更新包含的用量。
     noTab: 请打开 cursor.com，然后点击刷新，以更新包含的用量。
+    permission: 缺少 Cursor 页面访问权限。请重新连接 Cursor 以更新包含的用量。
     http: "包含的用量未能刷新（HTTP {status}）。"
     injection: 无法从已打开的 cursor.com 页面读取包含的用量。
     network: 已打开的 cursor.com 页面上的包含用量请求没有完成。
@@ -470,6 +471,7 @@ metrics:
     pageCarried: "部分 Cursor 页面数据来自更早的刷新。{reason}"
     pageScheduled: 在已打开 cursor.com 标签页时连接或刷新，即可更新 Grok Bot。
     pageNoTab: 请打开 cursor.com，然后点击刷新，以更新 Grok Bot。
+    pagePermission: 缺少 Cursor 页面访问权限。请重新连接 Cursor 以更新 Grok Bot。
     pageHttp: "Grok Bot 未能刷新（HTTP {status}）。"
     pageInjection: 无法从已打开的 cursor.com 页面读取 Grok Bot。
     pageNetwork: 已打开的 cursor.com 页面上的 Grok Bot 请求没有完成。

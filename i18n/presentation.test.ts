@@ -111,6 +111,12 @@ describe("locale-neutral presentation", () => {
     expect(
       localizeGroupDescription("cursor", {
         id: "usage",
+        description: "cursor:permission",
+      }),
+    ).toBe("Cursor page access is missing. Reconnect Cursor to update Grok Bot.");
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
         description: "cursor:carried:http:403",
       }),
     ).toBe(

@@ -432,6 +432,7 @@ metrics:
     carried: "Included usage is from an earlier page refresh. {reason}"
     scheduled: Included usage updates on Connect or Refresh with an open cursor.com tab.
     noTab: Open cursor.com, then Refresh, to update included usage.
+    permission: Cursor page access is missing. Reconnect Cursor to update included usage.
     http: "Included usage could not be refreshed (HTTP {status})."
     injection: Could not read included usage from the open cursor.com page.
     network: The included-usage request from the open cursor.com page did not complete.
@@ -470,6 +471,7 @@ metrics:
     pageCarried: "Some Cursor page values are from an earlier refresh. {reason}"
     pageScheduled: Grok Bot updates on Connect or Refresh with an open cursor.com tab.
     pageNoTab: Open cursor.com, then Refresh, to update Grok Bot.
+    pagePermission: Cursor page access is missing. Reconnect Cursor to update Grok Bot.
     pageHttp: "Grok Bot could not be refreshed (HTTP {status})."
     pageInjection: Could not read Grok Bot from the open cursor.com page.
     pageNetwork: The Grok Bot request from the open cursor.com page did not complete.

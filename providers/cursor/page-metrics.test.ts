@@ -183,6 +183,12 @@ describe("Cursor page-metric carry-forward", () => {
       "cursor:carried:no-tab",
     ],
     [
+      "missing page permission",
+      { kind: "permission_missing" as const },
+      "cursor:permission",
+      "cursor:carried:permission",
+    ],
+    [
       "injection failure",
       { kind: "injection_failed" as const },
       "cursor:injection",

@@ -10,6 +10,7 @@ export type CursorDashboardEndpointResult =
 
 export type CursorDashboardProbe =
   | { readonly kind: "no_tab" }
+  | { readonly kind: "permission_missing" }
   | { readonly kind: "injection_failed" }
   | {
       readonly kind: "read";
@@ -27,6 +28,7 @@ interface CursorScriptResult {
 }
 
 interface CursorDashboardBridge {
+  hasPagePermission(): Promise<boolean>;
   queryTabs(details: { url: string }): Promise<CursorTab[]>;
   executeScript(details: {
     target: { tabId: number };
@@ -111,10 +113,12 @@ export function dashboardJsonFromProbe(
 }
 
 export async function findCursorDashboardJson({
+  hasPagePermission,
   queryTabs,
   executeScript,
 }: CursorDashboardBridge): Promise<CursorDashboardProbe> {
   try {
+    if (!(await hasPagePermission())) return { kind: "permission_missing" };
     const tabs = await queryTabs({ url: "https://cursor.com/*" });
     const tabId = tabs.find((tab) => tab.id !== undefined)?.id;
     if (tabId === undefined) return { kind: "no_tab" };

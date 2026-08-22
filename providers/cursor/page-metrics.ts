@@ -25,7 +25,8 @@ export type CursorPageReason =
   | "network"
   | `http:${number}`
   | "mismatch"
-  | "unavailable";
+  | "unavailable"
+  | "permission";
 
 export type CursorGrokClassification =
   | "absent"
@@ -84,6 +85,7 @@ function grokReasonFromProbe(
 ): CursorPageReason {
   if (probe.kind === "skipped") return "scheduled";
   if (probe.kind === "no_tab") return "no-tab";
+  if (probe.kind === "permission_missing") return "permission";
   if (probe.kind === "injection_failed") return "injection";
   if (!probe.grok.ok) {
     return probe.grok.status === undefined
@@ -130,6 +132,7 @@ function aggregatedReasonFromProbe(
 ): CursorPageReason {
   if (probe.kind === "skipped") return "scheduled";
   if (probe.kind === "no_tab") return "no-tab";
+  if (probe.kind === "permission_missing") return "permission";
   if (probe.kind === "injection_failed") return "injection";
   if (!probe.aggregated.ok) {
     return probe.aggregated.status === undefined

@@ -88,6 +88,18 @@ export const cursorPackage = createCursorPackage({
   collect: collectCursor,
   findDashboardJson: () =>
     findCursorDashboardJson({
+      hasPagePermission: async () => {
+        try {
+          return Boolean(
+            await browser.permissions.contains({
+              origins: [...providerDefinitions.cursor.optionalOrigins],
+              permissions: [...providerDefinitions.cursor.optionalPermissions],
+            }),
+          );
+        } catch {
+          return false;
+        }
+      },
       queryTabs: (details) => browser.tabs.query(details),
       executeScript: (details) => browser.scripting.executeScript(details),
     }),
