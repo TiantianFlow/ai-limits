@@ -1,6 +1,9 @@
 import { retainUsageHistory } from "../domain/history";
 import {
+  DETAIL_TABLE_MAX_TABLES,
+  DETAIL_TABLE_ROW_CAP,
   sanitizedFailureMessage,
+  type DetailTable,
   type MetricCycle,
   type MetricHistorySample,
   type MetricSegment,
@@ -233,6 +236,119 @@ function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+const DETAIL_CELL_TYPES = new Set([
+  "text",
+  "tokens",
+  "percent",
+  "money",
+  "timestamp",
+]);
+
+function normalizeDetailTable(value: unknown): DetailTable | undefined {
+  if (
+    !isRecord(value) ||
+    !nonEmptyString(value.id) ||
+    !nonEmptyString(value.labelKey) ||
+    !isFiniteNonNegative(value.observedAt) ||
+    !optionalNonNegative(value.expiresAt) ||
+    (value.omittedRowCount !== undefined &&
+      !(
+        isFiniteNonNegative(value.omittedRowCount) &&
+        Number.isInteger(value.omittedRowCount)
+      )) ||
+    !optionalString(value.description) ||
+    !Array.isArray(value.columns) ||
+    value.columns.length === 0 ||
+    value.columns.length > 6 ||
+    !Array.isArray(value.rows)
+  ) {
+    return undefined;
+  }
+  const columns = value.columns.flatMap((column) => {
+    if (
+      !isRecord(column) ||
+      !nonEmptyString(column.key) ||
+      !nonEmptyString(column.labelKey) ||
+      !DETAIL_CELL_TYPES.has(column.type as string)
+    ) {
+      return [];
+    }
+    return [
+      {
+        key: column.key,
+        labelKey: column.labelKey,
+        type: column.type as DetailTable["columns"][number]["type"],
+      },
+    ];
+  });
+  if (
+    columns.length !== value.columns.length ||
+    new Set(columns.map((column) => column.key)).size !== columns.length
+  ) {
+    return undefined;
+  }
+  const columnKeys = new Set(columns.map((column) => column.key));
+  const normalizedRows = value.rows.flatMap((row) => {
+    if (
+      !isRecord(row) ||
+      !nonEmptyString(row.id) ||
+      !optionalString(row.badgeKey) ||
+      !isRecord(row.cells)
+    ) {
+      return [];
+    }
+    const cells: Record<string, string | number> = {};
+    for (const [key, cell] of Object.entries(row.cells)) {
+      if (!columnKeys.has(key)) return [];
+      if (typeof cell === "number" && Number.isFinite(cell)) {
+        cells[key] = cell;
+        continue;
+      }
+      if (typeof cell === "string" && cell.trim().length > 0 && cell.length <= 128) {
+        cells[key] = cell;
+        continue;
+      }
+      return [];
+    }
+    return [
+      {
+        id: row.id,
+        cells,
+        ...(row.badgeKey === undefined ? {} : { badgeKey: row.badgeKey }),
+      },
+    ];
+  });
+  if (normalizedRows.length !== value.rows.length) return undefined;
+  const omittedFromCap = Math.max(0, normalizedRows.length - DETAIL_TABLE_ROW_CAP);
+  const omittedRowCount =
+    (typeof value.omittedRowCount === "number" ? value.omittedRowCount : 0) +
+    omittedFromCap;
+  return {
+    id: value.id,
+    labelKey: value.labelKey,
+    columns,
+    rows: normalizedRows.slice(0, DETAIL_TABLE_ROW_CAP),
+    observedAt: value.observedAt,
+    ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }),
+    ...(omittedRowCount > 0 ? { omittedRowCount } : {}),
+    ...(value.description === undefined ? {} : { description: value.description }),
+  };
+}
+
+function normalizeDetailTables(value: unknown): DetailTable[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return undefined;
+  if (value.length === 0) return [];
+  const tables = value.slice(0, DETAIL_TABLE_MAX_TABLES).map(normalizeDetailTable);
+  if (
+    tables.some((table) => table === undefined) ||
+    new Set(tables.map((table) => table?.id)).size !== tables.length
+  ) {
+    return undefined;
+  }
+  return tables as DetailTable[];
+}
+
 export function normalizeUsageSnapshot(
   value: unknown,
   providerKind: ProviderKind,
@@ -261,6 +377,8 @@ export function normalizeUsageSnapshot(
     metrics as UsageMetric[],
   );
   if (value.usageGroups !== undefined && usageGroups === undefined) return undefined;
+  const detailTables = normalizeDetailTables(value.detailTables);
+  if (value.detailTables !== undefined && detailTables === undefined) return undefined;
   return {
     providerKind,
     ...(value.accountLabel !== undefined && !looksLikeEmail(value.accountLabel)
@@ -271,6 +389,9 @@ export function normalizeUsageSnapshot(
     fetchedAt: value.fetchedAt,
     metrics: metrics as UsageMetric[],
     ...(usageGroups === undefined ? {} : { usageGroups }),
+    ...(detailTables !== undefined && detailTables.length > 0
+      ? { detailTables }
+      : {}),
   };
 }
 

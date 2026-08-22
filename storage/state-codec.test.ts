@@ -83,6 +83,41 @@ describe("V5 instance state codec", () => {
     ]);
   });
 
+  test("caps persisted detail tables instead of storing an unbounded event list", () => {
+    const instance = newApiInstance("newapi:default", "Relay");
+    instance.snapshot = {
+      ...instance.snapshot!,
+      detailTables: [
+        {
+          id: "included-usage",
+          labelKey: "metrics.detail.includedUsage",
+          observedAt: now - hour,
+          columns: [
+            { key: "model", labelKey: "metrics.detail.model", type: "text" },
+            { key: "tokens", labelKey: "metrics.detail.tokens", type: "tokens" },
+          ],
+          rows: Array.from({ length: 16 }, (_, index) => ({
+            id: `row-${index}`,
+            cells: { model: `m-${index}`, tokens: index },
+          })),
+        },
+      ],
+    };
+
+    const table = normalizeInstanceAppState(
+      {
+        version: 5,
+        preferences: { displayMode: "used", autoRefresh: true },
+        instances: [instance],
+      },
+      now,
+    ).instances[0]?.snapshot?.detailTables?.[0];
+
+    expect(table?.rows).toHaveLength(10);
+    expect(table?.omittedRowCount).toBe(6);
+    expect(table?.observedAt).toBe(now - hour);
+  });
+
   test("preserves optional metric observation times across a reload", () => {
     const instance = newApiInstance("newapi:default", "Relay");
     instance.snapshot = {

@@ -17,6 +17,7 @@ import { InteractionBanner } from "../components/InteractionBanner";
 import { PageHeader } from "../components/PageHeader";
 import type { ProviderCardProps } from "../components/ProviderCard";
 import { ProviderMark } from "../components/ProviderMark";
+import { DetailTables } from "../components/DetailTables";
 import { QuotaBars } from "../components/QuotaBars";
 import { StatusChip } from "../components/StatusChip";
 
@@ -239,6 +240,13 @@ export function ProviderDetailView({
           : (
             <p className="illustrative-note">{provider.emptyDescription}</p>
           )}
+
+        {provider.detailTables?.length ? (
+          <DetailTables
+            tables={provider.detailTables}
+            now={provider.now ?? Date.now()}
+          />
+        ) : null}
 
         {firstWindow ? (
           <button

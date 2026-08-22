@@ -1,6 +1,7 @@
 export interface CursorDashboardJson {
   readonly grok?: unknown;
   readonly credits?: unknown;
+  readonly aggregated?: unknown;
 }
 
 export type CursorDashboardEndpointResult =
@@ -14,6 +15,7 @@ export type CursorDashboardProbe =
       readonly kind: "read";
       readonly grok: CursorDashboardEndpointResult;
       readonly credits: CursorDashboardEndpointResult;
+      readonly aggregated: CursorDashboardEndpointResult;
     };
 
 interface CursorTab {
@@ -57,6 +59,7 @@ export async function readCursorDashboardJsonAtExpectedOrigin(
   | {
       readonly grok: CursorDashboardEndpointResult;
       readonly credits: CursorDashboardEndpointResult;
+      readonly aggregated: CursorDashboardEndpointResult;
     }
   | undefined
 > {
@@ -87,11 +90,12 @@ export async function readCursorDashboardJsonAtExpectedOrigin(
 
   // These POSTs must stay same-origin. A service-worker fetch is rejected
   // with 403 "Invalid origin for state-changing request".
-  const [grok, credits] = await Promise.all([
+  const [grok, credits, aggregated] = await Promise.all([
     readJson("https://cursor.com/api/dashboard/get-sand-usage-status"),
     readJson("https://cursor.com/api/dashboard/get-credit-grants-balance"),
+    readJson("https://cursor.com/api/dashboard/get-aggregated-usage-events"),
   ]);
-  return { grok, credits };
+  return { grok, credits, aggregated };
 }
 
 export function dashboardJsonFromProbe(
@@ -101,6 +105,7 @@ export function dashboardJsonFromProbe(
   return {
     ...(probe.grok.ok ? { grok: probe.grok.value } : {}),
     ...(probe["credits"].ok ? { credits: probe["credits"].value } : {}),
+    ...(probe.aggregated.ok ? { aggregated: probe.aggregated.value } : {}),
   };
 }
 
@@ -124,10 +129,17 @@ export async function findCursorDashboardJson({
     }
     const grok = asEndpointResult((result as { grok?: unknown }).grok);
     const credits = asEndpointResult((result as { credits?: unknown })["credits"]);
-    if (grok === undefined || credits === undefined) {
+    const aggregated = asEndpointResult(
+      (result as { aggregated?: unknown }).aggregated,
+    );
+    if (
+      grok === undefined ||
+      credits === undefined ||
+      aggregated === undefined
+    ) {
       return { kind: "injection_failed" };
     }
-    return { kind: "read", grok, credits };
+    return { kind: "read", grok, credits, aggregated };
   } catch {
     return { kind: "injection_failed" };
   }

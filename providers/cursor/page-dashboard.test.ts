@@ -20,7 +20,8 @@ describe("Cursor page dashboard bridge", () => {
     const fetchPage = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(jsonResponse(grok))
-      .mockResolvedValueOnce(jsonResponse(credits));
+      .mockResolvedValueOnce(jsonResponse(credits))
+      .mockResolvedValueOnce(jsonResponse({ aggregations: [] }));
 
     await expect(
       readCursorDashboardJsonAtExpectedOrigin(
@@ -30,6 +31,7 @@ describe("Cursor page dashboard bridge", () => {
     ).resolves.toEqual({
       grok: { ok: true, value: grok },
       credits: { ok: true, value: credits },
+      aggregated: { ok: true, value: { aggregations: [] } },
     });
 
     const request = {
@@ -52,7 +54,12 @@ describe("Cursor page dashboard bridge", () => {
       "https://cursor.com/api/dashboard/get-credit-grants-balance",
       request,
     );
-    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage).toHaveBeenNthCalledWith(
+      3,
+      "https://cursor.com/api/dashboard/get-aggregated-usage-events",
+      request,
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(3);
   });
 
   test("refuses to read from any non-Cursor origin", async () => {
@@ -72,7 +79,8 @@ describe("Cursor page dashboard bridge", () => {
     const fetchPage = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(new Response("not json", { status: 500 }))
-      .mockResolvedValueOnce(jsonResponse(credits));
+      .mockResolvedValueOnce(jsonResponse(credits))
+      .mockResolvedValueOnce(new Response("not json", { status: 403 }));
 
     await expect(
       readCursorDashboardJsonAtExpectedOrigin(
@@ -82,6 +90,7 @@ describe("Cursor page dashboard bridge", () => {
     ).resolves.toEqual({
       grok: { ok: false, status: 500 },
       credits: { ok: true, value: credits },
+      aggregated: { ok: false, status: 403 },
     });
   });
 
@@ -110,11 +119,12 @@ describe("Cursor page dashboard bridge", () => {
       await expect(result).resolves.toEqual({
         grok: { ok: false },
         credits: { ok: false },
+        aggregated: { ok: false },
       });
-      expect(fetchPage).toHaveBeenCalledTimes(2);
+      expect(fetchPage).toHaveBeenCalledTimes(3);
       expect(
         fetchPage.mock.calls.map(([, init]) => init?.signal?.aborted),
-      ).toEqual([true, true]);
+      ).toEqual([true, true, true]);
     } finally {
       vi.useRealTimers();
     }
@@ -124,6 +134,7 @@ describe("Cursor page dashboard bridge", () => {
     const dashboard = {
       grok: { ok: true as const, value: { usagePercent: 25 } },
       credits: { ok: false as const, status: 401 },
+      aggregated: { ok: false as const, status: 403 },
     };
     const queryTabs = vi.fn().mockResolvedValue([{ id: undefined }, { id: 17 }]);
     const executeScript = vi.fn().mockResolvedValue([{ result: dashboard }]);
@@ -170,8 +181,12 @@ describe("Cursor page dashboard bridge", () => {
         kind: "read",
         grok: { ok: true, value: { usagePercent: 92 } },
         credits: { ok: false, status: 403 },
+        aggregated: { ok: true, value: { aggregations: [] } },
       }),
-    ).toEqual({ grok: { usagePercent: 92 } });
+    ).toEqual({
+      grok: { usagePercent: 92 },
+      aggregated: { aggregations: [] },
+    });
     expect(dashboardJsonFromProbe({ kind: "no_tab" })).toEqual({});
   });
 });

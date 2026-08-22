@@ -3,6 +3,7 @@ import React from "react";
 import { l10n } from "../../../i18n/index";
 import { localizeOperation } from "../../../i18n/presentation";
 import type {
+  DetailTable,
   DisplayMode,
   PaceKind,
   ProviderInstanceView,
@@ -69,6 +70,8 @@ export interface ProviderCardProps {
   };
   emptyDescription: string;
   extraDisclosure?: string;
+  detailTables?: DetailTable[];
+  now?: number;
   action?: {
     label: string;
     accessibleLabel: string;

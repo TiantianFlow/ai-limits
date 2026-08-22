@@ -127,6 +127,7 @@ describe("Cursor provider package", () => {
       kind: "read",
       grok: { ok: true, value: dashboard.grok },
       credits: { ok: true, value: dashboard.credits },
+      aggregated: { ok: false },
     };
     const collect = vi.fn<CursorCollect>().mockResolvedValue(baseCollection());
     const providerPackage = createCursorPackage({

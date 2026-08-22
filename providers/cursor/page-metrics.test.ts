@@ -173,6 +173,7 @@ describe("Cursor page-metric carry-forward", () => {
         kind: "read" as const,
         grok: { ok: false as const, status: 403 },
         credits: { ok: false as const },
+        aggregated: { ok: false as const, status: 403 },
       },
       "cursor:http:403",
       "cursor:carried:http:403",
@@ -183,6 +184,7 @@ describe("Cursor page-metric carry-forward", () => {
         kind: "read" as const,
         grok: { ok: false as const },
         credits: { ok: false as const },
+        aggregated: { ok: false as const },
       },
       "cursor:network",
       "cursor:carried:network",
@@ -193,6 +195,7 @@ describe("Cursor page-metric carry-forward", () => {
         kind: "read" as const,
         grok: { ok: true as const, value: { hasAvailableUsage: "yes" } },
         credits: { ok: false as const },
+        aggregated: { ok: false as const },
       },
       "cursor:mismatch",
       "cursor:carried:mismatch",
@@ -228,6 +231,7 @@ describe("Cursor page-metric carry-forward", () => {
         },
       },
       credits: { ok: false as const },
+      aggregated: { ok: false as const },
     };
 
     const result = applyCursorPageMetrics(baseResult(), previous(), probe, NOW);
@@ -276,6 +280,7 @@ describe("Cursor page-metric carry-forward", () => {
           },
         },
         credits: { ok: false },
+        aggregated: { ok: false },
       },
       NOW,
     );
@@ -294,6 +299,84 @@ describe("Cursor page-metric carry-forward", () => {
     if (result.ok) {
       expect(result.snapshot.usageGroups?.[0]?.description).toBeUndefined();
     }
+  });
+
+  test("carries last-good included usage across a scheduled refresh", () => {
+    const prior = {
+      ...previous(),
+      detailTables: [
+        {
+          id: "cursor-models",
+          labelKey: "metrics.cursor.cursorModels",
+          observedAt: NOW - 20 * 60 * 1_000,
+          expiresAt: NOW + 1_000,
+          columns: [
+            { key: "model", labelKey: "metrics.detail.model", type: "text" as const },
+            { key: "tokens", labelKey: "metrics.detail.tokens", type: "tokens" as const },
+            { key: "percent", labelKey: "metrics.detail.percent", type: "percent" as const },
+          ],
+          rows: [
+            { id: "composer", cells: { model: "composer-1.5", tokens: 9, percent: 3 } },
+          ],
+        },
+      ],
+    };
+    const result = applyCursorPageMetrics(
+      baseResult(),
+      prior,
+      { kind: "skipped" },
+      NOW,
+    );
+    expect(result).toMatchObject({
+      snapshot: {
+        detailTables: [
+          expect.objectContaining({
+            id: "cursor-models",
+            observedAt: NOW - 20 * 60 * 1_000,
+            description: "cursor-detail:carried:scheduled",
+            rows: [
+              { id: "composer", cells: { model: "composer-1.5", tokens: 9, percent: 3 } },
+            ],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("expires included usage with the monthly cycle instead of showing a stale month", () => {
+    const prior = {
+      ...previous(),
+      detailTables: [
+        {
+          id: "cursor-models",
+          labelKey: "metrics.cursor.cursorModels",
+          observedAt: NOW - 20 * 60 * 1_000,
+          expiresAt: NOW - 1,
+          columns: [
+            { key: "model", labelKey: "metrics.detail.model", type: "text" as const },
+            { key: "tokens", labelKey: "metrics.detail.tokens", type: "tokens" as const },
+          ],
+          rows: [{ id: "old", cells: { model: "old-model", tokens: 1 } }],
+        },
+      ],
+    };
+    const result = applyCursorPageMetrics(
+      baseResult(),
+      prior,
+      { kind: "skipped" },
+      NOW,
+    );
+    expect(result).toMatchObject({
+      snapshot: {
+        detailTables: [
+          expect.objectContaining({
+            id: "included-usage",
+            rows: [],
+            description: "cursor-detail:scheduled",
+          }),
+        ],
+      },
+    });
   });
 
   test("builds locale-neutral description tokens", () => {

@@ -1,4 +1,6 @@
 import {
+  DETAIL_TABLE_MAX_TABLES,
+  DETAIL_TABLE_ROW_CAP,
   isProviderInstanceId,
   type ProviderInstanceConfig,
   type ProviderInstanceId,
@@ -6,6 +8,10 @@ import {
 export type {
   BalanceMetric,
   CounterMetric,
+  DetailCellType,
+  DetailColumn,
+  DetailRow,
+  DetailTable,
   DisplayMode,
   FailureCategory,
   MetricCycle,
@@ -21,6 +27,7 @@ export type {
   UsageMetric,
   UsageSnapshot,
 } from "./model";
+export { DETAIL_TABLE_MAX_TABLES, DETAIL_TABLE_ROW_CAP } from "./model";
 export { sanitizedFailureMessage } from "./model";
 export { quotaHistorySegments } from "./history";
 export type { MetricHistoryPoint } from "./history";
@@ -28,6 +35,7 @@ export { displayRatio, elapsedRatio, paceStatus } from "./quota";
 export type { PaceKind, PaceStatus } from "./quota";
 import type {
   DeferredReason,
+  DetailTable,
   DisplayMode,
   FailureCategory,
   FailureGuidance,
@@ -424,12 +432,108 @@ function isUsageGroup(value: unknown): value is UsageGroup {
   );
 }
 
+const DETAIL_CELL_TYPES = new Set([
+  "text",
+  "tokens",
+  "percent",
+  "money",
+  "timestamp",
+]);
+
+function isDetailColumn(value: unknown): boolean {
+  return (
+    hasExactKeys(value, ["key", "labelKey", "type"]) &&
+    isSafeText(value.key, 64) &&
+    isSafeText(value.labelKey, 128) &&
+    DETAIL_CELL_TYPES.has(value.type as string)
+  );
+}
+
+function isDetailRow(value: unknown, columnKeys: ReadonlySet<string>): boolean {
+  if (
+    !hasExactKeys(value, ["id", "cells"], ["badgeKey"]) ||
+    !isSafeText(value.id, 128) ||
+    (value.badgeKey !== undefined && !isSafeText(value.badgeKey, 128)) ||
+    !isRecord(value.cells)
+  ) {
+    return false;
+  }
+  return Object.entries(value.cells).every(
+    ([key, cell]) =>
+      columnKeys.has(key) &&
+      (typeof cell === "number"
+        ? Number.isFinite(cell)
+        : isSafeText(cell, 128)),
+  );
+}
+
+function isDetailTable(value: unknown): value is DetailTable {
+  if (
+    !hasExactKeys(
+      value,
+      ["id", "labelKey", "columns", "rows", "observedAt"],
+      ["expiresAt", "omittedRowCount", "description"],
+    ) ||
+    !isSafeText(value.id, 128) ||
+    !isSafeText(value.labelKey, 128) ||
+    !isFiniteNumber(value.observedAt) ||
+    (value.observedAt as number) < 0 ||
+    (value.expiresAt !== undefined &&
+      !(isFiniteNumber(value.expiresAt) && (value.expiresAt as number) >= 0)) ||
+    (value.omittedRowCount !== undefined &&
+      !(
+        isFiniteNumber(value.omittedRowCount) &&
+        Number.isInteger(value.omittedRowCount) &&
+        (value.omittedRowCount as number) >= 0
+      )) ||
+    (value.description !== undefined && !isSafeText(value.description, 1_024)) ||
+    !Array.isArray(value.columns) ||
+    value.columns.length === 0 ||
+    value.columns.length > 6 ||
+    !value.columns.every(isDetailColumn) ||
+    !Array.isArray(value.rows) ||
+    value.rows.length > DETAIL_TABLE_ROW_CAP
+  ) {
+    return false;
+  }
+  const columnKeys = new Set(
+    value.columns.map((column) => (column as { key: string }).key),
+  );
+  return (
+    columnKeys.size === value.columns.length &&
+    value.rows.every((row) => isDetailRow(row, columnKeys))
+  );
+}
+
+function copyDetailTable(table: DetailTable): DetailTable {
+  return {
+    id: table.id,
+    labelKey: table.labelKey,
+    columns: table.columns.map((column) => ({
+      key: column.key,
+      labelKey: column.labelKey,
+      type: column.type,
+    })),
+    rows: table.rows.map((row) => ({
+      id: row.id,
+      cells: { ...row.cells },
+      ...(row.badgeKey === undefined ? {} : { badgeKey: row.badgeKey }),
+    })),
+    observedAt: table.observedAt,
+    ...(table.expiresAt === undefined ? {} : { expiresAt: table.expiresAt }),
+    ...(table.omittedRowCount === undefined
+      ? {}
+      : { omittedRowCount: table.omittedRowCount }),
+    ...(table.description === undefined ? {} : { description: table.description }),
+  };
+}
+
 function isUsageSnapshot(value: unknown): value is UsageSnapshot {
   return (
     hasExactKeys(
       value,
       ["providerKind", "source", "fetchedAt", "metrics"],
-      ["accountLabel", "planLabel", "usageGroups"],
+      ["accountLabel", "planLabel", "usageGroups", "detailTables"],
     ) &&
     isProviderKind(value.providerKind) &&
     (value.accountLabel === undefined || isSafeText(value.accountLabel)) &&
@@ -442,7 +546,11 @@ function isUsageSnapshot(value: unknown): value is UsageSnapshot {
     Array.isArray(value.metrics) &&
     value.metrics.every(isUsageMetric) &&
     (value.usageGroups === undefined ||
-      (Array.isArray(value.usageGroups) && value.usageGroups.every(isUsageGroup)))
+      (Array.isArray(value.usageGroups) && value.usageGroups.every(isUsageGroup))) &&
+    (value.detailTables === undefined ||
+      (Array.isArray(value.detailTables) &&
+        value.detailTables.length <= DETAIL_TABLE_MAX_TABLES &&
+        value.detailTables.every(isDetailTable)))
   );
 }
 
@@ -468,6 +576,9 @@ function copySnapshot(snapshot: UsageSnapshot): UsageSnapshot {
             metricIds: [...group.metricIds],
           })),
         }),
+    ...(snapshot.detailTables === undefined
+      ? {}
+      : { detailTables: snapshot.detailTables.map(copyDetailTable) }),
   };
 }
 

@@ -408,6 +408,28 @@ metrics:
     usagePool: Usage pool
     rateLimits: Chat rate limits
   grokPoolUnavailable: Usage-pool details are unavailable
+  detail:
+    includedUsage: Included usage
+    model: Model
+    tokens: Tokens
+    percent: Usage
+    event: Event
+    time: Time
+    amount: Amount
+    captured: "Captured {age}"
+    omittedRows:
+      zero: "{count} more rows not shown"
+      one: "{count} more row not shown"
+      two: "{count} more rows not shown"
+      few: "{count} more rows not shown"
+      many: "{count} more rows not shown"
+      other: "{count} more rows not shown"
+    carried: "Included usage is from an earlier page refresh. {reason}"
+    scheduled: Included usage updates on Connect or Refresh with an open cursor.com tab.
+    noTab: Included usage needs an open cursor.com tab on Connect or Refresh.
+    http: "Included usage could not be refreshed (HTTP {status})."
+    network: Included usage could not be refreshed.
+    mismatch: Cursor's included-usage response could not be read.
   units:
     credits: credits
     voices: voices

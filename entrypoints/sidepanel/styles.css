@@ -1878,6 +1878,77 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-size: 10px;
 }
 
+.detail-table {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.detail-table__heading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.detail-table__heading h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.detail-table__heading > span,
+.detail-table > p {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.detail-table__heading > span {
+  margin-left: auto;
+}
+
+.detail-table > p {
+  margin: 7px 0 0;
+  line-height: 1.5;
+}
+
+.detail-table__scroll {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.detail-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.detail-table th,
+.detail-table td {
+  padding: 5px 6px;
+  text-align: right;
+  vertical-align: top;
+}
+
+.detail-table th:first-child,
+.detail-table td:first-child,
+.detail-table td.detail-table__text {
+  text-align: left;
+}
+
+.detail-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.detail-table td.detail-table__text {
+  overflow-wrap: anywhere;
+}
+
 .detail-history-action {
   display: inline-flex;
   min-height: 44px;

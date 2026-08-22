@@ -375,6 +375,8 @@ export function providerView(
       provider.access === "required"
         ? localizeManualRefreshDisclosure(provider.providerKind)
         : undefined,
+    detailTables: snapshot?.detailTables,
+    now,
   };
 }
 

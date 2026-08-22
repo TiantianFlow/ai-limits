@@ -130,6 +130,34 @@ export interface BalanceMetric extends MetricBase {
 
 export type UsageMetric = QuotaMetric | CounterMetric | BalanceMetric;
 
+export const DETAIL_TABLE_ROW_CAP = 10;
+export const DETAIL_TABLE_MAX_TABLES = 4;
+
+export type DetailCellType = "text" | "tokens" | "percent" | "money" | "timestamp";
+
+export interface DetailColumn {
+  key: string;
+  labelKey: string;
+  type: DetailCellType;
+}
+
+export interface DetailRow {
+  id: string;
+  cells: Record<string, string | number>;
+  badgeKey?: string;
+}
+
+export interface DetailTable {
+  id: string;
+  labelKey: string;
+  columns: DetailColumn[];
+  rows: DetailRow[];
+  observedAt: number;
+  expiresAt?: number;
+  omittedRowCount?: number;
+  description?: string;
+}
+
 export interface UsageSnapshot {
   providerKind: ProviderKind;
   accountLabel?: string;
@@ -138,6 +166,7 @@ export interface UsageSnapshot {
   fetchedAt: number;
   metrics: UsageMetric[];
   usageGroups?: UsageGroup[];
+  detailTables?: DetailTable[];
 }
 
 export type MetricHistorySample =

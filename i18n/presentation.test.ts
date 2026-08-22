@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { QuotaMetric, UsageSnapshot } from "../domain/model";
 import {
+  formatDetailCell,
+  localizeDetailDescription,
   localizeGroupDescription,
   localizeGroupLabel,
   localizeMetricLabel,
@@ -133,6 +135,23 @@ describe("locale-neutral presentation", () => {
         description: "cursor:no-tab",
       }),
     ).toBe("连接或刷新时需要已打开的 cursor.com 标签页才能读取 Grok Bot。");
+  });
+
+  it("formats detail cells by declared type", () => {
+    expect(formatDetailCell("text", "composer-1.5")).toBe("composer-1.5");
+    expect(formatDetailCell("tokens", 12000)).toBe("12,000");
+    expect(formatDetailCell("percent", 40)).toBe("40%");
+    expect(formatDetailCell("money", 1.5)).toBe("$1.50");
+  });
+
+  it("localizes included-usage tokens without showing the raw token", () => {
+    expect(localizeDetailDescription("cursor-detail:mismatch")).toBe(
+      "Cursor's included-usage response could not be read.",
+    );
+    expect(localizeDetailDescription("cursor-detail:carried:http:403")).toBe(
+      "Included usage is from an earlier page refresh. Included usage could not be refreshed (HTTP 403).",
+    );
+    expect(localizeDetailDescription("cursor:no-tab")).toBeUndefined();
   });
 
   it("never renders raw Grok diagnostics as visible copy", async () => {

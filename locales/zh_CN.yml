@@ -408,6 +408,28 @@ metrics:
     usagePool: 用量池
     rateLimits: 对话速率限制
   grokPoolUnavailable: 用量池详情不可用
+  detail:
+    includedUsage: 包含的用量
+    model: 模型
+    tokens: Token
+    percent: 用量
+    event: 事件
+    time: 时间
+    amount: 金额
+    captured: "采集于 {age}"
+    omittedRows:
+      zero: "另有 {count} 行未显示"
+      one: "另有 {count} 行未显示"
+      two: "另有 {count} 行未显示"
+      few: "另有 {count} 行未显示"
+      many: "另有 {count} 行未显示"
+      other: "另有 {count} 行未显示"
+    carried: "包含的用量来自更早的页面刷新。{reason}"
+    scheduled: 在已打开 cursor.com 标签页时连接或刷新，即可更新包含的用量。
+    noTab: 连接或刷新时需要已打开的 cursor.com 标签页才能读取包含的用量。
+    http: "包含的用量未能刷新（HTTP {status}）。"
+    network: 包含的用量未能刷新。
+    mismatch: 无法读取 Cursor 的包含用量响应。
   units:
     credits: 额度
     voices: 语音

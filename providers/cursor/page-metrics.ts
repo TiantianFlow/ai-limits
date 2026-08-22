@@ -1,9 +1,14 @@
-import type { UsageMetric, UsageSnapshot } from "../../domain/model";
+import type {
+  DetailTable,
+  UsageMetric,
+  UsageSnapshot,
+} from "../../domain/model";
 import type { CollectionResult } from "../types";
 import {
   normalizeExtraUsageCredits,
   normalizeGrokStatus,
 } from "./adapter";
+import { CURSOR_DETAIL_COLUMNS, parseCursorAggregatedUsage } from "./detail";
 import type { CursorDashboardProbe } from "./page-dashboard";
 import {
   cursorCreditGrantsBalanceSchema,
@@ -67,6 +72,13 @@ export function cursorPageDescriptionToken(
   return carried ? `cursor:carried:${reason}` : `cursor:${reason}`;
 }
 
+export function cursorDetailDescriptionToken(
+  carried: boolean,
+  reason: CursorPageReason,
+): string {
+  return carried ? `cursor-detail:carried:${reason}` : `cursor-detail:${reason}`;
+}
+
 function grokReasonFromProbe(
   probe: CursorDashboardProbe | { kind: "skipped" },
 ): CursorPageReason {
@@ -111,6 +123,84 @@ function carryGrok(
   const metric = previousPageMetric(previous, GROK_BOT_METRIC_ID);
   if (metric === undefined || !grokStillValid(metric, now)) return undefined;
   return stampObservedAt(metric, previous?.fetchedAt ?? now);
+}
+
+function aggregatedReasonFromProbe(
+  probe: CursorDashboardProbe | { kind: "skipped" },
+): CursorPageReason {
+  if (probe.kind === "skipped") return "scheduled";
+  if (probe.kind === "no_tab") return "no-tab";
+  if (probe.kind === "injection_failed") return "injection";
+  if (!probe.aggregated.ok) {
+    return probe.aggregated.status === undefined
+      ? "network"
+      : `http:${probe.aggregated.status}`;
+  }
+  return "mismatch";
+}
+
+function monthlyExpiresAt(snapshot: UsageSnapshot): number | undefined {
+  return snapshot.metrics.find(
+    (metric) =>
+      metric.id === "cursor-models-monthly" ||
+      metric.id === "other-models-monthly" ||
+      metric.id === "monthly",
+  )?.cycle?.resetsAt;
+}
+
+function tablesStillValid(
+  tables: readonly DetailTable[],
+  now: number,
+): boolean {
+  return tables.every(
+    (table) => table.expiresAt === undefined || now < table.expiresAt,
+  );
+}
+
+function placeholderDetailTable(
+  reason: CursorPageReason,
+  observedAt: number,
+): DetailTable {
+  return {
+    id: "included-usage",
+    labelKey: "metrics.detail.includedUsage",
+    columns: [...CURSOR_DETAIL_COLUMNS],
+    rows: [],
+    observedAt,
+    description: cursorDetailDescriptionToken(false, reason),
+  };
+}
+
+function applyDetailTables(
+  snapshot: UsageSnapshot,
+  previous: UsageSnapshot | undefined,
+  probe: CursorDashboardProbe | { kind: "skipped" },
+  now: number,
+): DetailTable[] {
+  const reason = aggregatedReasonFromProbe(probe);
+  const expiresAt = monthlyExpiresAt(snapshot);
+  if (probe.kind === "read" && probe.aggregated.ok) {
+    const parsed = parseCursorAggregatedUsage(
+      probe.aggregated.value,
+      now,
+      expiresAt,
+    );
+    if (parsed !== undefined) return parsed;
+  }
+  const previousTables = previous?.detailTables;
+  if (
+    previousTables !== undefined &&
+    previousTables.some((table) => table.rows.length > 0) &&
+    tablesStillValid(previousTables, now)
+  ) {
+    return previousTables.map((table, index) => ({
+      ...table,
+      ...(index === 0
+        ? { description: cursorDetailDescriptionToken(true, reason) }
+        : {}),
+    }));
+  }
+  return [placeholderDetailTable(reason, now)];
 }
 
 function carryCredits(
@@ -174,19 +264,23 @@ export function applyCursorPageMetrics(
         ? undefined
         : cursorPageDescriptionToken(carried, reason);
 
+  const snapshot = {
+    ...result.snapshot,
+    metrics,
+    usageGroups: [
+      {
+        id: "usage",
+        label: result.snapshot.usageGroups?.[0]?.label ?? "Usage",
+        ...(description === undefined ? {} : { description }),
+        metricIds: metrics.map((metric) => metric.id),
+      },
+    ],
+  };
   return {
     ok: true,
     snapshot: {
-      ...result.snapshot,
-      metrics,
-      usageGroups: [
-        {
-          id: "usage",
-          label: result.snapshot.usageGroups?.[0]?.label ?? "Usage",
-          ...(description === undefined ? {} : { description }),
-          metricIds: metrics.map((metric) => metric.id),
-        },
-      ],
+      ...snapshot,
+      detailTables: applyDetailTables(snapshot, previous, probe, now),
     },
   };
 }

@@ -1,10 +1,11 @@
 import type {
+  DetailCellType,
   DisplayMode,
   FailureCategory,
   ProviderKind,
   ProviderOperation,
 } from "../domain/public-protocol";
-import { formatNumber } from "./format";
+import { formatCurrency, formatDateTime, formatNumber, formatPercent } from "./format";
 import { l10n } from "./index";
 
 const translate = l10n.t as (
@@ -315,6 +316,54 @@ export function localizeGroupDescription(
     return localizeCursorUsageDescription(group.description);
   }
   return group.description;
+}
+
+export function localizeDetailDescription(
+  description: string | undefined,
+): string | undefined {
+  if (
+    description === undefined ||
+    !description.startsWith("cursor-detail:")
+  ) {
+    return undefined;
+  }
+  const carried = description.startsWith("cursor-detail:carried:");
+  const reasonToken = carried
+    ? description.slice("cursor-detail:carried:".length)
+    : description.slice("cursor-detail:".length);
+  const http = reasonToken.match(/^http:(\d{3})$/);
+  const reason = http
+    ? i18nNamed("metrics.detail.http", { status: http[1]! })
+    : reasonToken === "scheduled"
+      ? translate("metrics.detail.scheduled")
+      : reasonToken === "no-tab"
+        ? translate("metrics.detail.noTab")
+        : reasonToken === "injection" || reasonToken === "network"
+          ? translate("metrics.detail.network")
+          : reasonToken === "mismatch"
+            ? translate("metrics.detail.mismatch")
+            : undefined;
+  if (reason === undefined) return undefined;
+  return carried ? i18nNamed("metrics.detail.carried", { reason }) : reason;
+}
+
+export function formatDetailCell(
+  type: DetailCellType,
+  value: string | number,
+): string {
+  if (type === "text" || typeof value !== "number" || !Number.isFinite(value)) {
+    return String(value);
+  }
+  if (type === "tokens") {
+    return formatNumber(value, { maximumFractionDigits: 0 });
+  }
+  if (type === "percent") {
+    return `${formatPercent(value)}%`;
+  }
+  if (type === "money") {
+    return formatCurrency(value, "USD");
+  }
+  return formatDateTime(value);
 }
 
 export function localizeSegmentLabel(
