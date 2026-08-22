@@ -439,6 +439,13 @@ metrics:
     grokBot: Grok Bot
     onDemandSpend: On-demand spend
     extraUsageCredits: Extra usage credits
+    pageCarried: "Some Cursor page values are from an earlier refresh. {reason}"
+    pageScheduled: Grok Bot updates on Connect or Refresh with an open cursor.com tab.
+    pageNoTab: Grok Bot needs an open cursor.com tab on Connect or Refresh.
+    pageHttp: "Grok Bot could not be refreshed (HTTP {status})."
+    pageNetwork: Grok Bot could not be refreshed.
+    pageMismatch: Cursor's Grok Bot response could not be read.
+    pageUnavailable: Grok Bot is not available on this account.
   elevenlabs:
     monthlyCredits: Monthly credits
     voiceSlots: Voice slots

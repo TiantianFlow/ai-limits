@@ -47,23 +47,25 @@ However, manual refresh bypasses scheduled backoff, while automatic refresh
 respects it. Kimi manual refresh may additionally perform interactive session
 recovery. Cursor manual refresh may additionally request Grok Bot and
 extra-credit JSON through an already-open Cursor page; automatic refresh never
-injects into a page. A manual success therefore cannot guarantee every later
-scheduled refresh contains the same optional metrics.
+injects into a page. Scheduled refresh keeps last-good page values until Grok
+Bot's weekly reset and explains when they could not be refreshed.
 
 Kimi has an additional limitation described below.
 
 ## Why can Cursor Grok Bot or extra credits appear only after manual refresh?
 
 Cursor's base monthly and on-demand usage refreshes in the background. Its
-Grok Bot and extra-credit dashboard endpoints require a same-origin page
-request, so AI Limits tries them only during Connect or an explicit manual
-Refresh and only when a `cursor.com` tab is already open. The extension runs a
-bundled exact-origin function that sends two fixed read-only dashboard requests
-and returns their JSON for schema validation in the extension. It does not
-inspect rendered content, browser storage, or cookie values directly; Chrome
-attaches the signed-in Cursor cookies to those fixed same-origin requests. It
-never creates or activates a Cursor tab, and scheduled refresh never injects
-into a Cursor page.
+Grok Bot and extra-credit dashboard endpoints reject cross-origin POSTs
+(`Invalid origin for state-changing request`), so AI Limits reads them only
+during Connect or an explicit manual Refresh and only when a `cursor.com` tab
+is already open. The extension runs a bundled exact-origin function that sends
+two fixed read-only dashboard requests and returns their JSON for schema
+validation in the extension. It does not inspect rendered content, browser
+storage, or cookie values directly; Chrome attaches the signed-in Cursor
+cookies to those fixed same-origin requests. It never creates or activates a
+Cursor tab, and scheduled refresh never injects into a Cursor page. Last-good
+Grok Bot and extra-credit values stay on the card until Grok Bot's weekly
+reset; the card says why they could not be refreshed.
 
 ## Why doesn't Kimi automatic refresh always work, and why can manual refresh open a background tab?
 

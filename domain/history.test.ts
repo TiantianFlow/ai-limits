@@ -76,6 +76,42 @@ describe("quota history", () => {
     );
   });
 
+  test("does not restamp carried metrics as a new history observation", () => {
+    const snapshot: UsageSnapshot = {
+      providerKind: "cursor",
+      source: "web-session",
+      fetchedAt: NOW,
+      metrics: [
+        {
+          type: "quota",
+          id: "cursor-models-monthly",
+          label: "Cursor models",
+          scope: "model",
+          usedRatio: 0.17,
+        },
+        {
+          type: "quota",
+          id: "grok-bot-weekly",
+          label: "Grok Bot",
+          scope: "feature",
+          usedRatio: 0.92,
+          observedAt: NOW - HOUR,
+        },
+      ],
+    };
+
+    expect(observationFromUsage(snapshot)).toEqual({
+      observedAt: NOW,
+      metrics: [
+        {
+          metricId: "cursor-models-monthly",
+          type: "quota",
+          usedRatio: 0.17,
+        },
+      ],
+    });
+  });
+
   test("retains typed metric observations with the established raw, compacted, and capped policy", () => {
     const typedSnapshot: UsageSnapshot = {
       providerKind: "chatgpt",

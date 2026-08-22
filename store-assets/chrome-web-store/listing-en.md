@@ -251,10 +251,11 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    **Connect** on Cursor, approve the Cursor origin plus `scripting`, and confirm
    provider-reported monthly, Grok Bot, on-demand, and extra-credit data may
    appear. Use the card's **Refresh** action once. Confirm no Cursor tab is
-   created or activated. Then close all Cursor tabs and refresh again: base
-   monthly/on-demand usage should remain available while page-only Grok Bot and
-   extra-credit data are omitted. Scheduled refresh must not inspect or inject
-    into a Cursor page.
+    created or activated. Then close all Cursor tabs and refresh again: base
+    monthly/on-demand usage should remain available. Previously collected Grok
+    Bot and extra-credit values should remain visible as earlier page values
+    until Grok Bot's weekly reset, and the card should explain why they were not
+    refreshed. Scheduled refresh must not inspect or inject into a Cursor page.
 6. **Grok:** sign in at `grok.com`, click **Connect** on Grok, approve only the
    Grok origin, and confirm a SuperGrok-family or Free plan plus the reported
    query window appears. Use the card's **Refresh** action once. No extra

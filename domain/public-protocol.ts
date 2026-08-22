@@ -273,6 +273,10 @@ function isOptionalFiniteNumber(value: unknown): boolean {
   return value === undefined || isFiniteNumber(value);
 }
 
+function isOptionalNonNegative(value: unknown): boolean {
+  return value === undefined || (isFiniteNumber(value) && (value as number) >= 0);
+}
+
 function isMetricCycle(value: unknown): value is MetricCycle {
   return (
     hasExactKeys(value, [], ["cadence", "startedAt", "resetsAt", "durationMs"]) &&
@@ -321,11 +325,12 @@ function isUsageMetric(value: unknown): value is UsageMetric {
       hasExactKeys(
         value,
         ["type", "id", "label", "scope", "usedRatio"],
-        ["cycle", "used", "limit", "unit", "segments"],
+        ["cycle", "used", "limit", "unit", "segments", "observedAt"],
       ) &&
       isFiniteNumber(value.usedRatio) &&
       isOptionalFiniteNumber(value.used) &&
       isOptionalFiniteNumber(value.limit) &&
+      isOptionalNonNegative(value.observedAt) &&
       (value.unit === undefined || isSafeText(value.unit, 128)) &&
       (value.segments === undefined ||
         (Array.isArray(value.segments) && value.segments.every(isMetricSegment)))
@@ -336,12 +341,13 @@ function isUsageMetric(value: unknown): value is UsageMetric {
       hasExactKeys(
         value,
         ["type", "id", "label", "scope", "semantic", "value", "unit"],
-        ["cycle", "limit"],
+        ["cycle", "limit", "observedAt"],
       ) &&
       (value.semantic === "consumed" || value.semantic === "spent") &&
       isFiniteNumber(value.value) &&
       isSafeText(value.unit, 128) &&
-      isOptionalFiniteNumber(value.limit)
+      isOptionalFiniteNumber(value.limit) &&
+      isOptionalNonNegative(value.observedAt)
     );
   }
   return (
@@ -349,11 +355,12 @@ function isUsageMetric(value: unknown): value is UsageMetric {
     hasExactKeys(
       value,
       ["type", "id", "label", "scope", "value", "unit"],
-      ["cycle", "initialLimit"],
+      ["cycle", "initialLimit", "observedAt"],
     ) &&
     isFiniteNumber(value.value) &&
     isSafeText(value.unit, 128) &&
-    isOptionalFiniteNumber(value.initialLimit)
+    isOptionalFiniteNumber(value.initialLimit) &&
+    isOptionalNonNegative(value.observedAt)
   );
 }
 
@@ -364,6 +371,7 @@ function copyUsageMetric(metric: UsageMetric): UsageMetric {
     label: metric.label,
     scope: metric.scope,
     ...(cycle ? { cycle } : {}),
+    ...(metric.observedAt === undefined ? {} : { observedAt: metric.observedAt }),
   };
   if (metric.type === "quota") {
     return {

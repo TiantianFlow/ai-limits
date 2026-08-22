@@ -40,20 +40,22 @@ Chrome 完全关闭或设备休眠时，AI Limits 无法刷新。恢复运行后
 对于 ElevenLabs 或 New API，只要保存的密钥和主机权限仍处于有效状态，通常也可以。但手动刷新可以
 绕过定时退避，自动刷新则会遵守退避时间。Kimi 手动刷新还可能执行交互式会话
 恢复。Cursor 手动刷新还可能通过已经打开的 Cursor 页面请求 Grok Bot 和额外
-Credits JSON；自动刷新绝不会向页面注入代码。因此，一次手动成功不能保证此后
-的定时刷新包含相同的可选指标。
+Credits JSON；自动刷新绝不会向页面注入代码。定时刷新会保留上次有效的页面数值，
+直到 Grok Bot 的每周重置，并说明为何未能刷新。
 
 Kimi 还有下述额外限制。
 
 ## 为什么 Cursor 的 Grok Bot 或额外 Credits 可能只在手动刷新后出现？
 
 Cursor 的基础月度和按量用量会在后台刷新。Grok Bot 和额外 Credits Dashboard
-接口需要同源页面请求，因此 AI Limits 只会在 Connect 或明确的手动 Refresh
-期间、并且已经打开 `cursor.com` 标签页时尝试请求。扩展自带的函数会验证精确
-来源，只发送两个固定的只读 Dashboard 请求，并把 JSON 返回扩展上下文进行
-Schema 验证。它不会直接检查页面渲染内容、浏览器存储或 Cookie 值；Chrome
-仍会把已登录的 Cursor Cookie 附加到这些固定的同源请求。它不会创建或激活
-Cursor 标签页，定时刷新也绝不会向 Cursor 页面注入代码。
+接口会拒绝跨源 POST（`Invalid origin for state-changing request`），因此 AI
+Limits 只会在 Connect 或明确的手动 Refresh 期间、并且已经打开 `cursor.com`
+标签页时尝试请求。扩展自带的函数会验证精确来源，只发送两个固定的只读
+Dashboard 请求，并把 JSON 返回扩展上下文进行 Schema 验证。它不会直接检查
+页面渲染内容、浏览器存储或 Cookie 值；Chrome 仍会把已登录的 Cursor Cookie
+附加到这些固定的同源请求。它不会创建或激活 Cursor 标签页，定时刷新也绝不会
+向 Cursor 页面注入代码。上次有效的 Grok Bot 和额外 Credits 会保留在卡片上，
+直到 Grok Bot 的每周重置；卡片会说明为何未能刷新。
 
 ## 为什么 Kimi 自动刷新不一定成功，而手动刷新可能打开后台标签页？
 

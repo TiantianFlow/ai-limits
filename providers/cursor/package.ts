@@ -8,9 +8,12 @@ import type {
 } from "../types";
 import { providerDefinitions } from "../definitions";
 import { collectCursor } from "./adapter";
+import { applyCursorPageMetrics } from "./page-metrics";
 import {
+  dashboardJsonFromProbe,
   findCursorDashboardJson,
   type CursorDashboardJson,
+  type CursorDashboardProbe,
 } from "./page-dashboard";
 
 interface CursorPackageDependencies {
@@ -18,7 +21,7 @@ interface CursorPackageDependencies {
     context: CollectionContext,
     dashboard: CursorDashboardJson,
   ): Promise<CollectionResult>;
-  findDashboardJson(): Promise<CursorDashboardJson | undefined>;
+  findDashboardJson(): Promise<CursorDashboardProbe>;
 }
 
 function adapterContext(services: ProviderRuntimeServices): CollectionContext {
@@ -57,15 +60,26 @@ export function createCursorPackage(
         return { ok: false, health: { kind: "provider_changed" } };
       }
 
-      let dashboard: CursorDashboardJson = {};
+      let probe: CursorDashboardProbe | { kind: "skipped" } = { kind: "skipped" };
       if (services.interaction === "allowed" && !services.signal.aborted) {
         try {
-          dashboard = (await dependencies.findDashboardJson()) ?? {};
+          probe = await dependencies.findDashboardJson();
         } catch {
-          dashboard = {};
+          probe = { kind: "injection_failed" };
         }
       }
-      return dependencies.collect(adapterContext(services), dashboard);
+      const dashboard =
+        probe.kind === "skipped" ? {} : dashboardJsonFromProbe(probe);
+      const result = await dependencies.collect(
+        adapterContext(services),
+        dashboard,
+      );
+      return applyCursorPageMetrics(
+        result,
+        instance.snapshot,
+        probe,
+        services.now,
+      );
     },
   };
 }

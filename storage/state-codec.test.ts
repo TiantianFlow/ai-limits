@@ -83,6 +83,30 @@ describe("V5 instance state codec", () => {
     ]);
   });
 
+  test("preserves optional metric observation times across a reload", () => {
+    const instance = newApiInstance("newapi:default", "Relay");
+    instance.snapshot = {
+      ...instance.snapshot!,
+      metrics: [
+        {
+          ...instance.snapshot!.metrics[0]!,
+          observedAt: now - hour,
+        },
+      ],
+    };
+
+    expect(
+      normalizeInstanceAppState(
+        {
+          version: 5,
+          preferences: { displayMode: "used", autoRefresh: true },
+          instances: [instance],
+        },
+        now,
+      ).instances[0]?.snapshot?.metrics[0],
+    ).toMatchObject({ observedAt: now - hour });
+  });
+
   test("normalizes instance config through its package without dropping a base path", () => {
     const instance = newApiInstance("newapi:default", "Gateway relay");
     instance.config = {

@@ -16,49 +16,62 @@ export interface MetricHistoryPoint {
   usedRatio: number;
 }
 
+function isFreshlyObserved(
+  metric: { observedAt?: number },
+  fetchedAt: number,
+): boolean {
+  return metric.observedAt === undefined || metric.observedAt === fetchedAt;
+}
+
+function historySample(
+  metric: UsageSnapshot["metrics"][number],
+): MetricHistorySample {
+  switch (metric.type) {
+    case "quota":
+      return {
+        metricId: metric.id,
+        type: metric.type,
+        usedRatio: metric.usedRatio,
+        ...(metric.cycle === undefined
+          ? {}
+          : { cycle: historyCycle(metric.cycle) }),
+      };
+    case "counter":
+      return {
+        metricId: metric.id,
+        type: metric.type,
+        semantic: metric.semantic,
+        value: metric.value,
+        unit: metric.unit,
+        ...(metric.limit === undefined ? {} : { limit: metric.limit }),
+        ...(metric.cycle === undefined
+          ? {}
+          : { cycle: historyCycle(metric.cycle) }),
+      };
+    case "balance":
+      return {
+        metricId: metric.id,
+        type: metric.type,
+        value: metric.value,
+        unit: metric.unit,
+        ...(metric.initialLimit === undefined
+          ? {}
+          : { initialLimit: metric.initialLimit }),
+        ...(metric.cycle === undefined
+          ? {}
+          : { cycle: historyCycle(metric.cycle) }),
+      };
+  }
+}
+
 export function observationFromUsage(
   snapshot: UsageSnapshot,
 ): UsageHistoryObservation {
   return {
     observedAt: snapshot.fetchedAt,
-    metrics: snapshot.metrics.map((metric): MetricHistorySample => {
-      switch (metric.type) {
-        case "quota":
-          return {
-            metricId: metric.id,
-            type: metric.type,
-            usedRatio: metric.usedRatio,
-            ...(metric.cycle === undefined
-              ? {}
-              : { cycle: historyCycle(metric.cycle) }),
-          };
-        case "counter":
-          return {
-            metricId: metric.id,
-            type: metric.type,
-            semantic: metric.semantic,
-            value: metric.value,
-            unit: metric.unit,
-            ...(metric.limit === undefined ? {} : { limit: metric.limit }),
-            ...(metric.cycle === undefined
-              ? {}
-              : { cycle: historyCycle(metric.cycle) }),
-          };
-        case "balance":
-          return {
-            metricId: metric.id,
-            type: metric.type,
-            value: metric.value,
-            unit: metric.unit,
-            ...(metric.initialLimit === undefined
-              ? {}
-              : { initialLimit: metric.initialLimit }),
-            ...(metric.cycle === undefined
-              ? {}
-              : { cycle: historyCycle(metric.cycle) }),
-          };
-      }
-    }),
+    metrics: snapshot.metrics.flatMap((metric) =>
+      isFreshlyObserved(metric, snapshot.fetchedAt) ? [historySample(metric)] : [],
+    ),
   };
 }
 

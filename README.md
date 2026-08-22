@@ -76,9 +76,10 @@ request Grok Bot and extra-credit JSON in the page's same-origin context. AI
 Limits does not create or activate a Cursor tab and does not inspect its
 rendered content, browser storage, or cookie values directly. Chrome still
 attaches the signed-in Cursor cookies to those fixed same-origin requests.
-Scheduled or automatic refresh never injects into a Cursor page, so it refreshes
-base monthly and on-demand usage without adding new Grok Bot or extra-credit
-observations.
+Scheduled or automatic refresh never injects into a Cursor page. It refreshes
+base monthly and on-demand usage and keeps last-good Grok Bot and extra-credit
+values until Grok Bot's weekly reset, without presenting them as a new
+observation.
 
 ElevenLabs setup opens its official API-keys page in a normal tab. If you need
 to sign in first, the guide remains open and lets you reopen that page. It asks

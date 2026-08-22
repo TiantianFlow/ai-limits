@@ -260,6 +260,48 @@ export function localizeGroupLabel(
   return known ? translate(known) : group.label;
 }
 
+const CURSOR_PAGE_REASON_PREFIX = "cursor:";
+const CURSOR_PAGE_CARRIED_PREFIX = "cursor:carried:";
+
+function localizeCursorPageReason(token: string): string | undefined {
+  const http = token.match(/^http:(\d{3})$/);
+  if (http) {
+    return i18nNamed("metrics.cursor.pageHttp", { status: http[1]! });
+  }
+  switch (token) {
+    case "scheduled":
+      return l10n.t("metrics.cursor.pageScheduled");
+    case "no-tab":
+      return l10n.t("metrics.cursor.pageNoTab");
+    case "injection":
+    case "network":
+      return l10n.t("metrics.cursor.pageNetwork");
+    case "mismatch":
+      return l10n.t("metrics.cursor.pageMismatch");
+    case "unavailable":
+      return l10n.t("metrics.cursor.pageUnavailable");
+    default:
+      return undefined;
+  }
+}
+
+function localizeCursorUsageDescription(
+  description: string | undefined,
+): string | undefined {
+  if (description === undefined || !description.startsWith(CURSOR_PAGE_REASON_PREFIX)) {
+    return undefined;
+  }
+  const carried = description.startsWith(CURSOR_PAGE_CARRIED_PREFIX);
+  const reasonToken = carried
+    ? description.slice(CURSOR_PAGE_CARRIED_PREFIX.length)
+    : description.slice(CURSOR_PAGE_REASON_PREFIX.length);
+  const reason = localizeCursorPageReason(reasonToken);
+  if (reason === undefined) return undefined;
+  return carried
+    ? l10n.t("metrics.cursor.pageCarried", { reason })
+    : reason;
+}
+
 export function localizeGroupDescription(
   providerKind: ProviderKind,
   group: { id: string; description?: string },
@@ -268,6 +310,9 @@ export function localizeGroupDescription(
     return group.description
       ? l10n.t("metrics.grokPoolUnavailable")
       : undefined;
+  }
+  if (providerKind === "cursor") {
+    return localizeCursorUsageDescription(group.description);
   }
   return group.description;
 }

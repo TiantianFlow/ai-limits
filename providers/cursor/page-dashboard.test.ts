@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import {
+  dashboardJsonFromProbe,
   findCursorDashboardJson,
   readCursorDashboardJsonAtExpectedOrigin,
 } from "./page-dashboard";
@@ -26,7 +27,10 @@ describe("Cursor page dashboard bridge", () => {
         fetchPage,
         "https://cursor.com",
       ),
-    ).resolves.toEqual({ grok, credits });
+    ).resolves.toEqual({
+      grok: { ok: true, value: grok },
+      credits: { ok: true, value: credits },
+    });
 
     const request = {
       method: "POST",
@@ -75,7 +79,10 @@ describe("Cursor page dashboard bridge", () => {
         fetchPage,
         "https://cursor.com",
       ),
-    ).resolves.toEqual({ credits });
+    ).resolves.toEqual({
+      grok: { ok: false, status: 500 },
+      credits: { ok: true, value: credits },
+    });
   });
 
   test("bounds stalled dashboard requests so base collection can continue", async () => {
@@ -100,7 +107,10 @@ describe("Cursor page dashboard bridge", () => {
       );
       await vi.advanceTimersByTimeAsync(8_000);
 
-      await expect(result).resolves.toEqual({});
+      await expect(result).resolves.toEqual({
+        grok: { ok: false },
+        credits: { ok: false },
+      });
       expect(fetchPage).toHaveBeenCalledTimes(2);
       expect(
         fetchPage.mock.calls.map(([, init]) => init?.signal?.aborted),
@@ -111,13 +121,19 @@ describe("Cursor page dashboard bridge", () => {
   });
 
   test("injects into one current Cursor tab in MAIN world without any tab mutation capability", async () => {
-    const dashboard = { grok: { usagePercent: 25 } };
+    const dashboard = {
+      grok: { ok: true as const, value: { usagePercent: 25 } },
+      credits: { ok: false as const, status: 401 },
+    };
     const queryTabs = vi.fn().mockResolvedValue([{ id: undefined }, { id: 17 }]);
     const executeScript = vi.fn().mockResolvedValue([{ result: dashboard }]);
 
     await expect(
       findCursorDashboardJson({ queryTabs, executeScript }),
-    ).resolves.toEqual(dashboard);
+    ).resolves.toEqual({
+      kind: "read",
+      ...dashboard,
+    });
 
     expect(queryTabs).toHaveBeenCalledWith({ url: "https://cursor.com/*" });
     expect(executeScript).toHaveBeenCalledWith({
@@ -135,7 +151,27 @@ describe("Cursor page dashboard bridge", () => {
         queryTabs: vi.fn().mockResolvedValue([]),
         executeScript,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ kind: "no_tab" });
     expect(executeScript).not.toHaveBeenCalled();
+  });
+
+  test("maps injection exceptions to a failed probe instead of throwing", async () => {
+    await expect(
+      findCursorDashboardJson({
+        queryTabs: vi.fn().mockRejectedValue(new Error("tabs failed")),
+        executeScript: vi.fn(),
+      }),
+    ).resolves.toEqual({ kind: "injection_failed" });
+  });
+
+  test("extracts dashboard JSON only from successful endpoint reads", () => {
+    expect(
+      dashboardJsonFromProbe({
+        kind: "read",
+        grok: { ok: true, value: { usagePercent: 92 } },
+        credits: { ok: false, status: 403 },
+      }),
+    ).toEqual({ grok: { usagePercent: 92 } });
+    expect(dashboardJsonFromProbe({ kind: "no_tab" })).toEqual({});
   });
 });

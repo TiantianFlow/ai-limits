@@ -76,7 +76,7 @@ describe("Cursor adapter", () => {
     );
   });
 
-  test("keeps the base monthly snapshot when page dashboard JSON is unavailable", async () => {
+  test("adapter still emits only base monthly metrics when dashboard JSON is absent; carry-forward is the package's job", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response(planSummary()));

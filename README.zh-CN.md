@@ -61,8 +61,8 @@ Cursor Connect 或手动 Refresh 可能使用一个已经打开的 `cursor.com` 
 在页面的同源上下文中请求 Grok Bot 和额外 Credits JSON。AI Limits 不会创建或
 激活 Cursor 标签页，也不会直接检查页面渲染内容、浏览器存储或 Cookie 值；
 Chrome 仍会把已登录的 Cursor Cookie 附加到这些固定的同源请求。定时或自动刷新
-绝不会向 Cursor 页面注入代码，因此只会刷新基础月度和按量用量，不会新增 Grok
-Bot 或额外 Credits 观测。
+绝不会向 Cursor 页面注入代码。它会刷新基础月度和按量用量，并保留上次有效的
+Grok Bot 和额外 Credits，直到 Grok Bot 的每周重置，而不会把它们记成新的观测。
 
 ElevenLabs 设置流程会在普通标签页中打开其官方 API 密钥页面。如果你需要先
 登录，指南会保持打开，并允许再次打开该页面。指南要求创建仅含 **User → Read**

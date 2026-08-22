@@ -89,9 +89,10 @@ validation in the extension context. It does not read rendered page content,
 local or session storage, or cookie values directly. Chrome does attach the
 signed-in Cursor cookies to these fixed same-origin requests. AI Limits never
 creates or activates a Cursor tab. Scheduled refresh never queries for or
-injects into a Cursor page, so page-only Grok Bot and extra-credit metrics are
-refreshed only by Connect or manual Refresh. Raw dashboard JSON is request-local
-and is not persisted.
+injects into a Cursor page. Page-only Grok Bot and extra-credit metrics are
+refreshed only by Connect or manual Refresh; last-good normalized values may
+remain visible until Grok Bot's weekly reset. Raw dashboard JSON is
+request-local and is not persisted.
 
 For conservative Chrome Web Store disclosure, AI Limits classifies its
 current-tab exact-provider-origin checks as **Web history** access. For Kimi and

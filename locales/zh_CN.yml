@@ -439,6 +439,13 @@ metrics:
     grokBot: Grok Bot
     onDemandSpend: 按需花费
     extraUsageCredits: 额外用量额度
+    pageCarried: "部分 Cursor 页面数据来自更早的刷新。{reason}"
+    pageScheduled: 在已打开 cursor.com 标签页时连接或刷新，即可更新 Grok Bot。
+    pageNoTab: 连接或刷新时需要已打开的 cursor.com 标签页才能读取 Grok Bot。
+    pageHttp: "Grok Bot 未能刷新（HTTP {status}）。"
+    pageNetwork: Grok Bot 未能刷新。
+    pageMismatch: 无法读取 Cursor 的 Grok Bot 响应。
+    pageUnavailable: 此账号没有 Grok Bot。
   elevenlabs:
     monthlyCredits: 每月额度
     voiceSlots: 语音槽位

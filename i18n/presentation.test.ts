@@ -98,6 +98,43 @@ describe("locale-neutral presentation", () => {
     ).toBe("用量");
   });
 
+  it("localizes Cursor page-metric tokens and never shows the raw token", async () => {
+    installI18nLocale("en");
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
+        description: "cursor:no-tab",
+      }),
+    ).toBe("Grok Bot needs an open cursor.com tab on Connect or Refresh.");
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
+        description: "cursor:carried:http:403",
+      }),
+    ).toBe(
+      "Some Cursor page values are from an earlier refresh. Grok Bot could not be refreshed (HTTP 403).",
+    );
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
+        description: "cursor:unavailable",
+      }),
+    ).toBe("Grok Bot is not available on this account.");
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
+        description: "not-a-cursor-token",
+      }),
+    ).toBeUndefined();
+    installI18nLocale("zh_CN");
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
+        description: "cursor:no-tab",
+      }),
+    ).toBe("连接或刷新时需要已打开的 cursor.com 标签页才能读取 Grok Bot。");
+  });
+
   it("never renders raw Grok diagnostics as visible copy", async () => {
     installI18nLocale("en");
     const description = localizeGroupDescription(

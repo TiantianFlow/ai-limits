@@ -199,7 +199,7 @@ function normalizeDashboardJson<T, Metric extends QuotaMetric | BalanceMetric>(
   return parsed.success ? normalize(parsed.data) : undefined;
 }
 
-function normalizeGrokStatus(status: CursorGrokStatus): QuotaMetric | undefined {
+export function normalizeGrokStatus(status: CursorGrokStatus): QuotaMetric | undefined {
   if (
     !status.hasAvailableUsage ||
     !status.hasNonZeroIncludedLimit ||
@@ -281,7 +281,7 @@ function remainingCreditCents(credit: CursorCreditAmounts): CreditRemainder {
   return { kind: "valid", remainingCents: totalCents - usedCents };
 }
 
-function normalizeExtraUsageCredits(
+export function normalizeExtraUsageCredits(
   balance: CursorCreditGrantsBalance,
 ): BalanceMetric | undefined {
   const aggregate = remainingCreditCents(balance);

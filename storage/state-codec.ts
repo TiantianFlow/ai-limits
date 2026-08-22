@@ -109,11 +109,15 @@ function normalizeMetric(value: unknown): UsageMetric | undefined {
   }
   const cycle = normalizeCycle(value.cycle);
   if (value.cycle !== undefined && cycle === undefined) return undefined;
+  if (value.observedAt !== undefined && !isFiniteNonNegative(value.observedAt)) {
+    return undefined;
+  }
   const base = {
     id: value.id,
     label: value.label,
     scope: value.scope as UsageMetric["scope"],
     ...(cycle === undefined ? {} : { cycle }),
+    ...(value.observedAt === undefined ? {} : { observedAt: value.observedAt }),
   };
   if (value.type === "quota") {
     if (

@@ -100,6 +100,8 @@ interface MetricBase {
   label: string;
   scope: MetricScope;
   cycle?: MetricCycle;
+  /** Original collection time. Older than snapshot.fetchedAt means carried. */
+  observedAt?: number;
 }
 
 export interface QuotaMetric extends MetricBase {
