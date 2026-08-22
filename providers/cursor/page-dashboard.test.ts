@@ -166,6 +166,34 @@ describe("Cursor page dashboard bridge", () => {
     expect(executeScript).not.toHaveBeenCalled();
   });
 
+  test("keeps a valid Grok Bot read when aggregated is missing or malformed", async () => {
+    const grok = {
+      hasAvailableUsage: true,
+      hasNonZeroIncludedLimit: true,
+      usagePercent: 92,
+      currentPeriodStart: "2030-04-01T00:00:00.000Z",
+      nextResetTimestampUtc: "2030-04-08T00:00:00.000Z",
+    };
+    await expect(
+      findCursorDashboardJson({
+        queryTabs: vi.fn().mockResolvedValue([{ id: 4 }]),
+        executeScript: vi.fn().mockResolvedValue([
+          {
+            result: {
+              grok: { ok: true, value: grok },
+              credits: { ok: true, value: { total_cents: 100, used_cents: 0 } },
+            },
+          },
+        ]),
+      }),
+    ).resolves.toEqual({
+      kind: "read",
+      grok: { ok: true, value: grok },
+      credits: { ok: true, value: { total_cents: 100, used_cents: 0 } },
+      aggregated: { ok: false },
+    });
+  });
+
   test("maps injection exceptions to a failed probe instead of throwing", async () => {
     await expect(
       findCursorDashboardJson({

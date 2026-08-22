@@ -66,7 +66,7 @@ describe("DetailTables", () => {
     expect(screen.getByText("$1.50")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Included usage needs an open cursor.com tab on Connect or Refresh.",
+        "Open cursor.com, then Refresh, to update included usage.",
       ),
     ).toBeInTheDocument();
   });

@@ -3,7 +3,7 @@
 Last updated: August 14, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
-describes version 0.4.0.
+describes version 0.4.1.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
 or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI, ElevenLabs, the New

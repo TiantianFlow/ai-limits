@@ -247,6 +247,63 @@ describe("Cursor page-metric carry-forward", () => {
     });
   });
 
+  test("keeps a fresh Grok Bot bar when aggregated usage is missing", () => {
+    const freshGrok = {
+      ...grok,
+      observedAt: undefined,
+      usedRatio: 0.92,
+    };
+    const result = applyCursorPageMetrics(
+      {
+        ok: true,
+        snapshot: {
+          providerKind: "cursor",
+          source: "web-session",
+          fetchedAt: NOW,
+          metrics: [monthly, freshGrok],
+        },
+      },
+      undefined,
+      {
+        kind: "read",
+        grok: {
+          ok: true,
+          value: {
+            hasAvailableUsage: true,
+            hasNonZeroIncludedLimit: true,
+            usagePercent: 92,
+            currentPeriodStart: "2030-04-01T00:00:00.000Z",
+            nextResetTimestampUtc: "2030-04-08T00:00:00.000Z",
+          },
+        },
+        credits: { ok: false },
+        aggregated: { ok: false },
+      },
+      NOW,
+    );
+
+    expect(result).toMatchObject({
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({
+            id: "grok-bot-weekly",
+            usedRatio: 0.92,
+            observedAt: NOW,
+          }),
+        ]),
+        detailTables: [
+          expect.objectContaining({
+            rows: [],
+            description: "cursor-detail:network",
+          }),
+        ],
+      },
+    });
+    if (result.ok) {
+      expect(result.snapshot.usageGroups?.[0]?.description).toBeUndefined();
+    }
+  });
+
   test("stamps a fresh Grok Bot with this collection time", () => {
     const fresh = {
       ...grok,

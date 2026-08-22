@@ -431,9 +431,10 @@ metrics:
       other: "{count} more rows not shown"
     carried: "Included usage is from an earlier page refresh. {reason}"
     scheduled: Included usage updates on Connect or Refresh with an open cursor.com tab.
-    noTab: Included usage needs an open cursor.com tab on Connect or Refresh.
+    noTab: Open cursor.com, then Refresh, to update included usage.
     http: "Included usage could not be refreshed (HTTP {status})."
-    network: Included usage could not be refreshed.
+    injection: Could not read included usage from the open cursor.com page.
+    network: The included-usage request from the open cursor.com page did not complete.
     mismatch: Cursor's included-usage response could not be read.
   units:
     credits: credits
@@ -468,9 +469,10 @@ metrics:
     extraUsageCredits: Extra usage credits
     pageCarried: "Some Cursor page values are from an earlier refresh. {reason}"
     pageScheduled: Grok Bot updates on Connect or Refresh with an open cursor.com tab.
-    pageNoTab: Grok Bot needs an open cursor.com tab on Connect or Refresh.
+    pageNoTab: Open cursor.com, then Refresh, to update Grok Bot.
     pageHttp: "Grok Bot could not be refreshed (HTTP {status})."
-    pageNetwork: Grok Bot could not be refreshed.
+    pageInjection: Could not read Grok Bot from the open cursor.com page.
+    pageNetwork: The Grok Bot request from the open cursor.com page did not complete.
     pageMismatch: Cursor's Grok Bot response could not be read.
     pageUnavailable: Grok Bot is not available on this account.
   elevenlabs:

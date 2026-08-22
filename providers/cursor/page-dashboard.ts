@@ -35,9 +35,10 @@ interface CursorDashboardBridge {
   }): Promise<CursorScriptResult[]>;
 }
 
-function asEndpointResult(value: unknown): CursorDashboardEndpointResult | undefined {
+function asEndpointResult(value: unknown): CursorDashboardEndpointResult {
+  if (value === undefined) return { ok: false };
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
+    return { ok: false };
   }
   const record = value as { ok?: unknown; value?: unknown; status?: unknown };
   if (record.ok === true) return { ok: true, value: record.value };
@@ -49,7 +50,7 @@ function asEndpointResult(value: unknown): CursorDashboardEndpointResult | undef
       ? { ok: false, status: record.status }
       : { ok: false };
   }
-  return undefined;
+  return { ok: true, value };
 }
 
 export async function readCursorDashboardJsonAtExpectedOrigin(
@@ -127,19 +128,17 @@ export async function findCursorDashboardJson({
     if (typeof result !== "object" || result === null || Array.isArray(result)) {
       return { kind: "injection_failed" };
     }
-    const grok = asEndpointResult((result as { grok?: unknown }).grok);
-    const credits = asEndpointResult((result as { credits?: unknown })["credits"]);
-    const aggregated = asEndpointResult(
-      (result as { aggregated?: unknown }).aggregated,
-    );
-    if (
-      grok === undefined ||
-      credits === undefined ||
-      aggregated === undefined
-    ) {
-      return { kind: "injection_failed" };
-    }
-    return { kind: "read", grok, credits, aggregated };
+    const record = result as {
+      grok?: unknown;
+      credits?: unknown;
+      aggregated?: unknown;
+    };
+    return {
+      kind: "read",
+      grok: asEndpointResult(record.grok),
+      credits: asEndpointResult(record["credits"]),
+      aggregated: asEndpointResult(record.aggregated),
+    };
   } catch {
     return { kind: "injection_failed" };
   }

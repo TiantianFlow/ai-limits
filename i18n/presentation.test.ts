@@ -107,7 +107,7 @@ describe("locale-neutral presentation", () => {
         id: "usage",
         description: "cursor:no-tab",
       }),
-    ).toBe("Grok Bot needs an open cursor.com tab on Connect or Refresh.");
+    ).toBe("Open cursor.com, then Refresh, to update Grok Bot.");
     expect(
       localizeGroupDescription("cursor", {
         id: "usage",
@@ -134,7 +134,7 @@ describe("locale-neutral presentation", () => {
         id: "usage",
         description: "cursor:no-tab",
       }),
-    ).toBe("连接或刷新时需要已打开的 cursor.com 标签页才能读取 Grok Bot。");
+    ).toBe("请打开 cursor.com，然后点击刷新，以更新 Grok Bot。");
   });
 
   it("formats detail cells by declared type", () => {
