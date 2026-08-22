@@ -27,6 +27,7 @@ export type CursorPageReason =
   | "mismatch"
   | "unavailable"
   | "permission"
+  | "tab-asleep"
   | `wrong-origin:${string}`;
 
 export type CursorGrokClassification =
@@ -87,6 +88,7 @@ function grokReasonFromProbe(
   if (probe.kind === "skipped") return "scheduled";
   if (probe.kind === "no_tab") return "no-tab";
   if (probe.kind === "permission_missing") return "permission";
+  if (probe.kind === "tab_asleep") return "tab-asleep";
   if (probe.kind === "wrong_origin") return `wrong-origin:${probe.origin}`;
   if (probe.kind === "injection_failed") return "injection";
   if (!probe.grok.ok) {
@@ -135,6 +137,7 @@ function aggregatedReasonFromProbe(
   if (probe.kind === "skipped") return "scheduled";
   if (probe.kind === "no_tab") return "no-tab";
   if (probe.kind === "permission_missing") return "permission";
+  if (probe.kind === "tab_asleep") return "tab-asleep";
   if (probe.kind === "wrong_origin") return `wrong-origin:${probe.origin}`;
   if (probe.kind === "injection_failed") return "injection";
   if (!probe.aggregated.ok) {

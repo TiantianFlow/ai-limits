@@ -282,6 +282,8 @@ function localizeCursorPageReason(token: string): string | undefined {
       return l10n.t("metrics.cursor.pageNoTab");
     case "permission":
       return translate("metrics.cursor.pagePermission");
+    case "tab-asleep":
+      return translate("metrics.cursor.pageTabAsleep");
     case "injection":
       return translate("metrics.cursor.pageInjection");
     case "network":
@@ -349,6 +351,8 @@ export function localizeDetailDescription(
         ? translate("metrics.detail.noTab")
         : reasonToken === "permission"
           ? translate("metrics.detail.permission")
+        : reasonToken === "tab-asleep"
+          ? translate("metrics.detail.tabAsleep")
         : reasonToken.startsWith("wrong-origin:")
           ? i18nNamed("metrics.detail.wrongOrigin", {
               origin: reasonToken.slice("wrong-origin:".length),

@@ -130,7 +130,7 @@ macOS 文件选择器中正常显示。点击扩展工具栏图标即可打开�
 pnpm verify:zip
 ```
 
-该命令会重新构建扩展，创建 `.output/ai-limits-0.4.2-chrome.zip`，打开压缩包，
+该命令会重新构建扩展，创建 `.output/ai-limits-0.4.3-chrome.zip`，打开压缩包，
 并验证清单、入口文件、权限和禁止包含的文件规则。
 
 ## 服务兼容性

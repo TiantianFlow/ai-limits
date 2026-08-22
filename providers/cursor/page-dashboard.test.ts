@@ -5,6 +5,7 @@ import {
   findCursorDashboardJson,
   rankCursorTabs,
   readCursorDashboardJsonAtExpectedOrigin,
+  tabLooksAsleep,
 } from "./page-dashboard";
 
 function jsonResponse(value: unknown, status = 200): Response {
@@ -230,6 +231,7 @@ describe("Cursor page dashboard bridge", () => {
     });
     expect(dashboardJsonFromProbe({ kind: "no_tab" })).toEqual({});
     expect(dashboardJsonFromProbe({ kind: "permission_missing" })).toEqual({});
+    expect(dashboardJsonFromProbe({ kind: "tab_asleep" })).toEqual({});
   });
 
   test("does not inject when scripting or host permission is missing", async () => {
@@ -292,6 +294,66 @@ describe("Cursor page dashboard bridge", () => {
     expect(executeScript).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ target: { tabId: 8 } }),
+    );
+  });
+
+  test("prefers a loaded tab over a discarded one at the same path", () => {
+    expect(tabLooksAsleep({ discarded: true, status: "complete" })).toBe(true);
+    expect(tabLooksAsleep({ discarded: false, status: "loading" })).toBe(true);
+    expect(tabLooksAsleep({ discarded: false, status: "complete" })).toBe(false);
+    expect(tabLooksAsleep({})).toBe(false);
+    expect(
+      rankCursorTabs([
+        { id: 1, url: "https://cursor.com/dashboard", discarded: true },
+        { id: 2, url: "https://cursor.com/dashboard", status: "complete" },
+      ]),
+    ).toEqual([2, 1]);
+  });
+
+  test("tries a discarded tab as last resort and names it when it is the only candidate", async () => {
+    const executeScript = vi.fn().mockRejectedValue(new Error("discarded"));
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 6, url: "https://cursor.com/dashboard", discarded: true },
+        ]),
+        executeScript,
+      }),
+    ).resolves.toEqual({ kind: "tab_asleep" });
+    expect(executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { tabId: 6 } }),
+    );
+  });
+
+  test("tries a discarded tab only after a loaded tab at the same path fails", async () => {
+    const executeScript = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("loaded failed"))
+      .mockResolvedValueOnce([
+        {
+          result: {
+            grok: { ok: true, value: { usagePercent: 10 } },
+            credits: { ok: false },
+            aggregated: { ok: false },
+          },
+        },
+      ]);
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 1, url: "https://cursor.com/dashboard", discarded: true },
+          { id: 2, url: "https://cursor.com/dashboard", status: "complete" },
+        ]),
+        executeScript,
+      }),
+    ).resolves.toMatchObject({
+      kind: "read",
+      grok: { ok: true, value: { usagePercent: 10 } },
+    });
+    expect(executeScript.mock.calls.map(([details]) => details.target.tabId)).toEqual(
+      [2, 1],
     );
   });
 

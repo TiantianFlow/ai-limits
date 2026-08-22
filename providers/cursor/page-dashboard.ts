@@ -13,6 +13,7 @@ export type CursorDashboardProbe =
   | { readonly kind: "permission_missing" }
   | { readonly kind: "injection_failed" }
   | { readonly kind: "wrong_origin"; readonly origin: string }
+  | { readonly kind: "tab_asleep" }
   | {
       readonly kind: "read";
       readonly grok: CursorDashboardEndpointResult;
@@ -23,6 +24,8 @@ export type CursorDashboardProbe =
 interface CursorTab {
   id?: number;
   url?: string;
+  discarded?: boolean;
+  status?: string;
 }
 
 interface CursorScriptResult {
@@ -59,10 +62,23 @@ function asEndpointResult(value: unknown): CursorDashboardEndpointResult {
   return { ok: true, value };
 }
 
+export function tabLooksAsleep(tab: CursorTab): boolean {
+  if (tab.discarded === true) return true;
+  return tab.status !== undefined && tab.status !== "complete";
+}
+
 export function rankCursorTabs(tabs: readonly CursorTab[]): number[] {
   return tabs
-    .flatMap((tab) => (tab.id === undefined ? [] : [{ id: tab.id, url: tab.url }]))
-    .sort((left, right) => cursorTabScore(left.url) - cursorTabScore(right.url))
+    .flatMap((tab) =>
+      tab.id === undefined
+        ? []
+        : [{ id: tab.id, url: tab.url, asleep: tabLooksAsleep(tab) }],
+    )
+    .sort((left, right) => {
+      const pathDelta = cursorTabScore(left.url) - cursorTabScore(right.url);
+      if (pathDelta !== 0) return pathDelta;
+      return Number(left.asleep) - Number(right.asleep);
+    })
     .map((tab) => tab.id);
 }
 
@@ -180,8 +196,10 @@ export async function findCursorDashboardJson({
   try {
     if (!(await hasPagePermission())) return { kind: "permission_missing" };
     const tabs = await queryTabs({ url: "https://cursor.com/*" });
-    const tabIds = rankCursorTabs(tabs);
-    if (tabIds.length === 0) return { kind: "no_tab" };
+    const candidates = tabs.filter((tab) => tab.id !== undefined);
+    if (candidates.length === 0) return { kind: "no_tab" };
+    const onlyAsleep = candidates.every(tabLooksAsleep);
+    const tabIds = rankCursorTabs(candidates);
 
     let lastWrongOrigin: { kind: "wrong_origin"; origin: string } | undefined;
     for (const tabId of tabIds) {
@@ -203,7 +221,8 @@ export async function findCursorDashboardJson({
         continue;
       }
     }
-    return lastWrongOrigin ?? { kind: "injection_failed" };
+    if (lastWrongOrigin) return lastWrongOrigin;
+    return onlyAsleep ? { kind: "tab_asleep" } : { kind: "injection_failed" };
   } catch {
     return { kind: "injection_failed" };
   }

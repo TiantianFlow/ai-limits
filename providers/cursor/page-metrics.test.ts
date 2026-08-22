@@ -189,6 +189,12 @@ describe("Cursor page-metric carry-forward", () => {
       "cursor:carried:permission",
     ],
     [
+      "asleep tab",
+      { kind: "tab_asleep" as const },
+      "cursor:tab-asleep",
+      "cursor:carried:tab-asleep",
+    ],
+    [
       "injection failure",
       { kind: "injection_failed" as const },
       "cursor:injection",

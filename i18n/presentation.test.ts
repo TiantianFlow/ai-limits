@@ -117,6 +117,12 @@ describe("locale-neutral presentation", () => {
     expect(
       localizeGroupDescription("cursor", {
         id: "usage",
+        description: "cursor:tab-asleep",
+      }),
+    ).toBe("The cursor.com tab is asleep. Click it so it loads, then press Refresh.");
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
         description: "cursor:wrong-origin:https://www.cursor.com",
       }),
     ).toBe(
