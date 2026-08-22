@@ -123,6 +123,14 @@ describe("locale-neutral presentation", () => {
     expect(
       localizeGroupDescription("cursor", {
         id: "usage",
+        description: "cursor:inject-empty:injection.result was undefined",
+      }),
+    ).toBe(
+      "The cursor.com page script returned no result (injection.result was undefined).",
+    );
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
         description: "cursor:wrong-origin:https://www.cursor.com",
       }),
     ).toBe(

@@ -11,7 +11,9 @@ export type CursorDashboardEndpointResult =
 export type CursorDashboardProbe =
   | { readonly kind: "no_tab" }
   | { readonly kind: "permission_missing" }
-  | { readonly kind: "injection_failed" }
+  | { readonly kind: "inject_threw"; readonly detail: string }
+  | { readonly kind: "inject_empty"; readonly detail: string }
+  | { readonly kind: "inject_unusable"; readonly detail: string }
   | { readonly kind: "wrong_origin"; readonly origin: string }
   | { readonly kind: "tab_asleep" }
   | {
@@ -86,12 +88,15 @@ function cursorTabScore(url: string | undefined): number {
   if (url === undefined) return 4;
   try {
     const path = new URL(url).pathname;
-    if (path === "/dashboard" || path.startsWith("/dashboard/")) return 0;
-    if (path === "/settings" || path.startsWith("/settings/")) return 1;
-    if (path === "/" || path === "") return 3;
-    return 2;
+    if (path === "/dashboard/spending" || path.startsWith("/dashboard/spending/")) {
+      return 0;
+    }
+    if (path === "/dashboard" || path.startsWith("/dashboard/")) return 1;
+    if (path === "/settings" || path.startsWith("/settings/")) return 2;
+    if (path === "/" || path === "") return 4;
+    return 3;
   } catch {
-    return 4;
+    return 5;
   }
 }
 
@@ -169,6 +174,24 @@ function asWrongOrigin(
   return { kind: "wrong_origin", origin };
 }
 
+export function sanitizeInjectDetail(value: unknown): string {
+  const text =
+    value instanceof Error
+      ? value.message
+      : typeof value === "string"
+        ? value
+        : Object.prototype.toString.call(value);
+  const compact = text.replace(/\s+/g, " ").trim().slice(0, 160);
+  return compact.length > 0 ? compact : "unknown";
+}
+
+function describeInjectedValue(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `array(length=${value.length})`;
+  return typeof value;
+}
+
 function asReadResult(value: unknown): Extract<CursorDashboardProbe, { kind: "read" }> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
@@ -202,14 +225,34 @@ export async function findCursorDashboardJson({
     const tabIds = rankCursorTabs(candidates);
 
     let lastWrongOrigin: { kind: "wrong_origin"; origin: string } | undefined;
+    let firstFailure:
+      | Extract<
+          CursorDashboardProbe,
+          { kind: "inject_threw" | "inject_empty" | "inject_unusable" }
+        >
+      | undefined;
     for (const tabId of tabIds) {
       try {
-        const [injection] = await executeScript({
+        const frames = await executeScript({
           target: { tabId },
           world: "MAIN",
           func: readCursorDashboardJsonAtExpectedOrigin,
         });
-        const result = injection?.result;
+        if (!Array.isArray(frames) || frames.length === 0) {
+          firstFailure ??= {
+            kind: "inject_empty",
+            detail: "executeScript returned no frames",
+          };
+          continue;
+        }
+        const result = frames[0]?.result;
+        if (result === undefined) {
+          firstFailure ??= {
+            kind: "inject_empty",
+            detail: "injection.result was undefined",
+          };
+          continue;
+        }
         const wrongOrigin = asWrongOrigin(result);
         if (wrongOrigin) {
           lastWrongOrigin = wrongOrigin;
@@ -217,13 +260,26 @@ export async function findCursorDashboardJson({
         }
         const read = asReadResult(result);
         if (read) return read;
-      } catch {
-        continue;
+        firstFailure ??= {
+          kind: "inject_unusable",
+          detail: describeInjectedValue(result),
+        };
+      } catch (error) {
+        firstFailure ??= {
+          kind: "inject_threw",
+          detail: sanitizeInjectDetail(error),
+        };
       }
     }
     if (lastWrongOrigin) return lastWrongOrigin;
-    return onlyAsleep ? { kind: "tab_asleep" } : { kind: "injection_failed" };
-  } catch {
-    return { kind: "injection_failed" };
+    if (onlyAsleep) return { kind: "tab_asleep" };
+    return (
+      firstFailure ?? {
+        kind: "inject_empty",
+        detail: "no injection attempt produced a result",
+      }
+    );
+  } catch (error) {
+    return { kind: "inject_threw", detail: sanitizeInjectDetail(error) };
   }
 }

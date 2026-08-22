@@ -159,7 +159,9 @@ describe("Cursor provider package", () => {
       ok: true,
       snapshot: {
         usageGroups: [
-          expect.objectContaining({ description: "cursor:injection" }),
+          expect.objectContaining({
+            description: "cursor:inject-threw:findDashboardJson threw",
+          }),
         ],
       },
     });

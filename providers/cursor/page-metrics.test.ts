@@ -195,10 +195,16 @@ describe("Cursor page-metric carry-forward", () => {
       "cursor:carried:tab-asleep",
     ],
     [
-      "injection failure",
-      { kind: "injection_failed" as const },
-      "cursor:injection",
-      "cursor:carried:injection",
+      "script throw",
+      { kind: "inject_threw" as const, detail: "Cannot access contents" },
+      "cursor:inject-threw:Cannot access contents",
+      "cursor:carried:inject-threw:Cannot access contents",
+    ],
+    [
+      "empty inject result",
+      { kind: "inject_empty" as const, detail: "injection.result was undefined" },
+      "cursor:inject-empty:injection.result was undefined",
+      "cursor:carried:inject-empty:injection.result was undefined",
     ],
     [
       "HTTP failure",
@@ -395,7 +401,7 @@ describe("Cursor page-metric carry-forward", () => {
     const result = applyCursorPageMetrics(
       baseResult(),
       previous(),
-      { kind: "injection_failed" },
+      { kind: "inject_empty", detail: "injection.result was undefined" },
       NOW,
     );
     expect(result).toMatchObject({
@@ -408,7 +414,9 @@ describe("Cursor page-metric carry-forward", () => {
           }),
         ]),
         usageGroups: [
-          expect.objectContaining({ description: "cursor:carried:injection" }),
+          expect.objectContaining({
+            description: "cursor:carried:inject-empty:injection.result was undefined",
+          }),
         ],
       },
     });

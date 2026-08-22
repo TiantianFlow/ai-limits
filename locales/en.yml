@@ -437,6 +437,9 @@ metrics:
     wrongOrigin: "We found a Cursor tab at {origin}, not cursor.com. Open cursor.com/dashboard, then Refresh."
     http: "Included usage could not be refreshed (HTTP {status})."
     injection: Could not read included usage from the open cursor.com page.
+    injectThrew: "The cursor.com page script threw: {detail}"
+    injectEmpty: "The cursor.com page script returned no result ({detail})."
+    injectUnusable: "The cursor.com page script returned an unusable result ({detail})."
     network: The included-usage request from the open cursor.com page did not complete.
     mismatch: Cursor's included-usage response could not be read.
   units:
@@ -478,6 +481,9 @@ metrics:
     pageWrongOrigin: "We found a Cursor tab at {origin}, not cursor.com. Open cursor.com/dashboard, then Refresh."
     pageHttp: "Grok Bot could not be refreshed (HTTP {status})."
     pageInjection: Could not read Grok Bot from the open cursor.com page.
+    pageInjectThrew: "The cursor.com page script threw: {detail}"
+    pageInjectEmpty: "The cursor.com page script returned no result ({detail})."
+    pageInjectUnusable: "The cursor.com page script returned an unusable result ({detail})."
     pageNetwork: The Grok Bot request from the open cursor.com page did not complete.
     pageMismatch: Cursor's Grok Bot response could not be read.
     pageUnavailable: Grok Bot is not available on this account.

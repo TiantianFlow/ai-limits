@@ -214,7 +214,55 @@ describe("Cursor page dashboard bridge", () => {
         queryTabs: vi.fn().mockRejectedValue(new Error("tabs failed")),
         executeScript: vi.fn(),
       }),
-    ).resolves.toEqual({ kind: "injection_failed" });
+    ).resolves.toEqual({
+      kind: "inject_threw",
+      detail: "tabs failed",
+    });
+  });
+
+  test("names an empty executeScript result separately from a throw", async () => {
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript: vi.fn().mockResolvedValue([]),
+      }),
+    ).resolves.toEqual({
+      kind: "inject_empty",
+      detail: "executeScript returned no frames",
+    });
+  });
+
+  test("names an undefined injection.result separately from a throw", async () => {
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript: vi.fn().mockResolvedValue([{}]),
+      }),
+    ).resolves.toEqual({
+      kind: "inject_empty",
+      detail: "injection.result was undefined",
+    });
+  });
+
+  test("names a non-object injection result as unusable", async () => {
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://cursor.com/dashboard/spending", status: "complete" },
+        ]),
+        executeScript: vi.fn().mockResolvedValue([{ result: 12 }]),
+      }),
+    ).resolves.toEqual({
+      kind: "inject_unusable",
+      detail: "number",
+    });
   });
 
   test("extracts dashboard JSON only from successful endpoint reads", () => {
@@ -252,10 +300,11 @@ describe("Cursor page dashboard bridge", () => {
     expect(
       rankCursorTabs([
         { id: 1, url: "https://cursor.com/" },
-        { id: 2, url: "https://cursor.com/dashboard/spending" },
-        { id: 3 },
+        { id: 2, url: "https://cursor.com/dashboard" },
+        { id: 3, url: "https://cursor.com/dashboard/spending" },
+        { id: 4 },
       ]),
-    ).toEqual([2, 1, 3]);
+    ).toEqual([3, 2, 1, 4]);
 
     const executeScript = vi
       .fn()

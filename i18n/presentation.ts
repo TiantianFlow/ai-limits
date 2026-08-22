@@ -275,6 +275,24 @@ function localizeCursorPageReason(token: string): string | undefined {
       origin: wrongOrigin[1]!,
     });
   }
+  const injectThrew = token.match(/^inject-threw:(.+)$/);
+  if (injectThrew) {
+    return i18nNamed("metrics.cursor.pageInjectThrew", {
+      detail: injectThrew[1]!,
+    });
+  }
+  const injectEmpty = token.match(/^inject-empty:(.+)$/);
+  if (injectEmpty) {
+    return i18nNamed("metrics.cursor.pageInjectEmpty", {
+      detail: injectEmpty[1]!,
+    });
+  }
+  const injectUnusable = token.match(/^inject-unusable:(.+)$/);
+  if (injectUnusable) {
+    return i18nNamed("metrics.cursor.pageInjectUnusable", {
+      detail: injectUnusable[1]!,
+    });
+  }
   switch (token) {
     case "scheduled":
       return l10n.t("metrics.cursor.pageScheduled");
@@ -356,6 +374,18 @@ export function localizeDetailDescription(
         : reasonToken.startsWith("wrong-origin:")
           ? i18nNamed("metrics.detail.wrongOrigin", {
               origin: reasonToken.slice("wrong-origin:".length),
+            })
+        : reasonToken.startsWith("inject-threw:")
+          ? i18nNamed("metrics.detail.injectThrew", {
+              detail: reasonToken.slice("inject-threw:".length),
+            })
+        : reasonToken.startsWith("inject-empty:")
+          ? i18nNamed("metrics.detail.injectEmpty", {
+              detail: reasonToken.slice("inject-empty:".length),
+            })
+        : reasonToken.startsWith("inject-unusable:")
+          ? i18nNamed("metrics.detail.injectUnusable", {
+              detail: reasonToken.slice("inject-unusable:".length),
             })
         : reasonToken === "injection"
           ? translate("metrics.detail.injection")

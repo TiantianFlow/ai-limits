@@ -22,6 +22,9 @@ export type CursorPageReason =
   | "scheduled"
   | "no-tab"
   | "injection"
+  | `inject-threw:${string}`
+  | `inject-empty:${string}`
+  | `inject-unusable:${string}`
   | "network"
   | `http:${number}`
   | "mismatch"
@@ -90,7 +93,9 @@ function grokReasonFromProbe(
   if (probe.kind === "permission_missing") return "permission";
   if (probe.kind === "tab_asleep") return "tab-asleep";
   if (probe.kind === "wrong_origin") return `wrong-origin:${probe.origin}`;
-  if (probe.kind === "injection_failed") return "injection";
+  if (probe.kind === "inject_threw") return `inject-threw:${probe.detail}`;
+  if (probe.kind === "inject_empty") return `inject-empty:${probe.detail}`;
+  if (probe.kind === "inject_unusable") return `inject-unusable:${probe.detail}`;
   if (!probe.grok.ok) {
     return probe.grok.status === undefined
       ? "network"
@@ -139,7 +144,9 @@ function aggregatedReasonFromProbe(
   if (probe.kind === "permission_missing") return "permission";
   if (probe.kind === "tab_asleep") return "tab-asleep";
   if (probe.kind === "wrong_origin") return `wrong-origin:${probe.origin}`;
-  if (probe.kind === "injection_failed") return "injection";
+  if (probe.kind === "inject_threw") return `inject-threw:${probe.detail}`;
+  if (probe.kind === "inject_empty") return `inject-empty:${probe.detail}`;
+  if (probe.kind === "inject_unusable") return `inject-unusable:${probe.detail}`;
   if (!probe.aggregated.ok) {
     return probe.aggregated.status === undefined
       ? "network"

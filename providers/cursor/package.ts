@@ -65,7 +65,7 @@ export function createCursorPackage(
         try {
           probe = await dependencies.findDashboardJson();
         } catch {
-          probe = { kind: "injection_failed" };
+          probe = { kind: "inject_threw", detail: "findDashboardJson threw" };
         }
       }
       const dashboard =

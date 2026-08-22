@@ -437,6 +437,9 @@ metrics:
     wrongOrigin: "找到了 Cursor 标签页，但其来源是 {origin}，不是 cursor.com。请打开 cursor.com/dashboard，然后刷新。"
     http: "包含的用量未能刷新（HTTP {status}）。"
     injection: 无法从已打开的 cursor.com 页面读取包含的用量。
+    injectThrew: "cursor.com 页面脚本抛出了错误：{detail}"
+    injectEmpty: "cursor.com 页面脚本没有返回结果（{detail}）。"
+    injectUnusable: "cursor.com 页面脚本返回了无法使用的结果（{detail}）。"
     network: 已打开的 cursor.com 页面上的包含用量请求没有完成。
     mismatch: 无法读取 Cursor 的包含用量响应。
   units:
@@ -478,6 +481,9 @@ metrics:
     pageWrongOrigin: "找到了 Cursor 标签页，但其来源是 {origin}，不是 cursor.com。请打开 cursor.com/dashboard，然后刷新。"
     pageHttp: "Grok Bot 未能刷新（HTTP {status}）。"
     pageInjection: 无法从已打开的 cursor.com 页面读取 Grok Bot。
+    pageInjectThrew: "cursor.com 页面脚本抛出了错误：{detail}"
+    pageInjectEmpty: "cursor.com 页面脚本没有返回结果（{detail}）。"
+    pageInjectUnusable: "cursor.com 页面脚本返回了无法使用的结果（{detail}）。"
     pageNetwork: 已打开的 cursor.com 页面上的 Grok Bot 请求没有完成。
     pageMismatch: 无法读取 Cursor 的 Grok Bot 响应。
     pageUnavailable: 此账号没有 Grok Bot。
