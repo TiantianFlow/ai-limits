@@ -12,6 +12,7 @@ export type CursorDashboardProbe =
   | { readonly kind: "no_tab" }
   | { readonly kind: "permission_missing" }
   | { readonly kind: "injection_failed" }
+  | { readonly kind: "wrong_origin"; readonly origin: string }
   | {
       readonly kind: "read";
       readonly grok: CursorDashboardEndpointResult;
@@ -21,6 +22,7 @@ export type CursorDashboardProbe =
 
 interface CursorTab {
   id?: number;
+  url?: string;
 }
 
 interface CursorScriptResult {
@@ -36,6 +38,8 @@ interface CursorDashboardBridge {
     func: typeof readCursorDashboardJsonAtExpectedOrigin;
   }): Promise<CursorScriptResult[]>;
 }
+
+const EXPECTED_ORIGIN = "https://cursor.com";
 
 function asEndpointResult(value: unknown): CursorDashboardEndpointResult {
   if (value === undefined) return { ok: false };
@@ -55,6 +59,26 @@ function asEndpointResult(value: unknown): CursorDashboardEndpointResult {
   return { ok: true, value };
 }
 
+export function rankCursorTabs(tabs: readonly CursorTab[]): number[] {
+  return tabs
+    .flatMap((tab) => (tab.id === undefined ? [] : [{ id: tab.id, url: tab.url }]))
+    .sort((left, right) => cursorTabScore(left.url) - cursorTabScore(right.url))
+    .map((tab) => tab.id);
+}
+
+function cursorTabScore(url: string | undefined): number {
+  if (url === undefined) return 4;
+  try {
+    const path = new URL(url).pathname;
+    if (path === "/dashboard" || path.startsWith("/dashboard/")) return 0;
+    if (path === "/settings" || path.startsWith("/settings/")) return 1;
+    if (path === "/" || path === "") return 3;
+    return 2;
+  } catch {
+    return 4;
+  }
+}
+
 export async function readCursorDashboardJsonAtExpectedOrigin(
   fetchPage: typeof globalThis.fetch = globalThis.fetch,
   currentOrigin: string = globalThis.location.origin,
@@ -64,9 +88,11 @@ export async function readCursorDashboardJsonAtExpectedOrigin(
       readonly credits: CursorDashboardEndpointResult;
       readonly aggregated: CursorDashboardEndpointResult;
     }
-  | undefined
+  | { readonly declined: "wrong_origin"; readonly origin: string }
 > {
-  if (currentOrigin !== "https://cursor.com") return undefined;
+  if (currentOrigin !== EXPECTED_ORIGIN) {
+    return { declined: "wrong_origin", origin: currentOrigin };
+  }
 
   const readJson = async (url: string): Promise<CursorDashboardEndpointResult> => {
     const abortController = new AbortController();
@@ -112,6 +138,40 @@ export function dashboardJsonFromProbe(
   };
 }
 
+function asWrongOrigin(
+  value: unknown,
+): { readonly kind: "wrong_origin"; readonly origin: string } | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as { declined?: unknown; origin?: unknown };
+  if (record.declined !== "wrong_origin" || typeof record.origin !== "string") {
+    return undefined;
+  }
+  const origin = record.origin.trim();
+  if (origin.length === 0 || origin.length > 128) return undefined;
+  return { kind: "wrong_origin", origin };
+}
+
+function asReadResult(value: unknown): Extract<CursorDashboardProbe, { kind: "read" }> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as {
+    declined?: unknown;
+    grok?: unknown;
+    credits?: unknown;
+    aggregated?: unknown;
+  };
+  if (record.declined !== undefined) return undefined;
+  return {
+    kind: "read",
+    grok: asEndpointResult(record.grok),
+    credits: asEndpointResult(record["credits"]),
+    aggregated: asEndpointResult(record.aggregated),
+  };
+}
+
 export async function findCursorDashboardJson({
   hasPagePermission,
   queryTabs,
@@ -120,29 +180,30 @@ export async function findCursorDashboardJson({
   try {
     if (!(await hasPagePermission())) return { kind: "permission_missing" };
     const tabs = await queryTabs({ url: "https://cursor.com/*" });
-    const tabId = tabs.find((tab) => tab.id !== undefined)?.id;
-    if (tabId === undefined) return { kind: "no_tab" };
+    const tabIds = rankCursorTabs(tabs);
+    if (tabIds.length === 0) return { kind: "no_tab" };
 
-    const [injection] = await executeScript({
-      target: { tabId },
-      world: "MAIN",
-      func: readCursorDashboardJsonAtExpectedOrigin,
-    });
-    const result = injection?.result;
-    if (typeof result !== "object" || result === null || Array.isArray(result)) {
-      return { kind: "injection_failed" };
+    let lastWrongOrigin: { kind: "wrong_origin"; origin: string } | undefined;
+    for (const tabId of tabIds) {
+      try {
+        const [injection] = await executeScript({
+          target: { tabId },
+          world: "MAIN",
+          func: readCursorDashboardJsonAtExpectedOrigin,
+        });
+        const result = injection?.result;
+        const wrongOrigin = asWrongOrigin(result);
+        if (wrongOrigin) {
+          lastWrongOrigin = wrongOrigin;
+          continue;
+        }
+        const read = asReadResult(result);
+        if (read) return read;
+      } catch {
+        continue;
+      }
     }
-    const record = result as {
-      grok?: unknown;
-      credits?: unknown;
-      aggregated?: unknown;
-    };
-    return {
-      kind: "read",
-      grok: asEndpointResult(record.grok),
-      credits: asEndpointResult(record["credits"]),
-      aggregated: asEndpointResult(record.aggregated),
-    };
+    return lastWrongOrigin ?? { kind: "injection_failed" };
   } catch {
     return { kind: "injection_failed" };
   }

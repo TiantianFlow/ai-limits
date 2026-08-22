@@ -385,6 +385,29 @@ describe("Cursor page-metric carry-forward", () => {
     }
   });
 
+  test("carries last-good Grok Bot across a failed manual Refresh", () => {
+    const result = applyCursorPageMetrics(
+      baseResult(),
+      previous(),
+      { kind: "injection_failed" },
+      NOW,
+    );
+    expect(result).toMatchObject({
+      snapshot: {
+        metrics: expect.arrayContaining([
+          expect.objectContaining({
+            id: "grok-bot-weekly",
+            usedRatio: 0.92,
+            observedAt: NOW - 20 * 60 * 1_000,
+          }),
+        ]),
+        usageGroups: [
+          expect.objectContaining({ description: "cursor:carried:injection" }),
+        ],
+      },
+    });
+  });
+
   test("carries last-good included usage across a scheduled refresh", () => {
     const prior = {
       ...previous(),

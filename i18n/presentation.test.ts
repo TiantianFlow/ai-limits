@@ -117,6 +117,14 @@ describe("locale-neutral presentation", () => {
     expect(
       localizeGroupDescription("cursor", {
         id: "usage",
+        description: "cursor:wrong-origin:https://www.cursor.com",
+      }),
+    ).toBe(
+      "We found a Cursor tab at https://www.cursor.com, not cursor.com. Open cursor.com/dashboard, then Refresh.",
+    );
+    expect(
+      localizeGroupDescription("cursor", {
+        id: "usage",
         description: "cursor:carried:http:403",
       }),
     ).toBe(

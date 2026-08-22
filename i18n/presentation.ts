@@ -269,6 +269,12 @@ function localizeCursorPageReason(token: string): string | undefined {
   if (http) {
     return i18nNamed("metrics.cursor.pageHttp", { status: http[1]! });
   }
+  const wrongOrigin = token.match(/^wrong-origin:(.+)$/);
+  if (wrongOrigin) {
+    return i18nNamed("metrics.cursor.pageWrongOrigin", {
+      origin: wrongOrigin[1]!,
+    });
+  }
   switch (token) {
     case "scheduled":
       return l10n.t("metrics.cursor.pageScheduled");
@@ -343,6 +349,10 @@ export function localizeDetailDescription(
         ? translate("metrics.detail.noTab")
         : reasonToken === "permission"
           ? translate("metrics.detail.permission")
+        : reasonToken.startsWith("wrong-origin:")
+          ? i18nNamed("metrics.detail.wrongOrigin", {
+              origin: reasonToken.slice("wrong-origin:".length),
+            })
         : reasonToken === "injection"
           ? translate("metrics.detail.injection")
           : reasonToken === "network"

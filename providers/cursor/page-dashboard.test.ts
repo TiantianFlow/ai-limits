@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   dashboardJsonFromProbe,
   findCursorDashboardJson,
+  rankCursorTabs,
   readCursorDashboardJsonAtExpectedOrigin,
 } from "./page-dashboard";
 
@@ -72,7 +73,10 @@ describe("Cursor page dashboard bridge", () => {
         fetchPage,
         "https://lookalike.example",
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({
+      declined: "wrong_origin",
+      origin: "https://lookalike.example",
+    });
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
@@ -240,5 +244,69 @@ describe("Cursor page dashboard bridge", () => {
     ).resolves.toEqual({ kind: "permission_missing" });
     expect(queryTabs).not.toHaveBeenCalled();
     expect(executeScript).not.toHaveBeenCalled();
+  });
+
+  test("prefers a dashboard tab and falls through when the first candidate declines", async () => {
+    expect(
+      rankCursorTabs([
+        { id: 1, url: "https://cursor.com/" },
+        { id: 2, url: "https://cursor.com/dashboard/spending" },
+        { id: 3 },
+      ]),
+    ).toEqual([2, 1, 3]);
+
+    const executeScript = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { result: { declined: "wrong_origin", origin: "https://www.cursor.com" } },
+      ])
+      .mockResolvedValueOnce([
+        {
+          result: {
+            grok: { ok: true, value: { usagePercent: 94 } },
+            credits: { ok: false },
+            aggregated: { ok: false },
+          },
+        },
+      ]);
+
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([
+          { id: 8, url: "https://cursor.com/" },
+          { id: 9, url: "https://cursor.com/dashboard" },
+        ]),
+        executeScript,
+      }),
+    ).resolves.toEqual({
+      kind: "read",
+      grok: { ok: true, value: { usagePercent: 94 } },
+      credits: { ok: false },
+      aggregated: { ok: false },
+    });
+    expect(executeScript).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ target: { tabId: 9 } }),
+    );
+    expect(executeScript).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ target: { tabId: 8 } }),
+    );
+  });
+
+  test("reports a wrong origin when every candidate declines the guard", async () => {
+    await expect(
+      findCursorDashboardJson({
+        hasPagePermission: granted,
+        queryTabs: vi.fn().mockResolvedValue([{ id: 5, url: "https://cursor.com/" }]),
+        executeScript: vi.fn().mockResolvedValue([
+          { result: { declined: "wrong_origin", origin: "https://www.cursor.com" } },
+        ]),
+      }),
+    ).resolves.toEqual({
+      kind: "wrong_origin",
+      origin: "https://www.cursor.com",
+    });
   });
 });
