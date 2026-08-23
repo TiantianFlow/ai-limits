@@ -76,7 +76,7 @@ describe("provider abstraction contract", () => {
   });
 
   it("keeps provider-literal behavior branches out of central runtime and storage", () => {
-    const providerLiteral = /["'](?:chatgpt|claude|kimi|cursor|grok|elevenlabs|newapi)["']/;
+    const providerLiteral = /["'](?:chatgpt|claude|kimi|cursor|grok|elevenlabs|newapi|litellm|clawrouter|sub2api|llmProxy)["']/;
     const failures = ["background", "storage"].flatMap(executableSources).filter((file) => {
       if (file === "storage/migration.ts") return false;
       return providerLiteral.test(source(file));

@@ -2,7 +2,7 @@
 
 English | [简体中文](SUPPORTED_PROVIDERS.zh-CN.md)
 
-AI Limits supports seven provider connections. Each provider is opt-in, and the
+AI Limits supports eleven provider connections. Each provider is opt-in, and the
 extension keeps normalized usage and History in the local Chrome profile.
 
 | Provider | Connection | What AI Limits reads | Important nuance |
@@ -14,6 +14,10 @@ extension keeps normalized usage and History in the local Chrome profile.
 | Grok | Signed-in browser session | Weekly or monthly usage pool as the subscription limit, with Grok Build and Chat composition when those buckets account for the whole pool, plus the SuperGrok-family plan label. Per-mode chat rate limits (`fast`, `expert`, `heavy`, `auto`) appear only as a fallback when no pool is available | Uses private web-session usage interfaces on `grok.com`. The browser may attach Grok cookies; account identifiers and raw subscription payloads are not persisted. This is consumer Grok, not Cursor's Grok Bot. |
 | ElevenLabs | User-created API key | Subscription credit and voice-capacity limits | The guide recommends **User → Read**. AI Limits calls the documented subscription endpoint and stores the validated key locally; no browser session is reused. |
 | New API | One instance URL, label, and relay key per connection; multiple connections supported | Each key's granted, used, and remaining quota, or absolute usage for an unlimited key | AI Limits calls `/api/status` and the read-only `/api/usage/token/` endpoint. The request is read-only, but each relay key may still be capable of model calls. |
+| LiteLLM | One instance URL, label, and virtual key per connection; multiple connections supported | Key spend from `/key/info`, plus a budget quota when the key response includes `max_budget` | AI Limits calls only the read-only `/key/info` endpoint. It does not follow up with `/user/info` or `/team/info`, so team/user budget windows that exist only on those endpoints are omitted. |
+| ClawRouter | One instance URL, label, and policy key per connection; multiple connections supported. Defaults to `https://clawrouter.openclaw.ai` | Monthly remaining budget when the policy is metered, otherwise this-month actual cost | AI Limits calls the read-only `/v1/usage` endpoint. Micros fields are converted from integer micro-dollars to USD. |
+| sub2api | One instance URL, label, and group key per connection; multiple connections supported | Capped-key quota, daily/weekly/monthly subscription windows, wallet balance, and optional 5h/1d/7d rate limits | AI Limits calls the read-only `/v1/usage?days=30&timezone=UTC` endpoint. HTTPS is required except for localhost development. |
+| LLM Proxy | One instance URL, label, and API key per connection; multiple connections supported | Lowest remaining credential quota percent, or request/token counters when no remaining percent is reported | AI Limits calls the read-only `/v1/quota-stats` endpoint. |
 
 ## New API connection modes
 
@@ -71,10 +75,10 @@ credential or raw provider response.
 ## Compatibility boundary
 
 ChatGPT, Claude, Kimi, Cursor, and Grok depend on private provider interfaces that may
-change without notice. ElevenLabs and New API use documented endpoints, but
-their response and authorization behavior can also change. AI Limits rejects
-malformed or contradictory usage rather than inventing a percentage, reset, or
-pace signal.
+change without notice. ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, and LLM Proxy
+use documented or reverse-engineered HTTP endpoints, but their response and authorization
+behavior can also change. AI Limits rejects malformed or contradictory usage rather than
+inventing a percentage, reset, or pace signal.
 
 See [Privacy](PRIVACY.md) for credential storage, request destinations, and
 deletion behavior.

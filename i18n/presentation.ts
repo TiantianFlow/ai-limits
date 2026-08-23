@@ -53,6 +53,31 @@ const KNOWN_METRIC_KEYS: Partial<
     "relay-key-usage": "metrics.newapi.apiKeyUsage",
     "relay-key-quota": "metrics.newapi.apiKeyQuota",
   },
+  litellm: {
+    "key-spend": "metrics.litellm.keySpend",
+    "key-budget": "metrics.litellm.keyBudget",
+    "team-spend": "metrics.litellm.teamSpend",
+    "team-budget": "metrics.litellm.teamBudget",
+  },
+  clawrouter: {
+    "monthly-budget": "metrics.clawrouter.monthlyBudget",
+    "actual-cost": "metrics.clawrouter.actualCost",
+  },
+  sub2api: {
+    "key-quota": "metrics.sub2api.keyQuota",
+    daily: "metrics.sub2api.daily",
+    weekly: "metrics.sub2api.weekly",
+    monthly: "metrics.sub2api.monthly",
+    balance: "metrics.sub2api.balance",
+    "rate-5h": "metrics.sub2api.rate5h",
+    "rate-1d": "metrics.sub2api.rate1d",
+    "rate-7d": "metrics.sub2api.rate7d",
+  },
+  llmProxy: {
+    "remaining-quota": "metrics.llmProxy.remainingQuota",
+    "total-requests": "metrics.llmProxy.totalRequests",
+    "total-tokens": "metrics.llmProxy.totalTokens",
+  },
   grok: {
     "weekly-pool": "metrics.grok.weeklyPool",
     "monthly-pool": "metrics.grok.monthlyPool",
@@ -115,6 +140,10 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   grok: ["usagePool", "planTier"],
   elevenlabs: ["monthlyCredits", "voiceLimits"],
   newapi: ["apiKeyQuota", "unlimitedKeyUsage"],
+  litellm: ["keySpend", "keyBudget"],
+  clawrouter: ["monthlyBudget", "actualCost"],
+  sub2api: ["keyQuota", "subscriptionLimits", "balance"],
+  llmProxy: ["remainingQuota", "usageCounters"],
 };
 
 const DURATION_METRIC = /^(\d+(?:\.\d+)?)-(day|hour)$/;

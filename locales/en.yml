@@ -495,6 +495,27 @@ metrics:
   newapi:
     apiKeyUsage: API key usage
     apiKeyQuota: API key quota
+  litellm:
+    keySpend: Key spend
+    keyBudget: Key budget
+    teamSpend: Team spend
+    teamBudget: Team budget
+  clawrouter:
+    monthlyBudget: Monthly budget
+    actualCost: Actual cost
+  sub2api:
+    keyQuota: Key quota
+    daily: Daily
+    weekly: Weekly
+    monthly: Monthly
+    balance: Balance
+    rate5h: 5 hour limit
+    rate1d: Daily limit
+    rate7d: 7 day limit
+  llmProxy:
+    remainingQuota: Remaining quota
+    totalRequests: Total requests
+    totalTokens: Total tokens
   grok:
     weeklyPool: Weekly usage pool
     monthlyPool: Monthly usage pool
@@ -573,6 +594,35 @@ providers:
     capabilities:
       apiKeyQuota: API key quota
       unlimitedKeyUsage: Unlimited-key usage
+  litellm:
+    name: LiteLLM
+    connect: Connect LiteLLM
+    connectionDisclosure: Supports multiple independent connections. Each stores its own LiteLLM base URL, virtual key, label, usage, and History locally; same-origin connections share only Chrome's host permission.
+    capabilities:
+      keySpend: Key spend
+      keyBudget: Key budget
+  clawrouter:
+    name: ClawRouter
+    connect: Connect ClawRouter
+    connectionDisclosure: Supports multiple independent connections. Each stores its own ClawRouter base URL, policy key, label, usage, and History locally; same-origin connections share only Chrome's host permission.
+    capabilities:
+      monthlyBudget: Monthly budget
+      actualCost: Actual cost
+  sub2api:
+    name: sub2api
+    connect: Connect sub2api
+    connectionDisclosure: Supports multiple independent connections. Each stores its own sub2api base URL, group key, label, usage, and History locally; same-origin connections share only Chrome's host permission.
+    capabilities:
+      keyQuota: Key quota
+      subscriptionLimits: Subscription limits
+      balance: Balance
+  llmProxy:
+    name: LLM Proxy
+    connect: Connect LLM Proxy
+    connectionDisclosure: Supports multiple independent connections. Each stores its own LLM Proxy base URL, API key, label, usage, and History locally; same-origin connections share only Chrome's host permission.
+    capabilities:
+      remainingQuota: Remaining quota
+      usageCounters: Usage counters
 
 accessibility:
   refreshProvider: "Refresh {provider}"

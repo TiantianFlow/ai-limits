@@ -5,7 +5,11 @@ import { cursorPackage } from "./cursor/package";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { kimiPackage } from "./kimi/package";
+import { clawRouterAdapter } from "./clawrouter/adapter";
+import { liteLlmAdapter } from "./litellm/adapter";
+import { llmProxyAdapter } from "./llm-proxy/adapter";
 import { newApiAdapter } from "./newapi/adapter";
+import { sub2apiAdapter } from "./sub2api/adapter";
 import {
   createApiKeyPackage,
   createBrowserSessionPackage,
@@ -16,7 +20,8 @@ import {
   normalizeNewApiBaseUrl,
 } from "./newapi/url";
 import { providerDefinitions } from "./definitions";
-import type { ProviderPackage } from "./types";
+import type { ProviderCollector, ProviderPackage } from "./types";
+import type { ApiKeyProviderKind } from "./catalog";
 
 export { providerKinds } from "./catalog";
 
@@ -45,6 +50,29 @@ function normalizeDynamicOrigin(value: unknown) {
     (value as { baseUrl?: unknown }).baseUrl,
   );
   return baseUrl ? ({ kind: "dynamic-origin", baseUrl } as const) : undefined;
+}
+
+function dynamicOriginPermissions(config: unknown) {
+  const normalized = normalizeDynamicOrigin(config);
+  const origin =
+    normalized === undefined
+      ? undefined
+      : newApiPermissionOrigin(normalized.baseUrl);
+  return origin ? { origins: [origin] } : undefined;
+}
+
+function dynamicOriginApiKeyPackage<Kind extends ApiKeyProviderKind>(
+  kind: Kind,
+  adapter: ProviderCollector<Kind>,
+) {
+  return createApiKeyPackage({
+    kind,
+    adapter,
+    cardinality: providerDefinitions[kind].cardinality,
+    configKind: providerDefinitions[kind].configKind,
+    normalizeConfig: normalizeDynamicOrigin,
+    requiredPermissions: dynamicOriginPermissions,
+  });
 }
 
 export const providerRegistry = {
@@ -88,19 +116,9 @@ export const providerRegistry = {
       providerDefinitions.elevenlabs.optionalPermissions,
     ),
   }),
-  newapi: createApiKeyPackage({
-    kind: "newapi",
-    adapter: newApiAdapter,
-    cardinality: providerDefinitions.newapi.cardinality,
-    configKind: providerDefinitions.newapi.configKind,
-    normalizeConfig: normalizeDynamicOrigin,
-    requiredPermissions: (config) => {
-      const normalized = normalizeDynamicOrigin(config);
-      const origin =
-        normalized === undefined
-          ? undefined
-          : newApiPermissionOrigin(normalized.baseUrl);
-      return origin ? { origins: [origin] } : undefined;
-    },
-  }),
+  newapi: dynamicOriginApiKeyPackage("newapi", newApiAdapter),
+  litellm: dynamicOriginApiKeyPackage("litellm", liteLlmAdapter),
+  clawrouter: dynamicOriginApiKeyPackage("clawrouter", clawRouterAdapter),
+  sub2api: dynamicOriginApiKeyPackage("sub2api", sub2apiAdapter),
+  llmProxy: dynamicOriginApiKeyPackage("llmProxy", llmProxyAdapter),
 } satisfies { [Kind in ProviderKind]: ProviderPackage };

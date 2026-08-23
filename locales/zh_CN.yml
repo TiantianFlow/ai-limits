@@ -495,6 +495,27 @@ metrics:
   newapi:
     apiKeyUsage: API 密钥用量
     apiKeyQuota: API 密钥额度
+  litellm:
+    keySpend: 密钥花费
+    keyBudget: 密钥预算
+    teamSpend: 团队花费
+    teamBudget: 团队预算
+  clawrouter:
+    monthlyBudget: 每月预算
+    actualCost: 实际费用
+  sub2api:
+    keyQuota: 密钥额度
+    daily: 每日
+    weekly: 每周
+    monthly: 每月
+    balance: 余额
+    rate5h: 5 小时限制
+    rate1d: 每日限制
+    rate7d: 7 天限制
+  llmProxy:
+    remainingQuota: 剩余额度
+    totalRequests: 总请求数
+    totalTokens: 总令牌
   grok:
     weeklyPool: 每周用量池
     monthlyPool: 每月用量池
@@ -573,6 +594,35 @@ providers:
     capabilities:
       apiKeyQuota: API 密钥额度
       unlimitedKeyUsage: 无上限密钥用量
+  litellm:
+    name: LiteLLM
+    connect: 连接 LiteLLM
+    connectionDisclosure: 支持多个独立连接。每个连接在本地分别存储自己的 LiteLLM 基础网址、虚拟密钥、标签、用量和历史；同源连接仅共享 Chrome 的主机权限。
+    capabilities:
+      keySpend: 密钥花费
+      keyBudget: 密钥预算
+  clawrouter:
+    name: ClawRouter
+    connect: 连接 ClawRouter
+    connectionDisclosure: 支持多个独立连接。每个连接在本地分别存储自己的 ClawRouter 基础网址、策略密钥、标签、用量和历史；同源连接仅共享 Chrome 的主机权限。
+    capabilities:
+      monthlyBudget: 每月预算
+      actualCost: 实际费用
+  sub2api:
+    name: sub2api
+    connect: 连接 sub2api
+    connectionDisclosure: 支持多个独立连接。每个连接在本地分别存储自己的 sub2api 基础网址、分组密钥、标签、用量和历史；同源连接仅共享 Chrome 的主机权限。
+    capabilities:
+      keyQuota: 密钥额度
+      subscriptionLimits: 订阅限制
+      balance: 余额
+  llmProxy:
+    name: LLM Proxy
+    connect: 连接 LLM Proxy
+    connectionDisclosure: 支持多个独立连接。每个连接在本地分别存储自己的 LLM Proxy 基础网址、API 密钥、标签、用量和历史；同源连接仅共享 Chrome 的主机权限。
+    capabilities:
+      remainingQuota: 剩余额度
+      usageCounters: 用量计数
 
 accessibility:
   refreshProvider: "刷新 {provider}"

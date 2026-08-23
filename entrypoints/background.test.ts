@@ -631,7 +631,7 @@ describe("central provider abstraction source contract", () => {
       "entrypoints/background.ts": backgroundSource,
       "storage/state-codec.ts": stateCodecSource,
     };
-    const providerKinds = "chatgpt|claude|kimi|cursor|grok|elevenlabs|newapi";
+    const providerKinds = "chatgpt|claude|kimi|cursor|grok|elevenlabs|newapi|litellm|clawrouter|sub2api|llmProxy";
     const comparison = new RegExp(
       `(?:===|!==)\\s*[\"'](?:${providerKinds})[\"']|[\"'](?:${providerKinds})[\"']\\s*(?:===|!==)`,
     );

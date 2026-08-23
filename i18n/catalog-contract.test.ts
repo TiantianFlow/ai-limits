@@ -39,7 +39,7 @@ const ALLOWED_JSX_TEXT = new Set([
   "/api/usage/token/",
 ]);
 const ALLOWED_LITERAL_RE =
-  /^(used|left|general|model|feature|product|elapsed|remaining|default|USD|chatgpt|claude|kimi|cursor|grok|elevenlabs|newapi)$/;
+  /^(used|left|general|model|feature|product|elapsed|remaining|default|USD|chatgpt|claude|kimi|cursor|grok|elevenlabs|newapi|litellm|clawrouter|sub2api|llmProxy)$/;
 
 function chromeKey(message: ParsedMessage): string {
   return message.key.join("_");

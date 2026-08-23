@@ -19,9 +19,9 @@ export default defineConfig({
     default_locale: "en",
     minimum_chrome_version: "116",
     permissions: ["storage", "alarms", "sidePanel"],
-    optional_host_permissions: providers.flatMap(
-      ({ optionalOrigins }) => optionalOrigins,
-    ),
+    optional_host_permissions: [
+      ...new Set(providers.flatMap(({ optionalOrigins }) => optionalOrigins)),
+    ],
     optional_permissions: [
       ...new Set(
         providers.flatMap(({ optionalPermissions }) => optionalPermissions),

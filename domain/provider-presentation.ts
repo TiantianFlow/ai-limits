@@ -53,6 +53,30 @@ export const providerCatalog = {
       markPath: "/provider-marks/fallback.svg",
     },
   },
+  litellm: {
+    displayName: "LiteLLM",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+    },
+  },
+  clawrouter: {
+    displayName: "ClawRouter",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+    },
+  },
+  sub2api: {
+    displayName: "sub2api",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+    },
+  },
+  llmProxy: {
+    displayName: "LLM Proxy",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+    },
+  },
 } as const;
 
 export const providerNames = Object.fromEntries(

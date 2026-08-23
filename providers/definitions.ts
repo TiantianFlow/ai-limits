@@ -62,4 +62,48 @@ export const providerDefinitions = {
     ],
     optionalPermissions: [],
   },
+  litellm: {
+    cardinality: "multiple",
+    credentialKind: "api-key",
+    configKind: "dynamic-origin",
+    optionalOrigins: [
+      "https://*/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+    ],
+    optionalPermissions: [],
+  },
+  clawrouter: {
+    cardinality: "multiple",
+    credentialKind: "api-key",
+    configKind: "dynamic-origin",
+    optionalOrigins: [
+      "https://*/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+    ],
+    optionalPermissions: [],
+  },
+  sub2api: {
+    cardinality: "multiple",
+    credentialKind: "api-key",
+    configKind: "dynamic-origin",
+    optionalOrigins: [
+      "https://*/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+    ],
+    optionalPermissions: [],
+  },
+  llmProxy: {
+    cardinality: "multiple",
+    credentialKind: "api-key",
+    configKind: "dynamic-origin",
+    optionalOrigins: [
+      "https://*/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+    ],
+    optionalPermissions: [],
+  },
 } as const satisfies { [Kind in ProviderKind]: ProviderDefinition };

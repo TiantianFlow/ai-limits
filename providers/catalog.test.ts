@@ -23,7 +23,14 @@ describe("provider catalog", () => {
       "cursor",
       "grok",
     ];
-    const apiKeyKinds: ApiKeyProviderKind[] = ["elevenlabs", "newapi"];
+    const apiKeyKinds: ApiKeyProviderKind[] = [
+      "elevenlabs",
+      "newapi",
+      "litellm",
+      "clawrouter",
+      "sub2api",
+      "llmProxy",
+    ];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
     expect(allKinds).toEqual(providerKinds);
@@ -82,6 +89,22 @@ describe("provider catalog", () => {
         providerId: "newapi",
         markPath: "/provider-marks/fallback.svg",
       },
+      {
+        providerId: "litellm",
+        markPath: "/provider-marks/fallback.svg",
+      },
+      {
+        providerId: "clawrouter",
+        markPath: "/provider-marks/fallback.svg",
+      },
+      {
+        providerId: "sub2api",
+        markPath: "/provider-marks/fallback.svg",
+      },
+      {
+        providerId: "llmProxy",
+        markPath: "/provider-marks/fallback.svg",
+      },
     ]);
   });
 
@@ -97,12 +120,12 @@ describe("provider catalog", () => {
               type: "CONNECT_API_KEY_PROVIDER",
               providerKind,
               config:
-                providerKind === "newapi"
-                  ? {
+                providerKind === "elevenlabs"
+                  ? { kind: "fixed" }
+                  : {
                       kind: "dynamic-origin",
                       baseUrl: "https://relay.example",
-                    }
-                  : { kind: "fixed" },
+                    },
               apiKey: "candidate",
               permissionIntentId: "550e8400-e29b-41d4-a716-446655440099",
             })
@@ -125,6 +148,8 @@ describe("provider catalog", () => {
   test("derives API-key provider identities from the catalog", () => {
     expect(isApiKeyProviderKind("elevenlabs")).toBe(true);
     expect(isApiKeyProviderKind("newapi")).toBe(true);
+    expect(isApiKeyProviderKind("litellm")).toBe(true);
+    expect(isApiKeyProviderKind("llmProxy")).toBe(true);
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);

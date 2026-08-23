@@ -2,7 +2,7 @@
 
 [English](SUPPORTED_PROVIDERS.md) | 简体中文
 
-AI Limits 目前支持七种服务连接。每个服务都需要用户主动启用；标准化用量和
+AI Limits 目前支持十一种服务连接。每个服务都需要用户主动启用；标准化用量和
 History 只保存在当前 Chrome 配置文件中。
 
 | 服务 | 连接方式 | 读取内容 | 重要差异 |
@@ -14,6 +14,10 @@ History 只保存在当前 Chrome 配置文件中。
 | Grok | 浏览器登录会话 | 以每周或每月用量池为订阅限额，并在 Grok Build 与 Chat 桶合计等于整池时显示构成，以及 SuperGrok 系列套餐标签。按聊天模式（`fast`、`expert`、`heavy`、`auto`）的短窗速率限制仅在没有用量池时作为回退显示 | 使用 `grok.com` 上未公开的网站会话接口。浏览器可能附带 Grok Cookie；账号标识和原始订阅响应不会持久化。这是面向消费者的 Grok，不是 Cursor 的 Grok Bot。 |
 | ElevenLabs | 用户创建的 API 密钥 | 订阅 Credits 和语音容量限制 | 指南建议使用 **User → Read**。AI Limits 调用有文档的订阅接口并在本地保存验证成功的密钥，不复用浏览器会话。 |
 | New API | 每个连接各自使用实例网址、标签和一个 Relay Key；支持多个连接 | 每个密钥的总额、已用和剩余配额；无限额密钥则显示绝对用量 | AI Limits 调用 `/api/status` 和只读的 `/api/usage/token/` 接口。请求本身只读，但每个 Relay Key 仍可能具备调用模型的能力。 |
+| LiteLLM | 每个连接各自使用实例网址、标签和一个虚拟密钥；支持多个连接 | 来自 `/key/info` 的密钥花费；当响应包含 `max_budget` 时显示预算额度 | AI Limits 只调用只读的 `/key/info` 接口，不会继续请求 `/user/info` 或 `/team/info`，因此仅存在于后两个接口中的用户/团队预算窗口会被省略。 |
+| ClawRouter | 每个连接各自使用实例网址、标签和一个策略密钥；支持多个连接。默认地址为 `https://clawrouter.openclaw.ai` | 按策略计量时显示每月剩余预算，否则显示本月实际费用 | AI Limits 调用只读的 `/v1/usage` 接口。微美元整数字段会换算为美元。 |
+| sub2api | 每个连接各自使用实例网址、标签和一个分组密钥；支持多个连接 | 有上限密钥额度、每日/每周/每月订阅窗口、钱包余额，以及可选的 5 小时/1 天/7 天速率限制 | AI Limits 调用只读的 `/v1/usage?days=30&timezone=UTC` 接口。必须使用 HTTPS，本地开发的 localhost 除外。 |
+| LLM Proxy | 每个连接各自使用实例网址、标签和一个 API 密钥；支持多个连接 | 最低剩余额度百分比；未报告剩余百分比时回退为请求/令牌计数 | AI Limits 调用只读的 `/v1/quota-stats` 接口。 |
 
 ## New API 连接模式
 
@@ -63,8 +67,9 @@ History 只绘制配额指标。History 不包含凭据或服务商原始响应�
 
 ## 兼容性边界
 
-ChatGPT、Claude、Kimi、Cursor 和 Grok 依赖可能随时变化的未公开接口。ElevenLabs
-和 New API 使用有文档的接口，但响应和授权行为仍可能变化。对于格式异常或
-彼此矛盾的用量，AI Limits 会拒绝数据，而不会虚构百分比、重置时间或用量节奏。
+ChatGPT、Claude、Kimi、Cursor 和 Grok 依赖可能随时变化的未公开接口。ElevenLabs、
+New API、LiteLLM、ClawRouter、sub2api 和 LLM Proxy 使用有文档或已逆向的 HTTP
+接口，但响应和授权行为仍可能变化。对于格式异常或彼此矛盾的用量，AI Limits
+会拒绝数据，而不会虚构百分比、重置时间或用量节奏。
 
 凭据存储、请求目标和删除行为请参阅[隐私说明（英文）](PRIVACY.md)。

@@ -5,6 +5,7 @@ export {
   type ProviderPresentation,
 } from "../domain/provider-presentation";
 export {
+  apiKeyProviderKinds,
   isApiKeyProviderKind,
   isProviderKind,
   providerKinds,

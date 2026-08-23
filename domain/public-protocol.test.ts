@@ -10,6 +10,10 @@ const providers = [
   { providerKind: "grok", cardinality: "single", credentialKind: "none", configKind: "fixed" },
   { providerKind: "elevenlabs", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
   { providerKind: "newapi", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
+  { providerKind: "litellm", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
+  { providerKind: "clawrouter", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
+  { providerKind: "sub2api", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
+  { providerKind: "llmProxy", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
 ] as const;
 
 describe("public side-panel protocol", () => {

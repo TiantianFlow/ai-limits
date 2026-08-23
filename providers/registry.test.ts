@@ -11,7 +11,11 @@ import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { createFixtureState } from "./fixtures";
 import { kimiAdapter } from "./kimi/adapter";
+import { clawRouterAdapter } from "./clawrouter/adapter";
+import { liteLlmAdapter } from "./litellm/adapter";
+import { llmProxyAdapter } from "./llm-proxy/adapter";
 import { newApiAdapter } from "./newapi/adapter";
+import { sub2apiAdapter } from "./sub2api/adapter";
 import { providerKinds, providerRegistry } from "./registry";
 import type {
   ProviderCollector,
@@ -94,6 +98,10 @@ describe("provider registry", () => {
       "grok",
       "elevenlabs",
       "newapi",
+      "litellm",
+      "clawrouter",
+      "sub2api",
+      "llmProxy",
     ]);
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
 
@@ -104,13 +112,13 @@ describe("provider registry", () => {
         credentialKind: providerRegistry[kind].credentialKind,
         configKind: providerRegistry[kind].configKind,
         accepted: providerRegistry[kind].normalizeConfig(
-          kind === "newapi" ? dynamic : fixed,
+          providerRegistry[kind].configKind === "dynamic-origin" ? dynamic : fixed,
         ),
         rejected: providerRegistry[kind].normalizeConfig(
-          kind === "newapi" ? fixed : dynamic,
+          providerRegistry[kind].configKind === "dynamic-origin" ? fixed : dynamic,
         ),
         permissions: providerRegistry[kind].requiredPermissions(
-          kind === "newapi" ? dynamic : fixed,
+          providerRegistry[kind].configKind === "dynamic-origin" ? dynamic : fixed,
         ),
       })),
     ).toEqual([
@@ -186,6 +194,54 @@ describe("provider registry", () => {
         rejected: undefined,
         permissions: { origins: ["https://relay.example/*"] },
       },
+      {
+        kind: "litellm",
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        accepted: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example/private/path",
+        },
+        rejected: undefined,
+        permissions: { origins: ["https://relay.example/*"] },
+      },
+      {
+        kind: "clawrouter",
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        accepted: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example/private/path",
+        },
+        rejected: undefined,
+        permissions: { origins: ["https://relay.example/*"] },
+      },
+      {
+        kind: "sub2api",
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        accepted: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example/private/path",
+        },
+        rejected: undefined,
+        permissions: { origins: ["https://relay.example/*"] },
+      },
+      {
+        kind: "llmProxy",
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        accepted: {
+          kind: "dynamic-origin",
+          baseUrl: "https://relay.example/private/path",
+        },
+        rejected: undefined,
+        permissions: { origins: ["https://relay.example/*"] },
+      },
     ]);
 
     expect(providerRegistry.newapi.normalizeConfig({
@@ -250,6 +306,50 @@ describe("provider registry", () => {
         ],
         optionalPermissions: [],
       },
+      litellm: {
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        optionalOrigins: [
+          "https://*/*",
+          "http://localhost/*",
+          "http://127.0.0.1/*",
+        ],
+        optionalPermissions: [],
+      },
+      clawrouter: {
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        optionalOrigins: [
+          "https://*/*",
+          "http://localhost/*",
+          "http://127.0.0.1/*",
+        ],
+        optionalPermissions: [],
+      },
+      sub2api: {
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        optionalOrigins: [
+          "https://*/*",
+          "http://localhost/*",
+          "http://127.0.0.1/*",
+        ],
+        optionalPermissions: [],
+      },
+      llmProxy: {
+        cardinality: "multiple",
+        credentialKind: "api-key",
+        configKind: "dynamic-origin",
+        optionalOrigins: [
+          "https://*/*",
+          "http://localhost/*",
+          "http://127.0.0.1/*",
+        ],
+        optionalPermissions: [],
+      },
     });
   });
 
@@ -261,6 +361,10 @@ describe("provider registry", () => {
       grok: grokAdapter,
       elevenlabs: elevenLabsAdapter,
       newapi: newApiAdapter,
+      litellm: liteLlmAdapter,
+      clawrouter: clawRouterAdapter,
+      sub2api: sub2apiAdapter,
+      llmProxy: llmProxyAdapter,
     };
     const adapterSpies = Object.fromEntries(
       Object.entries(adapters).map(([kind, adapter]) => [
@@ -276,7 +380,8 @@ describe("provider registry", () => {
     } as never);
 
     for (const kind of providerKinds) {
-      const config = kind === "newapi" ? dynamic : fixed;
+      const config =
+        providerRegistry[kind].configKind === "dynamic-origin" ? dynamic : fixed;
       const credential = providerRegistry[kind].credentialKind === "api-key"
         ? apiKey
         : undefined;
@@ -308,6 +413,20 @@ describe("provider registry", () => {
       credential: { kind: "api-key", value: "secret" },
     });
     expect(adapterSpies.newapi).toHaveBeenCalledWith({
+      fetch: services.fetch,
+      now: 123,
+      signal: services.signal,
+      credential: { kind: "api-key", value: "secret" },
+      baseUrl: "https://relay.example/private/path",
+    });
+    expect(adapterSpies.litellm).toHaveBeenCalledWith({
+      fetch: services.fetch,
+      now: 123,
+      signal: services.signal,
+      credential: { kind: "api-key", value: "secret" },
+      baseUrl: "https://relay.example/private/path",
+    });
+    expect(adapterSpies.llmProxy).toHaveBeenCalledWith({
       fetch: services.fetch,
       now: 123,
       signal: services.signal,
