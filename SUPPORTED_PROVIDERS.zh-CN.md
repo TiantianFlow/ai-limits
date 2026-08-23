@@ -9,13 +9,22 @@ History 只保存在当前 Chrome 配置文件中。
 捕获的服务响应或上游已观测响应样例支持；**INFERRED** 表示结构来自文档或客户端
 契约，仍需实时捕获确认。
 
+余额展示策略按服务明确分类：
+
+- **余额为主** — Mistral、sub2api、DeepSeek、Moonshot、DeepInfra、OpenAI 和
+  OpenRouter。服务报告的零余额仍会显示。
+- **套餐/用量池为主** — ChatGPT、Claude、Cursor、Grok、Perplexity 和
+  ElevenLabs。为零的辅助或额外额度会隐藏，因为套餐或用量池才是主要信号。
+- **当前无余额指标** — Kimi、New API、LiteLLM、ClawRouter、LLM Proxy、
+  Fireworks 和 GroqCloud；当前契约报告配额或计数。
+
 | 服务 | 连接方式 | 读取内容 | 来源等级 | 重要差异 |
 | --- | --- | --- | --- | --- |
 | ChatGPT | 浏览器登录会话 | 服务商报告的消息窗口和 Credits | **OBSERVED** | 使用未公开的网站会话接口。浏览器可能附带 ChatGPT Cookie；请求期间使用的账号标识不会持久化。 |
 | Claude | 浏览器登录会话 | 通用及模型专属限制，以及服务商报告的 Extra usage | **OBSERVED** | 使用未公开的网站会话接口。组织选择只在请求期间使用；服务商提供的显示标签可能被保留。 |
 | Kimi | 浏览器会话及定向凭据恢复 | 订阅总用量和 Kimi Code 限制 | **OBSERVED** | 可能读取名称完全匹配的旧版 `kimi-auth` Cookie 或 `localStorage.access_token`。手动 Connect 或 Refresh 可能短暂打开一个非活动 Kimi 标签页，让 Kimi 自己刷新会话。自动刷新绝不会打开标签页；没有可用会话时可能延后。 |
 | Cursor | 浏览器登录会话及手动页面增强 | Cursor 模型和其他模型的独立月度限制、Grok Bot 每周用量，以及服务商报告的按量支出/额外 Credits 数据 | **OBSERVED** | 基础用量在后台刷新。Connect 或手动 Refresh 可通过一个已经打开的 `cursor.com` 标签页请求 Grok Bot 和额外 Credits JSON；如果当前没有打开的标签页，可能会短暂打开一个非活动的用量页。Chrome 会把已登录的 Cursor Cookie 附加到这些固定的同源请求，但 AI Limits 不会直接检查 Cookie 值。扩展不会激活 Cursor 标签页，并且只关闭它自己创建的标签页。自动刷新绝不会打开标签页或注入代码。上次有效的页面数值会保留到 Grok Bot 的每周重置，卡片会说明为何未能刷新。 |
-| Grok | 浏览器登录会话 | 以每周或每月用量池为订阅限额，并在 Grok Build 与 Chat 桶合计等于整池时显示构成，以及 SuperGrok 系列套餐标签。按聊天模式（`fast`、`expert`、`heavy`、`auto`）的短窗速率限制仅在没有用量池时作为回退显示 | **OBSERVED** | 使用 `grok.com` 上未公开的网站会话接口。浏览器可能附带 Grok Cookie；账号标识和原始订阅响应不会持久化。这是面向消费者的 Grok，不是 Cursor 的 Grok Bot。 |
+| Grok | 浏览器登录会话 | 以每周或每月用量池为订阅限额，并在 Grok Build 与 Chat 桶合计等于整池时显示构成，以及 SuperGrok 系列套餐标签 | **OBSERVED** | 使用 `grok.com` 上未公开的网站会话接口。按聊天模式返回的短窗速率限制不会显示。浏览器可能附带 Grok Cookie；账号标识和原始订阅响应不会持久化。这是面向消费者的 Grok，不是 Cursor 的 Grok Bot。 |
 | Mistral | 浏览器登录会话 | 本月至今支出、令牌总量和可用额度 | **INFERRED** | Chrome 会附加同源 Cookie，但无法暴露构造 `X-CSRFTOKEN` 所需的 CSRF Cookie 值；需要实时测试确认服务能接受缺少该请求头的请求。 |
 | Perplexity | 浏览器登录会话 | 周期性、已购买和促销额度池，以及套餐推断 | **INFERRED** | 使用私有账单接口和 Chrome 附加的同源 Cookie。额度过期与瀑布式归因遵循推断的响应契约。 |
 | ElevenLabs | 用户创建的 API 密钥 | 订阅 Credits 和语音容量限制 | **OBSERVED** | 指南建议使用 **User → Read**。AI Limits 调用有文档的订阅接口并在本地保存验证成功的密钥，不复用浏览器会话。 |

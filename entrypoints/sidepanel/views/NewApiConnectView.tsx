@@ -1,12 +1,20 @@
 import React, { useState } from "react";
 
+import { formatList } from "../../../i18n/format";
 import { l10n } from "../../../i18n/index";
-import { localizeProviderName } from "../../../i18n/presentation";
+import {
+  localizeCapability,
+  localizeProviderName,
+  providerCapabilityIds,
+} from "../../../i18n/presentation";
+import type { ApiKeyProviderKind } from "../../../domain/public-protocol";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
 import type { ApiKeyConnectAttemptResult } from "./ApiKeyConnectView";
 
 export interface NewApiConnectViewProps {
+  providerKind: ApiKeyProviderKind;
+  guideKind?: "newapi";
   mode: "connect" | "replace";
   initialBaseUrl?: string;
   initialUserLabel?: string;
@@ -20,7 +28,29 @@ export interface NewApiConnectViewProps {
   ) => Promise<ApiKeyConnectAttemptResult>;
 }
 
-function feedbackFor(result: ApiKeyConnectAttemptResult): string {
+function feedbackFor(
+  result: ApiKeyConnectAttemptResult,
+  providerKind: ApiKeyProviderKind,
+  guideKind?: "newapi",
+): string {
+  if (guideKind !== "newapi") {
+    const provider = localizeProviderName(providerKind);
+    switch (result) {
+      case "connected":
+        return "";
+      case "invalid_site":
+        return l10n.t("dynamicApi.invalidSite", { provider });
+      case "invalid_key":
+        return l10n.t("dynamicApi.invalidKey", { provider });
+      case "insufficient_scope":
+        return l10n.t("dynamicApi.insufficientScope", { provider });
+      case "temporary_error":
+        return l10n.t("dynamicApi.temporary", { provider });
+      case "permission_declined":
+        return l10n.t("dynamicApi.permissionDeclined", { provider });
+    }
+  }
+
   switch (result) {
     case "connected":
       return "";
@@ -38,6 +68,8 @@ function feedbackFor(result: ApiKeyConnectAttemptResult): string {
 }
 
 export function NewApiConnectView({
+  providerKind,
+  guideKind,
   mode,
   initialBaseUrl = "",
   initialUserLabel = "",
@@ -52,9 +84,21 @@ export function NewApiConnectView({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const replace = mode === "replace";
+  const isNewApi = guideKind === "newapi";
+  const provider = localizeProviderName(providerKind);
+  const capabilities = formatList(
+    providerCapabilityIds(providerKind).map((id) =>
+      localizeCapability(providerKind, id),
+    ),
+  );
+  const fieldPrefix = `${providerKind}-connection`;
   const title = replace
-    ? l10n.t("newapi.replaceTitle")
-    : l10n.t("newapi.connectTitle");
+    ? isNewApi
+      ? l10n.t("newapi.replaceTitle")
+      : l10n.t("dynamicApi.replaceTitle", { provider })
+    : isNewApi
+      ? l10n.t("newapi.connectTitle")
+      : l10n.t("dynamicApi.connectTitle", { provider });
   const submitLabel = replace
     ? l10n.t("apiKey.submitReplace")
     : l10n.t("apiKey.submitConnect");
@@ -67,8 +111,15 @@ export function NewApiConnectView({
         title={title}
         subtitle={
           instanceLabel
-            ? l10n.t("newapi.subtitleNamed", { label: instanceLabel })
-            : l10n.t("newapi.subtitle")
+            ? isNewApi
+              ? l10n.t("newapi.subtitleNamed", { label: instanceLabel })
+              : l10n.t("dynamicApi.subtitleNamed", {
+                  label: instanceLabel,
+                  capabilities,
+                })
+            : isNewApi
+              ? l10n.t("newapi.subtitle")
+              : l10n.t("dynamicApi.subtitle", { capabilities })
         }
         backLabel={backLabel}
         onBack={onBack}
@@ -76,18 +127,26 @@ export function NewApiConnectView({
 
       <div className="screen-body api-key-guide__body">
         <div className="api-key-guide__identity">
-          <ProviderMark providerId="newapi" size="md" />
+          <ProviderMark providerId={providerKind} size="md" />
           <div>
-            <h2>{localizeProviderName("newapi")}</h2>
-            <p>{l10n.t("newapi.capabilities")}</p>
+            <h2>{provider}</h2>
+            <p>{isNewApi ? l10n.t("newapi.capabilities") : capabilities}</p>
           </div>
         </div>
 
-        <p className="settings-copy">{l10n.t("newapi.explanation")}</p>
+        <p className="settings-copy">
+          {isNewApi
+            ? l10n.t("newapi.explanation")
+            : l10n.t("dynamicApi.explanation", { provider })}
+        </p>
 
         <form
           className="api-key-guide__form"
-          aria-label={l10n.t("newapi.formName")}
+          aria-label={
+            isNewApi
+              ? l10n.t("newapi.formName")
+              : l10n.t("dynamicApi.formName", { provider })
+          }
           onSubmit={(event) => {
             event.preventDefault();
             if (invalid || submitting) return;
@@ -99,53 +158,87 @@ export function NewApiConnectView({
                 ? onSubmit(baseUrl, apiKey, trimmedLabel)
                 : onSubmit(baseUrl, apiKey);
             void submission
-              .then((result) => setFeedback(feedbackFor(result)))
-              .catch(() => setFeedback(feedbackFor("temporary_error")))
+              .then((result) =>
+                setFeedback(feedbackFor(result, providerKind, guideKind)),
+              )
+              .catch(() =>
+                setFeedback(
+                  feedbackFor("temporary_error", providerKind, guideKind),
+                ),
+              )
               .finally(() => {
                 setApiKey("");
                 setSubmitting(false);
               });
           }}
         >
-          <label htmlFor="newapi-user-label">{l10n.t("newapi.labelField")}</label>
+          <label htmlFor={`${fieldPrefix}-user-label`}>
+            {l10n.t("newapi.labelField")}
+          </label>
           <input
-            id="newapi-user-label"
+            id={`${fieldPrefix}-user-label`}
             type="text"
             autoComplete="off"
             maxLength={128}
-            placeholder={l10n.t("newapi.labelPlaceholder")}
+            placeholder={
+              isNewApi
+                ? l10n.t("newapi.labelPlaceholder")
+                : l10n.t("dynamicApi.labelPlaceholder", { provider })
+            }
             value={userLabel}
             disabled={submitting}
-            aria-describedby="newapi-user-label-help"
+            aria-describedby={`${fieldPrefix}-user-label-help`}
             onChange={(event) => setUserLabel(event.currentTarget.value)}
           />
-          <small id="newapi-user-label-help">{l10n.t("newapi.labelHelp")}</small>
+          <small id={`${fieldPrefix}-user-label-help`}>
+            {l10n.t("newapi.labelHelp")}
+          </small>
 
-          <label htmlFor="newapi-base-url">{l10n.t("newapi.urlField")}</label>
+          <label htmlFor={`${fieldPrefix}-base-url`}>
+            {isNewApi
+              ? l10n.t("newapi.urlField")
+              : l10n.t("dynamicApi.urlField", { provider })}
+          </label>
           <input
-            id="newapi-base-url"
+            id={`${fieldPrefix}-base-url`}
             type="url"
             inputMode="url"
             autoComplete="url"
-            placeholder={l10n.t("newapi.urlPlaceholder")}
+            placeholder={
+              isNewApi
+                ? l10n.t("newapi.urlPlaceholder")
+                : l10n.t("dynamicApi.urlPlaceholder")
+            }
             value={baseUrl}
             disabled={submitting}
-            aria-describedby="newapi-base-url-help"
+            aria-describedby={`${fieldPrefix}-base-url-help`}
             onChange={(event) => setBaseUrl(event.currentTarget.value)}
           />
-          <small id="newapi-base-url-help">{l10n.t("newapi.urlHelp")}</small>
+          <small id={`${fieldPrefix}-base-url-help`}>
+            {isNewApi
+              ? l10n.t("newapi.urlHelp")
+              : l10n.t("dynamicApi.urlHelp", { provider })}
+          </small>
 
-          <label htmlFor="newapi-api-key">{l10n.t("newapi.keyField")}</label>
+          <label htmlFor={`${fieldPrefix}-api-key`}>
+            {isNewApi
+              ? l10n.t("newapi.keyField")
+              : l10n.t("dynamicApi.keyField", { provider })}
+          </label>
           <input
-            id="newapi-api-key"
+            id={`${fieldPrefix}-api-key`}
             type="password"
             autoComplete="off"
             value={apiKey}
             disabled={submitting}
-            aria-describedby="newapi-api-key-help"
+            aria-describedby={`${fieldPrefix}-api-key-help`}
             onChange={(event) => setApiKey(event.currentTarget.value)}
           />
-          <small id="newapi-api-key-help">{l10n.t("newapi.keyHelp")}</small>
+          <small id={`${fieldPrefix}-api-key-help`}>
+            {isNewApi
+              ? l10n.t("newapi.keyHelp")
+              : l10n.t("dynamicApi.keyHelp")}
+          </small>
 
           <button
             className="button button--primary"
@@ -157,7 +250,9 @@ export function NewApiConnectView({
           </button>
         </form>
 
-        <p className="settings-copy">{l10n.t("newapi.excluded")}</p>
+        <p className="settings-copy">
+          {isNewApi ? l10n.t("newapi.excluded") : l10n.t("dynamicApi.excluded")}
+        </p>
         {feedback ? <p className="health-message">{feedback}</p> : null}
       </div>
     </section>

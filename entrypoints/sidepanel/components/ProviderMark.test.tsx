@@ -29,8 +29,8 @@ describe("ProviderMark", () => {
       "/provider-marks/kimi.svg",
       "/provider-marks/cursor.svg",
       "/provider-marks/grok.svg",
-      "/provider-marks/fallback.svg",
-      "/provider-marks/fallback.svg",
+      "/provider-marks/mistral.svg",
+      "/provider-marks/perplexity.svg",
       "/provider-marks/elevenlabs.svg",
       "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
@@ -41,9 +41,9 @@ describe("ProviderMark", () => {
       "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
-      "/provider-marks/fallback.svg",
-      "/provider-marks/fallback.svg",
-      "/provider-marks/fallback.svg",
+      "/provider-marks/openai.svg",
+      "/provider-marks/groqcloud.svg",
+      "/provider-marks/openrouter.svg",
       "/provider-marks/fallback.svg",
     ]);
     expect(
@@ -54,10 +54,11 @@ describe("ProviderMark", () => {
       "/provider-marks/kimi-dark.svg",
       "/provider-marks/cursor-dark.svg",
       "/provider-marks/grok-dark.svg",
+      "/provider-marks/openrouter-dark.svg",
     ]);
     expect(new Set(marks.slice(0, 20).map((mark) => mark.src))).toHaveProperty(
       "size",
-      7,
+      12,
     );
     expect(marks.every((mark) => mark.getAttribute("aria-hidden") === "true")).toBe(
       true,
@@ -100,10 +101,10 @@ describe("ProviderMark", () => {
     expect(
       marks.some((mark) => mark.classList.contains("mark-contrast-tile")),
     ).toBe(false);
-    expect(marks[5]).toHaveClass("provider-mark--fallback");
+    expect(marks[8]).toHaveClass("provider-mark--fallback");
     expect(
-      marks.slice(0, 5).every((mark) =>
-        !mark.classList.contains("provider-mark--fallback"),
+      [5, 6, 17, 18, 19].every(
+        (index) => !marks[index]?.classList.contains("provider-mark--fallback"),
       ),
     ).toBe(true);
     expect(screen.getByText("unknown-provider")).toBeVisible();

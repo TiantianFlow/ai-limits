@@ -50,6 +50,7 @@ describe("provider catalog", () => {
       markPath: string;
       darkMarkPath?: string;
       apiKeySetupUrl?: string;
+      apiKeyGuide?: "elevenlabs" | "newapi";
     };
     const providerPresentation = (
       catalog as typeof catalog & {
@@ -91,20 +92,22 @@ describe("provider catalog", () => {
       },
       {
         providerId: "mistral",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/mistral.svg",
       },
       {
         providerId: "perplexity",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/perplexity.svg",
       },
       {
         providerId: "elevenlabs",
         markPath: "/provider-marks/elevenlabs.svg",
         apiKeySetupUrl: "https://elevenlabs.io/app/developers/api-keys",
+        apiKeyGuide: "elevenlabs",
       },
       {
         providerId: "newapi",
         markPath: "/provider-marks/fallback.svg",
+        apiKeyGuide: "newapi",
       },
       {
         providerId: "litellm",
@@ -144,20 +147,42 @@ describe("provider catalog", () => {
       },
       {
         providerId: "openai",
-        markPath: "/provider-marks/fallback.svg",
-        apiKeySetupUrl: "https://platform.openai.com/usage",
+        markPath: "/provider-marks/openai.svg",
+        apiKeySetupUrl: "https://platform.openai.com/api-keys",
       },
       {
         providerId: "groqcloud",
-        markPath: "/provider-marks/fallback.svg",
-        apiKeySetupUrl: "https://console.groq.com/dashboard/usage",
+        markPath: "/provider-marks/groqcloud.svg",
+        apiKeySetupUrl: "https://console.groq.com/keys",
       },
       {
         providerId: "openrouter",
-        markPath: "/provider-marks/fallback.svg",
-        apiKeySetupUrl: "https://openrouter.ai/settings/credits",
+        markPath: "/provider-marks/openrouter.svg",
+        darkMarkPath: "/provider-marks/openrouter-dark.svg",
+        apiKeySetupUrl: "https://openrouter.ai/settings/keys",
       },
     ]);
+  });
+
+  test("classifies every provider's zero-balance presentation policy", () => {
+    expect(Object.keys(catalog.providerBalanceCategories)).toEqual(providerKinds);
+    expect(
+      providerKinds.filter(
+        (providerKind) =>
+          catalog.providerBalanceCategories[providerKind] === "balance-primary",
+      ),
+    ).toEqual([
+      "mistral",
+      "sub2api",
+      "deepseek",
+      "moonshot",
+      "deepinfra",
+      "openai",
+      "openrouter",
+    ]);
+    expect(catalog.shouldDisplayBalance("openrouter", 0)).toBe(true);
+    expect(catalog.shouldDisplayBalance("grok", 0)).toBe(false);
+    expect(catalog.shouldDisplayBalance("grok", 1)).toBe(true);
   });
 
   test("keeps registry and runtime commands catalog-complete", () => {

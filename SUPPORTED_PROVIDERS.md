@@ -10,13 +10,23 @@ The provenance tier describes schema evidence, not current availability:
 an observed upstream response fixture; **INFERRED** means the shape is derived
 from documented or client contracts and still needs live-capture confirmation.
 
+Balance presentation is explicit by provider:
+
+- **Balance-primary** — Mistral, sub2api, DeepSeek, Moonshot, DeepInfra, OpenAI,
+  and OpenRouter. A reported zero balance remains visible.
+- **Pool-primary** — ChatGPT, Claude, Cursor, Grok, Perplexity, and ElevenLabs.
+  A zero auxiliary/extra-credit balance is hidden because the plan or pool is
+  the primary signal.
+- **No balance metric** — Kimi, New API, LiteLLM, ClawRouter, LLM Proxy,
+  Fireworks, and GroqCloud. Their current contracts report quotas or counters.
+
 | Provider | Connection | What AI Limits reads | Provenance | Important nuance |
 | --- | --- | --- | --- | --- |
 | ChatGPT | Signed-in browser session | Reported message windows and credits | **OBSERVED** | Uses private web-session usage interfaces. The browser may attach ChatGPT cookies; request-local account identifiers are not persisted. |
 | Claude | Signed-in browser session | General and model-specific limits plus extra usage when reported | **OBSERVED** | Uses private web-session interfaces. Organization selection is request-local; a provider-supplied display label may be retained. |
 | Kimi | Browser session with targeted credential recovery | Subscription total and Kimi Code limits | **OBSERVED** | May read the exact legacy `kimi-auth` cookie or `localStorage.access_token`. Manual Connect or Refresh may briefly open one inactive Kimi tab so Kimi can refresh its own session. Automatic refresh never opens a tab and may defer when no usable session is available. |
 | Cursor | Signed-in browser session plus manual page enrichment | Cursor-model and other-model monthly limits, Grok Bot weekly usage, and on-demand/extra-credit data when reported | **OBSERVED** | Base usage refreshes in the background. Connect or manual Refresh can request Grok Bot and extra-credit JSON through one already-open `cursor.com` tab, or by briefly opening one inactive spending tab when none is open. Chrome attaches signed-in Cursor cookies to those fixed same-origin requests, but AI Limits does not inspect cookie values directly. It never activates a Cursor tab and closes only the tab it created. Automatic refresh never opens or injects. Last-good page values stay visible until Grok Bot's weekly reset, and the card explains when they could not be refreshed. |
-| Grok | Signed-in browser session | Weekly or monthly usage pool as the subscription limit, with Grok Build and Chat composition when those buckets account for the whole pool, plus the SuperGrok-family plan label. Per-mode chat rate limits (`fast`, `expert`, `heavy`, `auto`) appear only as a fallback when no pool is available | **OBSERVED** | Uses private web-session usage interfaces on `grok.com`. The browser may attach Grok cookies; account identifiers and raw subscription payloads are not persisted. This is consumer Grok, not Cursor's Grok Bot. |
+| Grok | Signed-in browser session | Weekly or monthly usage pool as the subscription limit, with Grok Build and Chat composition when those buckets account for the whole pool, plus the SuperGrok-family plan label | **OBSERVED** | Uses private web-session usage interfaces on `grok.com`. Short-window per-mode rate-limit responses are not rendered. The browser may attach Grok cookies; account identifiers and raw subscription payloads are not persisted. This is consumer Grok, not Cursor's Grok Bot. |
 | Mistral | Signed-in browser session | Month-to-date spend, token totals, and available credits | **INFERRED** | Chrome attaches same-origin cookies, but cannot expose the CSRF cookie value needed to construct `X-CSRFTOKEN`; live testing must confirm the service accepts the request without that header. |
 | Perplexity | Signed-in browser session | Recurring, purchased, and promotional credit pools plus plan inference | **INFERRED** | Uses a private billing endpoint and Chrome-attached same-origin cookies. Grant expiry and waterfall attribution follow the inferred wire contract. |
 | ElevenLabs | User-created API key | Subscription credit and voice-capacity limits | **OBSERVED** | The guide recommends **User → Read**. AI Limits calls the documented subscription endpoint and stores the validated key locally; no browser session is reused. |

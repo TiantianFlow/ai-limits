@@ -1157,14 +1157,16 @@ section[aria-labelledby="overview-title"] .provider-list {
   background: transparent;
 }
 
-.provider-mark--provider-chatgpt.provider-mark--sm {
+.provider-mark--provider-chatgpt.provider-mark--sm,
+.provider-mark--provider-openai.provider-mark--sm {
   width: 40px;
   max-width: none;
   height: 40px;
   margin: -8px;
 }
 
-.provider-mark--provider-chatgpt.provider-mark--md {
+.provider-mark--provider-chatgpt.provider-mark--md,
+.provider-mark--provider-openai.provider-mark--md {
   width: 46px;
   max-width: none;
   height: 46px;
@@ -2797,6 +2799,7 @@ section[aria-labelledby="overview-title"] .provider-list {
   }
 
   .provider-mark--provider-chatgpt,
+  .provider-mark--provider-openai,
   .provider-mark--provider-elevenlabs,
   .provider-mark--fallback,
   .open-source-footer__mark {

@@ -73,7 +73,8 @@ Other-model limits plus weekly Grok Bot usage, and a per-model included-usage
 breakdown grouped into Cursor Models and Other Models with input, output, cost,
 and provider totals. That detail view is a generic per-provider surface; today
 only Cursor fills it. **Grok** reads your signed-in consumer plan and
-rate-limit window. **Mistral** shows month-to-date spend and available credits,
+weekly or monthly usage pool; short per-mode windows are not shown.
+**Mistral** shows month-to-date spend and available credits,
 while **Perplexity** shows recurring, purchased, and promotional credit pools.
 **ElevenLabs** connects with a scoped, read-only API key you create yourself.
 **New API** connects self-hosted or third-party API-compatible instances with a

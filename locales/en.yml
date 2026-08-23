@@ -347,19 +347,33 @@ apiKey:
   invalidSite: The provider site could not be validated. Check its address and try again.
   temporary: ElevenLabs could not be validated right now. Your existing data and key are unchanged.
   permissionDeclined: ElevenLabs access was not changed. Allow access when you are ready to try again.
+  genericInvalidKey: "Enter a valid {provider} API key."
+  genericInsufficientScope: "{provider} could not read usage with this key. Check its scopes and any IP restrictions."
+  genericTemporary: "{provider} could not be validated right now. Your existing data and key are unchanged."
+  genericPermissionDeclined: "{provider} access was not changed. Allow access when you are ready to try again."
   connectTitle: Connect ElevenLabs
   replaceTitle: Replace ElevenLabs API key
+  connectProviderTitle: "Connect {provider}"
+  replaceProviderTitle: "Replace {provider} API key"
   subtitle: Read-only subscription usage
+  genericSubtitle: "API key · {capabilities}"
   capabilities: Monthly credits · Voice limits
   step1Title: Open the ElevenLabs API keys page
   step1Copy: Sign in first if ElevenLabs asks you to, then reopen the page.
+  genericStep1Title: "Open the {provider} API keys page"
+  genericStep1Copy: "Sign in to {provider}, create or select an API key, then return here."
   openKeysPage: Open API keys page
   step2Title: Create a key named AI Limits
   step2Prefix: Select
   step2Suffix: . Leave generation and write permissions off. ElevenLabs does not publish the exact endpoint-to-scope mapping, so validation confirms access.
+  genericStep2Title: Use the least privilege available
+  genericStep2Copy: "Grant only the usage or billing read access that {provider} requires. Avoid model-generation, write, and administration scopes when the provider offers separate controls."
   step3Title: Paste the key and validate
+  genericStep3Title: Paste the key and validate
   formName: ElevenLabs API key setup
+  genericFormName: "{provider} API key setup"
   fieldLabel: ElevenLabs API key
+  genericFieldLabel: "{provider} API key"
   fieldHelp: Saved locally and never shown again in AI Limits.
   validating: Validating…
   submitConnect: Validate & connect
@@ -387,6 +401,26 @@ newapi:
   keyField: New API relay key
   keyHelp: AI Limits calls only the read-only /api/usage/token/ endpoint and stores the key locally. The request is read-only, but the relay key itself may still call models; apply key limits in New API if needed.
   excluded: This mode does not read account wallet, subscriptions, admin data, or other relay keys. Each configured instance is read independently.
+
+dynamicApi:
+  invalidSite: "{provider} did not return compatible usage data. Check the instance URL and try again."
+  invalidKey: "Enter a valid API key for this {provider} instance."
+  insufficientScope: "This key could not read {provider} usage. Check its scopes and any IP restrictions."
+  temporary: "{provider} could not be validated right now. Your existing data and key are unchanged."
+  permissionDeclined: "{provider} access was not changed. Allow access when you are ready to try again."
+  connectTitle: "Connect {provider}"
+  replaceTitle: "Replace {provider} connection"
+  subtitle: "Independent instance · {capabilities}"
+  subtitleNamed: "{label} · Independent instance · {capabilities}"
+  explanation: "Each {provider} connection keeps its own instance URL, API key, label, usage, and History. Same-origin connections share only Chrome's host permission."
+  formName: "{provider} API connection setup"
+  labelPlaceholder: "Personal {provider}"
+  urlField: "{provider} instance URL"
+  urlPlaceholder: https://provider.example.com
+  urlHelp: "Paste the base URL for the {provider} instance. AI Limits validates and normalizes it before requesting only that instance's read-only usage endpoint. HTTPS is required, except localhost for development."
+  keyField: "{provider} API key"
+  keyHelp: "Saved locally and sent only to the configured instance origin for its read-only usage request."
+  excluded: AI Limits does not inspect provider pages or send this key to any other origin. Each configured instance is read independently.
 
 errors:
   signedOut: Sign in to the provider and try again.

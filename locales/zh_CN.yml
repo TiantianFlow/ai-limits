@@ -347,19 +347,33 @@ apiKey:
   invalidSite: 无法验证该服务站点。请检查地址后重试。
   temporary: 暂时无法验证 ElevenLabs。现有数据和密钥保持不变。
   permissionDeclined: ElevenLabs 访问权限未更改。准备好后请允许访问再试。
+  genericInvalidKey: "请输入有效的 {provider} API 密钥。"
+  genericInsufficientScope: "{provider} 无法使用此密钥读取用量。请检查权限范围和 IP 限制。"
+  genericTemporary: "暂时无法验证 {provider}。现有数据和密钥保持不变。"
+  genericPermissionDeclined: "{provider} 访问权限未更改。准备好后请允许访问再试。"
   connectTitle: 连接 ElevenLabs
   replaceTitle: 更换 ElevenLabs API 密钥
+  connectProviderTitle: "连接 {provider}"
+  replaceProviderTitle: "更换 {provider} API 密钥"
   subtitle: 只读订阅用量
+  genericSubtitle: "API 密钥 · {capabilities}"
   capabilities: 每月额度 · 语音限制
   step1Title: 打开 ElevenLabs API 密钥页面
   step1Copy: 如果 ElevenLabs 要求登录，请先登录，然后重新打开该页面。
+  genericStep1Title: "打开 {provider} API 密钥页面"
+  genericStep1Copy: "登录 {provider}，创建或选择 API 密钥，然后返回此处。"
   openKeysPage: 打开 API 密钥页面
   step2Title: 创建一个名为 AI Limits 的密钥
   step2Prefix: 选择
   step2Suffix: 。不要打开生成和写入权限。ElevenLabs 未公布端点与权限范围的精确对应关系，因此需要通过验证确认访问。
+  genericStep2Title: 使用可用的最小权限
+  genericStep2Copy: "只授予 {provider} 所需的用量或账单读取权限。如果服务提供独立控制，请不要启用模型生成、写入或管理权限。"
   step3Title: 粘贴密钥并验证
+  genericStep3Title: 粘贴密钥并验证
   formName: ElevenLabs API 密钥设置
+  genericFormName: "{provider} API 密钥设置"
   fieldLabel: ElevenLabs API 密钥
+  genericFieldLabel: "{provider} API 密钥"
   fieldHelp: 保存在本地，之后不会再在 AI Limits 中显示。
   validating: 正在验证…
   submitConnect: 验证并连接
@@ -387,6 +401,26 @@ newapi:
   keyField: New API 中继密钥
   keyHelp: AI Limits 只会调用只读的 /api/usage/token/ 端点，并将密钥保存在本地。请求本身是只读的，但中继密钥仍可能调用模型；如有需要，请在 New API 中为密钥设置限制。
   excluded: 此模式不会读取账户钱包、订阅、管理数据或其他中继密钥。每个配置的实例都独立读取。
+
+dynamicApi:
+  invalidSite: "{provider} 未返回兼容的用量数据。请检查实例网址后重试。"
+  invalidKey: "请输入此 {provider} 实例的有效 API 密钥。"
+  insufficientScope: "此密钥无法读取 {provider} 用量。请检查权限范围和 IP 限制。"
+  temporary: "暂时无法验证 {provider}。现有数据和密钥保持不变。"
+  permissionDeclined: "{provider} 访问权限未更改。准备好后请允许访问再试。"
+  connectTitle: "连接 {provider}"
+  replaceTitle: "更换 {provider} 连接"
+  subtitle: "独立实例 · {capabilities}"
+  subtitleNamed: "{label} · 独立实例 · {capabilities}"
+  explanation: "每个 {provider} 连接都保留自己的实例网址、API 密钥、标签、用量和 History。同源连接仅共享 Chrome 的主机权限。"
+  formName: "{provider} API 连接设置"
+  labelPlaceholder: "个人 {provider}"
+  urlField: "{provider} 实例网址"
+  urlPlaceholder: https://provider.example.com
+  urlHelp: "粘贴 {provider} 实例的基础网址。AI Limits 会先验证并标准化网址，然后只请求该实例的只读用量端点。必须使用 HTTPS，本地开发的 localhost 除外。"
+  keyField: "{provider} API 密钥"
+  keyHelp: 密钥保存在本地，只会发送到配置的实例来源以执行只读用量请求。
+  excluded: AI Limits 不会检查服务页面，也不会将此密钥发送到其他来源。每个配置的实例都独立读取。
 
 errors:
   signedOut: 请登录该服务后再试。

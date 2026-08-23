@@ -1,7 +1,10 @@
 export {
+  providerBalanceCategories,
   providerCatalog,
   providerNames,
   providerPresentation,
+  shouldDisplayBalance,
+  type ProviderBalanceCategory,
   type ProviderPresentation,
 } from "../domain/provider-presentation";
 export {

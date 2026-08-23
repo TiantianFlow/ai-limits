@@ -4,6 +4,7 @@ export interface ProviderPresentation {
   readonly markPath: string;
   readonly darkMarkPath?: string;
   readonly apiKeySetupUrl?: string;
+  readonly apiKeyGuide?: "elevenlabs" | "newapi";
 }
 
 export const providerCatalog = {
@@ -43,13 +44,13 @@ export const providerCatalog = {
   mistral: {
     displayName: "Mistral",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/mistral.svg",
     },
   },
   perplexity: {
     displayName: "Perplexity",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/perplexity.svg",
     },
   },
   elevenlabs: {
@@ -57,12 +58,14 @@ export const providerCatalog = {
     presentation: {
       markPath: "/provider-marks/elevenlabs.svg",
       apiKeySetupUrl: "https://elevenlabs.io/app/developers/api-keys",
+      apiKeyGuide: "elevenlabs",
     },
   },
   newapi: {
     displayName: "New API",
     presentation: {
       markPath: "/provider-marks/fallback.svg",
+      apiKeyGuide: "newapi",
     },
   },
   litellm: {
@@ -120,25 +123,54 @@ export const providerCatalog = {
   openai: {
     displayName: "OpenAI",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
-      apiKeySetupUrl: "https://platform.openai.com/usage",
+      markPath: "/provider-marks/openai.svg",
+      apiKeySetupUrl: "https://platform.openai.com/api-keys",
     },
   },
   groqcloud: {
     displayName: "GroqCloud",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
-      apiKeySetupUrl: "https://console.groq.com/dashboard/usage",
+      markPath: "/provider-marks/groqcloud.svg",
+      apiKeySetupUrl: "https://console.groq.com/keys",
     },
   },
   openrouter: {
     displayName: "OpenRouter",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
-      apiKeySetupUrl: "https://openrouter.ai/settings/credits",
+      markPath: "/provider-marks/openrouter.svg",
+      darkMarkPath: "/provider-marks/openrouter-dark.svg",
+      apiKeySetupUrl: "https://openrouter.ai/settings/keys",
     },
   },
 } as const;
+
+export type ProviderBalanceCategory =
+  | "balance-primary"
+  | "pool-primary"
+  | "none";
+
+export const providerBalanceCategories = {
+  chatgpt: "pool-primary",
+  claude: "pool-primary",
+  kimi: "none",
+  cursor: "pool-primary",
+  grok: "pool-primary",
+  mistral: "balance-primary",
+  perplexity: "pool-primary",
+  elevenlabs: "pool-primary",
+  newapi: "none",
+  litellm: "none",
+  clawrouter: "none",
+  sub2api: "balance-primary",
+  llmProxy: "none",
+  deepseek: "balance-primary",
+  moonshot: "balance-primary",
+  deepinfra: "balance-primary",
+  fireworks: "none",
+  openai: "balance-primary",
+  groqcloud: "none",
+  openrouter: "balance-primary",
+} as const satisfies Record<ProviderKind, ProviderBalanceCategory>;
 
 export const providerNames = Object.fromEntries(
   providerKinds.map((providerKind) => [
@@ -178,4 +210,11 @@ export function providerPresentation(
   providerKind: ProviderKind,
 ): ProviderPresentation {
   return providerCatalog[providerKind].presentation;
+}
+
+export function shouldDisplayBalance(
+  providerKind: ProviderKind,
+  value: number,
+): boolean {
+  return value !== 0 || providerBalanceCategories[providerKind] === "balance-primary";
 }

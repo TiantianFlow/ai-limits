@@ -23,6 +23,7 @@ import {
   providerAvailability,
   providerKinds,
   providerPresentation,
+  shouldDisplayBalance,
   type ApiKeyProviderKind,
   type AppViewState,
   type BalanceMetric,
@@ -324,10 +325,18 @@ export function providerView(
 ): ProviderCardProps {
   const snapshot = provider.snapshot;
   const stale = snapshot ? now - snapshot.fetchedAt > STALE_AFTER_MS : false;
+  const hiddenQuotaIds =
+    provider.providerKind === "grok"
+      ? new Set(
+          snapshot?.usageGroups
+            ?.filter((group) => group.id === "rate-limits")
+            .flatMap((group) => group.metricIds) ?? [],
+        )
+      : undefined;
   const quotas = snapshot?.metrics
-    ? quotaMetrics(snapshot).map((metric) =>
-        quotaView(provider.providerKind, metric, mode, now),
-      )
+    ? quotaMetrics(snapshot)
+        .filter((metric) => !hiddenQuotaIds?.has(metric.id))
+        .map((metric) => quotaView(provider.providerKind, metric, mode, now))
     : [];
   const values = snapshot?.metrics
     ? [
@@ -335,7 +344,9 @@ export function providerView(
           counterView(provider.providerKind, metric),
         ),
         ...balanceMetrics(snapshot)
-          .filter((metric) => metric.value !== 0)
+          .filter((metric) =>
+            shouldDisplayBalance(provider.providerKind, metric.value),
+          )
           .map((metric) => balanceView(provider.providerKind, metric)),
       ]
     : [];
@@ -687,6 +698,12 @@ export function Cockpit({
         providerAvailability(state, view.providerKind).configKind ===
         "dynamic-origin" ? (
           <NewApiConnectView
+            providerKind={view.providerKind}
+            guideKind={
+              providerPresentation(view.providerKind).apiKeyGuide === "newapi"
+                ? "newapi"
+                : undefined
+            }
             mode={view.mode}
             initialBaseUrl={
               view.instanceId
@@ -725,6 +742,12 @@ export function Cockpit({
           />
         ) : (
           <ApiKeyConnectView
+            providerKind={view.providerKind}
+            guideKind={
+              providerPresentation(view.providerKind).apiKeyGuide === "elevenlabs"
+                ? "elevenlabs"
+                : undefined
+            }
             mode={view.mode}
             backLabel={apiKeyBackLabel}
             onBack={popScreen}

@@ -10,6 +10,8 @@ function renderView(
   overrides: Partial<React.ComponentProps<typeof NewApiConnectView>> = {},
 ) {
   const props: React.ComponentProps<typeof NewApiConnectView> = {
+    providerKind: "newapi",
+    guideKind: "newapi",
     mode: "connect",
     backLabel: "Add provider",
     onBack: vi.fn(),
@@ -21,6 +23,23 @@ function renderView(
 }
 
 describe("NewApiConnectView", () => {
+  it("renders configurable-key onboarding for the selected provider identity", () => {
+    renderView({ providerKind: "litellm", guideKind: undefined });
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Connect LiteLLM" }),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { level: 2, name: "LiteLLM" })).toBeVisible();
+    expect(screen.getByLabelText("LiteLLM instance URL")).toBeVisible();
+    expect(screen.getByLabelText("LiteLLM API key")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    expect(screen.getByText(/each LiteLLM connection keeps its own instance URL/i))
+      .toBeVisible();
+    expect(screen.queryByText(/New API relay key setup/)).not.toBeInTheDocument();
+  });
+
   it("submits an optional trimmed instance label and clears a blank label", async () => {
     const onSubmit = vi.fn(async () => "invalid_key" as const);
     renderView({ onSubmit });

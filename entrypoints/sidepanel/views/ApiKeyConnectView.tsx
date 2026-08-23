@@ -1,7 +1,13 @@
 import React, { useState } from "react";
 
+import { formatList } from "../../../i18n/format";
 import { l10n } from "../../../i18n/index";
-import { localizeProviderName } from "../../../i18n/presentation";
+import {
+  localizeCapability,
+  localizeProviderName,
+  providerCapabilityIds,
+} from "../../../i18n/presentation";
+import type { ApiKeyProviderKind } from "../../../domain/public-protocol";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderMark } from "../components/ProviderMark";
 
@@ -14,6 +20,8 @@ export type ApiKeyConnectAttemptResult =
   | "permission_declined";
 
 export interface ApiKeyConnectViewProps {
+  providerKind: ApiKeyProviderKind;
+  guideKind?: "elevenlabs";
   mode: "connect" | "replace";
   backLabel: string;
   onBack: () => void;
@@ -21,24 +29,48 @@ export interface ApiKeyConnectViewProps {
   onSubmit: (apiKey: string) => Promise<ApiKeyConnectAttemptResult>;
 }
 
-function feedbackFor(result: ApiKeyConnectAttemptResult): string {
+function feedbackFor(
+  result: ApiKeyConnectAttemptResult,
+  providerKind: ApiKeyProviderKind,
+  guideKind?: "elevenlabs",
+): string {
+  if (guideKind === "elevenlabs") {
+    switch (result) {
+      case "connected":
+        return "";
+      case "invalid_key":
+        return l10n.t("apiKey.invalidKey");
+      case "insufficient_scope":
+        return l10n.t("apiKey.insufficientScope");
+      case "invalid_site":
+        return l10n.t("apiKey.invalidSite");
+      case "temporary_error":
+        return l10n.t("apiKey.temporary");
+      case "permission_declined":
+        return l10n.t("apiKey.permissionDeclined");
+    }
+  }
+
+  const provider = localizeProviderName(providerKind);
   switch (result) {
     case "connected":
       return "";
     case "invalid_key":
-      return l10n.t("apiKey.invalidKey");
+      return l10n.t("apiKey.genericInvalidKey", { provider });
     case "insufficient_scope":
-      return l10n.t("apiKey.insufficientScope");
+      return l10n.t("apiKey.genericInsufficientScope", { provider });
     case "invalid_site":
       return l10n.t("apiKey.invalidSite");
     case "temporary_error":
-      return l10n.t("apiKey.temporary");
+      return l10n.t("apiKey.genericTemporary", { provider });
     case "permission_declined":
-      return l10n.t("apiKey.permissionDeclined");
+      return l10n.t("apiKey.genericPermissionDeclined", { provider });
   }
 }
 
 export function ApiKeyConnectView({
+  providerKind,
+  guideKind,
   mode,
   backLabel,
   onBack,
@@ -49,29 +81,45 @@ export function ApiKeyConnectView({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const replace = mode === "replace";
+  const provider = localizeProviderName(providerKind);
+  const capabilities = formatList(
+    providerCapabilityIds(providerKind).map((id) =>
+      localizeCapability(providerKind, id),
+    ),
+  );
+  const isElevenLabs = guideKind === "elevenlabs";
   const submitLabel = replace
     ? l10n.t("apiKey.submitReplace")
     : l10n.t("apiKey.submitConnect");
   const title = replace
-    ? l10n.t("apiKey.replaceTitle")
-    : l10n.t("apiKey.connectTitle");
+    ? isElevenLabs
+      ? l10n.t("apiKey.replaceTitle")
+      : l10n.t("apiKey.replaceProviderTitle", { provider })
+    : isElevenLabs
+      ? l10n.t("apiKey.connectTitle")
+      : l10n.t("apiKey.connectProviderTitle", { provider });
+  const inputId = `${providerKind}-api-key`;
   const invalidLength = apiKey.trim().length === 0 || apiKey.length > 4_096;
 
   return (
     <section className="screen api-key-guide" aria-label={title}>
       <PageHeader
         title={title}
-        subtitle={l10n.t("apiKey.subtitle")}
+        subtitle={
+          isElevenLabs
+            ? l10n.t("apiKey.subtitle")
+            : l10n.t("apiKey.genericSubtitle", { capabilities })
+        }
         backLabel={backLabel}
         onBack={onBack}
       />
 
       <div className="screen-body api-key-guide__body">
         <div className="api-key-guide__identity">
-          <ProviderMark providerId="elevenlabs" size="md" />
+          <ProviderMark providerId={providerKind} size="md" />
           <div>
-            <h2>{localizeProviderName("elevenlabs")}</h2>
-            <p>{l10n.t("apiKey.capabilities")}</p>
+            <h2>{provider}</h2>
+            <p>{isElevenLabs ? l10n.t("apiKey.capabilities") : capabilities}</p>
           </div>
         </div>
 
@@ -79,8 +127,16 @@ export function ApiKeyConnectView({
           <li>
             <span className="api-key-guide__number" aria-hidden="true">1</span>
             <div>
-              <h3>{l10n.t("apiKey.step1Title")}</h3>
-              <p>{l10n.t("apiKey.step1Copy")}</p>
+              <h3>
+                {isElevenLabs
+                  ? l10n.t("apiKey.step1Title")
+                  : l10n.t("apiKey.genericStep1Title", { provider })}
+              </h3>
+              <p>
+                {isElevenLabs
+                  ? l10n.t("apiKey.step1Copy")
+                  : l10n.t("apiKey.genericStep1Copy", { provider })}
+              </p>
               <button
                 className="button button--secondary"
                 type="button"
@@ -93,46 +149,76 @@ export function ApiKeyConnectView({
           <li>
             <span className="api-key-guide__number" aria-hidden="true">2</span>
             <div>
-              <h3>{l10n.t("apiKey.step2Title")}</h3>
-              <p>
-                {l10n.t("apiKey.step2Prefix")}{" "}
-                <strong>User → Read</strong>
-                {l10n.t("apiKey.step2Suffix")}
-              </p>
+              <h3>
+                {isElevenLabs
+                  ? l10n.t("apiKey.step2Title")
+                  : l10n.t("apiKey.genericStep2Title")}
+              </h3>
+              {isElevenLabs ? (
+                <p>
+                  {l10n.t("apiKey.step2Prefix")}{" "}
+                  <strong>User → Read</strong>
+                  {l10n.t("apiKey.step2Suffix")}
+                </p>
+              ) : (
+                <p>{l10n.t("apiKey.genericStep2Copy", { provider })}</p>
+              )}
             </div>
           </li>
           <li>
             <span className="api-key-guide__number" aria-hidden="true">3</span>
             <div>
-              <h3>{l10n.t("apiKey.step3Title")}</h3>
+              <h3>
+                {isElevenLabs
+                  ? l10n.t("apiKey.step3Title")
+                  : l10n.t("apiKey.genericStep3Title")}
+              </h3>
               <form
                 className="api-key-guide__form"
-                aria-label={l10n.t("apiKey.formName")}
+                aria-label={
+                  isElevenLabs
+                    ? l10n.t("apiKey.formName")
+                    : l10n.t("apiKey.genericFormName", { provider })
+                }
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (invalidLength || submitting) return;
                   setSubmitting(true);
                   setFeedback("");
                   void onSubmit(apiKey)
-                    .then((result) => setFeedback(feedbackFor(result)))
-                    .catch(() => setFeedback(feedbackFor("temporary_error")))
+                    .then((result) =>
+                      setFeedback(feedbackFor(result, providerKind, guideKind)),
+                    )
+                    .catch(() =>
+                      setFeedback(
+                        feedbackFor(
+                          "temporary_error",
+                          providerKind,
+                          guideKind,
+                        ),
+                      ),
+                    )
                     .finally(() => {
                       setApiKey("");
                       setSubmitting(false);
                     });
                 }}
               >
-                <label htmlFor="elevenlabs-api-key">{l10n.t("apiKey.fieldLabel")}</label>
+                <label htmlFor={inputId}>
+                  {isElevenLabs
+                    ? l10n.t("apiKey.fieldLabel")
+                    : l10n.t("apiKey.genericFieldLabel", { provider })}
+                </label>
                 <input
-                  id="elevenlabs-api-key"
+                  id={inputId}
                   type="password"
                   autoComplete="off"
                   value={apiKey}
                   disabled={submitting}
-                  aria-describedby="elevenlabs-api-key-help"
+                  aria-describedby={`${inputId}-help`}
                   onChange={(event) => setApiKey(event.currentTarget.value)}
                 />
-                <small id="elevenlabs-api-key-help">
+                <small id={`${inputId}-help`}>
                   {l10n.t("apiKey.fieldHelp")}
                 </small>
                 <button

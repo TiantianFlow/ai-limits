@@ -17,6 +17,8 @@ function renderView(
   overrides: Partial<React.ComponentProps<typeof ApiKeyConnectView>> = {},
 ) {
   const props: React.ComponentProps<typeof ApiKeyConnectView> = {
+    providerKind: "elevenlabs",
+    guideKind: "elevenlabs",
     mode: "connect",
     backLabel: "Add provider",
     onBack: vi.fn(),
@@ -29,6 +31,24 @@ function renderView(
 }
 
 describe("ApiKeyConnectView", () => {
+  it("renders fixed-key onboarding for the selected provider identity", () => {
+    renderView({ providerKind: "openrouter", guideKind: undefined });
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Connect OpenRouter" }),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { level: 2, name: "OpenRouter" })).toBeVisible();
+    expect(
+      document.querySelector('img[src="/provider-marks/openrouter.svg"]'),
+    ).not.toBeNull();
+    expect(screen.getByText("Balance, API key budget")).toBeVisible();
+    expect(screen.getByLabelText("OpenRouter API key")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    expect(screen.queryByText(/ElevenLabs/)).not.toBeInTheDocument();
+  });
+
   it("renders the compact three-step ElevenLabs guide and safe input", () => {
     renderView();
 

@@ -67,10 +67,13 @@ export {
   type ProviderKind,
 } from "./provider-kind";
 export {
+  providerBalanceCategories,
   providerCatalog,
   providerNames,
   providerPlanLabel,
   providerPresentation,
+  shouldDisplayBalance,
+  type ProviderBalanceCategory,
   type ProviderPresentation,
 } from "./provider-presentation";
 

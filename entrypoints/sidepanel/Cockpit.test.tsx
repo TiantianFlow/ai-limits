@@ -21,6 +21,12 @@ import {
   createFixtureState,
 } from "../../providers/fixtures";
 import {
+  isApiKeyProviderKind,
+  providerKinds,
+  providerNames,
+  providerPresentation,
+} from "../../providers/catalog";
+import {
   Cockpit as InstanceCockpit,
   providerView as instanceProviderView,
 } from "./Cockpit";
@@ -832,6 +838,70 @@ describe("Cockpit", () => {
     expect(view.usageGroups[0]?.quotas[0]?.id).toBe("weekly-pool");
   });
 
+  it("shows a zero balance for a balance-primary provider", () => {
+    const provider = createFixtureState(NOW).instances.find(
+      (instance) => instance.providerKind === "grok",
+    )!;
+    provider.id = "openrouter:default";
+    provider.providerKind = "openrouter";
+    provider.snapshot = {
+      providerKind: "openrouter",
+      source: "api-key",
+      fetchedAt: NOW,
+      metrics: [
+        {
+          type: "balance",
+          id: "balance",
+          label: "Balance",
+          scope: "general",
+          unit: "USD",
+          value: 0,
+        },
+      ],
+    };
+
+    expect(providerView(provider, "used", NOW).values).toEqual([
+      { id: "balance", label: "Balance", value: "$0.00 remaining" },
+    ]);
+  });
+
+  it("does not surface Grok short-window rate-limit bars", () => {
+    const provider = createFixtureState(NOW).instances.find(
+      (instance) => instance.providerKind === "grok",
+    )!;
+    provider.snapshot!.metrics = [
+      {
+        type: "quota",
+        id: "2-hour-fast-queries",
+        label: "2-hour fast queries",
+        scope: "general",
+        usedRatio: 0.5,
+        used: 5,
+        limit: 10,
+        unit: "queries",
+        cycle: { cadence: "rolling", durationMs: 2 * 60 * 60 * 1_000 },
+      },
+    ];
+    provider.snapshot!.usageGroups = [
+      {
+        id: "rate-limits",
+        label: "Chat rate limits",
+        metricIds: ["2-hour-fast-queries"],
+      },
+    ];
+
+    const view = providerView(provider, "used", NOW);
+    expect(view.usageGroups).toEqual([
+      {
+        id: "rate-limits",
+        label: "Chat rate limits",
+        quotas: [],
+        values: [],
+      },
+    ]);
+    expect(view.usageGroups.flatMap((group) => group.quotas)).toEqual([]);
+  });
+
   it("renders quota rows through provider-authored semantic groups", () => {
     const state = createEmptyFixtureState();
     const provider = createFixtureState(NOW).instances[0]!;
@@ -1509,6 +1579,90 @@ describe("Cockpit", () => {
     expect(
       screen.getByRole("button", { name: "Connect ElevenLabs" }),
     ).toHaveFocus();
+  });
+
+  it("keeps every catalog connect target aligned with its selected provider", async () => {
+    for (const providerKind of providerKinds) {
+      const onConnectProvider = vi.fn();
+      const onOpenApiKeySetup = vi.fn();
+      const onSubmitApiKey = vi.fn(async () => "invalid_key" as const);
+      const view = render(
+        <Cockpit
+          state={createEmptyFixtureState()}
+          now={NOW}
+          onDisplayModeChange={vi.fn()}
+          onRefresh={vi.fn()}
+          onConnectProvider={onConnectProvider}
+          onOpenApiKeySetup={onOpenApiKeySetup}
+          onSubmitApiKey={onSubmitApiKey}
+        />,
+      );
+
+      const providerName = providerNames[providerKind];
+      fireEvent.click(
+        screen.getByRole("button", { name: `Connect ${providerName}` }),
+      );
+
+      if (isApiKeyProviderKind(providerKind)) {
+        expect(onConnectProvider).not.toHaveBeenCalled();
+        expect(
+          screen.getByRole("heading", {
+            level: 1,
+            name: `Connect ${providerName}`,
+          }),
+        ).toBeVisible();
+        expect(
+          screen.getByRole("heading", { level: 2, name: providerName }),
+        ).toBeVisible();
+        expect(
+          document.querySelector(
+            `.provider-mark--provider-${providerKind}`,
+          ),
+        ).not.toBeNull();
+        if (providerPresentation(providerKind).apiKeySetupUrl) {
+          expect(onOpenApiKeySetup).toHaveBeenCalledWith(providerKind);
+          fireEvent.change(
+            screen.getByLabelText(`${providerName} API key`),
+            { target: { value: "candidate" } },
+          );
+        } else {
+          expect(onOpenApiKeySetup).not.toHaveBeenCalled();
+          fireEvent.change(
+            screen.getByLabelText(
+              providerKind === "newapi"
+                ? "New API site URL"
+                : `${providerName} instance URL`,
+            ),
+            { target: { value: "https://provider.example" } },
+          );
+          fireEvent.change(
+            screen.getByLabelText(
+              providerKind === "newapi"
+                ? "New API relay key"
+                : `${providerName} API key`,
+            ),
+            { target: { value: "candidate" } },
+          );
+        }
+        fireEvent.click(
+          screen.getByRole("button", { name: "Validate & connect" }),
+        );
+        await waitFor(() =>
+          expect(onSubmitApiKey).toHaveBeenCalledWith(
+            providerKind,
+            "candidate",
+            providerPresentation(providerKind).apiKeySetupUrl
+              ? undefined
+              : "https://provider.example",
+          ),
+        );
+      } else {
+        expect(onConnectProvider).toHaveBeenCalledWith(providerKind);
+        expect(onOpenApiKeySetup).not.toHaveBeenCalled();
+      }
+
+      view.unmount();
+    }
   });
 
   it("returns to Overview after a successful API-key connection", async () => {

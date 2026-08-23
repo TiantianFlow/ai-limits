@@ -128,6 +128,62 @@ are used only to identify the corresponding provider beside its visible name.
   identifier beside the ElevenLabs name, with the viewport-only normalization
   noted above.
 
+## `openai.svg`
+
+- Upstream source and conditions: the same OpenAI official blossom and brand
+  guidance documented for `chatgpt.svg`.
+- Retrieved: 2026-08-11.
+- Modified: no; SHA-256
+  `75c1e9fffa5e8c437bec1d67197a73992bca45d166c6ff23215185dea8fae92a`.
+- Ownership: OpenAI; used only as the provider identifier beside the OpenAI
+  name.
+
+## `groqcloud.svg`
+
+- Upstream source: Groq Console's official homepage-declared
+  [`favicon.ico`](https://console.groq.com/favicon.ico).
+- Retrieved: 2026-08-23; upstream SHA-256
+  `3395e09f30348845087d51a562d2145b9634e4dbb5bc5a45d4323c4b28984997`.
+- Modified: the 32 px favicon image was converted to PNG without resampling and
+  embedded in a local SVG container. Bundled SHA-256
+  `01af4014a7b5bbee26800c9f43651875435db80f0c292d2cd61003642b7a48fe`.
+- Ownership and conditions: Groq; used only as a secondary identifier beside
+  GroqCloud. Groq's trademark policy does not grant a general logo license.
+
+## `openrouter.svg` and `openrouter-dark.svg`
+
+- Upstream source: OpenRouter's official
+  [`openrouter-light.svg`](https://openrouter.ai/brand/v2/openrouter-light.svg)
+  and
+  [`openrouter-dark.svg`](https://openrouter.ai/brand/v2/openrouter-dark.svg).
+- Retrieved: 2026-08-23.
+- Modified: the official symbol path was extracted from each horizontal
+  wordmark for legibility at provider-mark size; path geometry and colors are
+  unchanged. Bundled SHA-256 values are
+  `c35100dec4befbe29e44b592c40d3d39311c95541780fbbd5f88ee723d4264ab`
+  and
+  `1c8c40e47a1b656db1d074fb08ead1f84d7a1f3fe5fc6ccf63f98f61804e9dea`.
+- Ownership: OpenRouter; used only as a secondary provider identifier.
+
+## `mistral.svg`
+
+- Upstream source: Mistral AI's official homepage-declared
+  [`favicon.svg`](https://mistral.ai/favicon.svg).
+- Retrieved: 2026-08-23.
+- Modified: no; SHA-256
+  `66ceaf186f2075da38e5a3c2e46fc0015936e0cb57692d1f8ae0ba565354874d`.
+- Ownership: Mistral AI; used only as a secondary provider identifier.
+
+## `perplexity.svg`
+
+- Upstream source: Perplexity's official homepage-declared
+  [`favicon.svg`](https://www.perplexity.ai/favicon.svg).
+- Retrieved: 2026-08-23.
+- Modified: generator metadata was removed from the bundled SVG; path
+  geometry is unchanged. SHA-256
+  `ded1887a8258ae2035114fa71551679644316b35ba7ea6715ed6076b30c498d8`.
+- Ownership: Perplexity AI; used only as a secondary provider identifier.
+
 All proprietary provider and GitHub marks above are excluded from this
 repository's MIT license. They remain subject to their owners' trademark,
 copyright, and brand-use terms. AI Limits is an independent project and is not
