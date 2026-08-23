@@ -106,4 +106,32 @@ export const providerDefinitions = {
     ],
     optionalPermissions: [],
   },
+  deepseek: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.deepseek.com/*"],
+    optionalPermissions: [],
+  },
+  moonshot: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.moonshot.ai/*"],
+    optionalPermissions: [],
+  },
+  deepinfra: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.deepinfra.com/*"],
+    optionalPermissions: [],
+  },
+  fireworks: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.fireworks.ai/*"],
+    optionalPermissions: [],
+  },
 } as const satisfies { [Kind in ProviderKind]: ProviderDefinition };

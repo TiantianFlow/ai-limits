@@ -2,12 +2,16 @@ import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
 import type { ProviderKind } from "./catalog";
 import { cursorPackage } from "./cursor/package";
+import { deepInfraAdapter } from "./deepinfra/adapter";
+import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
+import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { kimiPackage } from "./kimi/package";
 import { clawRouterAdapter } from "./clawrouter/adapter";
 import { liteLlmAdapter } from "./litellm/adapter";
 import { llmProxyAdapter } from "./llm-proxy/adapter";
+import { moonshotAdapter } from "./moonshot/adapter";
 import { newApiAdapter } from "./newapi/adapter";
 import { sub2apiAdapter } from "./sub2api/adapter";
 import {
@@ -121,4 +125,48 @@ export const providerRegistry = {
   clawrouter: dynamicOriginApiKeyPackage("clawrouter", clawRouterAdapter),
   sub2api: dynamicOriginApiKeyPackage("sub2api", sub2apiAdapter),
   llmProxy: dynamicOriginApiKeyPackage("llmProxy", llmProxyAdapter),
+  deepseek: createApiKeyPackage({
+    kind: "deepseek",
+    adapter: deepSeekAdapter,
+    cardinality: providerDefinitions.deepseek.cardinality,
+    configKind: providerDefinitions.deepseek.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.deepseek.optionalOrigins,
+      providerDefinitions.deepseek.optionalPermissions,
+    ),
+  }),
+  moonshot: createApiKeyPackage({
+    kind: "moonshot",
+    adapter: moonshotAdapter,
+    cardinality: providerDefinitions.moonshot.cardinality,
+    configKind: providerDefinitions.moonshot.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.moonshot.optionalOrigins,
+      providerDefinitions.moonshot.optionalPermissions,
+    ),
+  }),
+  deepinfra: createApiKeyPackage({
+    kind: "deepinfra",
+    adapter: deepInfraAdapter,
+    cardinality: providerDefinitions.deepinfra.cardinality,
+    configKind: providerDefinitions.deepinfra.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.deepinfra.optionalOrigins,
+      providerDefinitions.deepinfra.optionalPermissions,
+    ),
+  }),
+  fireworks: createApiKeyPackage({
+    kind: "fireworks",
+    adapter: fireworksAdapter,
+    cardinality: providerDefinitions.fireworks.cardinality,
+    configKind: providerDefinitions.fireworks.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.fireworks.optionalOrigins,
+      providerDefinitions.fireworks.optionalPermissions,
+    ),
+  }),
 } satisfies { [Kind in ProviderKind]: ProviderPackage };

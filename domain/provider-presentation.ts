@@ -77,6 +77,34 @@ export const providerCatalog = {
       markPath: "/provider-marks/fallback.svg",
     },
   },
+  deepseek: {
+    displayName: "DeepSeek",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://platform.deepseek.com/api_keys",
+    },
+  },
+  moonshot: {
+    displayName: "Moonshot",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://platform.moonshot.ai/console/api-keys",
+    },
+  },
+  deepinfra: {
+    displayName: "DeepInfra",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://deepinfra.com/dash/api_keys",
+    },
+  },
+  fireworks: {
+    displayName: "Fireworks",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://app.fireworks.ai/settings/users/api-keys",
+    },
+  },
 } as const;
 
 export const providerNames = Object.fromEntries(

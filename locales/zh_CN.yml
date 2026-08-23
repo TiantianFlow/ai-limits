@@ -516,6 +516,15 @@ metrics:
     remainingQuota: 剩余额度
     totalRequests: 总请求数
     totalTokens: 总令牌
+  deepseek:
+    balance: 余额
+  moonshot:
+    balance: 余额
+  deepinfra:
+    spendingLimit: 支出上限
+    balance: 余额
+  fireworks:
+    last30DaysSpend: 近 30 天支出
   grok:
     weeklyPool: 每周用量池
     monthlyPool: 每月用量池
@@ -623,6 +632,31 @@ providers:
     capabilities:
       remainingQuota: 剩余额度
       usageCounters: 用量计数
+  deepseek:
+    name: DeepSeek
+    connect: 连接 DeepSeek
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      balance: 余额
+  moonshot:
+    name: Moonshot
+    connect: 连接 Moonshot
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      balance: 余额
+  deepinfra:
+    name: DeepInfra
+    connect: 连接 DeepInfra
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      spendingLimit: 支出上限
+      balance: 余额
+  fireworks:
+    name: Fireworks
+    connect: 连接 Fireworks
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      last30DaysSpend: 近 30 天支出
 
 accessibility:
   refreshProvider: "刷新 {provider}"

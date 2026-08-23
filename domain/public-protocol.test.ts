@@ -14,6 +14,10 @@ const providers = [
   { providerKind: "clawrouter", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
   { providerKind: "sub2api", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
   { providerKind: "llmProxy", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
+  { providerKind: "deepseek", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "moonshot", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "deepinfra", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "fireworks", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
 ] as const;
 
 describe("public side-panel protocol", () => {

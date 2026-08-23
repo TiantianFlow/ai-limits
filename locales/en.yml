@@ -516,6 +516,15 @@ metrics:
     remainingQuota: Remaining quota
     totalRequests: Total requests
     totalTokens: Total tokens
+  deepseek:
+    balance: Balance
+  moonshot:
+    balance: Balance
+  deepinfra:
+    spendingLimit: Spending limit
+    balance: Balance
+  fireworks:
+    last30DaysSpend: Last 30 days spend
   grok:
     weeklyPool: Weekly usage pool
     monthlyPool: Monthly usage pool
@@ -623,6 +632,31 @@ providers:
     capabilities:
       remainingQuota: Remaining quota
       usageCounters: Usage counters
+  deepseek:
+    name: DeepSeek
+    connect: Connect DeepSeek
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      balance: Balance
+  moonshot:
+    name: Moonshot
+    connect: Connect Moonshot
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      balance: Balance
+  deepinfra:
+    name: DeepInfra
+    connect: Connect DeepInfra
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      spendingLimit: Spending limit
+      balance: Balance
+  fireworks:
+    name: Fireworks
+    connect: Connect Fireworks
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      last30DaysSpend: Last 30 days spend
 
 accessibility:
   refreshProvider: "Refresh {provider}"

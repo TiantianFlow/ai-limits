@@ -10,6 +10,10 @@ export const providerKinds = [
   "clawrouter",
   "sub2api",
   "llmProxy",
+  "deepseek",
+  "moonshot",
+  "deepinfra",
+  "fireworks",
 ] as const;
 
 export type ProviderKind = (typeof providerKinds)[number];
@@ -26,6 +30,10 @@ export const apiKeyProviderKinds = [
   "clawrouter",
   "sub2api",
   "llmProxy",
+  "deepseek",
+  "moonshot",
+  "deepinfra",
+  "fireworks",
 ] as const;
 export type ApiKeyProviderKind = (typeof apiKeyProviderKinds)[number];
 

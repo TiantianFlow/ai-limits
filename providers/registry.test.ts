@@ -7,13 +7,17 @@ import type {
 import { chatGptAdapter } from "./chatgpt/adapter";
 import { claudeAdapter } from "./claude/adapter";
 import { providerDefinitions } from "./definitions";
+import { deepInfraAdapter } from "./deepinfra/adapter";
+import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
+import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { createFixtureState } from "./fixtures";
 import { kimiAdapter } from "./kimi/adapter";
 import { clawRouterAdapter } from "./clawrouter/adapter";
 import { liteLlmAdapter } from "./litellm/adapter";
 import { llmProxyAdapter } from "./llm-proxy/adapter";
+import { moonshotAdapter } from "./moonshot/adapter";
 import { newApiAdapter } from "./newapi/adapter";
 import { sub2apiAdapter } from "./sub2api/adapter";
 import { providerKinds, providerRegistry } from "./registry";
@@ -102,6 +106,10 @@ describe("provider registry", () => {
       "clawrouter",
       "sub2api",
       "llmProxy",
+      "deepseek",
+      "moonshot",
+      "deepinfra",
+      "fireworks",
     ]);
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
 
@@ -242,6 +250,42 @@ describe("provider registry", () => {
         rejected: undefined,
         permissions: { origins: ["https://relay.example/*"] },
       },
+      {
+        kind: "deepseek",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.deepseek.com/*"] },
+      },
+      {
+        kind: "moonshot",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.moonshot.ai/*"] },
+      },
+      {
+        kind: "deepinfra",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.deepinfra.com/*"] },
+      },
+      {
+        kind: "fireworks",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.fireworks.ai/*"] },
+      },
     ]);
 
     expect(providerRegistry.newapi.normalizeConfig({
@@ -350,6 +394,34 @@ describe("provider registry", () => {
         ],
         optionalPermissions: [],
       },
+      deepseek: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.deepseek.com/*"],
+        optionalPermissions: [],
+      },
+      moonshot: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.moonshot.ai/*"],
+        optionalPermissions: [],
+      },
+      deepinfra: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.deepinfra.com/*"],
+        optionalPermissions: [],
+      },
+      fireworks: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.fireworks.ai/*"],
+        optionalPermissions: [],
+      },
     });
   });
 
@@ -365,6 +437,10 @@ describe("provider registry", () => {
       clawrouter: clawRouterAdapter,
       sub2api: sub2apiAdapter,
       llmProxy: llmProxyAdapter,
+      deepseek: deepSeekAdapter,
+      moonshot: moonshotAdapter,
+      deepinfra: deepInfraAdapter,
+      fireworks: fireworksAdapter,
     };
     const adapterSpies = Object.fromEntries(
       Object.entries(adapters).map(([kind, adapter]) => [

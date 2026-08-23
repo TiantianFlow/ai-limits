@@ -30,6 +30,10 @@ describe("provider catalog", () => {
       "clawrouter",
       "sub2api",
       "llmProxy",
+      "deepseek",
+      "moonshot",
+      "deepinfra",
+      "fireworks",
     ];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
@@ -105,6 +109,26 @@ describe("provider catalog", () => {
         providerId: "llmProxy",
         markPath: "/provider-marks/fallback.svg",
       },
+      {
+        providerId: "deepseek",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://platform.deepseek.com/api_keys",
+      },
+      {
+        providerId: "moonshot",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://platform.moonshot.ai/console/api-keys",
+      },
+      {
+        providerId: "deepinfra",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://deepinfra.com/dash/api_keys",
+      },
+      {
+        providerId: "fireworks",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://app.fireworks.ai/settings/users/api-keys",
+      },
     ]);
   });
 
@@ -120,7 +144,7 @@ describe("provider catalog", () => {
               type: "CONNECT_API_KEY_PROVIDER",
               providerKind,
               config:
-                providerKind === "elevenlabs"
+                providerRegistry[providerKind].configKind === "fixed"
                   ? { kind: "fixed" }
                   : {
                       kind: "dynamic-origin",
@@ -150,6 +174,10 @@ describe("provider catalog", () => {
     expect(isApiKeyProviderKind("newapi")).toBe(true);
     expect(isApiKeyProviderKind("litellm")).toBe(true);
     expect(isApiKeyProviderKind("llmProxy")).toBe(true);
+    expect(isApiKeyProviderKind("deepseek")).toBe(true);
+    expect(isApiKeyProviderKind("moonshot")).toBe(true);
+    expect(isApiKeyProviderKind("deepinfra")).toBe(true);
+    expect(isApiKeyProviderKind("fireworks")).toBe(true);
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);

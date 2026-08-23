@@ -83,6 +83,19 @@ const KNOWN_METRIC_KEYS: Partial<
     "monthly-pool": "metrics.grok.monthlyPool",
     "extra-usage-credits": "metrics.grok.extraUsageCredits",
   },
+  deepseek: {
+    balance: "metrics.deepseek.balance",
+  },
+  moonshot: {
+    balance: "metrics.moonshot.balance",
+  },
+  deepinfra: {
+    "spending-limit": "metrics.deepinfra.spendingLimit",
+    balance: "metrics.deepinfra.balance",
+  },
+  fireworks: {
+    "last-30-days-spend": "metrics.fireworks.last30DaysSpend",
+  },
 };
 
 const KNOWN_GROUP_KEYS: Record<string, string> = {
@@ -144,6 +157,10 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   clawrouter: ["monthlyBudget", "actualCost"],
   sub2api: ["keyQuota", "subscriptionLimits", "balance"],
   llmProxy: ["remainingQuota", "usageCounters"],
+  deepseek: ["balance"],
+  moonshot: ["balance"],
+  deepinfra: ["spendingLimit", "balance"],
+  fireworks: ["last30DaysSpend"],
 };
 
 const DURATION_METRIC = /^(\d+(?:\.\d+)?)-(day|hour)$/;

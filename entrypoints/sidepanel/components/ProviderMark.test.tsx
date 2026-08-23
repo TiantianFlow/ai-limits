@@ -22,7 +22,7 @@ describe("ProviderMark", () => {
     );
 
     const marks = Array.from(document.querySelectorAll("img"));
-    expect(marks).toHaveLength(12);
+    expect(marks).toHaveLength(16);
     expect(marks.map((mark) => mark.getAttribute("src"))).toEqual([
       "/provider-marks/chatgpt.svg",
       "/provider-marks/claude.svg",
@@ -30,6 +30,10 @@ describe("ProviderMark", () => {
       "/provider-marks/cursor.svg",
       "/provider-marks/grok.svg",
       "/provider-marks/elevenlabs.svg",
+      "/provider-marks/fallback.svg",
+      "/provider-marks/fallback.svg",
+      "/provider-marks/fallback.svg",
+      "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
       "/provider-marks/fallback.svg",
@@ -46,7 +50,7 @@ describe("ProviderMark", () => {
       "/provider-marks/cursor-dark.svg",
       "/provider-marks/grok-dark.svg",
     ]);
-    expect(new Set(marks.slice(0, 11).map((mark) => mark.src))).toHaveProperty(
+    expect(new Set(marks.slice(0, 15).map((mark) => mark.src))).toHaveProperty(
       "size",
       7,
     );
@@ -58,7 +62,7 @@ describe("ProviderMark", () => {
       true,
     );
     expect(
-      marks.slice(0, 11).map((mark) =>
+      marks.slice(0, 15).map((mark) =>
         [...mark.classList].find((className) =>
           className.startsWith("provider-mark--provider-"),
         ),
@@ -75,6 +79,10 @@ describe("ProviderMark", () => {
       "provider-mark--provider-clawrouter",
       "provider-mark--provider-sub2api",
       "provider-mark--provider-llmProxy",
+      "provider-mark--provider-deepseek",
+      "provider-mark--provider-moonshot",
+      "provider-mark--provider-deepinfra",
+      "provider-mark--provider-fireworks",
     ]);
     expect(
       marks.some((mark) => mark.classList.contains("local-mark-tile")),
