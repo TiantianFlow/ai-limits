@@ -3,8 +3,8 @@ import { z } from "zod";
 const optionalInt = z.number().int().nullable().optional();
 const optionalFinite = z.number().finite().nullable().optional();
 
-// Wire keys from CodexBar LLMProxyUsageFetcher.swift LLMProxyQuotaStatsResponse
-// CodingKeys. quota_groups is array-or-record on the wire; parsed in the adapter.
+// Wire keys follow the upstream reference implementation. quota_groups is
+// array-or-record on the wire and is parsed in the adapter.
 export const llmProxyQuotaGroupSchema = z.object({
   remaining_percent: optionalFinite,
   reset_time: z.string().nullable().optional(),

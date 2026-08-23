@@ -3,9 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import type { CollectionContext } from "../types";
 import { moonshotAdapter } from "./adapter";
 
-// Fixtures mirror the wire shape decoded by CodexBar
-// Sources/CodexBarCore/Providers/Moonshot/MoonshotUsageFetcher.swift
-// (`MoonshotBalanceResponse`/`MoonshotBalanceData`, lines 58-75).
+// Fixtures mirror the wire shape decoded by the upstream reference
+// implementation.
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const TEST_CREDENTIAL = "synthetic-test-credential";
 

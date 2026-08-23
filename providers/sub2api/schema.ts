@@ -4,7 +4,7 @@ const finiteNumber = z.number().finite();
 const optionalFinite = finiteNumber.nullable().optional();
 const optionalText = z.string().nullable().optional();
 
-// Shape from CodexBar Sources/CodexBarCore/Resources/Plugins/sub2api.js.
+// Shape from the upstream reference implementation.
 export const sub2apiQuotaSchema = z.object({
   limit: finiteNumber,
   used: finiteNumber,

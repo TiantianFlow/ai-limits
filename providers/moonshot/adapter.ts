@@ -7,7 +7,7 @@ import type {
 } from "../types";
 import { moonshotBalanceResponseSchema } from "./schema";
 
-// Region is a user choice in CodexBar (MoonshotRegion.swift); this port is
+// The upstream reference implementation offers a region choice; this port is
 // hardcoded to the international host only.
 const BALANCE_ENDPOINT = "https://api.moonshot.ai/v1/users/me/balance";
 
@@ -84,8 +84,8 @@ async function collectMoonshot({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    // CodexBar MoonshotUsageFetcher.parseSummary treats status !== true or a
-    // non-zero code as an API error, not a parse failure.
+    // The upstream reference implementation treats status !== true or a
+    // non-zero code as an API error rather than a parse failure.
     if (parsed.data.status !== true || parsed.data.code !== 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }

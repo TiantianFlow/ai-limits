@@ -27,7 +27,7 @@ function context(
   };
 }
 
-// Fields required by CodexBar Sources/CodexBarCore/Resources/Plugins/clawrouter.js.
+// Fields required by the upstream reference implementation.
 function usageFixture(overrides: Record<string, unknown> = {}) {
   return {
     budget: {

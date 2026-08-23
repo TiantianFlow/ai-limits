@@ -3,7 +3,7 @@ import { z } from "zod";
 const integer = z.number().int();
 const optionalInteger = integer.nullable().optional();
 
-// Shape from CodexBar Sources/CodexBarCore/Resources/Plugins/clawrouter.js.
+// Shape from the upstream reference implementation.
 export const clawRouterUsageSchema = z.object({
   budget: z.object({
     configured: z.boolean(),

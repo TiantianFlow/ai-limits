@@ -27,8 +27,7 @@ function context(
   };
 }
 
-// Observed /key/info envelope from CodexBar LiteLLMUsageFetcherTests.swift
-// `parses key info identity for user lookup`.
+// Observed /key/info envelope from the upstream reference implementation.
 function keyInfoFixture(overrides: Record<string, unknown> = {}) {
   return {
     key: "sk-redacted",
@@ -106,7 +105,7 @@ describe("LiteLLM adapter", () => {
   });
 
   it("labels team-only virtual keys using the observed team-only key-info fixture", async () => {
-    // CodexBar LiteLLMUsageFetcherTests.swift `parses team-only key info without user identity`
+    // Matches the upstream reference implementation's team-only fixture.
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       json({
         info: {

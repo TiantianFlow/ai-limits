@@ -3,10 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import type { CollectionContext } from "../types";
 import { deepSeekAdapter } from "./adapter";
 
-// Fixtures mirror the wire shape decoded by CodexBar
-// Sources/CodexBarCore/Providers/DeepSeek/DeepSeekUsageFetcher.swift
-// (`DeepSeekBalanceResponse`/`DeepSeekBalanceInfo`, lines 8-30): balances are
-// string-typed decimals.
+// Fixtures mirror the wire shape decoded by the upstream reference
+// implementation: balances are string-typed decimals.
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const TEST_CREDENTIAL = "synthetic-test-credential";
 

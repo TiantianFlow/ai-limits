@@ -1,12 +1,8 @@
 import { z } from "zod";
 
-// Wire shapes sourced from CodexBar
-// Sources/CodexBarCore/Providers/Fireworks/FireworksUsageFetcher.swift
-// (`FireworksAccountsResponse`/`FireworksAccount` lines 371-390,
-// `FireworksBillingSummaryResponse`/`FireworksLineItem`/`FireworksMoney`
-// lines 366-368 and 392-406). Slugs derive from `accountId`, then `id`, then
-// the last path segment of `name`. `totalCost.units` is a string decimal;
-// `nanos` is an integer fraction.
+// Wire shapes follow the upstream reference implementation. Slugs derive from
+// `accountId`, then `id`, then the last path segment of `name`.
+// `totalCost.units` is a string decimal; `nanos` is an integer fraction.
 export const fireworksAccountsResponseSchema = z.object({
   accounts: z
     .array(

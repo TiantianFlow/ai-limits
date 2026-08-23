@@ -36,7 +36,7 @@ async function parseJson(response: Response): Promise<unknown> {
   }
 }
 
-// Mirrors the selection in CodexBar DeepSeekUsageFetcher.parseSnapshot:
+// Mirrors the selection in the upstream reference implementation:
 // prefer a funded USD row, then any funded row, then USD, then the first row.
 function selectBalance(
   balances: DeepSeekBalanceInfo[],

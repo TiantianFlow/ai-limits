@@ -27,7 +27,7 @@ function context(
   };
 }
 
-// Field names from CodexBar Sources/CodexBarCore/Resources/Plugins/sub2api.js.
+// Field names follow the upstream reference implementation.
 function quotaFixture(overrides: Record<string, unknown> = {}) {
   return {
     mode: "quota",

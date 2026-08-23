@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Wire shape sourced from CodexBar
-// Sources/CodexBarCore/Providers/DeepSeek/DeepSeekUsageFetcher.swift
-// (`DeepSeekBalanceResponse`/`DeepSeekBalanceInfo`, lines 8-30). Balances are
+// Wire shape follows the upstream reference implementation. Balances are
 // string-typed decimals on the wire.
 const decimalString = z
   .string()

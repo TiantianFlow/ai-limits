@@ -158,8 +158,8 @@ async function collectDeepInfra({
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    // CodexBar DeepInfraUsageFetcher.parseSnapshot takes months.last as the
-    // current month, falling back to the checklist `recent` spend.
+    // The upstream reference implementation takes the last month as current,
+    // falling back to the checklist `recent` spend.
     const recentCost = Math.max(0, checklist.data.recent);
     const lastMonth = usage.data.months.at(-1);
     const currentMonthCost =

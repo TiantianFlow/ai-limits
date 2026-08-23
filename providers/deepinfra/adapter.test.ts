@@ -3,11 +3,9 @@ import { describe, expect, test, vi } from "vitest";
 import type { CollectionContext } from "../types";
 import { deepInfraAdapter } from "./adapter";
 
-// Fixtures mirror the wire shapes decoded by CodexBar
-// Sources/CodexBarCore/Providers/DeepInfra/DeepInfraUsageFetcher.swift
-// (`DeepInfraChecklistResponse` lines 6-29; `DeepInfraUsageResponse`/
-// `DeepInfraUsageMonth` lines 31-49). Checklist money is USD; `total_cost` in
-// the usage response is cents.
+// Fixtures mirror the wire shapes decoded by the upstream reference
+// implementation. Checklist money is USD; `total_cost` in the usage response
+// is cents.
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const TEST_CREDENTIAL = "synthetic-test-credential";
 const CHECKLIST_URL = "https://api.deepinfra.com/payment/checklist?compute_owed=true";
@@ -115,7 +113,7 @@ describe("DeepInfra adapter", () => {
     expect(JSON.stringify(result)).not.toContain(TEST_CREDENTIAL);
   });
 
-  test("clamps a negative current-month cost to zero like CodexBar", async () => {
+  test("clamps a negative current-month cost to zero", async () => {
     const fetch = sequencedFetch(
       response(checklistFixture()),
       response(

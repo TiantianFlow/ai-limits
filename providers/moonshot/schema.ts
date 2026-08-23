@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Wire shape sourced from CodexBar
-// Sources/CodexBarCore/Providers/Moonshot/MoonshotUsageFetcher.swift
-// (`MoonshotBalanceResponse`/`MoonshotBalanceData`, lines 58-75). Balances are
+// Wire shape follows the upstream reference implementation. Balances are
 // numeric JSON doubles.
 export const moonshotBalanceResponseSchema = z.object({
   code: z.number().finite(),

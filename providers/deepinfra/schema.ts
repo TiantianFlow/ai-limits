@@ -1,10 +1,7 @@
 import { z } from "zod";
 
-// Wire shapes sourced from CodexBar
-// Sources/CodexBarCore/Providers/DeepInfra/DeepInfraUsageFetcher.swift
-// (`DeepInfraChecklistResponse` lines 6-29, `DeepInfraUsageResponse`/
-// `DeepInfraUsageMonth` lines 31-49). Checklist money fields are USD; the
-// usage endpoint reports `total_cost` in cents.
+// Wire shapes follow the upstream reference implementation. Checklist money
+// fields are USD; the usage endpoint reports `total_cost` in cents.
 export const deepInfraChecklistSchema = z.object({
   stripe_balance: z.number().finite(),
   recent: z.number().finite(),

@@ -3,11 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import type { CollectionContext } from "../types";
 import { fireworksAdapter } from "./adapter";
 
-// Fixtures mirror the wire shapes decoded by CodexBar
-// Sources/CodexBarCore/Providers/Fireworks/FireworksUsageFetcher.swift
-// (`FireworksAccountsResponse`/`FireworksAccount` lines 371-390,
-// `FireworksBillingSummaryResponse`/`FireworksLineItem`/`FireworksMoney`
-// lines 366-368 and 392-406).
+// Fixtures mirror the wire shapes decoded by the upstream reference
+// implementation.
 const NOW = Date.parse("2030-04-15T12:00:00.000Z");
 const LOOKBACK_MS = 30 * 24 * 60 * 60 * 1_000;
 const TEST_CREDENTIAL = "synthetic-test-credential";

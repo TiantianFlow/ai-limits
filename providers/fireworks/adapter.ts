@@ -14,7 +14,7 @@ const ACCOUNTS_ENDPOINT = "https://api.fireworks.ai/v1/accounts";
 const SUMMARY_ENDPOINT_PREFIX = "https://api.fireworks.ai/v1/accounts/";
 const SUMMARY_ENDPOINT_SUFFIX = "/billing/summary";
 
-// CodexBar FireworksUsageFetcher requests an explicit 30-day window.
+// The upstream reference implementation requests an explicit 30-day window.
 const LOOKBACK_MS = 30 * 24 * 60 * 60 * 1_000;
 const SLUG_PATTERN = /^[A-Za-z0-9._-]+$/;
 
@@ -62,8 +62,8 @@ function isoTimestamp(milliseconds: number): string {
   return new Date(milliseconds).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-// Mirrors FireworksUsageFetcher.parseSummary: the first rated currency wins
-// and only rows in that currency are summed; unrated rows are skipped.
+// The first rated currency wins and only rows in that currency are summed;
+// unrated rows are skipped, matching the upstream reference implementation.
 function summarizeSpend(body: unknown): { total: number; currency: string } | undefined {
   const parsed = fireworksBillingSummarySchema.safeParse(body);
   if (!parsed.success) return undefined;

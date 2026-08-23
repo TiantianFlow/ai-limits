@@ -27,8 +27,7 @@ function context(
   };
 }
 
-// Observed /v1/quota-stats payload from CodexBar LLMProxyUsageFetcherTests.swift
-// `parses quota stats summary`.
+// Observed /v1/quota-stats payload from the upstream reference implementation.
 function quotaStatsFixture(overrides: Record<string, unknown> = {}) {
   return {
     providers: {

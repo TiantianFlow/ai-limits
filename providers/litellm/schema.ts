@@ -3,10 +3,9 @@ import { z } from "zod";
 const optionalFinite = z.number().finite().nullable().optional();
 const optionalText = z.string().nullable().optional();
 
-// Wire keys from CodexBar LiteLLMUsageFetcher.swift LiteLLMKeyInfoResponse.Info
-// CodingKeys (key_name, spend, expires, user_id, team_id). max_budget is optional
-// because LiteLLMUsageFetcherTests.swift's observed /key/info fixture includes it;
-// the Swift decoder does not require it.
+// Wire keys follow the upstream reference implementation: key_name, spend,
+// expires, user_id, and team_id. max_budget is optional because an observed
+// /key/info fixture includes it while the decoder does not require it.
 export const liteLlmKeyInfoSchema = z.object({
   info: z.object({
     key_name: optionalText,
