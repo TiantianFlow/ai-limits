@@ -17,6 +17,10 @@ export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://*/*",
   "http://localhost/*",
   "http://127.0.0.1/*",
+  "https://api.deepseek.com/*",
+  "https://api.moonshot.ai/*",
+  "https://api.deepinfra.com/*",
+  "https://api.fireworks.ai/*",
 ];
 
 export const FORBIDDEN_RELEASE_LITERALS = [

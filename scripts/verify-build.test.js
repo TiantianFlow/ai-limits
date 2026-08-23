@@ -33,7 +33,7 @@ function validManifest() {
 describe("built Chrome artifact contract", () => {
   it("accepts the static and dynamic optional provider origins and the store description", () => {
     expect(EXPECTED_DESCRIPTION.length).toBeLessThanOrEqual(132);
-    expect(EXPECTED_OPTIONAL_ORIGINS).toHaveLength(9);
+    expect(EXPECTED_OPTIONAL_ORIGINS).toHaveLength(13);
     expect(validateBuildManifest(validManifest(), "0.4.1")).toEqual([]);
   });
 
