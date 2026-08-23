@@ -405,10 +405,23 @@ describe("release ZIP credential scan", () => {
       expect(
         artifactContract.validateReleaseTextEntries({ "background.js": literal }),
       ).toContain(
-        `Release text contains synthetic credential literal: ${literal}.`,
+        `Release text contains forbidden literal: ${literal}.`,
       );
     },
   );
+
+  it("rejects forbidden reference names case-insensitively", () => {
+    const referenceName = artifactContract.FORBIDDEN_RELEASE_LITERALS.find(
+      (literal) =>
+        literal.toLowerCase() === ["codex", "bar"].join(""),
+    );
+    expect(referenceName).toBeDefined();
+    expect(
+      artifactContract.validateReleaseTextEntries({
+        "background.js": referenceName.toUpperCase(),
+      }),
+    ).toContain(`Release text contains forbidden literal: ${referenceName}.`);
+  });
 
   it("rejects key-shaped values without treating ordinary API-key prose as a secret", () => {
     expect(
@@ -481,7 +494,7 @@ describe("release ZIP credential scan", () => {
     ).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/workstation path/i),
-        expect.stringMatching(/synthetic credential literal/i),
+        expect.stringMatching(/forbidden literal/i),
         expect.stringMatching(/key-shaped credential/i),
       ]),
     );

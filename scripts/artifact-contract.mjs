@@ -23,6 +23,45 @@ export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://api.fireworks.ai/*",
 ];
 
+const joinedLiteral = (...parts) => parts.join("");
+const upstreamSourceBasenames = [
+  joinedLiteral("DeepInfra", "UsageFetcher"),
+  joinedLiteral("DeepSeek", "UsageFetcher"),
+  joinedLiteral("Fireworks", "UsageFetcher"),
+  joinedLiteral("LiteLLM", "UsageFetcher"),
+  joinedLiteral("LiteLLM", "UsageFetcherTests"),
+  joinedLiteral("LLMProxy", "UsageFetcher"),
+  joinedLiteral("LLMProxy", "UsageFetcherTests"),
+  joinedLiteral("Moonshot", "Region"),
+  joinedLiteral("Moonshot", "UsageFetcher"),
+  joinedLiteral("Groq", "UsageFetcher"),
+  joinedLiteral("Groq", "UsageFetcherTests"),
+  joinedLiteral("Groq", "SettingsReader"),
+  joinedLiteral("Groq", "ProviderDescriptor"),
+  joinedLiteral("OpenAIAPI", "UsageFetcher"),
+  joinedLiteral("OpenAIAPI", "UsageFetcherTests"),
+  joinedLiteral("OpenAIAPI", "UsageResponses"),
+  joinedLiteral("OpenAIAPI", "CreditBalanceFetcher"),
+  joinedLiteral("OpenAIAPI", "CreditBalanceTests"),
+  joinedLiteral("OpenAIAPI", "ProviderDescriptor"),
+  joinedLiteral("OpenRouter", "UsageStatsTests"),
+  joinedLiteral("OpenRouter", "SettingsReader"),
+  joinedLiteral("OpenRouter", "ProviderDescriptor"),
+  joinedLiteral("Mistral", "UsageFetcher"),
+  joinedLiteral("Mistral", "Models"),
+  joinedLiteral("Perplexity", "UsageFetcher"),
+  joinedLiteral("Perplexity", "Models"),
+  joinedLiteral("Perplexity", "UsageSnapshot"),
+];
+
+export const FORBIDDEN_TRACKED_FILE_LITERALS = [
+  joinedLiteral("Codex", "Bar"),
+  joinedLiteral("Codex", "BarCore"),
+  joinedLiteral("Codex", "BarApp"),
+  joinedLiteral("Codex", "BarTests"),
+  ...upstreamSourceBasenames,
+];
+
 export const FORBIDDEN_RELEASE_LITERALS = [
   "active-test-key",
   "candidate-key",
@@ -39,6 +78,7 @@ export const FORBIDDEN_RELEASE_LITERALS = [
   "saved-key",
   "synthetic-api-key",
   "synthetic-candidate-key",
+  ...FORBIDDEN_TRACKED_FILE_LITERALS,
 ];
 
 const SIDE_PANEL_CREDENTIAL_BOUNDARIES = [
@@ -155,10 +195,11 @@ export function validateSidePanelAssetText(text) {
 export function validateReleaseTextEntries(entries) {
   const errors = [];
   const combinedText = Object.values(entries).join("\n");
+  const lowerCombinedText = combinedText.toLowerCase();
 
   for (const literal of FORBIDDEN_RELEASE_LITERALS) {
-    if (combinedText.includes(literal)) {
-      errors.push(`Release text contains synthetic credential literal: ${literal}.`);
+    if (lowerCombinedText.includes(literal.toLowerCase())) {
+      errors.push(`Release text contains forbidden literal: ${literal}.`);
     }
   }
 

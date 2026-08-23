@@ -12,9 +12,10 @@
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit",
+    "verify:tracked-files": "node scripts/verify-tracked-files.mjs",
     "verify:publication": "node scripts/verify-publication.mjs",
     "verify:store-assets": "node scripts/verify-store-assets.mjs",
-    "verify": "pnpm test:run && pnpm typecheck && pnpm build && node scripts/verify-build.mjs && pnpm verify:publication && pnpm verify:store-assets",
+    "verify": "pnpm verify:tracked-files && pnpm test:run && pnpm typecheck && pnpm build && node scripts/verify-build.mjs && pnpm verify:publication && pnpm verify:store-assets",
     "zip": "wxt zip && node scripts/publish-dev-build.mjs",
     "verify:zip": "pnpm build && pnpm zip && node scripts/verify-zip.mjs"
   },
