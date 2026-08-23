@@ -41,7 +41,7 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs across fifteen supported providers (see the supported-providers document
+graphs across twenty supported providers (see the supported-providers document
 for the full roster). Browser-session providers use an account already signed in within the
 user's browser profile; API-key providers use a key the user connects through
 guided setup.
@@ -73,7 +73,8 @@ Other-model limits plus weekly Grok Bot usage, and a per-model included-usage
 breakdown grouped into Cursor Models and Other Models with input, output, cost,
 and provider totals. That detail view is a generic per-provider surface; today
 only Cursor fills it. **Grok** reads your signed-in consumer plan and
-rate-limit window.
+rate-limit window. **Mistral** shows month-to-date spend and available credits,
+while **Perplexity** shows recurring, purchased, and promotional credit pools.
 **ElevenLabs** connects with a scoped, read-only API key you create yourself.
 **New API** connects self-hosted or third-party API-compatible instances with a
 key you provide. AI Limits supports multiple independent New API instances,
@@ -82,6 +83,9 @@ including multiple separately labeled keys on the same origin.
 instances with a key you provide. **DeepSeek** and **Moonshot** show developer
 platform balances, **DeepInfra** shows monthly spend against a limit or its
 reported balance, and **Fireworks** shows rated spend over the last 30 days.
+**OpenAI** shows organization costs and completion usage with a credit fallback,
+**GroqCloud** shows five-minute usage rates, and **OpenRouter** shows credits and
+an optional key budget.
 
 AI Limits keeps everything local: your usage history stays on your device and
 is never sent anywhere else. No ads, no AI Limits account to create, no
@@ -129,15 +133,20 @@ These origins are requested one provider at a time after the user clicks
   JSON.
 - `https://grok.com/*`: reads the signed-in user's Grok session, rate-limit, and
   subscription responses. This is consumer Grok on grok.com, not Cursor's Grok Bot.
+- `https://admin.mistral.ai/*` and `https://console.mistral.ai/*`: read
+  month-to-date usage and credits from the signed-in Mistral session.
+- `https://www.perplexity.ai/*`: reads credit pools from the signed-in
+  Perplexity session.
 - `https://api.elevenlabs.io/*`: sends the user-created API key as the
   `xi-api-key` header only to the read-only subscription request, then
   normalizes monthly credits and supported voice limits. The extension does
   not request `https://elevenlabs.io/*`; the setup page opens as a normal page
   without extension host access.
 - `https://api.deepseek.com/*`, `https://api.moonshot.ai/*`,
-  `https://api.deepinfra.com/*`, and `https://api.fireworks.ai/*`: send the
-  selected provider's saved key only to its fixed read-only balance, usage, or
-  billing endpoints.
+  `https://api.deepinfra.com/*`, `https://api.fireworks.ai/*`,
+  `https://api.openai.com/*`, `https://api.groq.com/*`, and
+  `https://openrouter.ai/*`: send the selected provider's saved key only to its
+  fixed read-only balance, usage, metrics, or billing endpoints.
 - `https://*/*`: optional dynamic host capability for New API, LiteLLM,
   ClawRouter, sub2api, and LLM Proxy instances. The extension never requests
   this wildcard at runtime; after URL normalization, Chrome is asked only for
@@ -250,11 +259,11 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Fifteen-provider test flow
+## Twenty-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm the side panel opens with fifteen permission-required cards.
+   confirm the side panel opens with twenty permission-required cards.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -288,7 +297,14 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    Grok origin, and confirm a SuperGrok-family or Free plan plus the reported
    query window appears. Use the card's **Refresh** action once. No extra
    `cookies` or `scripting` permission should be requested.
-7. **ElevenLabs:** click **Connect ElevenLabs** while signed out if practical.
+7. **Mistral:** sign in at `admin.mistral.ai`, click **Connect** on Mistral,
+   approve only the Mistral origins, and confirm month-to-date spend and any
+   available credits. Record whether the service accepts the request without an
+   `X-CSRFTOKEN` header.
+8. **Perplexity:** sign in at `www.perplexity.ai`, click **Connect** on
+   Perplexity, approve only that origin, and confirm recurring, purchased, and
+   promotional credit pools.
+9. **ElevenLabs:** click **Connect ElevenLabs** while signed out if practical.
    Sign in, use **Open API keys page** in the still-open guide, create a key
    named **AI Limits** with **User → Read** and no generation/write scopes,
    paste it, then select **Validate & connect** and approve only
@@ -296,7 +312,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    available voice limits. Close all ElevenLabs tabs and refresh again; no tab
    should open. If possible, revoke the key at ElevenLabs and confirm AI Limits
    stops scheduled attempts, preserves stale data, and offers **Replace key**.
-8. **New API:** click **Connect New API** twice, use two nonpersonal labels, and
+10. **New API:** click **Connect New API** twice, use two nonpersonal labels, and
    connect two reviewer-controlled keys for the same origin (a site URL or a
    `/v1/messages` URL is accepted). Confirm onboarding normalizes each URL,
    Chrome asks only for that exact origin, both independent cards appear, and
@@ -308,29 +324,40 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    while nonsecret configuration, normalized usage, refresh state, and History
    remain. Account wallet, subscriptions, admin data, and other keys remain out
    of scope.
-9. **LiteLLM:** connect a reviewer-controlled instance and virtual key. Confirm
+11. **LiteLLM:** connect a reviewer-controlled instance and virtual key. Confirm
    `/key/info` spend appears, with a budget quota only when `max_budget` is
    reported, and no user/team follow-up requests occur.
-10. **ClawRouter:** connect a reviewer-controlled instance and policy key.
+12. **ClawRouter:** connect a reviewer-controlled instance and policy key.
     Confirm monthly remaining budget appears for metered policies, otherwise
     this-month actual cost appears.
-11. **sub2api:** connect a reviewer-controlled HTTPS instance and group key.
+13. **sub2api:** connect a reviewer-controlled HTTPS instance and group key.
     Confirm the available key, subscription-window, balance, and optional
     rate-limit metrics reported by `/v1/usage?days=30&timezone=UTC`.
-12. **LLM Proxy:** connect a reviewer-controlled instance and API key. Confirm
+14. **LLM Proxy:** connect a reviewer-controlled instance and API key. Confirm
     the lowest remaining credential quota percent, or request/token counters
     when no remaining percent is reported.
-13. **DeepSeek:** connect a temporary key, approve only
+15. **DeepSeek:** connect a temporary key, approve only
     `https://api.deepseek.com/*`, and confirm the reported account balance.
-14. **Moonshot:** connect an international-platform key, approve only
+16. **Moonshot:** connect an international-platform key, approve only
     `https://api.moonshot.ai/*`, and confirm the available USD balance.
-15. **DeepInfra:** connect a temporary key, approve only
+17. **DeepInfra:** connect a temporary key, approve only
     `https://api.deepinfra.com/*`, and confirm current-month spend against its
     spending limit, or the provider-reported balance when no limit is present.
-16. **Fireworks:** connect a temporary key with exactly one accessible account,
+18. **Fireworks:** connect a temporary key with exactly one accessible account,
     approve only `https://api.fireworks.ai/*`, and confirm rated spend over the
     last 30 days.
-17. Use the header refresh and confirm connected providers retain their previous
+19. **OpenAI:** connect a temporary key, approve only
+    `https://api.openai.com/*`, and confirm organization costs/completion usage
+    or the legacy available-credit fallback. Note any required organization or
+    project scope.
+20. **GroqCloud:** connect a temporary key, approve only
+    `https://api.groq.com/*`, and confirm Prometheus rates when the key has the
+    required scope. A standard key returning 404 should show a scope-required
+    state.
+21. **OpenRouter:** connect a temporary key, approve only
+    `https://openrouter.ai/*`, and confirm credit balance plus key budget when
+    reported.
+22. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history while counter/spend and balance samples remain ungraphed. In Settings, turn automatic

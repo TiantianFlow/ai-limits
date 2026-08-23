@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: August 22, 2026
+Last updated: August 23, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
 describes version 0.4.2.
@@ -49,17 +49,18 @@ data, or other relay keys.
 
 ## Provider authentication and requests
 
-ChatGPT, Claude, Kimi, Cursor, and Grok use signed-in browser sessions. AI Limits
-sends read-only requests to those providers' own web-session services, and
-browser cookies may accompany requests to the same provider origin. Requests
-normally run directly from the extension; the manual Cursor enrichment
-described below runs in an already-open exact-origin page or, if none is
-open, in one inactive spending tab created for that attempt. ChatGPT and Kimi access credentials, the derived ChatGPT
-account identifier, and the selected Claude organization UUID and capabilities
-may be held in memory long enough to complete the related collection attempt
-and request sequence. Those values are not written to persistent extension
-storage or included in saved refresh results. The selected Claude organization
-name may separately be stored as the visible plan label.
+ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, and Perplexity use signed-in
+browser sessions. AI Limits sends read-only requests to those providers' own
+web-session services, and browser cookies may accompany requests to the same
+provider origin. Requests normally run directly from the extension; the manual
+Cursor enrichment described below runs in an already-open exact-origin page or,
+if none is open, in one inactive spending tab created for that attempt. ChatGPT
+and Kimi access credentials, the derived ChatGPT account identifier, and the
+selected Claude organization UUID and capabilities may be held in memory long
+enough to complete the related collection attempt and request sequence. Those
+values are not written to persistent extension storage or included in saved
+refresh results. The selected Claude organization name may separately be
+stored as the visible plan label.
 
 For Kimi, AI Limits checks the exact legacy `kimi-auth` cookie first, then the
 exact `access_token` entry from an already-open matching Kimi page. It does not
@@ -144,13 +145,17 @@ origin for the read-only `/key/info`, `/v1/usage`,
 the selected provider. Each configured instance keeps independent
 credentials, nonsecret configuration, normalized usage, and History.
 
-DeepSeek, Moonshot, DeepInfra, and Fireworks use user-created API keys at fixed
-provider API origins. AI Limits sends those keys only to
+DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter use
+user-created API keys at fixed provider API origins. AI Limits sends those keys
+only to
 `api.deepseek.com/user/balance`, `api.moonshot.ai/v1/users/me/balance`,
 DeepInfra's `api.deepinfra.com/payment/checklist` and `/payment/usage`
-endpoints, or Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
-`/billing/summary` endpoint. These read-only responses are normalized into
-balance, quota, or spend metrics; raw provider responses are not persisted.
+endpoints, Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
+`/billing/summary` endpoint, OpenAI's organization cost and completion-usage
+endpoints or legacy credit-grants fallback, GroqCloud's Prometheus query
+endpoint, or OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints. These
+read-only responses are normalized into balance, quota, counter, or spend
+metrics; raw provider responses are not persisted.
 
 ## Local storage and retention
 

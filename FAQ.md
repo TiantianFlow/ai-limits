@@ -22,9 +22,9 @@ panel, it reads the latest data from local extension storage.
 - At least one provider must remain connected. AI Limits removes the alarm when
   no providers are connected.
 - Chrome must still have that provider's optional permission.
-- For ChatGPT, Claude, Kimi, Cursor, and Grok, the signed-in browser session must
-  still be usable. ElevenLabs and New API instead need a saved active API key;
-  New API also needs its exact instance permission.
+- For ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, and Perplexity, the signed-in
+  browser session must still be usable. API-key providers instead need a saved
+  active key; configurable instances also need their exact instance permission.
 - Chrome must be running and able to run background extensions.
 
 The alarm runs approximately every 15 minutes. Chrome scheduling, device sleep,
@@ -40,8 +40,8 @@ does not reconstruct observations for intervals that were missed.
 
 ## If manual refresh works, should automatic refresh also work?
 
-Usually for ChatGPT, Claude, Cursor base usage, and Grok, as long as their permission
-and browser session remain valid, and for ElevenLabs or New API while the saved
+Usually for browser-session providers other than Kimi, as long as their
+permission and session remain valid, and for API-key providers while the saved
 key and host permission remain active.
 However, manual refresh bypasses scheduled backoff, while automatic refresh
 respects it. Kimi manual refresh may additionally perform interactive session

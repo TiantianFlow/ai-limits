@@ -27,7 +27,7 @@ The complete Chrome Web Store submission packs also live in this directory:
 
 - `chrome-web-store/listing-en.md` — English store configuration, artwork
   inventory, listing copy, permission justifications, data-disclosure
-  answers, reviewer prerequisites, and the fifteen-provider test flow.
+  answers, reviewer prerequisites, and the twenty-provider test flow.
 - `chrome-web-store/listing-zh_CN.md` — the same complete submission pack
   in Simplified Chinese.
 
@@ -90,7 +90,7 @@ button, then verifies that the nonpersonal **Demo relay A** and **Demo relay B**
 New API instance rows and their per-instance actions both fit inside the panel
 frame. The overview provider line remains a representative seven-provider
 fixture; the listing copy and supported-providers document carry the complete
-fifteen-provider roster. Expanding demo fixtures is intentionally a separate
+twenty-provider roster. Expanding demo fixtures is intentionally a separate
 UI-test update.
 
 Never generate store artwork from a browser profile, extension storage,

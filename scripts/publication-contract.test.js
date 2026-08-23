@@ -37,15 +37,15 @@ const elevenLabsPublicationStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports fifteen providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, and Fireworks.",
-    error: "README is missing the rendered fifteen-provider statement.",
+      "AI Limits supports twenty providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter.",
+    error: "README is missing the rendered twenty-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持十五个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra 和 Fireworks。",
+      "AI Limits 支持二十个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud 和 OpenRouter。",
     error:
-      "Simplified Chinese README is missing the rendered fifteen-provider statement.",
+      "Simplified Chinese README is missing the rendered twenty-provider statement.",
   },
   {
     key: "faq",
@@ -169,9 +169,9 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "confirm the side panel opens with fifteen permission-required cards.",
+      "confirm the side panel opens with twenty permission-required cards.",
     error:
-      "Store listing reviewer flow must expect fifteen permission-required cards.",
+      "Store listing reviewer flow must expect twenty permission-required cards.",
   },
 ];
 const v030PublicationStatements = [

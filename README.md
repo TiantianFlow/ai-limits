@@ -13,7 +13,7 @@ Chrome Web Store releases can lag while review or publishing is pending; the
 Store badge shows the currently published version. GitHub Releases preserve
 the corresponding source and validated upload archive.
 
-AI Limits supports fifteen providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, and Fireworks.
+AI Limits supports twenty providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter.
 It is a Chrome side-panel extension that shows their current
 subscription usage and local quota-history graphs in one compact view. It
 normalizes provider-specific reporting into one **Used** or **Left** display
@@ -24,8 +24,8 @@ per-model included-usage breakdown. It starts empty and reads usage only after
 you connect an individual provider and approve that provider's optional access.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
-endorsed by, or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI,
-ElevenLabs, the New API project, or their affiliates.
+endorsed by, or authorized by any supported provider, its parent company, or
+its affiliates.
 
 ![AI Limits Chrome side panel showing representative subscription usage in Used mode, reset timing, pace indicators, and provider navigation](store-assets/chrome-web-store/screenshot-overview-1280x800.png)
 
@@ -33,18 +33,20 @@ ElevenLabs, the New API project, or their affiliates.
 
 - Each provider is opt-in. Chrome asks for only that provider's exact host
   access.
-- ChatGPT, Claude, Kimi, Cursor, and Grok use the signed-in browser session. The
-  extension sends low-frequency, read-only requests to their own web-session
-  usage services and does not scrape rendered page content. Cursor's base
+- ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, and Perplexity use the signed-in
+  browser session. The extension sends low-frequency, read-only requests to
+  their own web-session usage services and does not scrape rendered page
+  content. Cursor's base
   usage refresh remains a background request; Connect or manual Refresh may
   additionally run bundled read-only code in one already-open `cursor.com`
   page, or briefly open one inactive spending tab if none is open, to request
   Grok Bot, extra-credit, and per-model included-usage JSON.
-- ElevenLabs, DeepSeek, Moonshot, DeepInfra, and Fireworks use user-created API
-  keys against their fixed provider APIs. New API, LiteLLM, ClawRouter, sub2api,
-  and LLM Proxy support multiple independently configured instances at
-  user-selected origins. The extension sends each key only to its selected
-  provider API for the read-only usage or balance requests described in
+- ElevenLabs, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and
+  OpenRouter use user-created API keys against their fixed provider APIs. New
+  API, LiteLLM, ClawRouter, sub2api, and LLM Proxy support multiple
+  independently configured instances at user-selected origins. The extension
+  sends each key only to its selected provider API for the read-only usage or
+  balance requests described in
   [Supported providers](SUPPORTED_PROVIDERS.md).
   AI Limits supports multiple New API instances. Each instance keeps its own
   normalized base URL, label, relay key, current usage, refresh state, and

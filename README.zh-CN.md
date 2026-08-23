@@ -12,7 +12,7 @@
 Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。
 GitHub Releases 会保留对应的源代码和已验证上传包。
 
-AI Limits 支持十五个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra 和 Fireworks。
+AI Limits 支持二十个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud 和 OpenRouter。
 它是一款 Chrome 侧边栏扩展，可在一个紧凑的界面中查看这些服务的当前订阅用量
 及本地配额历史图表。它会将不同服务商的用量统一为“已用”或“剩余”视图；当
 服务商提供完整的重置周期信息时，还会将配额消耗与已过时间比较，显示用量节奏。
@@ -20,8 +20,8 @@ Cursor 还会在 Cursor 模型与其他模型的月度限额旁显示 Grok Bot �
 按模型划分的包含用量明细。扩展初始不读取任何数据；只有当你主动连接某个服务
 并批准该服务的可选访问权限后，才会读取其用量。
 
-AI Limits 是 TiantianFlow 开发的独立项目，与 OpenAI、Anthropic、Moonshot AI、
-Cursor、xAI、ElevenLabs、New API 项目或其关联方不存在隶属、背书或授权关系。
+AI Limits 是 TiantianFlow 开发的独立项目，与任何受支持的服务商、其母公司或
+关联方不存在隶属、背书或授权关系。
 
 > 当前扩展界面为英文。下图的中文文字是项目介绍文案；嵌入的实际扩展界面
 > 仍为英文。后续完成扩展本身的简体中文支持后，我们会重新生成截图。
@@ -31,17 +31,17 @@ Cursor、xAI、ElevenLabs、New API 项目或其关联方不存在隶属、背�
 ## 工作原理
 
 - 每个服务都需要单独启用。Chrome 只会请求该服务的精确主机访问权限。
-- ChatGPT、Claude、Kimi、Cursor 和 Grok 使用浏览器中已登录的会话。扩展以较低
-  频率向这些服务自己的网站会话用量接口发送只读请求，不会抓取页面中渲染的
-  内容。Cursor 的基础用量仍由后台请求刷新；Connect 或手动 Refresh 还可能在
+- ChatGPT、Claude、Kimi、Cursor、Grok、Mistral 和 Perplexity 使用浏览器中已
+  登录的会话。扩展以较低频率向这些服务自己的网站会话用量接口发送只读请求，
+  不会抓取页面中渲染的内容。Cursor 的基础用量仍由后台请求刷新；Connect 或手动 Refresh 还可能在
   一个已经打开的 `cursor.com` 页面中运行扩展自带的只读代码；如果当前没有打开
   的标签页，可能会短暂打开一个非活动用量页，以请求 Grok Bot、额外 Credits
   和按模型包含用量 JSON。
-- ElevenLabs、DeepSeek、Moonshot、DeepInfra 和 Fireworks 使用用户创建的 API
-  密钥访问各自固定的服务商 API。New API、LiteLLM、ClawRouter、sub2api 和
-  LLM Proxy 支持在用户选择的来源上配置多个相互独立的实例。扩展只会将每个
-  密钥发送到所选服务商 API，执行[支持的服务](SUPPORTED_PROVIDERS.zh-CN.md)
-  中说明的只读用量或余额请求。
+- ElevenLabs、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud
+  和 OpenRouter 使用用户创建的 API 密钥访问各自固定的服务商 API。New API、
+  LiteLLM、ClawRouter、sub2api 和 LLM Proxy 支持在用户选择的来源上配置多个
+  相互独立的实例。扩展只会将每个密钥发送到所选服务商 API，执行
+  [支持的服务](SUPPORTED_PROVIDERS.zh-CN.md)中说明的只读用量或余额请求。
   AI Limits 支持多个 New API 实例。每个实例分别保存自己的标准化基础网址、标签、Relay Key、当前用量、刷新状态和 History。
 - 最新的标准化配额、计数或支出、余额、套餐、刷新状态和偏好设置会保存在当前
   浏览器配置文件的 Chrome 扩展本地存储中。
