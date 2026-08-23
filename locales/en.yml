@@ -525,6 +525,18 @@ metrics:
     balance: Balance
   fireworks:
     last30DaysSpend: Last 30 days spend
+  openai:
+    last30DaysSpend: Last 30 days spend
+    last30DaysRequests: Last 30 days requests
+    last30DaysTokens: Last 30 days tokens
+    balance: Available credits
+  groqcloud:
+    requestsPerMinute: Requests per minute
+    tokensPerMinute: Tokens per minute
+    cacheHitsPerMinute: Cache hits per minute
+  openrouter:
+    balance: Balance
+    keyBudget: API key budget
   grok:
     weeklyPool: Weekly usage pool
     monthlyPool: Monthly usage pool
@@ -657,6 +669,27 @@ providers:
     connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
     capabilities:
       last30DaysSpend: Last 30 days spend
+  openai:
+    name: OpenAI
+    connect: Connect OpenAI
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      last30DaysSpend: Last 30 days spend
+      last30DaysRequests: Last 30 days requests
+  groqcloud:
+    name: GroqCloud
+    connect: Connect GroqCloud
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      requestsPerMinute: Requests per minute
+      tokensPerMinute: Tokens per minute
+  openrouter:
+    name: OpenRouter
+    connect: Connect OpenRouter
+    connectionDisclosure: Uses an API key you provide, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      balance: Balance
+      keyBudget: API key budget
 
 accessibility:
   refreshProvider: "Refresh {provider}"

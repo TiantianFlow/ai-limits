@@ -12,6 +12,9 @@ import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
+import { groqCloudAdapter } from "./groqcloud/adapter";
+import { openAiAdapter } from "./openai/adapter";
+import { openRouterAdapter } from "./openrouter/adapter";
 import { createFixtureState } from "./fixtures";
 import { kimiAdapter } from "./kimi/adapter";
 import { clawRouterAdapter } from "./clawrouter/adapter";
@@ -110,6 +113,9 @@ describe("provider registry", () => {
       "moonshot",
       "deepinfra",
       "fireworks",
+      "openai",
+      "groqcloud",
+      "openrouter",
     ]);
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
 
@@ -286,6 +292,33 @@ describe("provider registry", () => {
         rejected: undefined,
         permissions: { origins: ["https://api.fireworks.ai/*"] },
       },
+      {
+        kind: "openai",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.openai.com/*"] },
+      },
+      {
+        kind: "groqcloud",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.groq.com/*"] },
+      },
+      {
+        kind: "openrouter",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://openrouter.ai/*"] },
+      },
     ]);
 
     expect(providerRegistry.newapi.normalizeConfig({
@@ -422,6 +455,27 @@ describe("provider registry", () => {
         optionalOrigins: ["https://api.fireworks.ai/*"],
         optionalPermissions: [],
       },
+      openai: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.openai.com/*"],
+        optionalPermissions: [],
+      },
+      groqcloud: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.groq.com/*"],
+        optionalPermissions: [],
+      },
+      openrouter: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://openrouter.ai/*"],
+        optionalPermissions: [],
+      },
     });
   });
 
@@ -441,6 +495,9 @@ describe("provider registry", () => {
       moonshot: moonshotAdapter,
       deepinfra: deepInfraAdapter,
       fireworks: fireworksAdapter,
+      openai: openAiAdapter,
+      groqcloud: groqCloudAdapter,
+      openrouter: openRouterAdapter,
     };
     const adapterSpies = Object.fromEntries(
       Object.entries(adapters).map(([kind, adapter]) => [

@@ -105,6 +105,27 @@ export const providerCatalog = {
       apiKeySetupUrl: "https://app.fireworks.ai/settings/users/api-keys",
     },
   },
+  openai: {
+    displayName: "OpenAI",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://platform.openai.com/usage",
+    },
+  },
+  groqcloud: {
+    displayName: "GroqCloud",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://console.groq.com/dashboard/usage",
+    },
+  },
+  openrouter: {
+    displayName: "OpenRouter",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+      apiKeySetupUrl: "https://openrouter.ai/settings/credits",
+    },
+  },
 } as const;
 
 export const providerNames = Object.fromEntries(

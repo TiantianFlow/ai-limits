@@ -96,6 +96,21 @@ const KNOWN_METRIC_KEYS: Partial<
   fireworks: {
     "last-30-days-spend": "metrics.fireworks.last30DaysSpend",
   },
+  openai: {
+    "last-30-days-spend": "metrics.openai.last30DaysSpend",
+    "last-30-days-requests": "metrics.openai.last30DaysRequests",
+    "last-30-days-tokens": "metrics.openai.last30DaysTokens",
+    balance: "metrics.openai.balance",
+  },
+  groqcloud: {
+    "requests-per-minute": "metrics.groqcloud.requestsPerMinute",
+    "tokens-per-minute": "metrics.groqcloud.tokensPerMinute",
+    "cache-hits-per-minute": "metrics.groqcloud.cacheHitsPerMinute",
+  },
+  openrouter: {
+    balance: "metrics.openrouter.balance",
+    "key-budget": "metrics.openrouter.keyBudget",
+  },
 };
 
 const KNOWN_GROUP_KEYS: Record<string, string> = {
@@ -161,6 +176,9 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   moonshot: ["balance"],
   deepinfra: ["spendingLimit", "balance"],
   fireworks: ["last30DaysSpend"],
+  openai: ["last30DaysSpend", "last30DaysRequests"],
+  groqcloud: ["requestsPerMinute", "tokensPerMinute"],
+  openrouter: ["balance", "keyBudget"],
 };
 
 const DURATION_METRIC = /^(\d+(?:\.\d+)?)-(day|hour)$/;

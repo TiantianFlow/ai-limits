@@ -34,6 +34,9 @@ describe("provider catalog", () => {
       "moonshot",
       "deepinfra",
       "fireworks",
+      "openai",
+      "groqcloud",
+      "openrouter",
     ];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
@@ -129,6 +132,21 @@ describe("provider catalog", () => {
         markPath: "/provider-marks/fallback.svg",
         apiKeySetupUrl: "https://app.fireworks.ai/settings/users/api-keys",
       },
+      {
+        providerId: "openai",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://platform.openai.com/usage",
+      },
+      {
+        providerId: "groqcloud",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://console.groq.com/dashboard/usage",
+      },
+      {
+        providerId: "openrouter",
+        markPath: "/provider-marks/fallback.svg",
+        apiKeySetupUrl: "https://openrouter.ai/settings/credits",
+      },
     ]);
   });
 
@@ -178,6 +196,9 @@ describe("provider catalog", () => {
     expect(isApiKeyProviderKind("moonshot")).toBe(true);
     expect(isApiKeyProviderKind("deepinfra")).toBe(true);
     expect(isApiKeyProviderKind("fireworks")).toBe(true);
+    expect(isApiKeyProviderKind("openai")).toBe(true);
+    expect(isApiKeyProviderKind("groqcloud")).toBe(true);
+    expect(isApiKeyProviderKind("openrouter")).toBe(true);
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);

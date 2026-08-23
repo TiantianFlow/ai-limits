@@ -21,6 +21,9 @@ export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://api.moonshot.ai/*",
   "https://api.deepinfra.com/*",
   "https://api.fireworks.ai/*",
+  "https://api.openai.com/*",
+  "https://api.groq.com/*",
+  "https://openrouter.ai/*",
 ];
 
 const joinedLiteral = (...parts) => parts.join("");

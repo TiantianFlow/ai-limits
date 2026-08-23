@@ -134,4 +134,25 @@ export const providerDefinitions = {
     optionalOrigins: ["https://api.fireworks.ai/*"],
     optionalPermissions: [],
   },
+  openai: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.openai.com/*"],
+    optionalPermissions: [],
+  },
+  groqcloud: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.groq.com/*"],
+    optionalPermissions: [],
+  },
+  openrouter: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://openrouter.ai/*"],
+    optionalPermissions: [],
+  },
 } as const satisfies { [Kind in ProviderKind]: ProviderDefinition };

@@ -7,6 +7,9 @@ import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
+import { groqCloudAdapter } from "./groqcloud/adapter";
+import { openAiAdapter } from "./openai/adapter";
+import { openRouterAdapter } from "./openrouter/adapter";
 import { kimiPackage } from "./kimi/package";
 import { clawRouterAdapter } from "./clawrouter/adapter";
 import { liteLlmAdapter } from "./litellm/adapter";
@@ -167,6 +170,39 @@ export const providerRegistry = {
     requiredPermissions: fixedPermissions(
       providerDefinitions.fireworks.optionalOrigins,
       providerDefinitions.fireworks.optionalPermissions,
+    ),
+  }),
+  openai: createApiKeyPackage({
+    kind: "openai",
+    adapter: openAiAdapter,
+    cardinality: providerDefinitions.openai.cardinality,
+    configKind: providerDefinitions.openai.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.openai.optionalOrigins,
+      providerDefinitions.openai.optionalPermissions,
+    ),
+  }),
+  groqcloud: createApiKeyPackage({
+    kind: "groqcloud",
+    adapter: groqCloudAdapter,
+    cardinality: providerDefinitions.groqcloud.cardinality,
+    configKind: providerDefinitions.groqcloud.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.groqcloud.optionalOrigins,
+      providerDefinitions.groqcloud.optionalPermissions,
+    ),
+  }),
+  openrouter: createApiKeyPackage({
+    kind: "openrouter",
+    adapter: openRouterAdapter,
+    cardinality: providerDefinitions.openrouter.cardinality,
+    configKind: providerDefinitions.openrouter.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.openrouter.optionalOrigins,
+      providerDefinitions.openrouter.optionalPermissions,
     ),
   }),
 } satisfies { [Kind in ProviderKind]: ProviderPackage };

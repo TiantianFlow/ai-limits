@@ -525,6 +525,18 @@ metrics:
     balance: 余额
   fireworks:
     last30DaysSpend: 近 30 天支出
+  openai:
+    last30DaysSpend: 近 30 天支出
+    last30DaysRequests: 近 30 天请求
+    last30DaysTokens: 近 30 天令牌
+    balance: 可用额度
+  groqcloud:
+    requestsPerMinute: 每分钟请求
+    tokensPerMinute: 每分钟令牌
+    cacheHitsPerMinute: 每分钟缓存命中
+  openrouter:
+    balance: 余额
+    keyBudget: API 密钥预算
   grok:
     weeklyPool: 每周用量池
     monthlyPool: 每月用量池
@@ -657,6 +669,27 @@ providers:
     connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
     capabilities:
       last30DaysSpend: 近 30 天支出
+  openai:
+    name: OpenAI
+    connect: 连接 OpenAI
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      last30DaysSpend: 近 30 天支出
+      last30DaysRequests: 近 30 天请求
+  groqcloud:
+    name: GroqCloud
+    connect: 连接 GroqCloud
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      requestsPerMinute: 每分钟请求
+      tokensPerMinute: 每分钟令牌
+  openrouter:
+    name: OpenRouter
+    connect: 连接 OpenRouter
+    connectionDisclosure: 使用你提供的 API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      balance: 余额
+      keyBudget: API 密钥预算
 
 accessibility:
   refreshProvider: "刷新 {provider}"

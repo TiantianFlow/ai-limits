@@ -18,6 +18,9 @@ const providers = [
   { providerKind: "moonshot", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
   { providerKind: "deepinfra", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
   { providerKind: "fireworks", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "openai", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "groqcloud", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "openrouter", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
 ] as const;
 
 describe("public side-panel protocol", () => {
