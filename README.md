@@ -13,8 +13,8 @@ Chrome Web Store releases can lag while review or publishing is pending; the
 Store badge shows the currently published version. GitHub Releases preserve
 the corresponding source and validated upload archive.
 
-AI Limits supports seven providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs,
-and New API. It is a Chrome side-panel extension that shows their current
+AI Limits supports fifteen providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, and Fireworks.
+It is a Chrome side-panel extension that shows their current
 subscription usage and local quota-history graphs in one compact view. It
 normalizes provider-specific reporting into one **Used** or **Left** display
 and, when a provider exposes a complete reset window, compares quota
@@ -40,14 +40,15 @@ ElevenLabs, the New API project, or their affiliates.
   additionally run bundled read-only code in one already-open `cursor.com`
   page, or briefly open one inactive spending tab if none is open, to request
   Grok Bot, extra-credit, and per-model included-usage JSON.
-- ElevenLabs uses a user-created API key because its documented public API does
-  not offer the same zero-setup web-session route used by the other providers.
-  The extension sends that key only to the ElevenLabs API for its read-only
-  subscription request.
-- AI Limits supports multiple New API instances. Each instance keeps its own
+- ElevenLabs, DeepSeek, Moonshot, DeepInfra, and Fireworks use user-created API
+  keys against their fixed provider APIs. New API, LiteLLM, ClawRouter, sub2api,
+  and LLM Proxy support multiple independently configured instances at
+  user-selected origins. The extension sends each key only to its selected
+  provider API for the read-only usage or balance requests described in
+  [Supported providers](SUPPORTED_PROVIDERS.md).
+  AI Limits supports multiple New API instances. Each instance keeps its own
   normalized base URL, label, relay key, current usage, refresh state, and
-  History. Capped keys show quota; unlimited keys show an absolute counter.
-  Account wallet, subscriptions, admin data, and other relay keys are not read.
+  History.
 - The latest normalized quota, counter or spend, balance, plan, refresh-status,
   and preference data is stored in Chrome extension storage on the local
   browser profile.
@@ -60,9 +61,9 @@ ElevenLabs, the New API project, or their affiliates.
   store raw provider responses or credentials in History.
 - Browser-session cookies and access credentials are used only for the current
   provider collection attempt and are not saved in persistent extension
-  storage. Successfully validated ElevenLabs and New API keys are stored separately in
-  local extension storage so manual and scheduled refresh can run without
-  reopening the setup page.
+  storage. Successfully validated API keys are stored separately in local
+  extension storage so manual and scheduled refresh can run without reopening
+  the setup page.
 - Automatic refresh is enabled by default and runs about every 15 minutes only
   while at least one connected provider remains. It can be disabled in
   Settings.
@@ -110,16 +111,17 @@ limitations,
 AI Limits requires `storage`, `alarms`, and `sidePanel` for local state,
 scheduled refresh, and its interface. Provider origins are optional and are
 requested one at a time when you click **Connect** or validate an API-key
-connection. New API declares dynamic optional host capability because it can be
-self-hosted, but Chrome is asked only for the exact instance origin entered in
-onboarding. Same-origin New API instances share that browser-global grant only;
-their credentials, labels, usage, and History remain independent. The optional
+connection. New API, LiteLLM, ClawRouter, sub2api, and LLM Proxy declare dynamic
+optional host capability because they can use configurable origins, but Chrome
+is asked only for the exact instance origin entered in onboarding. Same-origin
+instances share that browser-global grant only; their credentials, labels,
+usage, and History remain independent. The optional
 `cookies` is requested only for Kimi session access. `scripting` is requested
 for Kimi interactive recovery and for Cursor's manual/connect-only page
-enrichment. ElevenLabs
-receives only optional access to `https://api.elevenlabs.io/*`; the public
-setup page is opened normally and does not receive extension host access. The
-extension does not request the broad `tabs` permission.
+enrichment. Fixed API-key providers receive only optional access to their own
+API origins. Public setup pages are opened normally and do not receive
+extension host access. The extension does not request the broad `tabs`
+permission.
 
 For exact permission justifications and reviewer steps, see the
 [store-listing draft](STORE_LISTING.md).
@@ -169,10 +171,11 @@ manifest, entrypoints, permissions, and forbidden-file rules.
 ## Provider compatibility
 
 The browser-session providers use private, unsupported session and usage
-interfaces. ElevenLabs and New API use documented APIs, but response
-shapes, authorization scopes, security challenges, or availability can still
-change without notice. AI Limits converts malformed or unavailable responses
-into bounded health states, but cannot guarantee continuous compatibility.
+interfaces. API-key providers use documented or reverse-engineered HTTP
+endpoints, but response shapes, authorization scopes, security challenges, or
+availability can still change without notice. AI Limits converts malformed or
+unavailable responses into bounded health states, but cannot guarantee
+continuous compatibility.
 
 ## Contributing
 

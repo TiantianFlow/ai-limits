@@ -37,15 +37,15 @@ const elevenLabsPublicationStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports seven providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, and New API.",
-    error: "README is missing the rendered seven-provider statement.",
+      "AI Limits supports fifteen providers: ChatGPT, Claude, Kimi, Cursor, Grok, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, and Fireworks.",
+    error: "README is missing the rendered fifteen-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持七个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs 和 New API。",
+      "AI Limits 支持十五个服务：ChatGPT、Claude、Kimi、Cursor、Grok、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra 和 Fireworks。",
     error:
-      "Simplified Chinese README is missing the rendered seven-provider statement.",
+      "Simplified Chinese README is missing the rendered fifteen-provider statement.",
   },
   {
     key: "faq",
@@ -64,7 +64,7 @@ const elevenLabsPublicationStatements = [
   {
     key: "privacy",
     statement:
-      "ElevenLabs and New API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
+      "API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
     error:
       "Privacy policy is missing the trusted-context ElevenLabs key-storage disclosure.",
   },
@@ -162,16 +162,16 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "Authentication information: Yes. This includes the ElevenLabs and New API keys that the user creates and AI Limits saves locally after successful validation.",
+      "Authentication information: Yes. This includes provider API keys that the user creates and AI Limits saves locally after successful validation.",
     error:
-      "Store listing is missing the saved ElevenLabs key authentication disclosure.",
+      "Store listing is missing the saved provider-key authentication disclosure.",
   },
   {
     key: "listing",
     statement:
-      "confirm the side panel opens with seven permission-required cards.",
+      "confirm the side panel opens with fifteen permission-required cards.",
     error:
-      "Store listing reviewer flow must expect seven permission-required cards.",
+      "Store listing reviewer flow must expect fifteen permission-required cards.",
   },
 ];
 const v030PublicationStatements = [

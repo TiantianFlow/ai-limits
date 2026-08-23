@@ -2,7 +2,7 @@
 
 The complete Chrome Web Store submission pack for AI Limits — store
 configuration, artwork inventory, listing copy, permission justifications,
-data-disclosure answers, reviewer prerequisites, and the seven-provider
+data-disclosure answers, reviewer prerequisites, and the fifteen-provider
 test flow — lives in:
 
 - [English listing pack](store-assets/chrome-web-store/listing-en.md)

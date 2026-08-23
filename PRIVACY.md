@@ -1,13 +1,12 @@
 # Privacy Policy
 
-Last updated: August 14, 2026
+Last updated: August 22, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
 describes version 0.4.1.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
-or authorized by OpenAI, Anthropic, Moonshot AI, Cursor, xAI, ElevenLabs, the New
-API project, or their affiliates.
+or authorized by any supported provider, its parent company, or its affiliates.
 
 ## Data AI Limits accesses
 
@@ -138,18 +137,33 @@ Limits cannot reduce the key's server-side authority. Multiple instances,
 including same-origin instances with different keys and labels, remain
 independent. AI Limits does not use management PAT or admin APIs.
 
+LiteLLM, ClawRouter, sub2api, and LLM Proxy also use a user-provided instance
+URL and API key. AI Limits sends the key only to the same normalized instance
+origin for the read-only `/key/info`, `/v1/usage`,
+`/v1/usage?days=30&timezone=UTC`, or `/v1/quota-stats` request associated with
+the selected provider. Each configured instance keeps independent
+credentials, nonsecret configuration, normalized usage, and History.
+
+DeepSeek, Moonshot, DeepInfra, and Fireworks use user-created API keys at fixed
+provider API origins. AI Limits sends those keys only to
+`api.deepseek.com/user/balance`, `api.moonshot.ai/v1/users/me/balance`,
+DeepInfra's `api.deepinfra.com/payment/checklist` and `/payment/usage`
+endpoints, or Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
+`/billing/summary` endpoint. These read-only responses are normalized into
+balance, quota, or spend metrics; raw provider responses are not persisted.
+
 ## Local storage and retention
 
 AI Limits stores one application-state record in `chrome.storage.local`. It
 contains display and automatic-refresh preferences, per-instance nonsecret
-configuration such as a normalized New API base URL and label, provider
+configuration such as a normalized configurable-provider base URL and label, provider
 permission state, the normalized usage fields listed above, History, and
 sanitized refresh-attempt metadata. It does not contain provider cookies,
-browser-session credentials, or ElevenLabs/New API keys.
+browser-session credentials, or API keys.
 
-ElevenLabs and New API keys are stored separately in chrome.storage.local,
+API keys are stored separately in chrome.storage.local,
 which AI Limits restricts to trusted extension contexts through Chrome's
-storage access level. Each New API instance has one separately keyed credential
+storage access level. Each configured instance has one separately keyed credential
 record; same-origin instances never share it. Ordinary websites, other
 extensions, and this extension's content scripts cannot read that record
 through Chrome extension APIs. The saved key is not OS-keychain encrypted and
@@ -213,13 +227,13 @@ the prior key unchanged.
 
 Automatic refresh is enabled in the default settings. A repeating Chrome alarm
 is created only when automatic refresh is enabled and at least one provider is
-connected. About every 15 minutes, AI Limits checks browser-session providers
-whose optional permission is still granted. Cursor automatic refresh collects
-base monthly and on-demand usage only and never injects into a page. ElevenLabs additionally requires
-its exact API permission and an active saved key. New API requires an active
-saved key, normalized instance URL, and the exact runtime host permission for
-that instance. A rejected API key stops that provider's scheduled requests
-while stale normalized usage and history remain until replacement or deletion.
+connected. About every 15 minutes, AI Limits checks providers whose optional
+permission is still granted. Cursor automatic refresh collects base monthly and
+on-demand usage only and never injects into a page. API-key providers
+additionally require an active saved key; configurable-origin providers also
+require a normalized instance URL and exact runtime host permission. A rejected
+API key stops that provider's scheduled requests while stale normalized usage
+and history remain until replacement or deletion.
 You can turn automatic refresh off in Settings at any time.
 
 ## Data transfer, sale, and sharing
@@ -252,15 +266,16 @@ user may separately choose to disclose information in a support issue.
 ## Security and limitations
 
 Optional access lets the extension interact with sensitive signed-in provider
-sessions and with the ElevenLabs or New API key you provide. AI Limits minimizes that
-access and stores normalized results locally, but no browser extension or local
-profile is risk-free. Anyone who can access your unlocked Chrome profile may
-be able to access extension data, including the separately saved API key.
+sessions and with API keys you provide. AI Limits minimizes that access and
+stores normalized results locally, but no browser extension or local profile
+is risk-free. Anyone who can access your unlocked Chrome profile may be able to
+access extension data, including separately saved API keys.
 
 Browser-session provider endpoints are private, unsupported interfaces and may
-change or stop working without notice. ElevenLabs and New API use documented
-endpoints, but their response and authorization behavior can also change. Provider security
-controls, account rules, and policies still apply. See
+change or stop working without notice. API-key providers use documented or
+reverse-engineered HTTP endpoints, but their response and authorization
+behavior can also change. Provider security controls, account rules, and
+policies still apply. See
 [SECURITY.md](SECURITY.md) for reporting guidance.
 
 ## Contact

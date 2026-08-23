@@ -2,7 +2,7 @@
 
 English | [简体中文](SUPPORTED_PROVIDERS.zh-CN.md)
 
-AI Limits supports eleven provider connections. Each provider is opt-in, and the
+AI Limits supports fifteen provider connections. Each provider is opt-in, and the
 extension keeps normalized usage and History in the local Chrome profile.
 
 | Provider | Connection | What AI Limits reads | Important nuance |
@@ -18,6 +18,10 @@ extension keeps normalized usage and History in the local Chrome profile.
 | ClawRouter | One instance URL, label, and policy key per connection; multiple connections supported. Defaults to `https://clawrouter.openclaw.ai` | Monthly remaining budget when the policy is metered, otherwise this-month actual cost | AI Limits calls the read-only `/v1/usage` endpoint. Micros fields are converted from integer micro-dollars to USD. |
 | sub2api | One instance URL, label, and group key per connection; multiple connections supported | Capped-key quota, daily/weekly/monthly subscription windows, wallet balance, and optional 5h/1d/7d rate limits | AI Limits calls the read-only `/v1/usage?days=30&timezone=UTC` endpoint. HTTPS is required except for localhost development. |
 | LLM Proxy | One instance URL, label, and API key per connection; multiple connections supported | Lowest remaining credential quota percent, or request/token counters when no remaining percent is reported | AI Limits calls the read-only `/v1/quota-stats` endpoint. |
+| DeepSeek | User-created API key | Available account balance in the provider-reported currency | AI Limits calls the read-only `https://api.deepseek.com/user/balance` endpoint and selects one provider-reported balance row without inventing a conversion. |
+| Moonshot | User-created API key | Available international-platform balance in USD | AI Limits calls the read-only `https://api.moonshot.ai/v1/users/me/balance` endpoint. This is the Moonshot developer platform, distinct from Kimi Code usage. |
+| DeepInfra | User-created API key | Current-month spend against a spending limit, or account balance when no limit is reported | AI Limits calls the read-only payment checklist and current-usage endpoints at `api.deepinfra.com`. |
+| Fireworks | User-created API key | Rated spend over the last 30 days for a single accessible account | AI Limits reads the account list and billing summary at `api.fireworks.ai`. Accounts with zero or multiple selectable account slugs require an account picker and are not supported yet. |
 
 ## New API connection modes
 
@@ -75,10 +79,11 @@ credential or raw provider response.
 ## Compatibility boundary
 
 ChatGPT, Claude, Kimi, Cursor, and Grok depend on private provider interfaces that may
-change without notice. ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, and LLM Proxy
-use documented or reverse-engineered HTTP endpoints, but their response and authorization
-behavior can also change. AI Limits rejects malformed or contradictory usage rather than
-inventing a percentage, reset, or pace signal.
+change without notice. ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy,
+DeepSeek, Moonshot, DeepInfra, and Fireworks use documented or reverse-engineered HTTP
+endpoints, but their response and authorization behavior can also change. AI Limits
+rejects malformed or contradictory usage rather than inventing a percentage, reset, or
+pace signal.
 
 See [Privacy](PRIVACY.md) for credential storage, request destinations, and
 deletion behavior.

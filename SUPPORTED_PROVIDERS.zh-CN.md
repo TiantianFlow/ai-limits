@@ -2,7 +2,7 @@
 
 [English](SUPPORTED_PROVIDERS.md) | 简体中文
 
-AI Limits 目前支持十一种服务连接。每个服务都需要用户主动启用；标准化用量和
+AI Limits 目前支持十五种服务连接。每个服务都需要用户主动启用；标准化用量和
 History 只保存在当前 Chrome 配置文件中。
 
 | 服务 | 连接方式 | 读取内容 | 重要差异 |
@@ -18,6 +18,10 @@ History 只保存在当前 Chrome 配置文件中。
 | ClawRouter | 每个连接各自使用实例网址、标签和一个策略密钥；支持多个连接。默认地址为 `https://clawrouter.openclaw.ai` | 按策略计量时显示每月剩余预算，否则显示本月实际费用 | AI Limits 调用只读的 `/v1/usage` 接口。微美元整数字段会换算为美元。 |
 | sub2api | 每个连接各自使用实例网址、标签和一个分组密钥；支持多个连接 | 有上限密钥额度、每日/每周/每月订阅窗口、钱包余额，以及可选的 5 小时/1 天/7 天速率限制 | AI Limits 调用只读的 `/v1/usage?days=30&timezone=UTC` 接口。必须使用 HTTPS，本地开发的 localhost 除外。 |
 | LLM Proxy | 每个连接各自使用实例网址、标签和一个 API 密钥；支持多个连接 | 最低剩余额度百分比；未报告剩余百分比时回退为请求/令牌计数 | AI Limits 调用只读的 `/v1/quota-stats` 接口。 |
+| DeepSeek | 用户创建的 API 密钥 | 服务商所报告币种的可用账户余额 | AI Limits 调用只读的 `https://api.deepseek.com/user/balance` 接口，并从服务商报告的余额行中选择一项，不虚构汇率换算。 |
+| Moonshot | 用户创建的 API 密钥 | 国际开发平台的可用美元余额 | AI Limits 调用只读的 `https://api.moonshot.ai/v1/users/me/balance` 接口。这是 Moonshot 开发平台，与 Kimi Code 用量不同。 |
+| DeepInfra | 用户创建的 API 密钥 | 当月支出相对消费上限的配额；未报告上限时显示账户余额 | AI Limits 调用 `api.deepinfra.com` 上只读的付款清单和当期用量接口。 |
+| Fireworks | 用户创建的 API 密钥 | 单个可访问账户最近 30 天的已计价支出 | AI Limits 读取 `api.fireworks.ai` 上的账户列表和账单摘要。零个或多个可选账户标识需要账户选择器，目前尚不支持。 |
 
 ## New API 连接模式
 
@@ -68,8 +72,9 @@ History 只绘制配额指标。History 不包含凭据或服务商原始响应�
 ## 兼容性边界
 
 ChatGPT、Claude、Kimi、Cursor 和 Grok 依赖可能随时变化的未公开接口。ElevenLabs、
-New API、LiteLLM、ClawRouter、sub2api 和 LLM Proxy 使用有文档或已逆向的 HTTP
-接口，但响应和授权行为仍可能变化。对于格式异常或彼此矛盾的用量，AI Limits
-会拒绝数据，而不会虚构百分比、重置时间或用量节奏。
+New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、
+DeepInfra 和 Fireworks 使用有文档或已逆向的 HTTP 接口，但响应和授权行为仍可能
+变化。对于格式异常或彼此矛盾的用量，AI Limits 会拒绝数据，而不会虚构百分比、
+重置时间或用量节奏。
 
 凭据存储、请求目标和删除行为请参阅[隐私说明（英文）](PRIVACY.md)。

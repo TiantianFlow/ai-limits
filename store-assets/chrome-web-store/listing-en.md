@@ -41,8 +41,8 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs across seven supported providers (see the screenshots for the full
-roster). Browser-session providers use an account already signed in within the
+graphs across fifteen supported providers (see the supported-providers document
+for the full roster). Browser-session providers use an account already signed in within the
 user's browser profile; API-key providers use a key the user connects through
 guided setup.
 
@@ -78,6 +78,10 @@ rate-limit window.
 **New API** connects self-hosted or third-party API-compatible instances with a
 key you provide. AI Limits supports multiple independent New API instances,
 including multiple separately labeled keys on the same origin.
+**LiteLLM**, **ClawRouter**, **sub2api**, and **LLM Proxy** connect configurable
+instances with a key you provide. **DeepSeek** and **Moonshot** show developer
+platform balances, **DeepInfra** shows monthly spend against a limit or its
+reported balance, and **Fireworks** shows rated spend over the last 30 days.
 
 AI Limits keeps everything local: your usage history stays on your device and
 is never sent anywhere else. No ads, no AI Limits account to create, no
@@ -99,7 +103,8 @@ parent companies, or their affiliates.
   credentials are not persisted. After validation, the user-created ElevenLabs
   or New API key is persisted in a separate `chrome.storage.local` credential
   record whose Chrome storage access level is restricted to trusted extension
-  contexts. It is not OS-keychain encrypted and may be inspectable from an
+  contexts. The same boundary applies to every validated provider API key. It
+  is not OS-keychain encrypted and may be inspectable from an
   unlocked Chrome profile, extension DevTools, or profile files.
 - `alarms`: schedules the approximately 15-minute refresh cycle only while
   automatic refresh is enabled and at least one provider is connected.
@@ -129,9 +134,14 @@ These origins are requested one provider at a time after the user clicks
   normalizes monthly credits and supported voice limits. The extension does
   not request `https://elevenlabs.io/*`; the setup page opens as a normal page
   without extension host access.
-- `https://*/*`: optional dynamic host capability for self-hosted New API
-  instances. The extension never requests this wildcard at runtime; after URL
-  normalization, Chrome is asked only for that instance's exact HTTPS origin.
+- `https://api.deepseek.com/*`, `https://api.moonshot.ai/*`,
+  `https://api.deepinfra.com/*`, and `https://api.fireworks.ai/*`: send the
+  selected provider's saved key only to its fixed read-only balance, usage, or
+  billing endpoints.
+- `https://*/*`: optional dynamic host capability for New API, LiteLLM,
+  ClawRouter, sub2api, and LLM Proxy instances. The extension never requests
+  this wildcard at runtime; after URL normalization, Chrome is asked only for
+  that instance's exact HTTPS origin.
 - `http://localhost/*` and `http://127.0.0.1/*`: optional dynamic capability
   for local New API development. Runtime permission remains limited to the
   exact localhost origin and port entered by the user. Public HTTP origins are
@@ -164,8 +174,8 @@ does not create or activate provider tabs and never injects into provider pages.
 
 ## Data-disclosure answers
 
-- **Authentication information:** Yes. This includes the ElevenLabs and New API keys
-  that the user creates and AI Limits saves locally after successful
+- **Authentication information:** Yes. This includes provider API keys that
+  the user creates and AI Limits saves locally after successful
   validation. Browser-session JSON, cookies, and access credentials for the
   other providers are handled only for the selected collection sequence and
   are not persisted. API keys are stored in the separate
@@ -230,21 +240,21 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 - Chrome 116 or newer.
 - The validated `ai-limits-0.4.1-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
-  provider sites in the same Chrome profile. ElevenLabs review additionally
-  requires the reviewer to create a temporary **User → Read** API key in their
-  own account. No credentials or provider accounts are embedded or supplied by
-  the extension.
+  provider sites in the same Chrome profile, plus temporary reviewer-created
+  keys for each API-key provider under test. ElevenLabs should use
+  **User → Read**. No credentials or provider accounts are embedded or supplied
+  by the extension.
 - Network access to the provider origins. Private endpoint behavior and account
   entitlements can affect which usage windows appear.
 - After the repository is public and before Chrome Web Store submission, verify
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Seven-provider test flow
+## Fifteen-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm the side panel opens with seven permission-required cards.
+   confirm the side panel opens with fifteen permission-required cards.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -298,7 +308,29 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    while nonsecret configuration, normalized usage, refresh state, and History
    remain. Account wallet, subscriptions, admin data, and other keys remain out
    of scope.
-9. Use the header refresh and confirm connected providers retain their previous
+9. **LiteLLM:** connect a reviewer-controlled instance and virtual key. Confirm
+   `/key/info` spend appears, with a budget quota only when `max_budget` is
+   reported, and no user/team follow-up requests occur.
+10. **ClawRouter:** connect a reviewer-controlled instance and policy key.
+    Confirm monthly remaining budget appears for metered policies, otherwise
+    this-month actual cost appears.
+11. **sub2api:** connect a reviewer-controlled HTTPS instance and group key.
+    Confirm the available key, subscription-window, balance, and optional
+    rate-limit metrics reported by `/v1/usage?days=30&timezone=UTC`.
+12. **LLM Proxy:** connect a reviewer-controlled instance and API key. Confirm
+    the lowest remaining credential quota percent, or request/token counters
+    when no remaining percent is reported.
+13. **DeepSeek:** connect a temporary key, approve only
+    `https://api.deepseek.com/*`, and confirm the reported account balance.
+14. **Moonshot:** connect an international-platform key, approve only
+    `https://api.moonshot.ai/*`, and confirm the available USD balance.
+15. **DeepInfra:** connect a temporary key, approve only
+    `https://api.deepinfra.com/*`, and confirm current-month spend against its
+    spending limit, or the provider-reported balance when no limit is present.
+16. **Fireworks:** connect a temporary key with exactly one accessible account,
+    approve only `https://api.fireworks.ai/*`, and confirm rated spend over the
+    last 30 days.
+17. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history while counter/spend and balance samples remain ungraphed. In Settings, turn automatic
