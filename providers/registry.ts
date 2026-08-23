@@ -15,7 +15,9 @@ import { clawRouterAdapter } from "./clawrouter/adapter";
 import { liteLlmAdapter } from "./litellm/adapter";
 import { llmProxyAdapter } from "./llm-proxy/adapter";
 import { moonshotAdapter } from "./moonshot/adapter";
+import { mistralAdapter } from "./mistral/adapter";
 import { newApiAdapter } from "./newapi/adapter";
+import { perplexityAdapter } from "./perplexity/adapter";
 import { sub2apiAdapter } from "./sub2api/adapter";
 import {
   createApiKeyPackage,
@@ -110,6 +112,24 @@ export const providerRegistry = {
     requiredPermissions: fixedPermissions(
       providerDefinitions.grok.optionalOrigins,
       providerDefinitions.grok.optionalPermissions,
+    ),
+  }),
+  mistral: createBrowserSessionPackage({
+    kind: "mistral",
+    adapter: mistralAdapter,
+    cardinality: providerDefinitions.mistral.cardinality,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.mistral.optionalOrigins,
+      providerDefinitions.mistral.optionalPermissions,
+    ),
+  }),
+  perplexity: createBrowserSessionPackage({
+    kind: "perplexity",
+    adapter: perplexityAdapter,
+    cardinality: providerDefinitions.perplexity.cardinality,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.perplexity.optionalOrigins,
+      providerDefinitions.perplexity.optionalPermissions,
     ),
   }),
   elevenlabs: createApiKeyPackage({

@@ -407,6 +407,7 @@ metrics:
     usage: Usage
     usagePool: Usage pool
     rateLimits: Chat rate limits
+    credits: Credits
   grokPoolUnavailable: Usage-pool details are unavailable
   detail:
     includedUsage: Included usage
@@ -548,6 +549,13 @@ metrics:
     nHourKind: "{count}-hour {mode} {kind}"
     queries: queries
     tokens: tokens
+  mistral:
+    monthSpend: Spend this month
+    credits: Credits
+  perplexity:
+    recurringCredits: Monthly recurring credits
+    promoCredits: Promotional bonus credits
+    purchasedCredits: Purchased credits
 
 providers:
   chatgpt:
@@ -599,6 +607,22 @@ providers:
       heavy: SuperGrok Heavy
       plus: SuperGrok Plus
       lite: SuperGrok Lite
+  mistral:
+    name: Mistral
+    connect: Connect Mistral
+    connectionDisclosure: Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.
+    capabilities:
+      monthSpend: Month-to-date spend
+      credits: Credits
+  perplexity:
+    name: Perplexity
+    connect: Connect Perplexity
+    connectionDisclosure: Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.
+    capabilities:
+      creditPools: Credit pools
+    plans:
+      pro: Pro
+      max: Max
   elevenlabs:
     name: ElevenLabs
     connect: Connect ElevenLabs

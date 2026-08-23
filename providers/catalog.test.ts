@@ -22,6 +22,8 @@ describe("provider catalog", () => {
       "kimi",
       "cursor",
       "grok",
+      "mistral",
+      "perplexity",
     ];
     const apiKeyKinds: ApiKeyProviderKind[] = [
       "elevenlabs",
@@ -86,6 +88,14 @@ describe("provider catalog", () => {
         providerId: "grok",
         markPath: "/provider-marks/grok.svg",
         darkMarkPath: "/provider-marks/grok-dark.svg",
+      },
+      {
+        providerId: "mistral",
+        markPath: "/provider-marks/fallback.svg",
+      },
+      {
+        providerId: "perplexity",
+        markPath: "/provider-marks/fallback.svg",
       },
       {
         providerId: "elevenlabs",

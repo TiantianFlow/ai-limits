@@ -44,6 +44,23 @@ export const providerDefinitions = {
     optionalOrigins: ["https://grok.com/*"],
     optionalPermissions: [],
   },
+  mistral: {
+    cardinality: "single",
+    credentialKind: "none",
+    configKind: "fixed",
+    optionalOrigins: [
+      "https://admin.mistral.ai/*",
+      "https://console.mistral.ai/*",
+    ],
+    optionalPermissions: [],
+  },
+  perplexity: {
+    cardinality: "single",
+    credentialKind: "none",
+    configKind: "fixed",
+    optionalOrigins: ["https://www.perplexity.ai/*"],
+    optionalPermissions: [],
+  },
   elevenlabs: {
     cardinality: "single",
     credentialKind: "api-key",

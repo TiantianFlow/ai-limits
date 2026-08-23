@@ -40,6 +40,18 @@ export const providerCatalog = {
       darkMarkPath: "/provider-marks/grok-dark.svg",
     },
   },
+  mistral: {
+    displayName: "Mistral",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+    },
+  },
+  perplexity: {
+    displayName: "Perplexity",
+    presentation: {
+      markPath: "/provider-marks/fallback.svg",
+    },
+  },
   elevenlabs: {
     displayName: "ElevenLabs",
     presentation: {

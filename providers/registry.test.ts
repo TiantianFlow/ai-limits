@@ -20,8 +20,10 @@ import { kimiAdapter } from "./kimi/adapter";
 import { clawRouterAdapter } from "./clawrouter/adapter";
 import { liteLlmAdapter } from "./litellm/adapter";
 import { llmProxyAdapter } from "./llm-proxy/adapter";
+import { mistralAdapter } from "./mistral/adapter";
 import { moonshotAdapter } from "./moonshot/adapter";
 import { newApiAdapter } from "./newapi/adapter";
+import { perplexityAdapter } from "./perplexity/adapter";
 import { sub2apiAdapter } from "./sub2api/adapter";
 import { providerKinds, providerRegistry } from "./registry";
 import type {
@@ -103,6 +105,8 @@ describe("provider registry", () => {
       "kimi",
       "cursor",
       "grok",
+      "mistral",
+      "perplexity",
       "elevenlabs",
       "newapi",
       "litellm",
@@ -186,6 +190,29 @@ describe("provider registry", () => {
         accepted: fixed,
         rejected: undefined,
         permissions: { origins: ["https://grok.com/*"] },
+      },
+      {
+        kind: "mistral",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: {
+          origins: [
+            "https://admin.mistral.ai/*",
+            "https://console.mistral.ai/*",
+          ],
+        },
+      },
+      {
+        kind: "perplexity",
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://www.perplexity.ai/*"] },
       },
       {
         kind: "elevenlabs",
@@ -365,6 +392,23 @@ describe("provider registry", () => {
         optionalOrigins: ["https://grok.com/*"],
         optionalPermissions: [],
       },
+      mistral: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: [
+          "https://admin.mistral.ai/*",
+          "https://console.mistral.ai/*",
+        ],
+        optionalPermissions: [],
+      },
+      perplexity: {
+        cardinality: "single",
+        credentialKind: "none",
+        configKind: "fixed",
+        optionalOrigins: ["https://www.perplexity.ai/*"],
+        optionalPermissions: [],
+      },
       elevenlabs: {
         cardinality: "single",
         credentialKind: "api-key",
@@ -485,6 +529,8 @@ describe("provider registry", () => {
       claude: claudeAdapter,
       kimi: kimiAdapter,
       grok: grokAdapter,
+      mistral: mistralAdapter,
+      perplexity: perplexityAdapter,
       elevenlabs: elevenLabsAdapter,
       newapi: newApiAdapter,
       litellm: liteLlmAdapter,

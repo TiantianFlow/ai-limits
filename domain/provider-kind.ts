@@ -4,6 +4,8 @@ export const providerKinds = [
   "kimi",
   "cursor",
   "grok",
+  "mistral",
+  "perplexity",
   "elevenlabs",
   "newapi",
   "litellm",
@@ -25,7 +27,9 @@ export type BrowserSessionProviderKind =
   | "claude"
   | "kimi"
   | "cursor"
-  | "grok";
+  | "grok"
+  | "mistral"
+  | "perplexity";
 export const apiKeyProviderKinds = [
   "elevenlabs",
   "newapi",

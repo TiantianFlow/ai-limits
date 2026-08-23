@@ -8,6 +8,8 @@ const providers = [
   { providerKind: "kimi", cardinality: "single", credentialKind: "none", configKind: "fixed", recoveryGuidance: "Safe retry guidance." },
   { providerKind: "cursor", cardinality: "single", credentialKind: "none", configKind: "fixed" },
   { providerKind: "grok", cardinality: "single", credentialKind: "none", configKind: "fixed" },
+  { providerKind: "mistral", cardinality: "single", credentialKind: "none", configKind: "fixed" },
+  { providerKind: "perplexity", cardinality: "single", credentialKind: "none", configKind: "fixed" },
   { providerKind: "elevenlabs", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
   { providerKind: "newapi", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },
   { providerKind: "litellm", cardinality: "multiple", credentialKind: "api-key", configKind: "dynamic-origin" },

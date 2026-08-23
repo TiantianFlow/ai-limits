@@ -83,6 +83,15 @@ const KNOWN_METRIC_KEYS: Partial<
     "monthly-pool": "metrics.grok.monthlyPool",
     "extra-usage-credits": "metrics.grok.extraUsageCredits",
   },
+  mistral: {
+    "month-spend": "metrics.mistral.monthSpend",
+    credits: "metrics.mistral.credits",
+  },
+  perplexity: {
+    "recurring-credits": "metrics.perplexity.recurringCredits",
+    "promo-credits": "metrics.perplexity.promoCredits",
+    "purchased-credits": "metrics.perplexity.purchasedCredits",
+  },
   deepseek: {
     balance: "metrics.deepseek.balance",
   },
@@ -117,6 +126,7 @@ const KNOWN_GROUP_KEYS: Record<string, string> = {
   usage: "metrics.groups.usage",
   "usage-pool": "metrics.groups.usagePool",
   "rate-limits": "metrics.groups.rateLimits",
+  credits: "metrics.groups.credits",
 };
 
 const KNOWN_SEGMENT_KEYS: Partial<
@@ -143,6 +153,10 @@ const PLAN_KEYS: Partial<Record<ProviderKind, Record<string, string>>> = {
     "supergrok plus": "providers.grok.plans.plus",
     "supergrok lite": "providers.grok.plans.lite",
   },
+  perplexity: {
+    pro: "providers.perplexity.plans.pro",
+    max: "providers.perplexity.plans.max",
+  },
 };
 
 const FAILURE_KEYS: Record<FailureCategory, string> = {
@@ -166,6 +180,8 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   kimi: ["subscriptionUsage", "codingLimits"],
   cursor: ["monthlyUsage", "grokBotUsage", "onDemandSpend", "extraUsageCredits"],
   grok: ["usagePool", "planTier"],
+  mistral: ["monthSpend", "credits"],
+  perplexity: ["creditPools"],
   elevenlabs: ["monthlyCredits", "voiceLimits"],
   newapi: ["apiKeyQuota", "unlimitedKeyUsage"],
   litellm: ["keySpend", "keyBudget"],

@@ -407,6 +407,7 @@ metrics:
     usage: 用量
     usagePool: 用量池
     rateLimits: 对话速率限制
+    credits: 额度
   grokPoolUnavailable: 用量池详情不可用
   detail:
     includedUsage: 包含的用量
@@ -548,6 +549,13 @@ metrics:
     nHourKind: "{count} 小时 {mode} {kind}"
     queries: 查询
     tokens: 令牌
+  mistral:
+    monthSpend: 本月支出
+    credits: 额度
+  perplexity:
+    recurringCredits: 每月周期性额度
+    promoCredits: 促销赠送额度
+    purchasedCredits: 已购买额度
 
 providers:
   chatgpt:
@@ -599,6 +607,22 @@ providers:
       heavy: SuperGrok Heavy
       plus: SuperGrok Plus
       lite: SuperGrok Lite
+  mistral:
+    name: Mistral
+    connect: 连接 Mistral
+    connectionDisclosure: 从你已登录的浏览器会话读取用量，在本地存储标准化用量，并大约每 15 分钟刷新一次。
+    capabilities:
+      monthSpend: 本月至今支出
+      credits: 额度
+  perplexity:
+    name: Perplexity
+    connect: 连接 Perplexity
+    connectionDisclosure: 从你已登录的浏览器会话读取用量，在本地存储标准化用量，并大约每 15 分钟刷新一次。
+    capabilities:
+      creditPools: 额度池
+    plans:
+      pro: Pro
+      max: Max
   elevenlabs:
     name: ElevenLabs
     connect: 连接 ElevenLabs
