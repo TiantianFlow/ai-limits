@@ -33,6 +33,7 @@ export interface ProviderDetailViewProps {
     focusKey?: string,
   ) => void;
   onOpenSettings: () => void;
+  onDisconnectInstance: (instanceId: ProviderInstanceId) => void;
 }
 
 function statusFor(
@@ -78,6 +79,7 @@ export function ProviderDetailView({
   onRefreshInstance,
   onOpenHistory,
   onOpenSettings,
+  onDisconnectInstance,
 }: ProviderDetailViewProps) {
   if (!provider) {
     return (
@@ -278,14 +280,17 @@ export function ProviderDetailView({
           ) : (
             <p>{l10n.t("providerDetail.scheduledNoTab")}</p>
           )}
+          <p>{l10n.t("providerDetail.disconnectExplanation")}</p>
           <button
+            className="connection-surface__disconnect"
             type="button"
-            aria-label={l10n.t("providerDetail.manageNamed", {
+            aria-label={l10n.t("providerDetail.disconnectNamed", {
               label: provider.instanceLabel,
             })}
-            onClick={onOpenSettings}
+            data-focus-key={`provider-disconnect-${provider.instanceId}`}
+            onClick={() => onDisconnectInstance(provider.instanceId)}
           >
-            {l10n.t("providerDetail.manageInSettings")}
+            <span aria-hidden="true">{l10n.t("common.disconnect")}</span>
           </button>
         </section>
       </article>

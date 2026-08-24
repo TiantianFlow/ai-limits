@@ -24,7 +24,19 @@ export interface CockpitNavigationState {
 export type CockpitAction =
   | { type: "push"; screen: CockpitScreen }
   | { type: "pop" }
-  | { type: "home" };
+  | { type: "home" }
+  | { type: "dropInstance"; instanceId: ProviderInstanceId };
+
+export function screenUsesInstance(
+  screen: CockpitScreen,
+  instanceId: ProviderInstanceId,
+): boolean {
+  return (
+    (screen.name === "provider" && screen.instanceId === instanceId) ||
+    (screen.name === "history" && screen.instanceId === instanceId) ||
+    (screen.name === "api-key-connect" && screen.instanceId === instanceId)
+  );
+}
 
 function sameScreen(left: CockpitScreen, right: CockpitScreen): boolean {
   if (left.name !== right.name) {
@@ -77,5 +89,30 @@ export function navigateCockpit(
       return state.current.name === "overview" && state.backStack.length === 0
         ? state
         : { current: { name: "overview" }, backStack: [] };
+    case "dropInstance": {
+      const remainingStack = state.backStack.filter(
+        (screen) => !screenUsesInstance(screen, action.instanceId),
+      );
+      const currentUsesInstance = screenUsesInstance(
+        state.current,
+        action.instanceId,
+      );
+      if (
+        !currentUsesInstance &&
+        remainingStack.length === state.backStack.length
+      ) {
+        return state;
+      }
+      if (!currentUsesInstance) {
+        return { current: state.current, backStack: remainingStack };
+      }
+      const previous = remainingStack.at(-1);
+      return previous
+        ? {
+            current: previous,
+            backStack: remainingStack.slice(0, -1),
+          }
+        : { current: { name: "overview" }, backStack: [] };
+    }
   }
 }

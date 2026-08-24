@@ -1964,16 +1964,22 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-weight: 600;
 }
 
-.connection-surface button {
+.connection-surface__disconnect {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  padding: 0;
-  color: var(--quota);
-  font-size: 10px;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, #e11d48 55%, var(--border));
+  border-radius: 11px;
+  color: #be123c;
+  font-size: 12px;
   font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+}
+
+.connection-surface__disconnect:hover {
+  background: color-mix(in srgb, #e11d48 8%, var(--surface));
 }
 
 .history-screen {

@@ -124,8 +124,8 @@ providerDetail:
   openHistoryNamed: "Open {label} history"
   connectionTitle: Connection and capabilities
   scheduledNoTab: Scheduled refresh reads the existing session without opening a tab.
-  manageInSettings: Manage or disconnect in Settings
-  manageNamed: "Manage {label} in Settings"
+  disconnectExplanation: Disconnecting removes the provider from Overview and deletes its stored local history.
+  disconnectNamed: "Disconnect {label}"
   countersNote: Counters and balances are stored as point-in-time observations.
 
 history:

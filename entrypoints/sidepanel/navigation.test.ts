@@ -144,4 +144,52 @@ describe("navigateCockpit", () => {
       backStack: [],
     });
   });
+
+  it("drops the disconnected provider from Settings so Back returns to Overview", () => {
+    const settings: CockpitNavigationState = {
+      current: { name: "settings" },
+      backStack: [overview, { name: "provider", instanceId: chatGptInstance }],
+    };
+
+    expect(
+      navigateCockpit(settings, {
+        type: "dropInstance",
+        instanceId: chatGptInstance,
+      }),
+    ).toEqual({
+      current: { name: "settings" },
+      backStack: [overview],
+    });
+  });
+
+  it("returns home when the current provider is disconnected", () => {
+    const provider: CockpitNavigationState = {
+      current: { name: "provider", instanceId: chatGptInstance },
+      backStack: [overview],
+    };
+
+    expect(
+      navigateCockpit(provider, {
+        type: "dropInstance",
+        instanceId: chatGptInstance,
+      }),
+    ).toEqual({
+      current: overview,
+      backStack: [],
+    });
+  });
+
+  it("leaves Settings opened from Overview unchanged when a provider disconnects", () => {
+    const settings: CockpitNavigationState = {
+      current: { name: "settings" },
+      backStack: [overview],
+    };
+
+    expect(
+      navigateCockpit(settings, {
+        type: "dropInstance",
+        instanceId: chatGptInstance,
+      }),
+    ).toBe(settings);
+  });
 });

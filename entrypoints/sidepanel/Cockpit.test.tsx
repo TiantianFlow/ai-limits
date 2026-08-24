@@ -1098,7 +1098,13 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Open Claude history" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Connection and capabilities" })).toBeVisible();
     expect(screen.getByText(/Reads usage from your signed-in browser session/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Manage Claude in Settings" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Settings for Claude" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Disconnect Claude" })).toBeVisible();
+    expect(
+      screen.getByText(
+        "Disconnecting removes the provider from Overview and deletes its stored local history.",
+      ),
+    ).toBeVisible();
   });
 
   it("renders History with compact selectors, ranges, a chart, and the current cycle", () => {
@@ -1393,6 +1399,66 @@ describe("Cockpit", () => {
     expect(
       screen.getByRole("button", { name: "Settings for ChatGPT" }),
     ).toHaveFocus();
+  });
+
+  it("disconnects the open provider from its detail screen and returns to Overview", () => {
+    const onDisconnectInstance = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDisconnectInstance={onDisconnectInstance}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open ChatGPT details" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+
+    expect(onDisconnectInstance).toHaveBeenCalledWith("chatgpt:default");
+    expect(screen.getByRole("region", { name: "Overview" })).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Provider unavailable" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to Overview from Settings after disconnecting the provider that opened it", () => {
+    const onDisconnectInstance = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDisconnectInstance={onDisconnectInstance}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open ChatGPT details" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settings for ChatGPT" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+
+    expect(onDisconnectInstance).toHaveBeenCalledWith("chatgpt:default");
+    expect(
+      screen.getByRole("region", { name: "Provider settings" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "ChatGPT" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+
+    expect(screen.getByRole("region", { name: "Overview" })).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Provider unavailable" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a truthful unavailable screen if the active provider disconnects", () => {
