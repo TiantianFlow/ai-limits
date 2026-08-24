@@ -146,7 +146,9 @@ the selected provider. Each configured instance keeps independent
 credentials, nonsecret configuration, normalized usage, and History.
 
 DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter use
-user-created API keys at fixed provider API origins. AI Limits sends those keys
+user-created API keys at fixed provider API origins. OpenAI here is the
+Platform organization and developer billing API, not the ChatGPT consumer
+session. AI Limits sends those keys
 only to
 `api.deepseek.com/user/balance`, `api.moonshot.ai/v1/users/me/balance`,
 DeepInfra's `api.deepinfra.com/payment/checklist` and `/payment/usage`

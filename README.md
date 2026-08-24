@@ -42,7 +42,10 @@ its affiliates.
   page, or briefly open one inactive spending tab if none is open, to request
   Grok Bot, extra-credit, and per-model included-usage JSON.
 - ElevenLabs, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and
-  OpenRouter use user-created API keys against their fixed provider APIs. New
+  OpenRouter use user-created API keys against their fixed provider APIs. OpenAI
+  is the Platform organization and developer billing surface (organization
+  costs, completion usage, or legacy credit grants), not the ChatGPT consumer
+  session. New
   API, LiteLLM, ClawRouter, sub2api, and LLM Proxy support multiple
   independently configured instances at user-selected origins. The extension
   sends each key only to its selected provider API for the read-only usage or

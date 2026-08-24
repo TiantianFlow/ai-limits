@@ -37,7 +37,7 @@ History 只保存在当前 Chrome 配置文件中。
 | Moonshot | 用户创建的 API 密钥 | 国际开发平台的可用美元余额 | **INFERRED** | AI Limits 调用只读的 `https://api.moonshot.ai/v1/users/me/balance` 接口。这是 Moonshot 开发平台，与 Kimi Code 用量不同。 |
 | DeepInfra | 用户创建的 API 密钥 | 当月支出相对消费上限的配额；未报告上限时显示账户余额 | **INFERRED** | AI Limits 调用 `api.deepinfra.com` 上只读的付款清单和当期用量接口。 |
 | Fireworks | 用户创建的 API 密钥 | 单个可访问账户最近 30 天的已计价支出 | **INFERRED** | AI Limits 读取 `api.fireworks.ai` 上的账户列表和账单摘要。零个或多个可选账户标识需要账户选择器，目前尚不支持。 |
-| OpenAI | 用户创建的 API 密钥 | 组织支出、补全请求/令牌总量，或旧版可用额度 | **INFERRED** | 优先读取组织用量；未设置项目范围时，组织请求失败会回退到旧版额度接口。可能需要组织或管理员范围。 |
+| OpenAI | 用户创建的 API 密钥 | 组织支出、补全请求/令牌总量，或旧版可用额度 | **INFERRED** | 这是平台组织/开发者账单接口，不是 ChatGPT 消费者会话。优先读取组织用量；未设置项目范围时，组织请求失败会回退到旧版额度接口。可能需要组织或管理员范围。 |
 | GroqCloud | 用户创建的 API 密钥 | 五分钟 Prometheus 请求、令牌和缓存命中速率 | **INFERRED** | 标准 Groq 密钥在 Prometheus 接口上返回 404，并会显示为需要更高凭据范围。 |
 | OpenRouter | 用户创建的 API 密钥 | 额度余额和可选 API 密钥预算 | **INFERRED** | 读取 `/credits` 和 `/key`；只有服务报告可用上限时才显示密钥预算。 |
 

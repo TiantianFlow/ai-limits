@@ -53,8 +53,8 @@ Track subscription usage, resets, pace, and local history for your connected AI 
 ## Detailed description
 
 AI Limits puts your AI subscription usage in one place, right in Chrome's side
-panel — no more opening five different account pages to check whether you're
-about to hit a limit.
+panel — no more opening a separate account page for each provider just to
+check whether you're about to hit a limit.
 
 Connect the providers you use, one at a time. Each one shows its usage windows,
 reset times, credits, and plan at a glance. Switch between **Used** and
@@ -84,7 +84,8 @@ including multiple separately labeled keys on the same origin.
 instances with a key you provide. **DeepSeek** and **Moonshot** show developer
 platform balances, **DeepInfra** shows monthly spend against a limit or its
 reported balance, and **Fireworks** shows rated spend over the last 30 days.
-**OpenAI** shows organization costs and completion usage with a credit fallback,
+**OpenAI** reads the Platform organization and developer billing surface
+(organization costs and completion usage, with a credit-grants fallback),
 **GroqCloud** shows five-minute usage rates, and **OpenRouter** shows credits and
 an optional key budget.
 
@@ -363,6 +364,5 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history while counter/spend and balance samples remain ungraphed. In Settings, turn automatic
    refresh off and on, disconnect one provider, then use **Delete all local
-   data** and confirm the cards return to the permission-required state. For
-   ElevenLabs, inspect extension storage after Disconnect and after Delete all
-   to confirm its credential record no longer contains a key.
+   data** and confirm the cards return to the permission-required state.     For API-key providers, inspect extension storage after Disconnect and after
+   Delete all to confirm the credential record no longer contains a key.

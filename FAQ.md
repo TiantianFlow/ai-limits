@@ -155,6 +155,13 @@ instance where appropriate. The validated URL and key are saved locally for
 background refresh. See [Supported providers](SUPPORTED_PROVIDERS.md) for the
 full boundary.
 
+## How is OpenAI different from ChatGPT?
+
+ChatGPT uses the signed-in browser session on chatgpt.com. OpenAI uses a
+user-created API key against the Platform organization and developer billing
+surface: organization costs and completion usage first, with a fallback to
+legacy credit grants when organization scope is unavailable.
+
 ## Does automatic refresh open provider tabs?
 
 No. Scheduled refresh is non-interactive and never creates provider tabs. Only
@@ -163,7 +170,8 @@ Kimi tab for session recovery. An interactive Cursor **Connect** or **Refresh**
 may briefly create one inactive spending tab when no `cursor.com` tab is already
 open, waits up to 10 seconds, and closes only the tab it created. ElevenLabs
 opens its normal API-keys page only when you explicitly start setup or choose
-**Open API keys page**. New API setup and refresh do not open provider tabs.
+**Open API keys page**. Other API-key providers, including New API, do not open
+provider tabs for setup or refresh.
 
 ## What does History store, and for how long?
 
