@@ -106,43 +106,43 @@ describe("provider catalog", () => {
       },
       {
         providerId: "newapi",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/newapi.svg",
         apiKeyGuide: "newapi",
       },
       {
         providerId: "litellm",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/litellm.svg",
       },
       {
         providerId: "clawrouter",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/clawrouter.svg",
       },
       {
         providerId: "sub2api",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/sub2api.svg",
       },
       {
         providerId: "llmProxy",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/llmproxy.svg",
       },
       {
         providerId: "deepseek",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/deepseek.svg",
         apiKeySetupUrl: "https://platform.deepseek.com/api_keys",
       },
       {
         providerId: "moonshot",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/moonshot.svg",
         apiKeySetupUrl: "https://platform.moonshot.ai/console/api-keys",
       },
       {
         providerId: "deepinfra",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/deepinfra.svg",
         apiKeySetupUrl: "https://deepinfra.com/dash/api_keys",
       },
       {
         providerId: "fireworks",
-        markPath: "/provider-marks/fallback.svg",
+        markPath: "/provider-marks/fireworks.svg",
         apiKeySetupUrl: "https://app.fireworks.ai/settings/users/api-keys",
       },
       {
@@ -162,6 +162,18 @@ describe("provider catalog", () => {
         apiKeySetupUrl: "https://openrouter.ai/settings/keys",
       },
     ]);
+  });
+
+  test("requires a distinct bundled mark for every catalog provider", () => {
+    const fallbackMarkPath = "/provider-marks/fallback.svg";
+    const markPaths = providerKinds.map(
+      (providerKind) => catalog.providerPresentation(providerKind).markPath,
+    );
+
+    expect(markPaths.every((markPath) => markPath !== fallbackMarkPath)).toBe(
+      true,
+    );
+    expect(new Set(markPaths).size).toBe(providerKinds.length);
   });
 
   test("classifies every provider's zero-balance presentation policy", () => {

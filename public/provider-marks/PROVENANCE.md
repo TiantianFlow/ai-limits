@@ -184,6 +184,71 @@ are used only to identify the corresponding provider beside its visible name.
   `ded1887a8258ae2035114fa71551679644316b35ba7ea6715ed6076b30c498d8`.
 - Ownership: Perplexity AI; used only as a secondary provider identifier.
 
+## `deepseek.svg`
+
+- Upstream source: DeepSeek's official homepage-declared
+  [`chat/icon.png`](https://cdn.deepseek.com/chat/icon.png).
+- Retrieved: 2026-08-23; upstream SHA-256
+  `f5d63a296b1b50b77c3a3528534000a95b6b3a5ff306a4230f9b1dfef15ee88c`.
+- Modified: the official 360 px PNG was kept without resampling. The white field
+  was made transparent and the viewport was tightened around the whale so the
+  mark stays legible at provider-mark size. Bundled SHA-256
+  `63ac732515609ca313edb38ce42794dbfc02b6daa3ec7295d943cfc5787f214a`.
+- Ownership: DeepSeek; the DeepSeek name and whale artwork remain its property.
+- Conditions: used only as a secondary provider identifier beside the DeepSeek
+  name. No general public trademark license was located; availability as a
+  product icon does not transfer ownership or imply endorsement.
+
+## `fireworks.svg`
+
+- Upstream source: Fireworks' official homepage-declared
+  [`/icon0.svg`](https://fireworks.ai/icon0.svg).
+- Retrieved: 2026-08-23; upstream SHA-256
+  `86b7f4b33ca48c5617f10e2cef5aaa7096c5e798090ceb2d0c21b01273660c76`.
+- Modified: the nested SVG wrapper and unused color-scheme style were removed;
+  path geometry and the official `#6720FF` fill are unchanged. Bundled SHA-256
+  `bf30db1d728041bda03a975f1e043fe8a90e3480c6ad18b53fd94e20520c594c`.
+- Ownership: Fireworks AI; used only as a secondary provider identifier.
+
+## `deepinfra.svg`
+
+- Upstream source: DeepInfra's official homepage-declared
+  [`fav-192.png`](https://deepinfra.com/fav-192.png).
+- Retrieved: 2026-08-23; upstream SHA-256
+  `04c6da8033fd9c0c2455787f0ad64ff16aaccb71df14ecaf4b38c59facdd1116`.
+- Modified: the official 10-node honeycomb was redrawn as a simplified SVG at
+  provider-mark size. Node layout and `#7D8AFF` follow the favicon. Bundled
+  SHA-256
+  `a934c40991c686d3f8060471978c9ee9133c957f6e36a307efe3d261d74a08f5`.
+- Ownership: DeepInfra; used only as a secondary provider identifier.
+
+## `moonshot.svg`
+
+- Source: original AI Limits mark for the Moonshot API provider, authored so it
+  stays distinct from the Kimi product favicon already bundled here.
+- Retrieved: not applicable.
+- Modified: not applicable.
+- SHA-256: `63c5e414780237ad5f616391e0278e6fe552f559b96641e4b6ec315a2f399c98`.
+- Ownership: AI Limits contributors.
+- Conditions: available under this repository's MIT license.
+
+## `newapi.svg`, `litellm.svg`, `clawrouter.svg`, `sub2api.svg`, and `llmproxy.svg`
+
+- Source: original AI Limits monograms, authored for this repository because
+  these self-hosted and aggregator tools do not publish a canonical logo for
+  third-party use.
+- Retrieved: not applicable.
+- Modified: not applicable.
+- SHA-256 values are
+  `4c9e4a51306bd49df49425c425320932cd28b37a5a76397c3868445a7670070d`,
+  `4b9587e95ad5055b90c533b3d0c84246aab533b49a151fabecf4eef017acda23`,
+  `a49b280c4d2da634ac738eb12c2314dc2ebccba54cfc2346332cee75270038db`,
+  `d36ebc03dd1a6ab9d95381ca8b4a51df585fda5678a6c6ea9ef0f6c61a02b45c`,
+  and
+  `240af907b36101e9d40cf185bd60e0a78bdf18f29a2f15b05912d47439fd9d15`.
+- Ownership: AI Limits contributors.
+- Conditions: available under this repository's MIT license.
+
 All proprietary provider and GitHub marks above are excluded from this
 repository's MIT license. They remain subject to their owners' trademark,
 copyright, and brand-use terms. AI Limits is an independent project and is not

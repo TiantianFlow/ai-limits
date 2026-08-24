@@ -64,59 +64,59 @@ export const providerCatalog = {
   newapi: {
     displayName: "New API",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/newapi.svg",
       apiKeyGuide: "newapi",
     },
   },
   litellm: {
     displayName: "LiteLLM",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/litellm.svg",
     },
   },
   clawrouter: {
     displayName: "ClawRouter",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/clawrouter.svg",
     },
   },
   sub2api: {
     displayName: "sub2api",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/sub2api.svg",
     },
   },
   llmProxy: {
     displayName: "LLM Proxy",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/llmproxy.svg",
     },
   },
   deepseek: {
     displayName: "DeepSeek",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/deepseek.svg",
       apiKeySetupUrl: "https://platform.deepseek.com/api_keys",
     },
   },
   moonshot: {
     displayName: "Moonshot",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/moonshot.svg",
       apiKeySetupUrl: "https://platform.moonshot.ai/console/api-keys",
     },
   },
   deepinfra: {
     displayName: "DeepInfra",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/deepinfra.svg",
       apiKeySetupUrl: "https://deepinfra.com/dash/api_keys",
     },
   },
   fireworks: {
     displayName: "Fireworks",
     presentation: {
-      markPath: "/provider-marks/fallback.svg",
+      markPath: "/provider-marks/fireworks.svg",
       apiKeySetupUrl: "https://app.fireworks.ai/settings/users/api-keys",
     },
   },

@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
+
+import { providerKinds, providerPresentation } from "../providers/catalog";
 
 const expectedKimiFrames = {
   "kimi.svg": "43eff2012c78452ead821b55defc7beaeae8265e79be30c7790254c7a8a1d650",
@@ -20,6 +22,37 @@ function readElevenLabsSvg() {
 }
 
 describe("provider mark assets", () => {
+  it("keeps a distinct on-disk mark for every catalog provider", () => {
+    const fallbackMarkPath = "/provider-marks/fallback.svg";
+
+    for (const providerKind of providerKinds) {
+      const presentation = providerPresentation(providerKind);
+      expect(presentation.markPath).not.toBe(fallbackMarkPath);
+      const markFile = path.join(
+        process.cwd(),
+        "public",
+        presentation.markPath.replace(/^\//u, ""),
+      );
+      expect(existsSync(markFile)).toBe(true);
+      if (presentation.darkMarkPath) {
+        const darkMarkFile = path.join(
+          process.cwd(),
+          "public",
+          presentation.darkMarkPath.replace(/^\//u, ""),
+        );
+        expect(existsSync(darkMarkFile)).toBe(true);
+      }
+    }
+
+    expect(
+      new Set(
+        providerKinds.map(
+          (providerKind) => providerPresentation(providerKind).markPath,
+        ),
+      ).size,
+    ).toBe(providerKinds.length);
+  });
+
   it("keeps the exact official ElevenLabs path geometry", () => {
     const paths = readElevenLabsSvg().match(/<path\b[^>]*\/>/gu);
 
