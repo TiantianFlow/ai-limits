@@ -1964,12 +1964,16 @@ section[aria-labelledby="overview-title"] .provider-list {
   font-weight: 600;
 }
 
+.connection-surface__disconnect,
+.connection-surface__confirm {
+  margin-top: 4px;
+}
+
 .connection-surface__disconnect {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
   justify-content: center;
-  margin-top: 4px;
   padding: 0 12px;
   border: 1px solid color-mix(in srgb, #e11d48 55%, var(--border));
   border-radius: 11px;

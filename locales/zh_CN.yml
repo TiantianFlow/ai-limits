@@ -124,8 +124,13 @@ providerDetail:
   openHistoryNamed: "打开 {label} 的历史"
   connectionTitle: 连接与能力
   scheduledNoTab: 定时刷新会读取现有会话，不会打开标签页。
-  disconnectExplanation: 断开连接会将该服务从总览中移除，并删除其本地历史。
+  disconnectExplanation: 断开连接会永久删除该服务的凭据、配置、用量和历史。
   disconnectNamed: "断开 {label}"
+  disconnectConfirmGroup: 确认断开连接
+  disconnectConfirmWarning: 此操作无法撤销。该服务的凭据、配置、用量和历史会立即删除。权限清理可能延迟，或与另一实例共享。
+  disconnectConfirm: 确认断开
+  disconnectConfirmNamed: "确认断开 {label}"
+  disconnectCancelNamed: "取消断开 {label}"
   countersNote: 计数和余额按时间点观察值存储。
 
 history:
