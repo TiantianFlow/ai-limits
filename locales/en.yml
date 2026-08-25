@@ -124,8 +124,13 @@ providerDetail:
   openHistoryNamed: "Open {label} history"
   connectionTitle: Connection and capabilities
   scheduledNoTab: Scheduled refresh reads the existing session without opening a tab.
-  disconnectExplanation: Disconnecting removes the provider from Overview and deletes its stored local history.
+  disconnectExplanation: Disconnecting permanently deletes this provider's credentials, configuration, usage, and history.
   disconnectNamed: "Disconnect {label}"
+  disconnectConfirmGroup: Confirm disconnect
+  disconnectConfirmWarning: This cannot be undone. Credentials, configuration, usage, and history for this provider will be deleted immediately. Permission cleanup can be delayed or shared with another instance.
+  disconnectConfirm: Confirm disconnect
+  disconnectConfirmNamed: "Confirm disconnect {label}"
+  disconnectCancelNamed: "Cancel disconnect {label}"
   countersNote: Counters and balances are stored as point-in-time observations.
 
 history:
