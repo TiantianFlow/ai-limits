@@ -1102,7 +1102,7 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Disconnect Claude" })).toBeVisible();
     expect(
       screen.getByText(
-        "Disconnecting removes the provider from Overview and deletes its stored local history.",
+        "Disconnecting permanently deletes this provider's credentials, configuration, usage, and history.",
       ),
     ).toBeVisible();
   });
@@ -1419,11 +1419,55 @@ describe("Cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
 
+    expect(onDisconnectInstance).not.toHaveBeenCalled();
+    expect(screen.getByRole("article", { name: "ChatGPT" })).toBeVisible();
+    expect(
+      screen.getByRole("group", { name: "Confirm disconnect" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "This cannot be undone. Credentials, configuration, usage, and history for this provider will be deleted immediately. Permission cleanup can be delayed or shared with another instance.",
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect ChatGPT" }),
+    );
+
     expect(onDisconnectInstance).toHaveBeenCalledWith("chatgpt:default");
     expect(screen.getByRole("region", { name: "Overview" })).toBeVisible();
     expect(
       screen.queryByRole("heading", { name: "Provider unavailable" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the provider detail screen open when disconnect is cancelled", () => {
+    const onDisconnectInstance = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDisconnectInstance={onDisconnectInstance}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open ChatGPT details" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel disconnect ChatGPT" }),
+    );
+
+    expect(onDisconnectInstance).not.toHaveBeenCalled();
+    expect(screen.getByRole("article", { name: "ChatGPT" })).toBeVisible();
+    expect(
+      screen.queryByRole("group", { name: "Confirm disconnect" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disconnect ChatGPT" })).toHaveFocus();
   });
 
   it("returns to Overview from Settings after disconnecting the provider that opened it", () => {

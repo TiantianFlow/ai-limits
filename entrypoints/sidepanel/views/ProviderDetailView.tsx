@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { l10n } from "../../../i18n/index";
 import {
@@ -81,6 +81,21 @@ export function ProviderDetailView({
   onOpenSettings,
   onDisconnectInstance,
 }: ProviderDetailViewProps) {
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const disconnectTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreDisconnectFocus = useRef(false);
+
+  useEffect(() => {
+    setConfirmDisconnect(false);
+  }, [provider?.instanceId]);
+
+  useEffect(() => {
+    if (!confirmDisconnect && restoreDisconnectFocus.current) {
+      restoreDisconnectFocus.current = false;
+      disconnectTriggerRef.current?.focus();
+    }
+  }, [confirmDisconnect]);
+
   if (!provider) {
     return (
       <section className="screen" aria-label={l10n.t("providerDetail.screenUnavailable")}>
@@ -281,17 +296,54 @@ export function ProviderDetailView({
             <p>{l10n.t("providerDetail.scheduledNoTab")}</p>
           )}
           <p>{l10n.t("providerDetail.disconnectExplanation")}</p>
-          <button
-            className="connection-surface__disconnect"
-            type="button"
-            aria-label={l10n.t("providerDetail.disconnectNamed", {
-              label: provider.instanceLabel,
-            })}
-            data-focus-key={`provider-disconnect-${provider.instanceId}`}
-            onClick={() => onDisconnectInstance(provider.instanceId)}
-          >
-            <span aria-hidden="true">{l10n.t("common.disconnect")}</span>
-          </button>
+          {confirmDisconnect ? (
+            <div
+              className="delete-confirmation connection-surface__confirm"
+              role="group"
+              aria-label={l10n.t("providerDetail.disconnectConfirmGroup")}
+            >
+              <p>{l10n.t("providerDetail.disconnectConfirmWarning")}</p>
+              <div className="confirmation-actions">
+                <button
+                  className="button button--danger"
+                  type="button"
+                  aria-label={l10n.t("providerDetail.disconnectConfirmNamed", {
+                    label: provider.instanceLabel,
+                  })}
+                  autoFocus
+                  onClick={() => onDisconnectInstance(provider.instanceId)}
+                >
+                  {l10n.t("providerDetail.disconnectConfirm")}
+                </button>
+                <button
+                  className="button button--secondary"
+                  type="button"
+                  aria-label={l10n.t("providerDetail.disconnectCancelNamed", {
+                    label: provider.instanceLabel,
+                  })}
+                  onClick={() => {
+                    restoreDisconnectFocus.current = true;
+                    setConfirmDisconnect(false);
+                  }}
+                >
+                  {l10n.t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              ref={disconnectTriggerRef}
+              className="connection-surface__disconnect"
+              type="button"
+              aria-label={l10n.t("providerDetail.disconnectNamed", {
+                label: provider.instanceLabel,
+              })}
+              data-focus-key={`provider-disconnect-${provider.instanceId}`}
+              onClick={() => setConfirmDisconnect(true)}
+            >
+              <span aria-hidden="true">{l10n.t("common.disconnect")}</span>
+            </button>
+          )}
         </section>
       </article>
     </section>
