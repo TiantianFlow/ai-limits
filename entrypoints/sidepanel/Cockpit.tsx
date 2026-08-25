@@ -48,6 +48,7 @@ import {
 } from "./components/SummaryBar";
 import {
   navigateCockpit,
+  screenUsesInstance,
   type CockpitNavigationState,
   type CockpitScreen,
 } from "./navigation";
@@ -483,6 +484,30 @@ export function Cockpit({
     setNavigation((current) => navigateCockpit(current, { type: "home" }));
   };
 
+  const disconnectInstance = (instanceId: ProviderInstanceId) => {
+    onDisconnectInstance(instanceId);
+    const next = navigateCockpit(navigation, {
+      type: "dropInstance",
+      instanceId,
+    });
+    if (next === navigation) {
+      return;
+    }
+
+    if (next.current.name === "overview" && next.backStack.length === 0) {
+      focusBackStack.current = [];
+      restoreFocusTarget.current = null;
+    } else {
+      focusBackStack.current = navigation.backStack.flatMap((screen, index) =>
+        screenUsesInstance(screen, instanceId)
+          ? []
+          : [focusBackStack.current[index]!],
+      );
+    }
+    setConfirmDelete(false);
+    setNavigation(next);
+  };
+
   const openApiKeyConnect = (
     providerKind: ApiKeyProviderKind,
     mode: "connect" | "replace",
@@ -785,7 +810,7 @@ export function Cockpit({
           onAutoRefreshChange={onAutoRefreshChange}
           onLocaleOverrideChange={onLocaleOverrideChange}
           onReconnectProvider={connectProvider}
-          onDisconnectInstance={onDisconnectInstance}
+          onDisconnectInstance={disconnectInstance}
           onRenameInstance={onRenameInstance}
           onReplaceApiKey={(providerKind, instanceId) =>
             openApiKeyConnect(providerKind, "replace", instanceId)
@@ -820,6 +845,7 @@ export function Cockpit({
               `provider-settings-${view.instanceId}`,
             )
           }
+          onDisconnectInstance={disconnectInstance}
         />
       ) : view.name === "history" ? (
         <HistoryView

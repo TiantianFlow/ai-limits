@@ -124,8 +124,8 @@ providerDetail:
   openHistoryNamed: "打开 {label} 的历史"
   connectionTitle: 连接与能力
   scheduledNoTab: 定时刷新会读取现有会话，不会打开标签页。
-  manageInSettings: 在设置中管理或断开连接
-  manageNamed: "在设置中管理 {label}"
+  disconnectExplanation: 断开连接会将该服务从总览中移除，并删除其本地历史。
+  disconnectNamed: "断开 {label}"
   countersNote: 计数和余额按时间点观察值存储。
 
 history:
