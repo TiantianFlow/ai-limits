@@ -1255,6 +1255,11 @@ describe("side-panel App", () => {
         name: "Disconnect relay.example · 22222222",
       }),
     );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Confirm disconnect relay.example · 22222222",
+      }),
+    );
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Couldn’t disconnect relay.example · 22222222.",
     );
@@ -1555,6 +1560,9 @@ describe("side-panel App", () => {
     await screen.findByText("ChatGPT");
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect ChatGPT" }),
+    );
 
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Disconnected ChatGPT and deleted its stored usage.",
@@ -1584,6 +1592,9 @@ describe("side-panel App", () => {
     await screen.findByText("ChatGPT");
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect ChatGPT" }),
+    );
 
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Deleted ChatGPT’s local usage. Browser access could not be removed.",
@@ -1615,6 +1626,9 @@ describe("side-panel App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("switch", { name: "Automatic refresh" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect ChatGPT" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Delete all local data" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete all local data" }));
 

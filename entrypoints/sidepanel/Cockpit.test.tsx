@@ -483,6 +483,10 @@ describe("Cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect Work relay" }));
+    expect(onDisconnectInstance).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect Work relay" }),
+    );
     expect(onDisconnectInstance).toHaveBeenCalledWith(WORK_NEW_API_ID);
     expect(onDisconnectInstance).not.toHaveBeenCalledWith(PERSONAL_NEW_API_ID);
   });
@@ -1488,6 +1492,10 @@ describe("Cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settings for ChatGPT" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+    expect(onDisconnectInstance).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect ChatGPT" }),
+    );
 
     expect(onDisconnectInstance).toHaveBeenCalledWith("chatgpt:default");
     expect(
@@ -1503,6 +1511,35 @@ describe("Cockpit", () => {
     expect(
       screen.queryByRole("heading", { name: "Provider unavailable" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps Settings open when disconnect is cancelled", () => {
+    const onDisconnectInstance = vi.fn();
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDisconnectInstance={onDisconnectInstance}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect ChatGPT" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel disconnect ChatGPT" }),
+    );
+
+    expect(onDisconnectInstance).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("region", { name: "Provider settings" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("group", { name: "Confirm disconnect" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disconnect ChatGPT" })).toHaveFocus();
   });
 
   it("shows a truthful unavailable screen if the active provider disconnects", () => {
@@ -2908,6 +2945,10 @@ describe("Cockpit", () => {
       expect(action.parentElement).toBe(providerActions);
     }
     fireEvent.click(screen.getByRole("button", { name: "Disconnect Claude" }));
+    expect(onDisconnectProvider).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm disconnect Claude" }),
+    );
     expect(onDisconnectProvider).toHaveBeenCalledWith("claude");
   });
 

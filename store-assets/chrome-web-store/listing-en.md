@@ -89,8 +89,9 @@ reported balance, and **Fireworks** shows rated spend over the last 30 days.
 **GroqCloud** shows five-minute usage rates, and **OpenRouter** shows credits and
 an optional key budget.
 
-The side panel is available in English and Simplified Chinese. It follows
-Chrome's language by default; Settings can pin one language for this panel.
+The side panel supports English and Simplified Chinese. It follows Chrome when
+Chrome is set to one of those languages, and falls back to English for other
+Chrome languages. Settings can pin English or Simplified Chinese for this panel.
 Chrome's own menus and the extension name stay in Chrome's language.
 
 AI Limits keeps everything local: your usage history stays on your device and
@@ -369,7 +370,8 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    quota history while counter/spend and balance samples remain ungraphed. From a
    provider detail screen, Disconnect asks for confirmation before deleting
    credentials, configuration, usage, and history. In Settings, turn automatic
-   refresh off and on, disconnect one provider, then use **Delete all local
-   data** and confirm the cards return to the permission-required state. For
+   refresh off and on, disconnect one provider after confirming the same
+   deletion, then use **Delete all local data** and confirm the cards return to
+   the permission-required state. For
    API-key providers, inspect extension storage after Disconnect and after
    Delete all to confirm the credential record no longer contains a key.
