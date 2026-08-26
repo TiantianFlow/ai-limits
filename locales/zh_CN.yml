@@ -198,7 +198,7 @@ settings:
   automaticOn: 开 · 大约每 15 分钟
   automaticOff: 关 · 请从顶部手动刷新
   language: 语言
-  languageDescription: 仅作用于本侧边栏。Chrome 自身的菜单和扩展名称仍跟随 Chrome 的语言。
+  languageDescription: 仅支持英文和简体中文。其他 Chrome 语言会回退到英文。Chrome 自身的菜单和扩展名称仍跟随 Chrome 的语言。
   languageFollowChrome: 跟随 Chrome
   connectedProviders: 已连接的服务
   instanceSettings: "{label} 设置"
@@ -206,7 +206,7 @@ settings:
   freshnessMethod: "{freshness} · {method} · {readOnly}"
   apiKeySaved: 已保存 API 密钥
   noProviders: 尚未连接服务。
-  disconnectExplanation: 断开连接会将该服务从总览中移除，并删除其本地历史。
+  disconnectExplanation: 断开连接会永久删除该服务的凭据、配置、用量和历史。权限清理可能延迟，或与另一实例共享。
   renameGroup: "重命名 {label}"
   instanceLabel: 实例标签
   saveLabelNamed: "保存 {label} 的标签"

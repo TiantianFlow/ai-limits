@@ -169,9 +169,9 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "confirm the side panel opens with twenty permission-required cards.",
+      "confirm First Run opens with twenty opt-in provider rows and no prefilled usage.",
     error:
-      "Store listing reviewer flow must expect twenty permission-required cards.",
+      "Store listing reviewer flow must expect twenty First Run provider rows.",
   },
 ];
 const v030PublicationStatements = [

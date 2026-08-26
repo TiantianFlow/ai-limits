@@ -198,7 +198,7 @@ settings:
   automaticOn: On · about every 15 minutes
   automaticOff: Off · refresh manually from the header
   language: Language
-  languageDescription: Applies to this side panel. Chrome’s own menus and the extension name stay in Chrome’s language.
+  languageDescription: English and Simplified Chinese only. Other Chrome languages fall back to English. Chrome’s own menus and the extension name stay in Chrome’s language.
   languageFollowChrome: Follow Chrome
   connectedProviders: Connected providers
   instanceSettings: "{label} settings"
@@ -206,7 +206,7 @@ settings:
   freshnessMethod: "{freshness} · {method} · {readOnly}"
   apiKeySaved: API key saved
   noProviders: No providers connected.
-  disconnectExplanation: Disconnecting removes the provider from Overview and deletes its stored local history.
+  disconnectExplanation: Disconnecting permanently deletes this provider's credentials, configuration, usage, and history. Permission cleanup can be delayed or shared with another instance.
   renameGroup: "Rename {label}"
   instanceLabel: Instance label
   saveLabelNamed: "Save label for {label}"

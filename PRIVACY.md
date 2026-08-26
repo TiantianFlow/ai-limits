@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: August 23, 2026
+Last updated: August 26, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
 describes version 0.4.3.
@@ -162,7 +162,7 @@ metrics; raw provider responses are not persisted.
 ## Local storage and retention
 
 AI Limits stores one application-state record in `chrome.storage.local`. It
-contains display and automatic-refresh preferences, per-instance nonsecret
+contains display, language, and automatic-refresh preferences, per-instance nonsecret
 configuration such as a normalized configurable-provider base URL and label, provider
 permission state, the normalized usage fields listed above, History, and
 sanitized refresh-attempt metadata. It does not contain provider cookies,

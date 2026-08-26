@@ -44,14 +44,15 @@ The complete Chrome Web Store submission packs also live in this directory:
 
 These four images are for the Simplified Chinese GitHub README and social
 media. Their dimensions and content are suitable for future localized Chrome
-Web Store screenshots, but they are not part of the current store submission.
-Chrome Web Store promotional tiles are not localized, so there is no separate
-Chinese promotional tile.
+Web Store screenshots, but they are not part of the current English store
+submission. Chrome Web Store promotional tiles are not localized, so there is
+no separate Chinese promotional tile.
 
-The surrounding project copy in these four Chinese images is Simplified
-Chinese, while the embedded production extension UI remains in English. After
-runtime localization is implemented, regenerate them so both the surrounding
-copy and embedded UI are Chinese.
+The side panel now supports English and Simplified Chinese. The current Chinese
+GitHub images still embed the English production UI; only the surrounding
+project copy is Chinese. Regenerate them so the embedded UI uses the Simplified
+Chinese catalog. The capture preview currently still leaves the production
+Cockpit in English even when `locale=zh_CN`.
 
 ### GitHub repository artwork
 
@@ -80,7 +81,7 @@ AI_LIMITS_CHROME_PATH=/absolute/path/to/chrome pnpm assets:store
 The preview uses the fixed instant `2026-08-09T14:00:00.000Z`, forces light
 mode, `en-US`, `America/Toronto`, and a device scale factor of 1, and creates a
 fresh browser context without a user profile. The `locale=zh_CN` preview option
-localizes only the surrounding project copy; it intentionally leaves the
+localizes only the surrounding project copy; it currently still leaves the
 production extension UI in English. The pacing image aligns the complete Kimi
 and Cursor cards below the real sticky side-panel header at production scale.
 The History image follows the real ChatGPT quota action into the dedicated

@@ -2396,8 +2396,8 @@ section[aria-labelledby="overview-title"] .provider-list {
   align-items: flex-start;
 }
 
-.settings-provider-row--renaming .settings-provider-actions {
-  justify-content: flex-start;
+.settings-provider-row--disconnecting .settings-disconnect-confirm {
+  min-width: 0;
 }
 
 .settings-provider-actions > button {
@@ -2421,7 +2421,7 @@ section[aria-labelledby="overview-title"] .provider-list {
   background: color-mix(in srgb, var(--surface-muted) 55%, var(--surface));
 }
 
-.settings-provider-actions > button:last-child {
+.settings-provider-actions > button.settings-provider-actions__disconnect {
   color: #be123c;
 }
 

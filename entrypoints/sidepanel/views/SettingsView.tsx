@@ -105,6 +105,14 @@ export function SettingsView({
   const restoreRenameFocus = useRef<ProviderInstanceId | undefined>(undefined);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const restoreRenameInputFocus = useRef(false);
+  const [confirmDisconnectId, setConfirmDisconnectId] =
+    useState<ProviderInstanceId>();
+  const disconnectTriggerRefs = useRef<
+    Partial<Record<ProviderInstanceId, HTMLButtonElement | null>>
+  >({});
+  const restoreDisconnectFocus = useRef<ProviderInstanceId | undefined>(
+    undefined,
+  );
   const labelsByInstance = instanceLabels(instances);
 
   useEffect(() => {
@@ -128,6 +136,23 @@ export function SettingsView({
       renameInputRef.current?.focus();
     }
   }, [renameError, renamePending]);
+
+  useEffect(() => {
+    if (
+      confirmDisconnectId &&
+      !instances.some((instance) => instance.id === confirmDisconnectId)
+    ) {
+      setConfirmDisconnectId(undefined);
+    }
+  }, [confirmDisconnectId, instances]);
+
+  useEffect(() => {
+    if (!confirmDisconnectId && restoreDisconnectFocus.current) {
+      const instanceId = restoreDisconnectFocus.current;
+      restoreDisconnectFocus.current = undefined;
+      disconnectTriggerRefs.current[instanceId]?.focus();
+    }
+  }, [confirmDisconnectId]);
 
   return (
     <section className="screen settings-panel" aria-label={l10n.t("settings.screen")}>
@@ -231,11 +256,18 @@ export function SettingsView({
                   instance.snapshot?.planLabel,
                 );
                 const editing = renamingInstanceId === instance.id;
+                const confirmingDisconnect = confirmDisconnectId === instance.id;
                 const inputId = `settings-label-${instance.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
                 return (
                   <li
                     key={instance.id}
-                    className={editing ? "settings-provider-row--renaming" : undefined}
+                    className={
+                      editing
+                        ? "settings-provider-row--renaming"
+                        : confirmingDisconnect
+                          ? "settings-provider-row--disconnecting"
+                          : undefined
+                    }
                     aria-label={l10n.t("settings.instanceSettings", { label })}
                   >
                     <ProviderMark providerId={instance.providerKind} size="sm" />
@@ -365,6 +397,7 @@ export function SettingsView({
                               restoreRenameInputFocus.current = false;
                               setRenameError("");
                               setLabelDraft(instance.userLabel ?? "");
+                              setConfirmDisconnectId(undefined);
                               setRenamingInstanceId(instance.id);
                             }}
                           >
@@ -398,15 +431,61 @@ export function SettingsView({
                             <span aria-hidden="true">{l10n.t("common.reconnect")}</span>
                           </button>
                         ) : null}
-                        <button
-                          type="button"
-                          aria-label={l10n.t("settings.disconnectNamed", { label })}
-                          data-focus-key={`settings-disconnect-${instance.id}`}
-                          onClick={() => onDisconnectInstance(instance.id)}
-                        >
-                          <span aria-hidden="true">{l10n.t("common.disconnect")}</span>
-                        </button>
+                        {confirmingDisconnect ? null : (
+                          <button
+                            ref={(element) => {
+                              disconnectTriggerRefs.current[instance.id] = element;
+                            }}
+                            type="button"
+                            aria-label={l10n.t("settings.disconnectNamed", { label })}
+                            data-focus-key={`settings-disconnect-${instance.id}`}
+                            className="settings-provider-actions__disconnect"
+                            onClick={() => {
+                              setRenamingInstanceId(undefined);
+                              setConfirmDisconnectId(instance.id);
+                            }}
+                          >
+                            <span aria-hidden="true">{l10n.t("common.disconnect")}</span>
+                          </button>
+                        )}
                       </div>
+                      {confirmingDisconnect ? (
+                        <div
+                          className="delete-confirmation settings-disconnect-confirm"
+                          role="group"
+                          aria-label={l10n.t("providerDetail.disconnectConfirmGroup")}
+                        >
+                          <p>{l10n.t("providerDetail.disconnectConfirmWarning")}</p>
+                          <div className="confirmation-actions">
+                            <button
+                              className="button button--danger"
+                              type="button"
+                              aria-label={l10n.t(
+                                "providerDetail.disconnectConfirmNamed",
+                                { label },
+                              )}
+                              autoFocus
+                              onClick={() => onDisconnectInstance(instance.id)}
+                            >
+                              {l10n.t("providerDetail.disconnectConfirm")}
+                            </button>
+                            <button
+                              className="button button--secondary"
+                              type="button"
+                              aria-label={l10n.t(
+                                "providerDetail.disconnectCancelNamed",
+                                { label },
+                              )}
+                              onClick={() => {
+                                restoreDisconnectFocus.current = instance.id;
+                                setConfirmDisconnectId(undefined);
+                              }}
+                            >
+                              {l10n.t("common.cancel")}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </li>
                 );
