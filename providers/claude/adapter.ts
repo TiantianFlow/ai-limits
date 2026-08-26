@@ -259,13 +259,13 @@ async function collectClaude({
     }
 
     const quotas = [...namedWindows, ...scopedWindows];
-
-    if (quotas.length === 0) {
+    const extraUsage = claudeExtraUsageSchema.safeParse(usage.data.extra_usage);
+    const counters = extraUsage.success ? normalizeExtraUsage(extraUsage.data) : [];
+    const metrics = [...quotas, ...counters];
+    if (metrics.length === 0) {
       return { ok: false, health: { kind: "provider_changed" } };
     }
 
-    const extraUsage = claudeExtraUsageSchema.safeParse(usage.data.extra_usage);
-    const counters = extraUsage.success ? normalizeExtraUsage(extraUsage.data) : [];
     return {
       ok: true,
       snapshot: {
@@ -273,12 +273,12 @@ async function collectClaude({
         ...(organization.name ? { planLabel: organization.name } : {}),
         source: "web-session",
         fetchedAt: now,
-        metrics: [...quotas, ...counters],
+        metrics,
         usageGroups: [
           {
             id: "usage",
             label: "Usage",
-            metricIds: [...quotas, ...counters].map((metric) => metric.id),
+            metricIds: metrics.map((metric) => metric.id),
           },
         ],
       },

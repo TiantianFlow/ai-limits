@@ -429,7 +429,62 @@ describe("Claude adapter", () => {
     expect(injectedFetch).toHaveBeenCalledTimes(2);
   });
 
-  test("rejects a response with no active quota window", async () => {
+  test("keeps enabled extra usage when plan windows have not started", async () => {
+    const injectedFetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response([{ uuid: "org", capabilities: ["chat"] }]),
+      )
+      .mockResolvedValueOnce(
+        response(
+          usageFixture({
+            five_hour: { utilization: 0, resets_at: null },
+            seven_day: { utilization: 0, resets_at: null },
+            seven_day_opus: null,
+            seven_day_sonnet: null,
+            limits: [
+              {
+                kind: "session",
+                percent: 0,
+                resets_at: null,
+                is_active: true,
+              },
+            ],
+          }),
+        ),
+      );
+
+    await expect(claudeAdapter.collect(context(injectedFetch))).resolves.toEqual({
+      ok: true,
+      snapshot: {
+        providerKind: "claude",
+        source: "web-session",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "counter",
+            id: "extra-usage",
+            label: "Extra usage",
+            scope: "product",
+            semantic: "spent",
+            unit: "USD",
+            value: 41.32,
+            limit: 1_000,
+          },
+        ],
+        usageGroups: [
+          {
+            id: "usage",
+            label: "Usage",
+            metricIds: ["extra-usage"],
+          },
+        ],
+      },
+    });
+    expect(injectedFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects a response with no displayable metrics", async () => {
     const injectedFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -443,6 +498,12 @@ describe("Claude adapter", () => {
             seven_day_opus: null,
             seven_day_sonnet: null,
             limits: null,
+            extra_usage: {
+              is_enabled: false,
+              used_credits: null,
+              monthly_limit: null,
+              currency: null,
+            },
           }),
         ),
       );
