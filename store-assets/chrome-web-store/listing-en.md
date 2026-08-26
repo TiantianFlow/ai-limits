@@ -1,6 +1,6 @@
 # Chrome Web Store listing
 
-This document describes AI Limits version 0.4.3. It is the complete
+This document describes AI Limits version 0.4.4. It is the complete
 Chrome Web Store submission pack, including the paste-ready listing copy
 and the reviewer reference material. It is not a claim that any provider
 has approved the extension.
@@ -268,7 +268,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.4.3-chrome.zip` upload artifact.
+- The validated `ai-limits-0.4.4-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
   provider sites in the same Chrome profile, plus temporary reviewer-created
   keys for each API-key provider under test. ElevenLabs should use
