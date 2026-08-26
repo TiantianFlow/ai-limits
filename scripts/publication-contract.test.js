@@ -3,6 +3,10 @@ import { validatePublicationDocuments } from "./publication-contract.mjs";
 
 const issuesUrl = "https://github.com/TiantianFlow/ai-limits/issues";
 const issuesLink = `[GitHub Issues](${issuesUrl})`;
+const supportedProvidersUrl =
+  "https://github.com/TiantianFlow/ai-limits/blob/main/SUPPORTED_PROVIDERS.md";
+const supportedProvidersUrlZh =
+  "https://github.com/TiantianFlow/ai-limits/blob/main/SUPPORTED_PROVIDERS.zh-CN.md";
 const storeUrl =
   "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
 const storeLink = `[Chrome Web Store](${storeUrl})`;
@@ -297,12 +301,6 @@ const v030PublicationStatements = [
   {
     key: "listing",
     statement:
-      "AI Limits supports multiple independent New API instances, including multiple separately labeled keys on the same origin.",
-    error: "Store listing is missing multi-instance New API support.",
-  },
-  {
-    key: "listing",
-    statement:
       "Successful normalized quota, counter or spend, and balance observations are retained per instance; History graphs quota metrics, while counter or spend and balance observations remain stored but ungraphed.",
     error: "Store listing is missing typed history and quota-only graph behavior.",
   },
@@ -412,6 +410,14 @@ const valid = {
     ...v030PublicationStatements
       .filter(({ key }) => key === "listing")
       .map(({ statement }) => statement),
+    "## Detailed description",
+    supportedProvidersUrl,
+    "## Permission justifications",
+  ].join("\n"),
+  listingZh: [
+    "## 详细说明",
+    supportedProvidersUrlZh,
+    "## 权限说明",
   ].join("\n"),
   license: "MIT License\n\nCopyright (c) 2026 TiantianFlow",
 };
@@ -612,6 +618,36 @@ describe("publication content", () => {
     });
     expect(errors).toContain(
       "Store listing short description must exactly match the manifest description.",
+    );
+  });
+
+  it("requires direct compatibility links and rejects provider inventories in Store descriptions", () => {
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        listing: valid.listing.replace(supportedProvidersUrl, ""),
+      }),
+    ).toContain(
+      "English Store detailed description is missing the direct supported-providers URL.",
+    );
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        listingZh: valid.listingZh.replace(supportedProvidersUrlZh, ""),
+      }),
+    ).toContain(
+      "Simplified Chinese Store detailed description is missing the direct supported-providers URL.",
+    );
+    expect(
+      validatePublicationDocuments({
+        ...valid,
+        listing: valid.listing.replace(
+          supportedProvidersUrl,
+          `${supportedProvidersUrl}\nChatGPT`,
+        ),
+      }),
+    ).toContain(
+      "English Store detailed description must not enumerate provider brands.",
     );
   });
 

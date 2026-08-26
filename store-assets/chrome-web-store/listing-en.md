@@ -41,10 +41,9 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs across twenty supported providers (see the supported-providers document
-for the full roster). Browser-session providers use an account already signed in within the
-user's browser profile; API-key providers use a key the user connects through
-guided setup.
+graphs across twenty supported services. Browser-session services use an account
+already signed in within the user's browser profile; API-key services use a key
+the user connects through guided setup.
 
 ## Short description
 
@@ -65,29 +64,12 @@ compares quota consumed with elapsed time.
 Every quota window can open its own local History screen, so you can see how
 your usage has trended over time, right on your device.
 
-**ChatGPT** and **Claude** show your plan, usage windows, resets, and available
-credits straight from your signed-in account. **Kimi** reads your usage and
-subscription status directly, with a brief, visible recovery step if your
-session ever needs refreshing. **Cursor** shows monthly Cursor-model and
-Other-model limits plus weekly Grok Bot usage, and a per-model included-usage
-breakdown grouped into Cursor Models and Other Models with input, output, cost,
-and provider totals. That detail view is a generic per-provider surface; today
-only Cursor fills it. **Grok** reads your signed-in consumer plan and
-weekly or monthly usage pool; short per-mode windows are not shown.
-**Mistral** shows month-to-date spend and available credits,
-while **Perplexity** shows recurring, purchased, and promotional credit pools.
-**ElevenLabs** connects with a scoped, read-only API key you create yourself.
-**New API** connects self-hosted or third-party API-compatible instances with a
-key you provide. AI Limits supports multiple independent New API instances,
-including multiple separately labeled keys on the same origin.
-**LiteLLM**, **ClawRouter**, **sub2api**, and **LLM Proxy** connect configurable
-instances with a key you provide. **DeepSeek** and **Moonshot** show developer
-platform balances, **DeepInfra** shows monthly spend against a limit or its
-reported balance, and **Fireworks** shows rated spend over the last 30 days.
-**OpenAI** reads the Platform organization and developer billing surface
-(organization costs and completion usage, with a credit-grants fallback),
-**GroqCloud** shows five-minute usage rates, and **OpenRouter** shows credits and
-an optional key budget.
+AI Limits supports 20 AI services. Connect only the services you use: every
+connection is opt-in. Browser-session services use the account already signed
+in to Chrome, while API services use a key you provide.
+
+Full compatibility details, connection methods, and known limitations:
+https://github.com/TiantianFlow/ai-limits/blob/main/SUPPORTED_PROVIDERS.md
 
 The side panel supports English and Simplified Chinese. It follows Chrome when
 Chrome is set to one of those languages, and falls back to English for other

@@ -3,6 +3,10 @@ import MarkdownIt from "markdown-it";
 import { EXPECTED_DESCRIPTION } from "./artifact-contract.mjs";
 
 const issuesUrl = "https://github.com/TiantianFlow/ai-limits/issues";
+const supportedProvidersUrl =
+  "https://github.com/TiantianFlow/ai-limits/blob/main/SUPPORTED_PROVIDERS.md";
+const supportedProvidersUrlZh =
+  "https://github.com/TiantianFlow/ai-limits/blob/main/SUPPORTED_PROVIDERS.zh-CN.md";
 const storeUrl =
   "https://chromewebstore.google.com/detail/ai-limits/hcfdchpajckemcdflcjhigngpipdkdeo";
 const releaseUrl = "https://github.com/TiantianFlow/ai-limits/releases/latest";
@@ -29,6 +33,8 @@ const publicRouteGate =
   "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
 const paceAvailabilityStatement =
   "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
+const providerBrandPattern =
+  /\b(?:ChatGPT|Claude|Kimi|Cursor|Grok|Mistral|Perplexity|ElevenLabs|New API|LiteLLM|ClawRouter|sub2api|LLM Proxy|DeepSeek|Moonshot|DeepInfra|Fireworks|OpenAI|GroqCloud|OpenRouter)\b/i;
 const requiredVisibleFaqStatements = [
   {
     key: "faq",
@@ -309,12 +315,6 @@ const requiredVisibleV030Statements = [
   {
     key: "listing",
     statement:
-      "AI Limits supports multiple independent New API instances, including multiple separately labeled keys on the same origin.",
-    error: "Store listing is missing multi-instance New API support.",
-  },
-  {
-    key: "listing",
-    statement:
       "Successful normalized quota, counter or spend, and balance observations are retained per instance; History graphs quota metrics, while counter or spend and balance observations remain stored but ungraphed.",
     error: "Store listing is missing typed history and quota-only graph behavior.",
   },
@@ -562,6 +562,16 @@ function extractQualifyingMarkdownProse(document) {
   return normalizeWhitespace(visible.join(" "));
 }
 
+function extractMarkdownSection(document, startHeading, endHeading) {
+  const source = document ?? "";
+  const start = source.indexOf(startHeading);
+  if (start === -1) return "";
+
+  const afterStart = source.slice(start + startHeading.length);
+  const end = afterStart.indexOf(endHeading);
+  return end === -1 ? afterStart : afterStart.slice(0, end);
+}
+
 export function validatePublicationDocuments(documents) {
   const errors = [];
   if (Object.values(documents).some((source) => {
@@ -656,6 +666,21 @@ export function validatePublicationDocuments(documents) {
   const listing = normalizeWhitespace(listingSource);
   const visibleListing = extractQualifyingMarkdownProse(listingSource);
   const listingDestinations = extractInlineMarkdownLinkDestinations(listingSource);
+  const listingZhSource = documents.listingZh ?? "";
+  const detailedListing = extractMarkdownSection(
+    listingSource,
+    "## Detailed description",
+    "## Permission justifications",
+  );
+  const detailedListingZh = extractMarkdownSection(
+    listingZhSource,
+    "## 详细说明",
+    "## 权限说明",
+  );
+  const visibleDetailedListing = extractQualifyingMarkdownProse(detailedListing);
+  const visibleDetailedListingZh = extractQualifyingMarkdownProse(
+    detailedListingZh,
+  );
 
   if (!privacy.includes(limitedUseStatement)) {
     errors.push("Privacy policy is missing the Limited Use compliance statement.");
@@ -716,6 +741,30 @@ export function validatePublicationDocuments(documents) {
   if (!listing.includes(publicRouteGate)) {
     errors.push(
       "Store listing must defer public-route verification until after repository visibility is public.",
+    );
+  }
+
+  if (!visibleDetailedListing.includes(supportedProvidersUrl)) {
+    errors.push(
+      "English Store detailed description is missing the direct supported-providers URL.",
+    );
+  }
+
+  if (providerBrandPattern.test(visibleDetailedListing)) {
+    errors.push(
+      "English Store detailed description must not enumerate provider brands.",
+    );
+  }
+
+  if (!visibleDetailedListingZh.includes(supportedProvidersUrlZh)) {
+    errors.push(
+      "Simplified Chinese Store detailed description is missing the direct supported-providers URL.",
+    );
+  }
+
+  if (providerBrandPattern.test(visibleDetailedListingZh)) {
+    errors.push(
+      "Simplified Chinese Store detailed description must not enumerate provider brands.",
     );
   }
 
