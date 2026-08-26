@@ -22,6 +22,8 @@ consumption with elapsed time to show a pace signal. Cursor also shows weekly
 Grok Bot usage next to its monthly Cursor-model and Other-model limits, plus a
 per-model included-usage breakdown. It starts empty and reads usage only after
 you connect an individual provider and approve that provider's optional access.
+The side panel is available in English and Simplified Chinese. It follows
+Chrome's language by default, and Settings can pin one language for this panel.
 
 AI Limits is an independent project by TiantianFlow. It is not affiliated with,
 endorsed by, or authorized by any supported provider, its parent company, or

@@ -89,6 +89,10 @@ reported balance, and **Fireworks** shows rated spend over the last 30 days.
 **GroqCloud** shows five-minute usage rates, and **OpenRouter** shows credits and
 an optional key budget.
 
+The side panel is available in English and Simplified Chinese. It follows
+Chrome's language by default; Settings can pin one language for this panel.
+Chrome's own menus and the extension name stay in Chrome's language.
+
 AI Limits keeps everything local: your usage history stays on your device and
 is never sent anywhere else. No ads, no AI Limits account to create, no
 analytics or telemetry.
@@ -101,7 +105,7 @@ parent companies, or their affiliates.
 
 ### Required permissions
 
-- `storage`: saves display and refresh preferences, provider access state,
+- `storage`: saves display, language, and refresh preferences, provider access state,
   normalized quota/counter/balance snapshots, up to 30 days of typed
   per-instance History, and sanitized refresh status in
   `chrome.storage.local`. It also holds temporary Kimi and Cursor tab-cleanup
@@ -265,7 +269,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm the side panel opens with twenty permission-required cards.
+   confirm First Run opens with twenty opt-in provider rows and no prefilled usage.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -362,7 +366,10 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 22. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
-   quota history while counter/spend and balance samples remain ungraphed. In Settings, turn automatic
+   quota history while counter/spend and balance samples remain ungraphed. From a
+   provider detail screen, Disconnect asks for confirmation before deleting
+   credentials, configuration, usage, and history. In Settings, turn automatic
    refresh off and on, disconnect one provider, then use **Delete all local
-   data** and confirm the cards return to the permission-required state.     For API-key providers, inspect extension storage after Disconnect and after
+   data** and confirm the cards return to the permission-required state. For
+   API-key providers, inspect extension storage after Disconnect and after
    Delete all to confirm the credential record no longer contains a key.

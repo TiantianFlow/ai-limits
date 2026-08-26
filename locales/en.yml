@@ -206,7 +206,7 @@ settings:
   freshnessMethod: "{freshness} · {method} · {readOnly}"
   apiKeySaved: API key saved
   noProviders: No providers connected.
-  disconnectExplanation: Disconnecting removes the provider from Overview and deletes its stored local history.
+  disconnectExplanation: Disconnecting permanently deletes this provider's credentials, configuration, usage, and history. Permission cleanup can be delayed or shared with another instance.
   renameGroup: "Rename {label}"
   instanceLabel: Instance label
   saveLabelNamed: "Save label for {label}"
