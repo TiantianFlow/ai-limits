@@ -232,7 +232,11 @@ export function localizeConnectionDisclosure(providerKind: ProviderKind): string
 export function localizeManualRefreshDisclosure(
   providerKind: ProviderKind,
 ): string | undefined {
-  if (providerKind !== "kimi" && providerKind !== "cursor") {
+  if (
+    providerKind !== "kimi" &&
+    providerKind !== "cursor" &&
+    providerKind !== "grok"
+  ) {
     return undefined;
   }
   return translate(`providers.${providerKind}.manualRefreshDisclosure`);

@@ -163,9 +163,18 @@ describe("normalizeUsagePool", () => {
         },
       }),
     ).toEqual({
-      kind: "unparseable",
-      message:
-        "Grok usage-pool JSON missing required field: credit_usage_percent",
+      kind: "metric",
+      metric: {
+        type: "quota",
+        id: "weekly-pool",
+        label: "Weekly usage pool",
+        scope: "general",
+        usedRatio: 0,
+        cycle: {
+          cadence: "calendar",
+          resetsAt: WEEKLY_END,
+        },
+      },
     });
   });
 

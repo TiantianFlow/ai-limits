@@ -636,7 +636,8 @@ providers:
   grok:
     name: Grok
     connect: 连接 Grok
-    connectionDisclosure: 从你已登录的浏览器会话读取用量，在本地存储标准化用量，并大约每 15 分钟刷新一次。
+    connectionDisclosure: 从已经打开的 grok.com 页面读取用量。在连接或手动刷新时，AI Limits 可能在该页面中运行捆绑的只读代码；如果当前没有打开的标签页，可能会短暂打开一个非活动 grok.com 标签页。它不会直接检查页面内容、浏览器存储或 cookie 值；Chrome 会把已登录的 Grok cookie 附加到这些同源请求。定时刷新可能向已经打开的 grok.com 标签页注入代码，但绝不会新建标签页。
+    manualRefreshDisclosure: 连接和手动刷新会优先使用已经打开的 grok.com 标签页。如果当前没有打开的标签页，它们可能会短暂打开一个非活动 grok.com 标签页。定时刷新可能向已经打开的 grok.com 标签页注入代码，但绝不会新建标签页。
     capabilities:
       usagePool: 用量池
       planTier: 套餐等级

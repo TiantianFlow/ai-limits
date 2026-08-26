@@ -138,8 +138,10 @@ These origins are requested one provider at a time after the user clicks
   already-open exact-origin page, or briefly open one inactive spending tab if
   none is open, to request Grok Bot, credit-grant, and aggregated included-usage
   JSON.
-- `https://grok.com/*`: reads the signed-in user's Grok session, rate-limit, and
-  subscription responses. This is consumer Grok on grok.com, not Cursor's Grok Bot.
+- `https://grok.com/*`: reads the signed-in user's Grok session, usage-pool,
+  rate-limit, and subscription responses from an already-open grok.com page.
+  During Connect or manual Refresh, if none is open, it may briefly open one
+  inactive grok.com tab. This is consumer Grok on grok.com, not Cursor's Grok Bot.
 - `https://admin.mistral.ai/*` and `https://console.mistral.ai/*`: read
   month-to-date usage and credits from the signed-in Mistral session.
 - `https://www.perplexity.ai/*`: reads credit pools from the signed-in
@@ -167,7 +169,7 @@ These origins are requested one provider at a time after the user clicks
 
 - `cookies`: requested only with Kimi access; reads only Kimi's exact legacy
   `kimi-auth` cookie when available. This is checked before Kimi page storage.
-- `scripting`: requested with Kimi or Cursor access. For Kimi, it reads only
+- `scripting`: requested with Kimi, Cursor, or Grok access. For Kimi, it reads only
   the exact `access_token` browser-storage entry from an already-open or
   recovery-created matching Kimi page. If a credential is missing or rejected,
   interactive recovery may create one inactive Kimi homepage tab. Recovery
@@ -183,10 +185,20 @@ These origins are requested one provider at a time after the user clicks
   returns only their JSON, and does not inspect rendered content, browser
   storage, or cookie values directly. Chrome attaches the signed-in Cursor
   cookies to those same-origin requests. Scheduled refresh never opens or
-  injects into a Cursor page.
+  injects into a Cursor page. For Grok, Connect or manual Refresh can run a
+  bundled exact-origin function in one already-open `grok.com` page. If none is
+  open, that interactive path may create one inactive `https://grok.com/` tab,
+  wait up to 10 seconds, and close only the tab it created. It never activates
+  a tab and never closes a tab the user opened. That function sends the
+  signed-in session, usage-pool, subscription, and chat-mode rate-limit
+  requests and returns only those responses. It does not inspect rendered
+  content, browser storage, or cookie values directly. Chrome attaches the
+  signed-in Grok cookies to those same-origin requests. Scheduled refresh may
+  inject into an already-open grok.com tab and never opens a new one.
 
 The manifest does not request the broad `tabs` permission. Scheduled refresh
-does not create or activate provider tabs and never injects into provider pages.
+does not create or activate provider tabs. Grok scheduled refresh may inject
+into an already-open grok.com tab; Cursor scheduled refresh never injects.
 
 ## Data-disclosure answers
 
@@ -201,7 +213,8 @@ does not create or activate provider tabs and never injects into provider pages.
   subscription, and organization-response JSON plus Kimi's exact
   `access_token` browser-storage entry and Cursor's manual page-context
   dashboard JSON responses (Grok Bot, credit-grant, and aggregated included
-  usage). It does not read rendered page text, prompts,
+  usage), plus Grok page-origin session, usage-pool, subscription, and
+  rate-limit responses. It does not read rendered page text, prompts,
   conversations, or generated responses.
 - **Account identifiers and personally identifiable information:** Yes,
   narrowly handled. A ChatGPT account identifier derived from the access
@@ -218,11 +231,12 @@ does not create or activate provider tabs and never injects into provider pages.
 - **Web history:** Yes, narrowly and conservatively classified. During Kimi
   collection, AI Limits may check for an already-open tab matching the exact
   Kimi origin. During Cursor Connect or manual Refresh, it may check for one
-  already-open tab matching the exact Cursor origin. This reveals only whether
-  that fixed provider-origin tab is currently open, is used locally for the
-  requested provider operation, and is never retained, transmitted, or
-  assembled into a list of visited pages. AI Limits does not query arbitrary
-  page URLs, titles, or Chrome browsing history.
+  already-open tab matching the exact Cursor origin. During Grok collection, it
+  may check for one already-open tab matching the exact Grok origin. This
+  reveals only whether that fixed provider-origin tab is currently open, is
+  used locally for the requested provider operation, and is never retained,
+  transmitted, or assembled into a list of visited pages. AI Limits does not
+  query arbitrary page URLs, titles, or Chrome browsing history.
 - **User activity:** No clicks, keystrokes, pointer movement, scrolling, or
   general browsing activity is monitored.
 - **Health information, personal communications, and location:** No.
@@ -300,10 +314,17 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
    collected Grok Bot, extra-credit, and detail values may remain visible as
    earlier page values until Grok Bot's weekly reset, and the card should
    explain why they were not refreshed.
-6. **Grok:** sign in at `grok.com`, click **Connect** on Grok, approve only the
-   Grok origin, and confirm a SuperGrok-family or Free plan plus the reported
-   query window appears. Use the card's **Refresh** action once. No extra
-   `cookies` or `scripting` permission should be requested.
+6. **Grok:** sign in at `grok.com`. You do **not** have to pre-open a Grok
+   tab. Click **Connect** on Grok, approve the Grok origin plus `scripting`,
+   and confirm a SuperGrok-family or Free plan plus the reported usage pool
+   appears. If no `grok.com` tab was already open, one inactive
+   `https://grok.com/` tab may appear, be read, and close; confirm it is never
+   activated and that no tab the reviewer opened is closed. Use the card's
+   **Refresh** action once with a grok.com tab already open and confirm the
+   existing tab is reused rather than a second tab being created. Then close
+   all grok.com tabs and start a **scheduled** cycle (or wait for automatic
+   refresh): no Grok tab should open. Reopen grok.com and confirm scheduled or
+   manual refresh can update usage from that existing tab.
 7. **Mistral:** sign in at `admin.mistral.ai`, click **Connect** on Mistral,
    approve only the Mistral origins, and confirm month-to-date spend and any
    available credits. Record whether the service accepts the request without an

@@ -97,8 +97,9 @@ API 密钥连接时才会逐个请求。New API、LiteLLM、ClawRouter、sub2api
 LLM Proxy 因来源可配置而声明动态可选主机能力，但 Chrome 实际只会请求设置中
 输入的那个实例来源。同一来源的多个实例只共享这一浏览器全局授权；凭据、标签、
 用量和 History 始终相互独立。可选的
-`cookies` 权限只用于 Kimi 会话访问。`scripting` 权限用于 Kimi 交互式恢复，
-以及 Cursor 仅在 Connect 或手动刷新期间执行的页面增强。固定 API 密钥服务只会
+`cookies` 权限只用于 Kimi 会话访问。`scripting` 权限用于 Kimi 交互式恢复、
+Cursor 仅在 Connect 或手动刷新期间执行的页面增强，以及 Grok 在 grok.com
+页面中读取会话和用量。固定 API 密钥服务只会
 获得各自 API 来源的可选访问权限；公开设置页面按普通网页打开，不会获得扩展
 主机访问权限。扩展不会请求范围更广的 `tabs` 权限。
 

@@ -60,18 +60,11 @@ export function inspectUsagePool(value: unknown): UsagePoolInspection {
     };
   }
 
-  if (!hasPercent) {
-    return {
-      kind: "unparseable",
-      message:
-        "Grok usage-pool JSON missing required field: credit_usage_percent",
-    };
-  }
-  const percent = pickNumber(
-    config,
-    "creditUsagePercent",
-    "credit_usage_percent",
-  );
+  // proto3 omits credit_usage_percent at 0%. A valid current_period without
+  // a percent is still a usable zero-usage window.
+  const percent = hasPercent
+    ? pickNumber(config, "creditUsagePercent", "credit_usage_percent")
+    : 0;
   if (percent === undefined) {
     return {
       kind: "unparseable",
@@ -172,14 +165,7 @@ export function inspectDecodedCreditsConfig(
     };
   }
 
-  if (!hasPercent) {
-    return {
-      kind: "unparseable",
-      message:
-        "Grok usage-pool missing required field: credit_usage_percent",
-    };
-  }
-  const percent = config.creditUsagePercent;
+  const percent = hasPercent ? config.creditUsagePercent : 0;
   if (percent === undefined || !Number.isFinite(percent)) {
     return {
       kind: "unparseable",

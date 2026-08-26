@@ -636,7 +636,8 @@ providers:
   grok:
     name: Grok
     connect: Connect Grok
-    connectionDisclosure: Reads usage from your signed-in browser session, stores normalized usage locally, and refreshes about every 15 minutes.
+    connectionDisclosure: Reads usage from an already-open grok.com page. On Connect or manual Refresh, AI Limits may run bundled read-only code there, or briefly open one inactive grok.com tab if none is open. It does not inspect page content, browser storage, or cookie values directly; Chrome attaches signed-in Grok cookies to those same-origin requests. Scheduled refresh may inject into an already-open grok.com tab and never opens a new one.
+    manualRefreshDisclosure: Connect and manual Refresh prefer an already-open grok.com tab. If none is open, they may briefly open one inactive grok.com tab. Scheduled refresh may inject into an already-open grok.com tab and never opens a new one.
     capabilities:
       usagePool: Usage pool
       planTier: Plan tier

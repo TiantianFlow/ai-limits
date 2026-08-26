@@ -46,7 +46,7 @@ function adapterContext(
 }
 
 export function createBrowserSessionPackage<
-  Kind extends Exclude<BrowserSessionProviderKind, "kimi">,
+  Kind extends Exclude<BrowserSessionProviderKind, "kimi" | "cursor" | "grok">,
 >({
   kind,
   adapter,

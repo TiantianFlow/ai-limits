@@ -719,6 +719,32 @@ describe("Grok adapter", () => {
     expect(rateLimitBodies(injectedFetch)).toEqual([]);
   });
 
+  test("treats SuperGrok omitted credit_usage_percent as a 0% weekly pool", async () => {
+    const injectedFetch = signedInFetch(usageFixture(), { subscriptions: [] }, {
+      pool: grpcWebResponse(
+        encodeGrokCreditsConfigResponse({
+          isUnifiedBillingUser: true,
+          currentPeriodType: USAGE_PERIOD_WEEKLY,
+          currentPeriodEndMs: SYNTHETIC_PERIOD_END,
+        }),
+      ),
+    });
+
+    const result = await grokAdapter.collect(context(injectedFetch));
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: [
+          expect.objectContaining({
+            id: "weekly-pool",
+            usedRatio: 0,
+          }),
+        ],
+      },
+    });
+    expect(rateLimitBodies(injectedFetch)).toEqual([]);
+  });
+
   test("maps an aborted request to a temporary error", async () => {
     const controller = new AbortController();
     controller.abort(new DOMException("Timed out", "AbortError"));

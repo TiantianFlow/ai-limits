@@ -98,6 +98,21 @@ describe("provider registry", () => {
     );
   });
 
+  test("scheduled Grok collection never falls back to a background grok.com fetch", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+
+    const result = await providerRegistry.grok.collect(instance("grok", fixed), {
+      ...services,
+      fetch,
+      interaction: "forbidden",
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      health: { message: expect.stringMatching(/^page-probe:/) },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test("is exhaustive and owns exact cardinality, config, credentials, and permissions", () => {
     expect(providerKinds).toEqual([
       "chatgpt",
@@ -189,7 +204,10 @@ describe("provider registry", () => {
         configKind: "fixed",
         accepted: fixed,
         rejected: undefined,
-        permissions: { origins: ["https://grok.com/*"] },
+        permissions: {
+          origins: ["https://grok.com/*"],
+          permissions: ["scripting"],
+        },
       },
       {
         kind: "mistral",
@@ -390,7 +408,7 @@ describe("provider registry", () => {
         credentialKind: "none",
         configKind: "fixed",
         optionalOrigins: ["https://grok.com/*"],
-        optionalPermissions: [],
+        optionalPermissions: ["scripting"],
       },
       mistral: {
         cardinality: "single",
@@ -569,7 +587,7 @@ describe("provider registry", () => {
         services,
         credential,
       );
-      if (kind !== "cursor") {
+      if (kind !== "cursor" && kind !== "grok") {
         expect(adapterSpies[kind]).toHaveBeenCalledTimes(1);
       }
     }
