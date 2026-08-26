@@ -6,7 +6,7 @@ import { deepInfraAdapter } from "./deepinfra/adapter";
 import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
-import { grokAdapter } from "./grok/adapter";
+import { grokPackage } from "./grok/package";
 import { groqCloudAdapter } from "./groqcloud/adapter";
 import { openAiAdapter } from "./openai/adapter";
 import { openRouterAdapter } from "./openrouter/adapter";
@@ -105,15 +105,7 @@ export const providerRegistry = {
   }),
   kimi: kimiPackage,
   cursor: cursorPackage,
-  grok: createBrowserSessionPackage({
-    kind: "grok",
-    adapter: grokAdapter,
-    cardinality: providerDefinitions.grok.cardinality,
-    requiredPermissions: fixedPermissions(
-      providerDefinitions.grok.optionalOrigins,
-      providerDefinitions.grok.optionalPermissions,
-    ),
-  }),
+  grok: grokPackage,
   mistral: createBrowserSessionPackage({
     kind: "mistral",
     adapter: mistralAdapter,

@@ -42,7 +42,7 @@ export const providerDefinitions = {
     credentialKind: "none",
     configKind: "fixed",
     optionalOrigins: ["https://grok.com/*"],
-    optionalPermissions: [],
+    optionalPermissions: ["scripting"],
   },
   mistral: {
     cardinality: "single",

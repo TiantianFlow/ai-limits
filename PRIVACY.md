@@ -3,7 +3,7 @@
 Last updated: August 26, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
-describes version 0.4.3.
+describes version 0.4.4.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
 or authorized by any supported provider, its parent company, or its affiliates.
@@ -52,9 +52,10 @@ data, or other relay keys.
 ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, and Perplexity use signed-in
 browser sessions. AI Limits sends read-only requests to those providers' own
 web-session services, and browser cookies may accompany requests to the same
-provider origin. Requests normally run directly from the extension; the manual
-Cursor enrichment described below runs in an already-open exact-origin page or,
-if none is open, in one inactive spending tab created for that attempt. ChatGPT
+provider origin. Requests normally run directly from the extension; the Cursor
+and Grok page-origin reads described below run in an already-open exact-origin
+page or, if none is open during Connect or manual Refresh, in one inactive tab
+created for that attempt. ChatGPT
 and Kimi access credentials, the derived ChatGPT account identifier, and the
 selected Claude organization UUID and capabilities may be held in memory long
 enough to complete the related collection attempt and request sequence. Those
@@ -78,6 +79,31 @@ identifier with the temporary tab ID and creation timestamp in
 background worker is interrupted. AI Limits attempts to remove it when
 recovery finishes and also performs best-effort abandoned-lease cleanup when
 the background worker starts.
+
+For Grok, grok.com rejects extension-background session and usage requests
+when the Origin is not `https://grok.com`. AI Limits therefore does not fetch
+grok.com from the extension worker. It checks for one already-open tab matching
+`https://grok.com/*` and uses the optional `scripting` permission to run a
+bundled function in that page's main JavaScript world. During Connect or an
+explicit manual Refresh only, if none exists, the same path may create one
+inactive `https://grok.com/` tab. That create-wait-read path has a 10-second
+deadline. When it finishes or times out, the extension attempts best-effort
+cleanup of only the tab and lease it owns; browser shutdown or API errors can
+delay or prevent cleanup. The function verifies the exact `https://grok.com`
+origin, sends the signed-in session, usage-pool, subscription, and chat-mode
+rate-limit requests, and returns only those responses for schema validation in
+the extension context. It does not read rendered page content, local or session
+storage, or cookie values directly. Chrome does attach the signed-in Grok
+cookies to these fixed same-origin requests. AI Limits never activates a Grok
+tab. Scheduled refresh may inject into an already-open grok.com tab and never
+opens a new one. Raw page-probe bodies are request-local and are not persisted.
+
+While that owned Grok tab is active, the extension stores only a generated lease
+identifier with the temporary tab ID and creation timestamp in
+`chrome.storage.session`. This transient metadata supports cleanup if the
+background worker is interrupted. AI Limits attempts to remove it when the
+owned tab is released and also performs best-effort abandoned-lease cleanup
+when the background worker starts.
 
 For Cursor, the base monthly and on-demand request runs from the extension.
 During Connect or an explicit manual Refresh only, AI Limits checks for one
@@ -108,9 +134,10 @@ owned tab is released and also performs best-effort abandoned-lease cleanup
 when the background worker starts.
 
 For conservative Chrome Web Store disclosure, AI Limits classifies its
-current-tab exact-provider-origin checks as **Web history** access. For Kimi and
-Cursor, the extension learns only whether a tab at that fixed provider origin
-is currently open so it can complete the user-requested provider operation.
+current-tab exact-provider-origin checks as **Web history** access. For Kimi,
+Cursor, and Grok, the extension learns only whether a tab at that fixed
+provider origin is currently open so it can complete the user-requested
+provider operation.
 This open-state result is used locally for that attempt and is never retained,
 transmitted, or assembled into a list of visited pages.
 

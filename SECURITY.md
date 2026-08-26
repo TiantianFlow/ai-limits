@@ -45,6 +45,19 @@ values directly. Chrome attaches signed-in Cursor cookies to those same-origin
 requests. Scheduled refresh never injects into a Cursor page, and no raw
 dashboard JSON is persisted.
 
+Grok collection may use `chrome.scripting` to run a bundled function in the
+main JavaScript world of one already-open exact-origin grok.com page, or, on
+Connect or manual Refresh only, of one inactive grok.com tab created for that
+attempt. The returned session, usage-pool, subscription, and rate-limit
+payloads are treated as untrusted and must pass the same extension-context
+schemas and semantic validation as any provider response. The function
+verifies `https://grok.com`, does not inspect rendered content, browser
+storage, or cookie values directly, and never falls back to an
+extension-background grok.com fetch. Chrome attaches signed-in Grok cookies to
+those same-origin requests. Scheduled refresh may inject into an already-open
+grok.com tab and never opens a new one. No raw page-probe bodies are
+persisted.
+
 Chrome's trusted extension contexts include the background worker and the side
 panel. The side-panel code does not request or read the credential record, but
 Chrome storage change events can expose local change objects to trusted

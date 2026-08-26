@@ -126,8 +126,8 @@ is asked only for the exact instance origin entered in onboarding. Same-origin
 instances share that browser-global grant only; their credentials, labels,
 usage, and History remain independent. The optional
 `cookies` is requested only for Kimi session access. `scripting` is requested
-for Kimi interactive recovery and for Cursor's manual/connect-only page
-enrichment. Fixed API-key providers receive only optional access to their own
+for Kimi interactive recovery, Cursor's manual/connect-only page enrichment,
+and Grok page-origin session and usage reads. Fixed API-key providers receive only optional access to their own
 API origins. Public setup pages are opened normally and do not receive
 extension host access. The extension does not request the broad `tabs`
 permission.
@@ -174,7 +174,7 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.4.3-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.4.4-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility

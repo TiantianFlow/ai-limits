@@ -40,7 +40,7 @@ does not reconstruct observations for intervals that were missed.
 
 ## If manual refresh works, should automatic refresh also work?
 
-Usually for browser-session providers other than Kimi, as long as their
+Usually for browser-session providers other than Kimi and Grok, as long as their
 permission and session remain valid, and for API-key providers while the saved
 key and host permission remain active.
 However, manual refresh bypasses scheduled backoff, while automatic refresh
@@ -49,7 +49,11 @@ recovery. Cursor manual refresh may additionally request Grok Bot and
 extra-credit JSON through an already-open Cursor page, or by briefly opening
 one inactive spending tab when none is open; automatic refresh never opens or
 injects into a page. Scheduled refresh keeps last-good page values until Grok
-Bot's weekly reset and explains when they could not be refreshed.
+Bot's weekly reset and explains when they could not be refreshed. Grok
+Connect or manual Refresh read grok.com from a page because extension-background
+requests are rejected; they prefer an already-open grok.com tab and may briefly
+open one inactive tab if none is open. Scheduled Grok refresh may inject into
+an already-open grok.com tab and never opens a new one.
 
 Kimi has an additional limitation described below.
 
@@ -69,6 +73,18 @@ requests. It never activates a Cursor tab, and scheduled refresh never opens
 or injects into a Cursor page. Last-good Grok Bot and extra-credit values stay
 on the card until Grok Bot's weekly reset; the card says why they could not be
 refreshed.
+
+## Why does Grok need a grok.com page?
+
+Grok's session and usage endpoints reject extension-background requests when
+the Origin is not `https://grok.com`. AI Limits therefore reads them only by
+running bundled exact-origin code in a grok.com page. Connect or manual Refresh
+prefer an already-open tab. If none is open, they may briefly create one
+inactive `https://grok.com/` tab, wait up to 10 seconds, and close only the tab
+they created. Scheduled refresh may inject into an already-open grok.com tab
+and never opens a new one. The function does not inspect rendered content,
+browser storage, or cookie values directly; Chrome attaches the signed-in Grok
+cookies to those same-origin requests.
 
 ## Why doesn't Kimi automatic refresh always work, and why can manual refresh open a background tab?
 

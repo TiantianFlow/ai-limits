@@ -148,4 +148,36 @@ describe("Grok credits protobuf", () => {
       expect(inspected.metric.cycle).not.toHaveProperty("startedAt");
     }
   });
+
+  test("treats an omitted credit_usage_percent with a valid period as zero usage", () => {
+    const decoded = decodeGrokCreditsConfigResponse(
+      encodeGrokCreditsConfigResponse({
+        isUnifiedBillingUser: true,
+        currentPeriodType: USAGE_PERIOD_WEEKLY,
+        currentPeriodEndMs: SYNTHETIC_PERIOD_END,
+      }),
+    );
+    expect(decoded).toMatchObject({
+      ok: true,
+      config: { currentPeriodType: USAGE_PERIOD_WEEKLY },
+    });
+    if (!decoded.ok) {
+      return;
+    }
+    expect(decoded.config.creditUsagePercent).toBeUndefined();
+    expect(inspectDecodedCreditsConfig(decoded.config)).toEqual({
+      kind: "metric",
+      metric: {
+        type: "quota",
+        id: "weekly-pool",
+        label: "Weekly usage pool",
+        scope: "general",
+        usedRatio: 0,
+        cycle: {
+          cadence: "calendar",
+          resetsAt: SYNTHETIC_PERIOD_END,
+        },
+      },
+    });
+  });
 });
