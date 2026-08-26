@@ -15,6 +15,10 @@ const documents = {
     resolve("store-assets/chrome-web-store/listing-en.md"),
     "utf8",
   ),
+  listingZh: await readFile(
+    resolve("store-assets/chrome-web-store/listing-zh_CN.md"),
+    "utf8",
+  ),
   license: await readFile(resolve("LICENSE"), "utf8"),
 };
 
