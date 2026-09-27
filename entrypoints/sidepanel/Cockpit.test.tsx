@@ -1474,6 +1474,39 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Disconnect ChatGPT" })).toHaveFocus();
   });
 
+  it("links provider detail to the plan usage page when that page has a stable URL", () => {
+    render(
+      <Cockpit
+        state={createFixtureState(NOW)}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onDisconnectInstance={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open ChatGPT details" }),
+    );
+    const usagePage = screen.getByRole("link", {
+      name: "Open the ChatGPT usage page",
+    });
+    expect(usagePage).toHaveAttribute(
+      "href",
+      "https://chatgpt.com/codex/settings/usage",
+    );
+    expect(usagePage).toHaveAttribute("target", "_blank");
+    expect(usagePage).toHaveAttribute("rel", "noopener noreferrer");
+    expect(usagePage).toHaveTextContent("Usage page");
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Grok details" }));
+    expect(
+      screen.queryByRole("link", { name: /usage page/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("returns to Overview from Settings after disconnecting the provider that opened it", () => {
     const onDisconnectInstance = vi.fn();
     render(

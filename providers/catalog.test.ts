@@ -51,6 +51,7 @@ describe("provider catalog", () => {
       darkMarkPath?: string;
       apiKeySetupUrl?: string;
       apiKeyGuide?: "elevenlabs" | "newapi";
+      usagePageUrl?: string;
     };
     const providerPresentation = (
       catalog as typeof catalog & {
@@ -70,20 +71,24 @@ describe("provider catalog", () => {
       {
         providerId: "chatgpt",
         markPath: "/provider-marks/chatgpt.svg",
+        usagePageUrl: "https://chatgpt.com/codex/settings/usage",
       },
       {
         providerId: "claude",
         markPath: "/provider-marks/claude.svg",
+        usagePageUrl: "https://claude.ai/settings/usage",
       },
       {
         providerId: "kimi",
         markPath: "/provider-marks/kimi.svg",
         darkMarkPath: "/provider-marks/kimi-dark.svg",
+        usagePageUrl: "https://www.kimi.com/membership/subscription",
       },
       {
         providerId: "cursor",
         markPath: "/provider-marks/cursor.svg",
         darkMarkPath: "/provider-marks/cursor-dark.svg",
+        usagePageUrl: "https://cursor.com/dashboard/spending",
       },
       {
         providerId: "grok",
@@ -93,10 +98,12 @@ describe("provider catalog", () => {
       {
         providerId: "mistral",
         markPath: "/provider-marks/mistral.svg",
+        usagePageUrl: "https://admin.mistral.ai/organization/usage",
       },
       {
         providerId: "perplexity",
         markPath: "/provider-marks/perplexity.svg",
+        usagePageUrl: "https://www.perplexity.ai/account/usage",
       },
       {
         providerId: "elevenlabs",
@@ -149,6 +156,7 @@ describe("provider catalog", () => {
         providerId: "openai",
         markPath: "/provider-marks/openai.svg",
         apiKeySetupUrl: "https://platform.openai.com/api-keys",
+        usagePageUrl: "https://platform.openai.com/usage",
       },
       {
         providerId: "groqcloud",

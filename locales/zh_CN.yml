@@ -122,6 +122,8 @@ providerDetail:
   usageGroup: 用量组
   openHistory: 打开历史
   openHistoryNamed: "打开 {label} 的历史"
+  openUsage: 用量页面
+  openUsageNamed: "打开 {label} 的用量页面"
   connectionTitle: 连接与能力
   scheduledNoTab: 定时刷新会读取现有会话，不会打开标签页。
   disconnectExplanation: 断开连接会永久删除该服务的凭据、配置、用量和历史。

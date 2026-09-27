@@ -122,6 +122,8 @@ providerDetail:
   usageGroup: Usage group
   openHistory: Open history
   openHistoryNamed: "Open {label} history"
+  openUsage: Usage page
+  openUsageNamed: "Open the {label} usage page"
   connectionTitle: Connection and capabilities
   scheduledNoTab: Scheduled refresh reads the existing session without opening a tab.
   disconnectExplanation: Disconnecting permanently deletes this provider's credentials, configuration, usage, and history.

@@ -14,7 +14,8 @@ export type IconName =
   | "settings"
   | "trash"
   | "trending-down"
-  | "trending-up";
+  | "trending-up"
+  | "external";
 
 export interface IconProps {
   name: IconName;
@@ -82,6 +83,12 @@ export function Icon({ name, className = "" }: IconProps) {
           <circle {...common} cx="10" cy="10" r="7" />
           <path {...common} d="M10 9v4" />
           <circle cx="10" cy="6.5" r="1" fill="currentColor" />
+        </>
+      ) : name === "external" ? (
+        <>
+          <path {...common} d="M8 4.5H4.5V15.5H15.5V12" />
+          <path {...common} d="M10.5 4.5H15.5V9.5" />
+          <path {...common} d="m9.2 10.8 6-6" />
         </>
       ) : name === "code" ? (
         <path {...common} d="m7.5 5-5 5 5 5m5-10 5 5-5 5" />
