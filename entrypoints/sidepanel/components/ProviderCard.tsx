@@ -81,6 +81,7 @@ export interface ProviderCardProps {
     onClick: () => void;
   };
   headingLevel?: 2 | 3;
+  usagePageUrl?: string;
   openDetailsFocusKey?: string;
   onOpenDetails?: () => void;
   onOpenHistory?: (metricId: string) => void;

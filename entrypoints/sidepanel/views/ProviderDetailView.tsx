@@ -265,19 +265,37 @@ export function ProviderDetailView({
           />
         ) : null}
 
-        {firstWindow ? (
-          <button
-            className="detail-history-action"
-            type="button"
-            aria-label={l10n.t("providerDetail.openHistoryNamed", {
-              label: provider.instanceLabel,
-            })}
-            data-focus-key={`provider-history-${provider.instanceId}`}
-            onClick={() => onOpenHistory(provider.instanceId, firstWindow?.id)}
-          >
-            <Icon name="trending-up" />
-            {l10n.t("providerDetail.openHistory")}
-          </button>
+        {firstWindow || provider.usagePageUrl ? (
+          <div className="detail-actions">
+            {firstWindow ? (
+              <button
+                className="detail-history-action"
+                type="button"
+                aria-label={l10n.t("providerDetail.openHistoryNamed", {
+                  label: provider.instanceLabel,
+                })}
+                data-focus-key={`provider-history-${provider.instanceId}`}
+                onClick={() => onOpenHistory(provider.instanceId, firstWindow.id)}
+              >
+                <Icon name="trending-up" />
+                {l10n.t("providerDetail.openHistory")}
+              </button>
+            ) : null}
+            {provider.usagePageUrl ? (
+              <a
+                className="detail-history-action"
+                href={provider.usagePageUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label={l10n.t("providerDetail.openUsageNamed", {
+                  label: provider.instanceLabel,
+                })}
+              >
+                <Icon name="external" />
+                {l10n.t("providerDetail.openUsage")}
+              </a>
+            ) : null}
+          </div>
         ) : null}
 
         <section className="connection-surface" aria-labelledby="connection-title">

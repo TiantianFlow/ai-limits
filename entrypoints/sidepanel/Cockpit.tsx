@@ -389,6 +389,7 @@ export function providerView(
         : undefined,
     detailTables: snapshot?.detailTables,
     now,
+    usagePageUrl: providerPresentation(provider.providerKind).usagePageUrl,
   };
 }
 

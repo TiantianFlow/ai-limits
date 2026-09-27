@@ -5,6 +5,8 @@ export interface ProviderPresentation {
   readonly darkMarkPath?: string;
   readonly apiKeySetupUrl?: string;
   readonly apiKeyGuide?: "elevenlabs" | "newapi";
+  /** Provider usage page with a stable public URL. Absent when none is known. */
+  readonly usagePageUrl?: string;
 }
 
 export const providerCatalog = {
@@ -12,12 +14,14 @@ export const providerCatalog = {
     displayName: "ChatGPT",
     presentation: {
       markPath: "/provider-marks/chatgpt.svg",
+      usagePageUrl: "https://chatgpt.com/codex/settings/usage",
     },
   },
   claude: {
     displayName: "Claude",
     presentation: {
       markPath: "/provider-marks/claude.svg",
+      usagePageUrl: "https://claude.ai/settings/usage",
     },
   },
   kimi: {
@@ -25,6 +29,7 @@ export const providerCatalog = {
     presentation: {
       markPath: "/provider-marks/kimi.svg",
       darkMarkPath: "/provider-marks/kimi-dark.svg",
+      usagePageUrl: "https://www.kimi.com/membership/subscription",
     },
   },
   cursor: {
@@ -32,6 +37,7 @@ export const providerCatalog = {
     presentation: {
       markPath: "/provider-marks/cursor.svg",
       darkMarkPath: "/provider-marks/cursor-dark.svg",
+      usagePageUrl: "https://cursor.com/dashboard/spending",
     },
   },
   grok: {
@@ -45,12 +51,14 @@ export const providerCatalog = {
     displayName: "Mistral",
     presentation: {
       markPath: "/provider-marks/mistral.svg",
+      usagePageUrl: "https://admin.mistral.ai/organization/usage",
     },
   },
   perplexity: {
     displayName: "Perplexity",
     presentation: {
       markPath: "/provider-marks/perplexity.svg",
+      usagePageUrl: "https://www.perplexity.ai/account/usage",
     },
   },
   elevenlabs: {
@@ -125,6 +133,7 @@ export const providerCatalog = {
     presentation: {
       markPath: "/provider-marks/openai.svg",
       apiKeySetupUrl: "https://platform.openai.com/api-keys",
+      usagePageUrl: "https://platform.openai.com/usage",
     },
   },
   groqcloud: {
