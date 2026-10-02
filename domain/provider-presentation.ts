@@ -29,7 +29,7 @@ export const providerCatalog = {
     presentation: {
       markPath: "/provider-marks/kimi.svg",
       darkMarkPath: "/provider-marks/kimi-dark.svg",
-      usagePageUrl: "https://www.kimi.com/membership/subscription",
+      usagePageUrl: "https://www.kimi.com/settings/subscription",
     },
   },
   cursor: {
@@ -58,7 +58,7 @@ export const providerCatalog = {
     displayName: "Perplexity",
     presentation: {
       markPath: "/provider-marks/perplexity.svg",
-      usagePageUrl: "https://www.perplexity.ai/account/usage",
+      usagePageUrl: "https://www.perplexity.ai/#settings/usage",
     },
   },
   elevenlabs: {
