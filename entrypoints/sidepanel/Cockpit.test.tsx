@@ -1475,9 +1475,22 @@ describe("Cockpit", () => {
   });
 
   it("links provider detail to the plan usage page when that page has a stable URL", () => {
+    const state = createFixtureState(NOW);
+    const kimi = state.instances.find((instance) => instance.providerKind === "kimi");
+    if (kimi) {
+      state.instances.push({
+        ...kimi,
+        id: "perplexity:default",
+        providerKind: "perplexity",
+        snapshot: kimi.snapshot
+          ? { ...kimi.snapshot, providerKind: "perplexity" }
+          : undefined,
+      });
+    }
+
     render(
       <Cockpit
-        state={createFixtureState(NOW)}
+        state={state}
         now={NOW}
         onDisplayModeChange={vi.fn()}
         onRefresh={vi.fn()}
@@ -1499,6 +1512,20 @@ describe("Cockpit", () => {
     expect(usagePage).toHaveAttribute("target", "_blank");
     expect(usagePage).toHaveAttribute("rel", "noopener noreferrer");
     expect(usagePage).toHaveTextContent("Usage page");
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Kimi details" }));
+    expect(
+      screen.getByRole("link", { name: "Open the Kimi usage page" }),
+    ).toHaveAttribute("href", "https://www.kimi.com/settings/subscription");
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Perplexity details" }),
+    );
+    expect(
+      screen.getByRole("link", { name: "Open the Perplexity usage page" }),
+    ).toHaveAttribute("href", "https://www.perplexity.ai/#settings/usage");
 
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     fireEvent.click(screen.getByRole("button", { name: "Open Grok details" }));

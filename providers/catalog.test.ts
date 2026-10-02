@@ -82,7 +82,7 @@ describe("provider catalog", () => {
         providerId: "kimi",
         markPath: "/provider-marks/kimi.svg",
         darkMarkPath: "/provider-marks/kimi-dark.svg",
-        usagePageUrl: "https://www.kimi.com/membership/subscription",
+        usagePageUrl: "https://www.kimi.com/settings/subscription",
       },
       {
         providerId: "cursor",
@@ -103,7 +103,7 @@ describe("provider catalog", () => {
       {
         providerId: "perplexity",
         markPath: "/provider-marks/perplexity.svg",
-        usagePageUrl: "https://www.perplexity.ai/account/usage",
+        usagePageUrl: "https://www.perplexity.ai/#settings/usage",
       },
       {
         providerId: "elevenlabs",
