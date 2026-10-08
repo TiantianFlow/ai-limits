@@ -2741,7 +2741,7 @@ describe("Cockpit", () => {
     });
     expect(
       within(chatGpt).queryByRole("img", {
-        name: /ChatGPT .* usage history/,
+        name: /ChatGPT .* usage history\. Short missed reads are bridged/,
       }),
     ).not.toBeInTheDocument();
 
@@ -2764,7 +2764,7 @@ describe("Cockpit", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("img", {
-        name: "ChatGPT 5-hour messages usage history",
+        name: "ChatGPT 5-hour messages usage history. Short missed reads are bridged and only long gaps are shaded.",
       }),
     ).toBeVisible();
   });

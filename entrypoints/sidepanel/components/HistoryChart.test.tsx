@@ -41,7 +41,7 @@ const history: UsageHistoryObservation[] = [
 afterEach(cleanup);
 
 describe("HistoryChart", () => {
-  it("renders reset-separated SVG paths with the current quota label and an accessible summary", () => {
+  it("bridges short holes, breaks the line at a reset, and labels the fitted trend", () => {
     const { container } = render(
       <HistoryChart
         providerName="ChatGPT"
@@ -77,9 +77,101 @@ describe("HistoryChart", () => {
       screen.getByText(/4 observations across 2 chart segments/),
     ).toHaveClass("visually-hidden");
     expect(screen.getByText("Observed quota used")).toBeVisible();
-    expect(screen.getByText("No observations")).toBeVisible();
-    expect(screen.getByText("Reset or missing observations · line breaks")).toBeVisible();
-    expect(container.querySelectorAll("rect.history-chart__break")).toHaveLength(1);
+    expect(screen.getAllByText("Quota reset").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Trend (fitted)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Long gap")).not.toBeInTheDocument();
+    expect(screen.getByText(/short missed reads bridged/)).toBeVisible();
+    expect(screen.getByText(/only gaps over 2 h are shaded/)).toBeVisible();
+    expect(container.querySelectorAll("rect.history-chart__gap")).toHaveLength(0);
+    expect(container.querySelectorAll("line.history-chart__reset")).toHaveLength(1);
+    expect(container.querySelectorAll("line.history-chart__trend")).toHaveLength(0);
+    expect(chart).toHaveAccessibleDescription(/The line breaks at quota resets/i);
+    expect(chart).not.toHaveAccessibleDescription(/dashed fitted trend line/i);
+  });
+
+  it("shades only a long gap and marks a plan-limit change without bridging it", () => {
+    const longGap: UsageHistoryObservation[] = [
+      observation(NOW - 30 * HOUR, 0.2, FIRST_RESET),
+      observation(NOW - 29 * HOUR, 0.4, FIRST_RESET),
+      observation(NOW - 28 * HOUR, 0.6, FIRST_RESET),
+      {
+        observedAt: NOW - 20 * HOUR,
+        metrics: [{
+          type: "quota",
+          metricId: "weekly",
+          usedRatio: 0.15,
+          limit: 100,
+          cycle: { cadence: "rolling", resetsAt: FIRST_RESET },
+        }],
+      },
+      {
+        observedAt: NOW - 18 * HOUR,
+        metrics: [{
+          type: "quota",
+          metricId: "weekly",
+          usedRatio: 0.3,
+          limit: 100,
+          cycle: { cadence: "rolling", resetsAt: FIRST_RESET },
+        }],
+      },
+      {
+        observedAt: NOW,
+        metrics: [{
+          type: "quota",
+          metricId: "weekly",
+          usedRatio: 0.45,
+          limit: 160,
+          cycle: { cadence: "rolling", resetsAt: FIRST_RESET },
+        }],
+      },
+    ];
+    const { container } = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        metrics={metrics}
+        history={longGap}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+
+    const gap = container.querySelector("rect.history-chart__gap");
+    expect(gap).not.toBeNull();
+    expect(gap?.querySelector("title")?.textContent).toMatch(/No observations/);
+    expect(container.querySelectorAll("line.history-chart__gap-edge")).toHaveLength(1);
+    expect(container.querySelectorAll("line.history-chart__limit")).toHaveLength(1);
+    expect(container.querySelector("line.history-chart__limit title")?.textContent).toBe(
+      "Plan limit changed · series restarts",
+    );
+    expect(screen.getByText("Long gap")).toBeVisible();
+    expect(screen.getByText("Plan limit changed")).toBeVisible();
+    expect(container.querySelectorAll("path.history-chart__line")).toHaveLength(3);
+  });
+
+  it("complements the fitted trend when rendering Left mode", () => {
+    const rising: UsageHistoryObservation[] = [
+      observation(NOW - 2 * HOUR, 0.2, FIRST_RESET),
+      observation(NOW - HOUR, 0.4, FIRST_RESET),
+      observation(NOW, 0.6, FIRST_RESET),
+    ];
+    const { container } = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="left"
+        metrics={metrics}
+        history={rising}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+
+    const trend = container.querySelector("line.history-chart__trend");
+    expect(trend).not.toBeNull();
+    expect(Number(trend?.getAttribute("y2"))).toBeGreaterThan(
+      Number(trend?.getAttribute("y1")),
+    );
+    expect(screen.getByText("Trend (fitted)")).toBeVisible();
   });
 
   it("renders visible markers without connecting reset-separated singleton segments", () => {

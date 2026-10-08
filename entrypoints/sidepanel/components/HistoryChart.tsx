@@ -4,9 +4,10 @@ import { l10n } from "../../../i18n/index";
 import { formatDateTime } from "../../../i18n/format";
 import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import {
-  quotaHistorySegments,
+  quotaHistorySeries,
   type MetricHistoryPoint,
   type DisplayMode,
+  type QuotaHistorySeries,
   type QuotaMetric,
   type UsageHistoryObservation,
 } from "../../../domain/public-protocol";
@@ -27,8 +28,28 @@ const PLOT_RIGHT = 312;
 const PLOT_TOP = 8;
 const PLOT_BOTTOM = 88;
 
-function displayedRatio(point: MetricHistoryPoint, mode: DisplayMode): number {
-  return mode === "used" ? point.usedRatio : 1 - point.usedRatio;
+function timePosition(
+  observedAt: number,
+  rangeStart: number,
+  rangeEnd: number,
+): number {
+  const duration = Math.max(1, rangeEnd - rangeStart);
+  return (
+    PLOT_LEFT +
+    ((observedAt - rangeStart) / duration) * (PLOT_RIGHT - PLOT_LEFT)
+  );
+}
+
+function ratioPosition(
+  observedAt: number,
+  usedRatio: number,
+  mode: DisplayMode,
+  rangeStart: number,
+  rangeEnd: number,
+): [number, number] {
+  const shown = mode === "used" ? usedRatio : 1 - usedRatio;
+  const y = PLOT_BOTTOM - shown * (PLOT_BOTTOM - PLOT_TOP);
+  return [timePosition(observedAt, rangeStart, rangeEnd), y];
 }
 
 function pointPosition(
@@ -37,14 +58,13 @@ function pointPosition(
   rangeStart: number,
   rangeEnd: number,
 ): [number, number] {
-  const duration = Math.max(1, rangeEnd - rangeStart);
-  const x =
-    PLOT_LEFT +
-    ((point.observedAt - rangeStart) / duration) * (PLOT_RIGHT - PLOT_LEFT);
-  const y =
-    PLOT_BOTTOM - displayedRatio(point, mode) * (PLOT_BOTTOM - PLOT_TOP);
-
-  return [x, y];
+  return ratioPosition(
+    point.observedAt,
+    point.usedRatio,
+    mode,
+    rangeStart,
+    rangeEnd,
+  );
 }
 
 function segmentPath(
@@ -83,6 +103,55 @@ function percent(ratio: number): number {
   return Math.round(ratio * 100);
 }
 
+function gapLabel(labelHours: number): string {
+  if (labelHours >= 24) {
+    const days = Math.round((labelHours / 24) * 2) / 2;
+    return l10n.t("history.gapLabel", {
+      duration: l10n.count("history.gapDays", days),
+    });
+  }
+
+  return l10n.t("history.gapLabel", {
+    duration: l10n.count("history.gapHours", Math.max(1, Math.round(labelHours))),
+  });
+}
+
+function chartSummary(
+  series: QuotaHistorySeries,
+  mode: DisplayMode,
+  observationCount: number,
+  latestPercent: number,
+): string {
+  const parts = [
+    l10n.t("history.summary", {
+      observations: l10n.count("history.observations", observationCount),
+      segments: l10n.count("history.segments", series.segments.length),
+      percent: latestPercent,
+      mode: localizeDisplayModeCompact(mode),
+    }),
+  ];
+  if (series.bridgedSamples > 0) {
+    parts.push(l10n.count("history.bridgedReads", series.bridgedSamples));
+  }
+  if (series.gaps.length > 0) {
+    parts.push(
+      l10n.count("history.longGaps", series.gaps.length, {
+        labels: series.gaps.map((gap) => gapLabel(gap.labelHours)).join("; "),
+      }),
+    );
+  }
+  if (series.resets.length > 0) {
+    parts.push(l10n.t("history.resetsBreak"));
+  }
+  if (series.limitChanges.length > 0) {
+    parts.push(l10n.t("history.limitChangesBreak"));
+  }
+  if (series.trends.length > 0) {
+    parts.push(l10n.t("history.trendEstimate"));
+  }
+  return parts.join(" ");
+}
+
 function formatRangeStart(
   rangeHours: number | undefined,
   rangeStart: number,
@@ -108,7 +177,6 @@ export function HistoryChart({
 }: HistoryChartProps) {
   const metricSelectId = useId();
   const summaryId = useId();
-  const gapPatternId = useId();
   const areaGradientId = useId();
   const [selectedMetricId, setSelectedMetricId] = useState(
     () => metrics[0]?.id ?? "",
@@ -131,28 +199,23 @@ export function HistoryChart({
     requestedRangeStart === undefined
       ? history
       : history.filter((observation) => observation.observedAt >= requestedRangeStart);
-  const segments = quotaHistorySegments(visibleHistory, selectedMetric.id);
+  const series = quotaHistorySeries(visibleHistory, selectedMetric.id, {
+    ...(rangeHours === undefined ? {} : { rangeHours }),
+    now,
+  });
+  const segments = series.segments.map((segment) => segment.points);
   const points = segments.flat();
   const firstPoint = points[0];
   const latestPoint = points.at(-1);
   const rangeEnd = Math.max(now, latestPoint?.observedAt ?? now);
   const rangeStart = requestedRangeStart ?? firstPoint?.observedAt ?? rangeEnd;
-  const breaks = segments.slice(1).flatMap((segment, index) => {
-    const previous = segments[index]?.at(-1);
-    const next = segment[0];
-    return previous && next ? [{ previous, next }] : [];
-  });
   const latestValue = latestPoint
-    ? percent(displayedRatio(latestPoint, mode))
+    ? percent(mode === "used" ? latestPoint.usedRatio : 1 - latestPoint.usedRatio)
     : undefined;
   const summary = latestPoint
-    ? l10n.t("history.summary", {
-        observations: l10n.count("history.observations", points.length),
-        segments: l10n.count("history.segments", segments.length),
-        percent: latestValue ?? 0,
-        mode: localizeDisplayModeCompact(mode),
-      })
+    ? chartSummary(series, mode, points.length, latestValue ?? 0)
     : l10n.t("history.noMetricHistory", { label: selectedMetric.label });
+  const thresholdHours = Math.round(series.gapThresholdMs / (60 * 60 * 1_000));
   const accessibleName = l10n.t("history.chartName", {
     provider: providerName,
     label: selectedMetric.label,
@@ -204,15 +267,6 @@ export function HistoryChart({
           aria-describedby={summaryId}
         >
           <defs>
-            <pattern
-              id={gapPatternId}
-              width="6"
-              height="6"
-              patternUnits="userSpaceOnUse"
-              patternTransform="rotate(45)"
-            >
-              <line x1="0" y1="0" x2="0" y2="6" />
-            </pattern>
             <linearGradient
               id={areaGradientId}
               x1="0"
@@ -253,19 +307,61 @@ export function HistoryChart({
               />
             ) : null;
           })}
-          {breaks.map(({ previous, next }) => {
-            const [from] = pointPosition(previous, mode, rangeStart, rangeEnd);
-            const [to] = pointPosition(next, mode, rangeStart, rangeEnd);
+          {series.gaps.map((gap) => {
+            const from = timePosition(gap.from, rangeStart, rangeEnd);
+            const to = timePosition(gap.to, rangeStart, rangeEnd);
             return (
-              <rect
-                className="history-chart__break"
-                key={`${previous.observedAt}-${next.observedAt}`}
-                x={Math.min(from, to)}
-                y={PLOT_TOP}
-                width={Math.max(2, Math.abs(to - from))}
-                height={PLOT_BOTTOM - PLOT_TOP}
-                fill={`url(#${gapPatternId})`}
-              />
+              <g key={`${gap.from}-${gap.to}`}>
+                <rect
+                  className="history-chart__gap"
+                  x={Math.min(from, to)}
+                  y={PLOT_TOP}
+                  width={Math.max(2, Math.abs(to - from))}
+                  height={PLOT_BOTTOM - PLOT_TOP}
+                >
+                  <title>{gapLabel(gap.labelHours)}</title>
+                </rect>
+                <line
+                  className="history-chart__gap-edge"
+                  x1={from}
+                  x2={from}
+                  y1={PLOT_TOP}
+                  y2={PLOT_BOTTOM}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            );
+          })}
+          {series.resets.map((resetAt) => {
+            const x = timePosition(resetAt, rangeStart, rangeEnd);
+            return (
+              <line
+                className="history-chart__reset"
+                key={`reset-${resetAt}`}
+                x1={x}
+                x2={x}
+                y1={PLOT_TOP}
+                y2={PLOT_BOTTOM}
+                vectorEffect="non-scaling-stroke"
+              >
+                <title>{l10n.t("history.legendReset")}</title>
+              </line>
+            );
+          })}
+          {series.limitChanges.map((changeAt) => {
+            const x = timePosition(changeAt, rangeStart, rangeEnd);
+            return (
+              <line
+                className="history-chart__limit"
+                key={`limit-${changeAt}`}
+                x1={x}
+                x2={x}
+                y1={PLOT_TOP}
+                y2={PLOT_BOTTOM}
+                vectorEffect="non-scaling-stroke"
+              >
+                <title>{l10n.t("history.limitMarker")}</title>
+              </line>
             );
           })}
           {segments.map((segment, index) => (
@@ -281,6 +377,33 @@ export function HistoryChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          {series.trends.map((trend) => {
+            const [x1, y1] = ratioPosition(
+              trend.from,
+              trend.fromRatio,
+              mode,
+              rangeStart,
+              rangeEnd,
+            );
+            const [x2, y2] = ratioPosition(
+              trend.to,
+              trend.toRatio,
+              mode,
+              rangeStart,
+              rangeEnd,
+            );
+            return (
+              <line
+                className="history-chart__trend"
+                key={`trend-${trend.from}-${trend.to}`}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
           {segments.map((segment, index) => {
             if (segment.length !== 1) {
               return null;
@@ -319,11 +442,44 @@ export function HistoryChart({
         </p>
       ) : null}
       {points.length >= 2 ? (
-        <ul className="history-chart__legend">
-          <li><span className="history-chart__legend-line" aria-hidden="true" />{l10n.t("history.legendObserved", { mode: localizeDisplayModeCompact(mode) })}</li>
-          <li><span className="history-chart__legend-gap" aria-hidden="true" />{l10n.t("history.legendNone")}</li>
-          <li><span className="history-chart__legend-break" aria-hidden="true" />{l10n.t("history.legendBreak")}</li>
-        </ul>
+        <>
+          <ul className="history-chart__legend">
+            <li>
+              <span className="history-chart__legend-line" aria-hidden="true" />
+              {l10n.t("history.legendObserved", { mode: localizeDisplayModeCompact(mode) })}
+            </li>
+            {series.trends.length > 0 ? (
+              <li>
+                <span className="history-chart__legend-trend" aria-hidden="true" />
+                {l10n.t("history.legendTrend")}
+              </li>
+            ) : null}
+            {series.gaps.length > 0 ? (
+              <li>
+                <span className="history-chart__legend-gap" aria-hidden="true" />
+                {l10n.t("history.legendGap")}
+              </li>
+            ) : null}
+            {series.resets.length > 0 ? (
+              <li>
+                <span className="history-chart__legend-reset" aria-hidden="true" />
+                {l10n.t("history.legendReset")}
+              </li>
+            ) : null}
+            {series.limitChanges.length > 0 ? (
+              <li>
+                <span className="history-chart__legend-limit" aria-hidden="true" />
+                {l10n.t("history.legendLimit")}
+              </li>
+            ) : null}
+          </ul>
+          <p className="history-chart__footnote">
+            {series.bridgedSamples > 0
+              ? l10n.count("history.bridgedFootnote", series.bridgedSamples)
+              : l10n.t("history.noMissedReads")}
+            {l10n.t("history.gapFootnote", { hours: thresholdHours })}
+          </p>
+        </>
       ) : null}
       <p className="visually-hidden" id={summaryId}>
         {summary}
