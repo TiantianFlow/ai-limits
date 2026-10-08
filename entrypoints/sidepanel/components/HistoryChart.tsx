@@ -29,7 +29,6 @@ const PLOT_TOP = 8;
 const PLOT_BOTTOM = 92;
 /** CSS px. The label uses a fixed font, so its box is sized in px, not viewBox units. */
 const GAP_LABEL_HEIGHT = 18;
-const GAP_LABEL_FONT = 11;
 /**
  * ViewBox units the fitted line is shifted down. The chart viewBox is 320 wide
  * and the side panel is about 360 px, so this is roughly 4 CSS px.
@@ -112,41 +111,23 @@ function percent(ratio: number): number {
 }
 
 /**
- * CSS px width of the hover label. The text is a fixed CSS font, so the box is
- * sized in px: CJK glyphs are about as wide as the font size, Latin about half.
- * Not capped to the plot: the anchor clamps only a box that actually overflows.
+ * Band center in CSS px. The label is translated by -50% so this is the
+ * painted center, then shifted only when the measured box leaves the plot.
  */
-function gapLabelWidth(label: string): number {
-  const textWidth = Array.from(label).reduce(
-    (total, char) => total + (char.charCodeAt(0) > 0xff ? GAP_LABEL_FONT : GAP_LABEL_FONT * 0.6),
-    0,
-  );
-  return Math.ceil(textWidth) + 14;
-}
-
-/**
- * Center of the gap hover label, in CSS px, clamped inside the plot.
- * The label sits at the top of the shaded band so it stays off the data line.
- */
-function gapLabelAnchor(
+function gapLabelCenter(
   gapStart: number,
   gapEnd: number,
-  labelWidth: number,
   chartWidth: number,
-): { x: number; y: number } {
+): { center: number; plotLeft: number; plotRight: number; top: number } {
   const scale = chartWidth / VIEWBOX_WIDTH;
   const gapLeft = Math.min(gapStart, gapEnd) * scale;
   const gapRight = Math.max(gapStart, gapEnd) * scale;
-  const plotLeft = PLOT_LEFT * scale;
-  const plotRight = PLOT_RIGHT * scale;
-  const plotTop = PLOT_TOP * scale;
-  const centered = (gapLeft + gapRight) / 2 - labelWidth / 2;
-  const overflowsLeft = centered < plotLeft;
-  const overflowsRight = centered + labelWidth > plotRight;
-  const x = overflowsLeft || overflowsRight
-    ? Math.min(Math.max(plotLeft, centered), Math.max(plotLeft, plotRight - labelWidth))
-    : centered;
-  return { x, y: plotTop + 2 };
+  return {
+    center: (gapLeft + gapRight) / 2,
+    plotLeft: PLOT_LEFT * scale,
+    plotRight: PLOT_RIGHT * scale,
+    top: PLOT_TOP * scale + 2,
+  };
 }
 
 function gapLabel(labelHours: number): string {
@@ -229,16 +210,48 @@ export function HistoryChart({
   // 360 is the narrowest side panel the layout is checked at.
   const [chartWidth, setChartWidth] = useState(360);
   const [activeGapKey, setActiveGapKey] = useState<string | null>(null);
+  const [gapLabelShift, setGapLabelShift] = useState(0);
+  const gapLabelRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const element = chartRef.current;
     if (!element) return undefined;
-    const update = (): void => setChartWidth(element.clientWidth || 360);
+    const update = (): void => {
+      const plot = element.querySelector(".history-chart__plot");
+      setChartWidth((plot ?? element).clientWidth || 360);
+    };
     update();
     if (typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver(update);
     observer.observe(element);
+    observer.observe(element);
+    const plot = element.querySelector(".history-chart__plot");
+    if (plot) observer.observe(plot);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    const label = gapLabelRef.current;
+    if (!label || activeGapKey === null) {
+      setGapLabelShift(0);
+      return;
+    }
+    let frame = 0;
+    const measure = (): void => {
+    const box = label.getBoundingClientRect();
+    const plot = label.closest(".history-chart__plot")?.getBoundingClientRect();
+    const scale = chartWidth / VIEWBOX_WIDTH;
+    const plotLeft = (plot?.left ?? 0) + PLOT_LEFT * scale;
+    const plotRight = (plot?.left ?? 0) + PLOT_RIGHT * scale;
+    const pastLeft = plotLeft - box.left;
+    const pastRight = box.right - plotRight;
+    const delta = pastLeft > 0.5 ? pastLeft : pastRight > 0.5 ? -pastRight : 0;
+    setGapLabelShift((current) => {
+      const unchanged = Math.abs(current - delta) < 0.5;
+      return unchanged ? current : delta;
+    });
+    };
+    frame = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(frame);
+  }, [activeGapKey, chartWidth]);
   const [selectedMetricId, setSelectedMetricId] = useState(
     () => metrics[0]?.id ?? "",
   );
@@ -509,16 +522,17 @@ export function HistoryChart({
             const from = timePosition(gap.from, rangeStart, rangeEnd);
             const to = timePosition(gap.to, rangeStart, rangeEnd);
             const label = gapLabel(gap.labelHours);
-            const labelWidth = gapLabelWidth(label);
-            const anchor = gapLabelAnchor(from, to, labelWidth, chartWidth);
+            const anchor = gapLabelCenter(from, to, chartWidth);
             return (
               <span
                 className="history-chart__gap-label"
                 key={`label-${gapKey}`}
+                ref={gapLabelRef}
                 style={{
-                  left: anchor.x,
-                  top: anchor.y,
-                  maxWidth: labelWidth,
+                  left: anchor.center,
+                  top: anchor.top,
+                  transform: `translateX(calc(-50% + ${gapLabelShift}px))`,
+                  maxWidth: Math.max(0, anchor.plotRight - anchor.plotLeft),
                 }}
               >
                 {label}

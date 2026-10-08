@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -233,7 +233,7 @@ describe("HistoryChart", () => {
     [460, "zh_CN", /无观察/],
   ] as const)(
     "keeps the gap label text inside the chart at %i px in %s",
-    (width, locale, pattern) => {
+    async (width, locale, pattern) => {
       installI18nLocale(locale);
       vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
       const start = NOW - 48 * HOUR;
@@ -253,42 +253,55 @@ describe("HistoryChart", () => {
         />,
       );
 
+      const plot = container.querySelector(".history-chart__plot") as HTMLElement;
+      expect(plot.clientWidth).toBe(width);
       const scale = width / 320;
       const bands = container.querySelectorAll("rect.history-chart__gap");
       expect(bands.length).toBeGreaterThan(0);
       fireEvent.mouseEnter(bands[0]!);
-      const labels = container.querySelectorAll("span.history-chart__gap-label");
-      expect(labels).toHaveLength(1);
-      for (const label of labels) {
-        const text = label.textContent ?? "";
-        expect(text).toMatch(pattern);
-        const box = Number.parseFloat((label as HTMLElement).style.maxWidth);
-        const left = Number.parseFloat((label as HTMLElement).style.left);
-        expect(left).toBeGreaterThanOrEqual(28 * scale - 0.01);
-        expect(left + box).toBeLessThanOrEqual(312 * scale + 0.01);
-        const textWidth = Array.from(text).reduce(
-          (total, char) => total + (char.charCodeAt(0) > 0xff ? 11 : 11 * 0.6),
-          0,
-        );
-        expect(textWidth).toBeLessThanOrEqual(box);
-        const top = Number.parseFloat((label as HTMLElement).style.top);
-        expect(top).toBeGreaterThanOrEqual(8 * scale - 0.01);
-        expect(top + 18).toBeLessThanOrEqual(92 * scale + 0.01);
-        const band = bands[0]!;
-        const bandLeft = Number(band.getAttribute("x")) * scale;
-        const bandRight = bandLeft + Number(band.getAttribute("width")) * scale;
-        const bandCenter = (bandLeft + bandRight) / 2;
-        const labelCenter = left + box / 2;
-        const naturalLeft = bandCenter - box / 2;
-        const plotLeft = 28 * scale;
-        const plotRight = 312 * scale;
-        const expectedLeft = naturalLeft < plotLeft
-          ? plotLeft
-          : naturalLeft + box > plotRight
-            ? Math.max(plotLeft, plotRight - box)
-            : naturalLeft;
-        expect(Math.abs(left - expectedLeft)).toBeLessThan(1.5);
-        expect(Math.abs(labelCenter - bandCenter) < 1.5 || left === plotLeft || left + box >= plotRight - 1).toBe(true);
+      const label = container.querySelector("span.history-chart__gap-label") as HTMLElement;
+      expect(label).not.toBeNull();
+      const text = label.textContent ?? "";
+      expect(text).toMatch(pattern);
+      const paintedWidth = text.length * 8 + 14;
+      const plotLeftPx = 28 * scale;
+      vi.spyOn(plot, "getBoundingClientRect").mockReturnValue({
+        x: 0, y: 0, left: 0, right: width, top: 0, bottom: width * 100 / 320,
+        width, height: width * 100 / 320, toJSON: () => ({}),
+      });
+      vi.spyOn(label, "getBoundingClientRect").mockReturnValue({
+        x: plotLeftPx,
+        y: 0,
+        left: plotLeftPx,
+        right: plotLeftPx + paintedWidth,
+        top: 0,
+        bottom: 18,
+        width: paintedWidth,
+        height: 18,
+        toJSON: () => ({}),
+      });
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+
+      const band = bands[0]!;
+      const bandLeft = Number(band.getAttribute("x")) * scale;
+      const bandRight = bandLeft + Number(band.getAttribute("width")) * scale;
+      const bandCenter = (bandLeft + bandRight) / 2;
+      const plotLeft = 28 * scale;
+      const plotRight = 312 * scale;
+      const fits = bandCenter - paintedWidth / 2 >= plotLeft - 0.5
+        && bandCenter + paintedWidth / 2 <= plotRight + 0.5;
+      const shift = Number.parseFloat(label.style.transform.match(/-50% \+ ([-\d.]+)px/)?.[1] ?? "0");
+      const paintedCenter = Number.parseFloat(label.style.left) + shift;
+      if (fits) {
+        expect(Math.abs(paintedCenter - bandCenter)).toBeLessThan(1);
+        expect(shift).toBe(0);
+      } else {
+        const paintedLeft = paintedCenter - paintedWidth / 2;
+        const paintedRight = paintedCenter + paintedWidth / 2;
+        expect(paintedLeft).toBeGreaterThanOrEqual(plotLeft - 1);
+        expect(paintedRight).toBeLessThanOrEqual(plotRight + 1);
       }
     },
   );
