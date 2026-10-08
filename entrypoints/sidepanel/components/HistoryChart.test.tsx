@@ -258,51 +258,55 @@ describe("HistoryChart", () => {
       const scale = width / 320;
       const bands = container.querySelectorAll("rect.history-chart__gap");
       expect(bands.length).toBeGreaterThan(0);
-      fireEvent.mouseEnter(bands[0]!);
-      const label = container.querySelector("span.history-chart__gap-label") as HTMLElement;
-      expect(label).not.toBeNull();
-      const text = label.textContent ?? "";
-      expect(text).toMatch(pattern);
-      const paintedWidth = text.length * 8 + 14;
-      const plotLeftPx = 28 * scale;
-      vi.spyOn(plot, "getBoundingClientRect").mockReturnValue({
-        x: 0, y: 0, left: 0, right: width, top: 0, bottom: width * 100 / 320,
-        width, height: width * 100 / 320, toJSON: () => ({}),
-      });
-      vi.spyOn(label, "getBoundingClientRect").mockReturnValue({
-        x: plotLeftPx,
-        y: 0,
-        left: plotLeftPx,
-        right: plotLeftPx + paintedWidth,
-        top: 0,
-        bottom: 18,
-        width: paintedWidth,
-        height: 18,
-        toJSON: () => ({}),
-      });
-      await act(async () => {
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      });
-
       const band = bands[0]!;
       const bandLeft = Number(band.getAttribute("x")) * scale;
       const bandRight = bandLeft + Number(band.getAttribute("width")) * scale;
       const bandCenter = (bandLeft + bandRight) / 2;
       const plotLeft = 28 * scale;
       const plotRight = 312 * scale;
-      const fits = bandCenter - paintedWidth / 2 >= plotLeft - 0.5
-        && bandCenter + paintedWidth / 2 <= plotRight + 0.5;
-      const shift = Number.parseFloat(label.style.transform.match(/-50% \+ ([-\d.]+)px/)?.[1] ?? "0");
-      const paintedCenter = Number.parseFloat(label.style.left) + shift;
-      if (fits) {
-        expect(Math.abs(paintedCenter - bandCenter)).toBeLessThan(1);
-        expect(shift).toBe(0);
-      } else {
-        const paintedLeft = paintedCenter - paintedWidth / 2;
-        const paintedRight = paintedCenter + paintedWidth / 2;
-        expect(paintedLeft).toBeGreaterThanOrEqual(plotLeft - 1);
-        expect(paintedRight).toBeLessThanOrEqual(plotRight + 1);
+
+      function rect(left: number, boxWidth: number): DOMRect {
+        return {
+          x: left, y: 0, left, right: left + boxWidth, top: 0, bottom: 18,
+          width: boxWidth, height: 18, toJSON: () => ({}),
+        } as DOMRect;
       }
+      vi.spyOn(plot, "getBoundingClientRect").mockReturnValue(rect(0, width));
+
+      fireEvent.mouseEnter(band);
+      const label = container.querySelector("span.history-chart__gap-label") as HTMLElement;
+      expect(label).not.toBeNull();
+      expect(label.textContent ?? "").toMatch(pattern);
+      expect(Math.abs(Number.parseFloat(label.style.left) - bandCenter)).toBeLessThan(0.5);
+
+      const fittingWidth = 40;
+      vi.spyOn(label, "getBoundingClientRect").mockReturnValue(
+        rect(bandCenter - fittingWidth / 2, fittingWidth),
+      );
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+      const fittedShift = Number.parseFloat(
+        label.style.transform.match(/-50% \+ ([-\d.]+)px/)?.[1] ?? "0",
+      );
+      expect(fittedShift).toBe(0);
+      expect(Math.abs(Number.parseFloat(label.style.left) + fittedShift - bandCenter)).toBeLessThan(1);
+
+      fireEvent.mouseLeave(band);
+      fireEvent.mouseEnter(band);
+      const overflowing = container.querySelector("span.history-chart__gap-label") as HTMLElement;
+      const overflowingWidth = 80;
+      vi.spyOn(overflowing, "getBoundingClientRect").mockReturnValue(rect(plotLeft - 20, overflowingWidth));
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+      const overflowShift = Number.parseFloat(
+        overflowing.style.transform.match(/-50% \+ ([-\d.]+)px/)?.[1] ?? "0",
+      );
+      const overflowCenter = Number.parseFloat(overflowing.style.left) + overflowShift;
+      expect(overflowShift).toBeGreaterThan(0);
+      expect(overflowCenter - overflowingWidth / 2).toBeGreaterThanOrEqual(plotLeft - 1);
+      expect(overflowCenter + overflowingWidth / 2).toBeLessThanOrEqual(plotRight + 1);
     },
   );
 
