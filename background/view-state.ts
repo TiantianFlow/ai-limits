@@ -106,6 +106,7 @@ function projectHistoryMetric(metric: MetricHistorySample): MetricHistorySample 
       type: "quota",
       metricId: metric.metricId,
       usedRatio: metric.usedRatio,
+      ...(metric.limit === undefined ? {} : { limit: metric.limit }),
       ...(cycle ? { cycle } : {}),
     };
   }

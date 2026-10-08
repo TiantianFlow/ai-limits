@@ -211,13 +211,13 @@ history:
   limitChangesBreak: The line breaks where the plan limit changed.
   trendEstimate: A dashed fitted trend line is an estimate, not observed data.
   bridgedFootnote:
-    zero: "{count} short missed reads bridged"
-    one: "{count} short missed read bridged"
-    two: "{count} short missed reads bridged"
-    few: "{count} short missed reads bridged"
-    many: "{count} short missed reads bridged"
-    other: "{count} short missed reads bridged"
-  noMissedReads: No missed reads
+    zero: "{count} short missed reads bridged in this range"
+    one: "{count} short missed read bridged in this range"
+    two: "{count} short missed reads bridged in this range"
+    few: "{count} short missed reads bridged in this range"
+    many: "{count} short missed reads bridged in this range"
+    other: "{count} short missed reads bridged in this range"
+  noMissedReads: No missed reads in this range
   gapFootnote: " · only gaps over {hours} h are shaded"
   summary: "{observations} across {segments}. Latest value is {percent}% {mode}."
   observations:

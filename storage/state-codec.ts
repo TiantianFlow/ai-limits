@@ -406,10 +406,20 @@ function normalizeHistorySample(value: unknown): MetricHistorySample | undefined
     value.usedRatio >= 0 &&
     value.usedRatio <= 1
   ) {
+    // Optional plan quota. Absent on older stored samples. A non-finite,
+    // non-positive, or non-numeric value is dropped so one bad field cannot
+    // discard the observation.
+    const limit =
+      value.limit !== undefined &&
+      isFiniteNonNegative(value.limit) &&
+      value.limit > 0
+        ? value.limit
+        : undefined;
     return {
       type: "quota",
       metricId: value.metricId,
       usedRatio: value.usedRatio,
+      ...(limit === undefined ? {} : { limit }),
       ...(cycle === undefined ? {} : { cycle }),
     };
   }
