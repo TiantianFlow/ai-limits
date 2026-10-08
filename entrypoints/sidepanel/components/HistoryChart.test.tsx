@@ -1,11 +1,12 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   UsageHistoryObservation,
   QuotaMetric,
 } from "../../../domain/model";
+import { installI18nLocale } from "../../../test/i18n-harness";
 import { HistoryChart } from "./HistoryChart";
 
 const HOUR = 60 * 60 * 1_000;
@@ -38,7 +39,11 @@ const history: UsageHistoryObservation[] = [
   observation(NOW, 0.42, SECOND_RESET),
 ];
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  installI18nLocale("en");
+  vi.restoreAllMocks();
+});
 
 describe("HistoryChart", () => {
   it("bridges short holes, breaks the line at a reset, and labels the fitted trend", () => {
@@ -184,15 +189,57 @@ describe("HistoryChart", () => {
       />,
     );
 
-    const gaps = container.querySelectorAll("rect.history-chart__gap");
-    expect(gaps).toHaveLength(2);
-    for (const label of container.querySelectorAll("g.history-chart__gap-label")) {
-      const labelX = Number(label.getAttribute("transform")?.match(/translate\(([-\d.]+)/)?.[1]);
-      const labelWidth = Number(label.querySelector("rect")?.getAttribute("width"));
-      expect(labelX).toBeGreaterThanOrEqual(28);
-      expect(labelX + labelWidth).toBeLessThanOrEqual(312);
-    }
+    expect(container.querySelectorAll("rect.history-chart__gap")).toHaveLength(2);
+    expect(container.querySelectorAll("span.history-chart__gap-label")).toHaveLength(2);
   });
+
+  it.each([
+    [360, "en", /No observations/],
+    [400, "en", /No observations/],
+    [460, "en", /No observations/],
+    [360, "zh_CN", /无观察/],
+    [400, "zh_CN", /无观察/],
+    [460, "zh_CN", /无观察/],
+  ] as const)(
+    "keeps the gap label text inside the chart at %i px in %s",
+    (width, locale, pattern) => {
+      installI18nLocale(locale);
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
+      const start = NOW - 48 * HOUR;
+      const history: UsageHistoryObservation[] = [
+        observation(start, 0.2, FIRST_RESET),
+        observation(NOW - 3 * HOUR, 0.5, FIRST_RESET),
+        observation(NOW, 0.6, FIRST_RESET),
+      ];
+      const { container } = render(
+        <HistoryChart
+          providerName="ChatGPT"
+          mode="used"
+          metrics={metrics}
+          history={history}
+          now={NOW}
+          rangeHours={48}
+        />,
+      );
+
+      const scale = width / 320;
+      const labels = container.querySelectorAll("span.history-chart__gap-label");
+      expect(labels.length).toBeGreaterThan(0);
+      for (const label of labels) {
+        const text = label.textContent ?? "";
+        expect(text).toMatch(pattern);
+        const box = Number.parseFloat((label as HTMLElement).style.maxWidth);
+        const left = Number.parseFloat((label as HTMLElement).style.left);
+        expect(left).toBeGreaterThanOrEqual(28 * scale - 0.01);
+        expect(left + box).toBeLessThanOrEqual(312 * scale + 0.01);
+        const textWidth = Array.from(text).reduce(
+          (total, char) => total + (char.charCodeAt(0) > 0xff ? 11 : 11 * 0.6),
+          0,
+        );
+        expect(textWidth).toBeLessThanOrEqual(box);
+      }
+    },
+  );
 
   it("draws the fitted trend offset from a linear observed series", () => {
     const linear: UsageHistoryObservation[] = [0, 1, 2, 3].map((step) =>

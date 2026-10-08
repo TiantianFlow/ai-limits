@@ -766,11 +766,15 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   font-variant-numeric: tabular-nums;
 }
 
+.history-chart__plot {
+  position: relative;
+  margin-top: 6px;
+}
+
 .history-chart__svg {
   display: block;
   width: 100%;
   height: auto;
-  margin-top: 6px;
   overflow: visible;
 }
 
@@ -817,25 +821,30 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   stroke-width: 1.5;
 }
 
-.history-chart__gap-label {
-  opacity: 0;
+/* Covers the plot. The viewBox is 320 by 112, so the height matches the SVG. */
+.history-chart__gap-labels {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 0;
+  padding-bottom: calc(100% * 112 / 320);
   pointer-events: none;
 }
 
-.history-chart__gap-group:hover .history-chart__gap-label,
-.history-chart__gap-group:focus-within .history-chart__gap-label {
-  opacity: 1;
-}
-
-.history-chart__gap-label rect {
-  fill: var(--surface);
-  stroke: var(--border);
-}
-
-.history-chart__gap-label text {
-  fill: var(--text);
-  /* ViewBox units, so the text scales with the rect behind it. */
-  font-size: 10px;
+.history-chart__gap-label {
+  position: absolute;
+  display: block;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-chart__reset {
