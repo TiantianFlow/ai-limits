@@ -265,7 +265,7 @@ export interface GapDetection {
  */
 export function detectGaps(
   points: readonly (Pick<QuotaHistoryPoint, "observedAt"> &
-    Partial<Pick<QuotaHistoryPoint, "limit" | "cycle">>)[],
+    Partial<Pick<QuotaHistoryPoint, "limit" | "cycle" | "usedRatio">>)[],
   thresholdMs: number,
   expectedIntervalMs: number,
 ): GapDetection {
@@ -286,7 +286,7 @@ export function detectGaps(
     }
     // A reset or a plan-limit change is its own break. The missed reads
     // around it belong to the shaded gap, not to the bridged count.
-    if (cycleBoundaryChanged(current.cycle, previous.cycle)) continue;
+    if (cycleBoundaryChanged(current.cycle, previous.cycle, previous.usedRatio, current.usedRatio)) continue;
     if (limitChanged(previous.limit, current.limit)) continue;
     if (delta > expectedIntervalMs * BRIDGE_INTERVAL_FACTOR) {
       bridgedSamples += Math.max(0, Math.round(delta / expectedIntervalMs) - 1);
@@ -368,7 +368,7 @@ export function splitQuotaSegments(
     let breakBefore: HistoryBreakKind | undefined;
     if (previous) {
       const midpoint = (previous.observedAt + point.observedAt) / 2;
-      if (cycleBoundaryChanged(point.cycle, previous.cycle)) {
+      if (cycleBoundaryChanged(point.cycle, previous.cycle, previous.usedRatio, point.usedRatio)) {
         breakBefore = "reset";
         resets.push(midpoint);
       } else if (limitChanged(previous.limit, point.limit)) {
@@ -467,14 +467,34 @@ export function quotaHistorySeries(
   };
 }
 
+/** Forward jump this large, relative to the cycle length, is a real reset. */
+const RESET_JUMP_FRACTION = 0.5;
+
+/**
+ * A cycle change is a quota reset only when `resetsAt` jumps forward by at
+ * least half the cycle length, or the duration/cadence changes and usage
+ * drops. Millisecond and second jitter, and slow rolling drift, are not resets.
+ * `left` is the newer cycle.
+ */
 function cycleBoundaryChanged(
   left: MetricCycle | undefined,
   right: MetricCycle | undefined,
+  previousUsedRatio?: number,
+  currentUsedRatio?: number,
 ): boolean {
-  return (
-    left?.resetsAt !== right?.resetsAt ||
-    left?.startedAt !== right?.startedAt ||
-    left?.durationMs !== right?.durationMs ||
-    left?.cadence !== right?.cadence
-  );
+  if (left === undefined || right === undefined) {
+    return false;
+  }
+  if (left.durationMs !== right.durationMs || left.cadence !== right.cadence) {
+    const usageKnown = previousUsedRatio !== undefined && currentUsedRatio !== undefined;
+    if (!usageKnown || currentUsedRatio < previousUsedRatio) return true;
+  }
+  if (left.resetsAt === undefined || right.resetsAt === undefined) {
+    return false;
+  }
+  const duration = left.durationMs ?? right.durationMs;
+  if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
+    return false;
+  }
+  return left.resetsAt - right.resetsAt >= duration * RESET_JUMP_FRACTION;
 }

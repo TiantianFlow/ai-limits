@@ -25,10 +25,20 @@ const metrics: QuotaMetric[] = [
   },
 ];
 
-function observation(observedAt: number, usedRatio: number, resetsAt: number): UsageHistoryObservation {
+function observation(
+  observedAt: number,
+  usedRatio: number,
+  resetsAt: number,
+  durationMs = 7 * 24 * HOUR,
+): UsageHistoryObservation {
   return {
     observedAt,
-    metrics: [{ type: "quota", metricId: "weekly", usedRatio, cycle: { cadence: "rolling", resetsAt } }],
+    metrics: [{
+      type: "quota",
+      metricId: "weekly",
+      usedRatio,
+      cycle: { cadence: "rolling", resetsAt, durationMs },
+    }],
   };
 }
 
@@ -162,6 +172,7 @@ describe("HistoryChart", () => {
     ).toHaveAccessibleName(/The line breaks where the plan limit changed/);
     expect(screen.getByText("Long gap")).toBeVisible();
     expect(screen.getByText("Plan limit changed")).toBeVisible();
+    expect(screen.queryByText(/No missed reads in this range/)).not.toBeInTheDocument();
     expect(container.querySelectorAll("path.history-chart__line")).toHaveLength(3);
   });
 
@@ -268,9 +279,16 @@ describe("HistoryChart", () => {
         const bandRight = bandLeft + Number(band.getAttribute("width")) * scale;
         const bandCenter = (bandLeft + bandRight) / 2;
         const labelCenter = left + box / 2;
-        const clampedToPlot =
-          Math.abs(left - 28 * scale) < 1 || Math.abs(left + box - 312 * scale) < 1;
-        expect(clampedToPlot || Math.abs(labelCenter - bandCenter)).toBeLessThan(1.5);
+        const naturalLeft = bandCenter - box / 2;
+        const plotLeft = 28 * scale;
+        const plotRight = 312 * scale;
+        const expectedLeft = naturalLeft < plotLeft
+          ? plotLeft
+          : naturalLeft + box > plotRight
+            ? Math.max(plotLeft, plotRight - box)
+            : naturalLeft;
+        expect(Math.abs(left - expectedLeft)).toBeLessThan(1.5);
+        expect(Math.abs(labelCenter - bandCenter) < 1.5 || left === plotLeft || left + box >= plotRight - 1).toBe(true);
       }
     },
   );
@@ -455,6 +473,27 @@ describe("HistoryChart", () => {
     expect(
       screen.getByRole("combobox", { name: "Quota metric" }),
     ).toHaveValue("five-hour");
+  });
+
+  it("does not claim there are no missed reads when the range is one shaded gap", () => {
+    installI18nLocale("zh_CN");
+    const sparse: UsageHistoryObservation[] = [
+      observation(NOW - 40 * HOUR, 0.1, FIRST_RESET),
+      observation(NOW, 0.2, FIRST_RESET),
+    ];
+    render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        metrics={metrics}
+        history={sparse}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+
+    expect(screen.getByText(/此范围内的较长空档已着色/)).toBeVisible();
+    expect(screen.queryByText("此范围内没有缺失的读取")).not.toBeInTheDocument();
   });
 
   it("does not imply a trend from a single observation", () => {

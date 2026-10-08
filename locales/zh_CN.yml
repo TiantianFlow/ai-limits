@@ -218,6 +218,7 @@ history:
     many: "此范围内桥接了 {count} 次短暂缺失的读取"
     other: "此范围内桥接了 {count} 次短暂缺失的读取"
   noMissedReads: 此范围内没有缺失的读取
+  longGapsOnly: 此范围内的较长空档已着色，没有桥接
   gapFootnote: " · 仅超过 {hours} 小时的空档会被着色"
   summary: "{observations}，分布在 {segments}。最新值为 {percent}% {mode}。"
   observations:
