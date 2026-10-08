@@ -62,7 +62,7 @@ describe("HistoryChart", () => {
       name: /ChatGPT Weekly messages usage history/,
     });
     expect(chart).toBeVisible();
-    expect(chart).toHaveAttribute("viewBox", "0 0 320 112");
+    expect(chart).toHaveAttribute("viewBox", "0 0 320 100");
     expect(
       container.querySelectorAll("path.history-chart__line"),
     ).toHaveLength(2);
@@ -123,7 +123,7 @@ describe("HistoryChart", () => {
         }],
       },
       {
-        observedAt: NOW,
+        observedAt: NOW - 17 * HOUR,
         metrics: [{
           type: "quota",
           metricId: "weekly",
@@ -146,7 +146,9 @@ describe("HistoryChart", () => {
 
     const gap = container.querySelector("rect.history-chart__gap");
     expect(gap).not.toBeNull();
-    expect(gap?.querySelector("title")?.textContent).toMatch(/No observations/);
+    expect(gap?.querySelector("title")).toBeNull();
+    expect(gap).not.toHaveAttribute("title");
+    expect(gap).toHaveAttribute("aria-label", expect.stringMatching(/No observations/));
     expect(container.querySelectorAll("line.history-chart__gap-edge")).toHaveLength(1);
     expect(container.querySelectorAll("line.history-chart__limit")).toHaveLength(1);
     expect(container.querySelector("line.history-chart__limit title")?.textContent).toBe(
@@ -189,8 +191,26 @@ describe("HistoryChart", () => {
       />,
     );
 
-    expect(container.querySelectorAll("rect.history-chart__gap")).toHaveLength(2);
-    expect(container.querySelectorAll("span.history-chart__gap-label")).toHaveLength(2);
+    const gaps = container.querySelectorAll("rect.history-chart__gap");
+    expect(gaps).toHaveLength(2);
+    expect(container.querySelectorAll("span.history-chart__gap-label")).toHaveLength(0);
+    for (const band of gaps) {
+      expect(band.querySelector("title")).toBeNull();
+      expect(band).not.toHaveAttribute("title");
+      expect(band.getAttribute("aria-label")).toMatch(/No observations/);
+    }
+
+    fireEvent.mouseEnter(gaps[0]!);
+    expect(container.querySelectorAll("span.history-chart__gap-label")).toHaveLength(1);
+    fireEvent.mouseLeave(gaps[0]!);
+    expect(container.querySelectorAll("span.history-chart__gap-label")).toHaveLength(0);
+
+    fireEvent.focus(gaps[1]!);
+    const focused = container.querySelectorAll("span.history-chart__gap-label");
+    expect(focused).toHaveLength(1);
+    expect(focused[0]?.textContent).toBe(gaps[1]?.getAttribute("aria-label"));
+    fireEvent.blur(gaps[1]!);
+    expect(container.querySelectorAll("span.history-chart__gap-label")).toHaveLength(0);
   });
 
   it.each([
@@ -223,8 +243,11 @@ describe("HistoryChart", () => {
       );
 
       const scale = width / 320;
+      const bands = container.querySelectorAll("rect.history-chart__gap");
+      expect(bands.length).toBeGreaterThan(0);
+      fireEvent.mouseEnter(bands[0]!);
       const labels = container.querySelectorAll("span.history-chart__gap-label");
-      expect(labels.length).toBeGreaterThan(0);
+      expect(labels).toHaveLength(1);
       for (const label of labels) {
         const text = label.textContent ?? "";
         expect(text).toMatch(pattern);
@@ -237,6 +260,17 @@ describe("HistoryChart", () => {
           0,
         );
         expect(textWidth).toBeLessThanOrEqual(box);
+        const top = Number.parseFloat((label as HTMLElement).style.top);
+        expect(top).toBeGreaterThanOrEqual(8 * scale - 0.01);
+        expect(top + 18).toBeLessThanOrEqual(92 * scale + 0.01);
+        const band = bands[0]!;
+        const bandLeft = Number(band.getAttribute("x")) * scale;
+        const bandRight = bandLeft + Number(band.getAttribute("width")) * scale;
+        const bandCenter = (bandLeft + bandRight) / 2;
+        const labelCenter = left + box / 2;
+        const clampedToPlot =
+          Math.abs(left - 28 * scale) < 1 || Math.abs(left + box - 312 * scale) < 1;
+        expect(clampedToPlot || Math.abs(labelCenter - bandCenter)).toBeLessThan(1.5);
       }
     },
   );

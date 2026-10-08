@@ -22,11 +22,11 @@ export interface HistoryChartProps {
 }
 
 const VIEWBOX_WIDTH = 320;
-const VIEWBOX_HEIGHT = 112;
+const VIEWBOX_HEIGHT = 100;
 const PLOT_LEFT = 28;
 const PLOT_RIGHT = 312;
 const PLOT_TOP = 8;
-const PLOT_BOTTOM = 88;
+const PLOT_BOTTOM = 92;
 /** CSS px. The label uses a fixed font, so its box is sized in px, not viewBox units. */
 const GAP_LABEL_HEIGHT = 18;
 const GAP_LABEL_FONT = 11;
@@ -125,8 +125,8 @@ function gapLabelWidth(label: string, chartWidth: number): number {
 }
 
 /**
- * Anchor for the gap hover label, in CSS px. Flips to the left of a gap that
- * starts near the right edge, and clamps so the label stays inside the plot.
+ * Center of the gap hover label, in CSS px, clamped inside the plot.
+ * The label sits at the top of the shaded band so it stays off the data line.
  */
 function gapLabelAnchor(
   gapStart: number,
@@ -139,13 +139,12 @@ function gapLabelAnchor(
   const gapRight = Math.max(gapStart, gapEnd) * scale;
   const plotLeft = PLOT_LEFT * scale;
   const plotRight = PLOT_RIGHT * scale;
-  const fitsRight = gapLeft + 4 + labelWidth <= plotRight;
-  const x = fitsRight
-    ? gapLeft + 4
-    : Math.max(plotLeft, gapRight - 4 - labelWidth);
+  const plotTop = PLOT_TOP * scale;
+  const plotBottom = PLOT_BOTTOM * scale;
+  const centered = (gapLeft + gapRight) / 2 - labelWidth / 2;
   return {
-    x: Math.min(Math.max(plotLeft, x), plotRight - labelWidth),
-    y: PLOT_TOP * scale,
+    x: Math.min(Math.max(plotLeft, centered), Math.max(plotLeft, plotRight - labelWidth)),
+    y: Math.min(plotTop + 2, Math.max(plotTop, plotBottom - GAP_LABEL_HEIGHT - 2)),
   };
 }
 
@@ -228,6 +227,7 @@ export function HistoryChart({
   // The label is positioned in CSS px, so it needs the rendered chart width.
   // 360 is the narrowest side panel the layout is checked at.
   const [chartWidth, setChartWidth] = useState(360);
+  const [activeGapKey, setActiveGapKey] = useState<string | null>(null);
   useEffect(() => {
     const element = chartRef.current;
     if (!element) return undefined;
@@ -372,17 +372,24 @@ export function HistoryChart({
           {series.gaps.map((gap) => {
             const from = timePosition(gap.from, rangeStart, rangeEnd);
             const to = timePosition(gap.to, rangeStart, rangeEnd);
+            const gapKey = `${gap.from}-${gap.to}`;
+            const label = gapLabel(gap.labelHours);
             return (
-              <g key={`${gap.from}-${gap.to}`}>
+              <g key={gapKey}>
                 <rect
                   className="history-chart__gap"
                   x={Math.min(from, to)}
                   y={PLOT_TOP}
                   width={Math.max(2, Math.abs(to - from))}
                   height={PLOT_BOTTOM - PLOT_TOP}
-                >
-                  <title>{gapLabel(gap.labelHours)}</title>
-                </rect>
+                  tabIndex={0}
+                  role="img"
+                  aria-label={label}
+                  onMouseEnter={() => setActiveGapKey(gapKey)}
+                  onMouseLeave={() => setActiveGapKey((current) => (current === gapKey ? null : current))}
+                  onFocus={() => setActiveGapKey(gapKey)}
+                  onBlur={() => setActiveGapKey((current) => (current === gapKey ? null : current))}
+                />
                 <line
                   className="history-chart__gap-edge"
                   x1={from}
@@ -496,6 +503,8 @@ export function HistoryChart({
         {series.gaps.length > 0 ? (
         <div className="history-chart__gap-labels">
           {series.gaps.map((gap) => {
+            const gapKey = `${gap.from}-${gap.to}`;
+            if (gapKey !== activeGapKey) return null;
             const from = timePosition(gap.from, rangeStart, rangeEnd);
             const to = timePosition(gap.to, rangeStart, rangeEnd);
             const label = gapLabel(gap.labelHours);
@@ -504,7 +513,7 @@ export function HistoryChart({
             return (
               <span
                 className="history-chart__gap-label"
-                key={`label-${gap.from}-${gap.to}`}
+                key={`label-${gapKey}`}
                 style={{
                   left: anchor.x,
                   top: anchor.y,

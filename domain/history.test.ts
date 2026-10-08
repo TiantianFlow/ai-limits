@@ -475,6 +475,69 @@ describe("history gap tolerance", () => {
     expect(series.segments).toHaveLength(2);
     expect(series.gapThresholdMs).toBe(2 * HOUR);
   });
+
+  test("shades a hole that contains a reset, and still breaks the line there", () => {
+    const series = quotaHistorySeries(
+      [
+        { observedAt: NOW - 40 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.8, cycle: { resetsAt: NOW } }] },
+        { observedAt: NOW - 39 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.9, cycle: { resetsAt: NOW } }] },
+        { observedAt: NOW - 15 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + 7 * DAY } }] },
+        { observedAt: NOW - 14 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + 7 * DAY } }] },
+        { observedAt: NOW - 13 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + 7 * DAY } }] },
+      ],
+      "weekly",
+      { rangeHours: 48, now: NOW },
+    );
+
+    expect(series.gaps).toContainEqual({
+      from: NOW - 39 * HOUR, to: NOW - 15 * HOUR, labelHours: 24,
+    });
+    expect(series.resets).toHaveLength(1);
+    expect(series.segments.map((segment) => segment.points.length)).toEqual([2, 3]);
+    const shadedReads = series.gaps.reduce(
+      (total, gap) => total + Math.round(gap.labelHours * HOUR / INTERVAL_15) - 1,
+      0,
+    );
+    expect(series.bridgedSamples).toBeLessThan(shadedReads);
+  });
+
+  test("shades a hole that contains a plan-limit change", () => {
+    const series = quotaHistorySeries(
+      [
+        { observedAt: NOW - 40 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.4, limit: 100 }] },
+        { observedAt: NOW - 20 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, limit: 200 }] },
+        { observedAt: NOW - 19 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.25, limit: 200 }] },
+        { observedAt: NOW - 18 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3, limit: 200 }] },
+        { observedAt: NOW, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.35, limit: 200 }] },
+      ],
+      "weekly",
+      { rangeHours: 48, now: NOW },
+    );
+
+    expect(series.gaps).toContainEqual({
+      from: NOW - 40 * HOUR, to: NOW - 20 * HOUR, labelHours: 20,
+    });
+    expect(series.limitChanges).toHaveLength(1);
+    expect(series.gaps.filter((gap) => gap.labelHours === 20)).toHaveLength(1);
+  });
+
+  test("does not count a bridged read twice when the series is split", () => {
+    const series = quotaHistorySeries(
+      [
+        { observedAt: NOW - 5 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW } }] },
+        { observedAt: NOW - 5 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3, cycle: { resetsAt: NOW } }] },
+        { observedAt: NOW - 4 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + DAY } }] },
+        { observedAt: NOW - 4 * HOUR + INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + DAY } }] },
+        { observedAt: NOW - 4 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + DAY } }] },
+      ],
+      "weekly",
+      { rangeHours: 48, now: NOW },
+    );
+
+    expect(series.segments).toHaveLength(2);
+    expect(series.bridgedSamples).toBe(1);
+    expect(series.gaps).toHaveLength(0);
+  });
 });
 
 describe("history trend fit", () => {
