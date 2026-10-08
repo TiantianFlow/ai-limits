@@ -80,7 +80,7 @@ describe("HistoryChart", () => {
     expect(screen.getAllByText("Quota reset").length).toBeGreaterThan(0);
     expect(screen.queryByText("Trend (fitted)")).not.toBeInTheDocument();
     expect(screen.queryByText("Long gap")).not.toBeInTheDocument();
-    expect(screen.getByText(/short missed reads bridged/)).toBeVisible();
+    expect(screen.getByText(/short missed reads bridged in this range/)).toBeVisible();
     expect(screen.getByText(/only gaps over 2 h are shaded/)).toBeVisible();
     expect(container.querySelectorAll("rect.history-chart__gap")).toHaveLength(0);
     expect(container.querySelectorAll("line.history-chart__reset")).toHaveLength(1);
@@ -156,6 +156,64 @@ describe("HistoryChart", () => {
     expect(screen.getByText("Long gap")).toBeVisible();
     expect(screen.getByText("Plan limit changed")).toBeVisible();
     expect(container.querySelectorAll("path.history-chart__line")).toHaveLength(3);
+  });
+
+  it("shades every long gap, skips bridged holes, and keeps the hover label inside the plot", () => {
+    const minute = 60 * 1_000;
+    const samples: UsageHistoryObservation[] = [];
+    const start = NOW - 48 * HOUR;
+    for (let at = start; at <= NOW; at += 15 * minute) {
+      const missed = [3, 9].some((step) => at === start + step * 15 * minute);
+      const inLongHole = at > NOW - 26 * HOUR && at < NOW - 21.5 * HOUR;
+      if (missed || inLongHole) continue;
+      samples.push(observation(at, 0.3, FIRST_RESET));
+    }
+    // A second long hole flush against the right edge of the 48 h window.
+    const edge = samples.filter(
+      (sample) => sample.observedAt < NOW - 3 * HOUR || sample.observedAt === NOW,
+    );
+
+    const { container } = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        metrics={metrics}
+        history={edge}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+
+    const gaps = container.querySelectorAll("rect.history-chart__gap");
+    expect(gaps).toHaveLength(2);
+    for (const label of container.querySelectorAll("g.history-chart__gap-label")) {
+      const labelX = Number(label.getAttribute("transform")?.match(/translate\(([-\d.]+)/)?.[1]);
+      const labelWidth = Number(label.querySelector("rect")?.getAttribute("width"));
+      expect(labelX).toBeGreaterThanOrEqual(28);
+      expect(labelX + labelWidth).toBeLessThanOrEqual(312);
+    }
+  });
+
+  it("draws the fitted trend offset from a linear observed series", () => {
+    const linear: UsageHistoryObservation[] = [0, 1, 2, 3].map((step) =>
+      observation(NOW - (3 - step) * HOUR, 0.2 + step * 0.1, FIRST_RESET),
+    );
+    const { container } = render(
+      <HistoryChart
+        providerName="ChatGPT"
+        mode="used"
+        metrics={metrics}
+        history={linear}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+
+    const trend = container.querySelector("line.history-chart__trend");
+    const observed = container.querySelector("path.history-chart__line");
+    expect(trend).not.toBeNull();
+    const observedStartY = Number(observed?.getAttribute("d")?.match(/M [-\d.]+ ([-\d.]+)/)?.[1]);
+    expect(Number(trend?.getAttribute("y1"))).toBeGreaterThan(observedStartY);
   });
 
   it("complements the fitted trend when rendering Left mode", () => {

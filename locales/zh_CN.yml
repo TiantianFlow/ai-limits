@@ -211,13 +211,13 @@ history:
   limitChangesBreak: 折线在计划限额变更处断开。
   trendEstimate: 虚线拟合趋势是估计值，不是观察到的数据。
   bridgedFootnote:
-    zero: "桥接了 {count} 次短暂缺失的读取"
-    one: "桥接了 {count} 次短暂缺失的读取"
-    two: "桥接了 {count} 次短暂缺失的读取"
-    few: "桥接了 {count} 次短暂缺失的读取"
-    many: "桥接了 {count} 次短暂缺失的读取"
-    other: "桥接了 {count} 次短暂缺失的读取"
-  noMissedReads: 没有缺失的读取
+    zero: "此范围内桥接了 {count} 次短暂缺失的读取"
+    one: "此范围内桥接了 {count} 次短暂缺失的读取"
+    two: "此范围内桥接了 {count} 次短暂缺失的读取"
+    few: "此范围内桥接了 {count} 次短暂缺失的读取"
+    many: "此范围内桥接了 {count} 次短暂缺失的读取"
+    other: "此范围内桥接了 {count} 次短暂缺失的读取"
+  noMissedReads: 此范围内没有缺失的读取
   gapFootnote: " · 仅超过 {hours} 小时的空档会被着色"
   summary: "{observations}，分布在 {segments}。最新值为 {percent}% {mode}。"
   observations:

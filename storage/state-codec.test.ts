@@ -389,4 +389,42 @@ describe("V5 instance state codec", () => {
       },
     ]);
   });
+
+  test("keeps a finite quota limit through a save and load, and drops an invalid one", () => {
+    const instance = newApiInstance("newapi:default", "Personal relay");
+    instance.history = [
+      {
+        observedAt: now - 30 * 60 * 1_000,
+        metrics: [
+          { type: "quota", metricId: "weekly", usedRatio: 0.4, limit: 200 },
+        ],
+      },
+      {
+        observedAt: now - 15 * 60 * 1_000,
+        metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.5 }],
+      },
+      {
+        observedAt: now,
+        metrics: [
+          { type: "quota", metricId: "weekly", usedRatio: 0.6, limit: 0 },
+          { type: "quota", metricId: "session", usedRatio: 0.2, limit: Number.NaN },
+        ],
+      },
+    ];
+
+    const saved = normalizeInstanceAppState(
+      { version: 5, preferences: {}, instances: [instance] },
+      now,
+    );
+    const loaded = normalizeInstanceAppState(JSON.parse(JSON.stringify(saved)), now);
+
+    expect(loaded.instances[0]?.history.map((observation) => observation.metrics)).toEqual([
+      [{ type: "quota", metricId: "weekly", usedRatio: 0.4, limit: 200 }],
+      [{ type: "quota", metricId: "weekly", usedRatio: 0.5 }],
+      [
+        { type: "quota", metricId: "weekly", usedRatio: 0.6 },
+        { type: "quota", metricId: "session", usedRatio: 0.2 },
+      ],
+    ]);
+  });
 });

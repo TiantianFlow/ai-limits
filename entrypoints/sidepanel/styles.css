@@ -780,9 +780,14 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   vector-effect: non-scaling-stroke;
 }
 
+/* CSS px, not viewBox units: the viewBox is 320 wide and scales with the side
+   panel, which previously shrank an 8px font to about 8px on screen. */
+.history-chart__svg text {
+  font-size: 11px;
+}
+
 .history-chart__guide text {
   fill: var(--text-muted);
-  font-size: 8px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -803,12 +808,34 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 }
 
 .history-chart__gap {
-  fill: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  fill: color-mix(in srgb, var(--text-muted) 22%, var(--bg));
 }
 
 .history-chart__gap-edge {
-  stroke: color-mix(in srgb, var(--text-muted) 45%, transparent);
-  stroke-width: 1;
+  stroke: var(--text-muted);
+  stroke-opacity: 0.7;
+  stroke-width: 1.5;
+}
+
+.history-chart__gap-label {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.history-chart__gap-group:hover .history-chart__gap-label,
+.history-chart__gap-group:focus-within .history-chart__gap-label {
+  opacity: 1;
+}
+
+.history-chart__gap-label rect {
+  fill: var(--surface);
+  stroke: var(--border);
+}
+
+.history-chart__gap-label text {
+  fill: var(--text);
+  /* ViewBox units, so the text scales with the rect behind it. */
+  font-size: 10px;
 }
 
 .history-chart__reset {
@@ -825,10 +852,10 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 
 .history-chart__trend {
   fill: none;
-  stroke: var(--text-muted);
-  stroke-dasharray: 4 3;
+  stroke: var(--text);
+  stroke-dasharray: 1.5 3.5;
   stroke-linecap: round;
-  stroke-width: 1.25;
+  stroke-width: 1.75;
 }
 
 .history-chart__range,
@@ -2179,7 +2206,7 @@ a.detail-history-action:hover {
   margin: 8px 0 0;
   padding: 0;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 11px;
   list-style: none;
 }
 
@@ -2197,16 +2224,17 @@ a.detail-history-action:hover {
 }
 
 .history-chart__legend-trend {
-  width: 12px;
+  width: 14px;
   height: 0;
-  border-top: 1.5px dashed var(--text-muted);
+  border-top: 2px dashed var(--text);
 }
 
 .history-chart__legend-gap {
   width: 12px;
   height: 8px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 22%, var(--bg));
+  box-shadow: inset 1.5px 0 0 var(--text-muted);
 }
 
 .history-chart__legend-reset {

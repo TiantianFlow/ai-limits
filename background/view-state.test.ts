@@ -88,7 +88,7 @@ describe("public app view state", () => {
             {
               observedAt: 1,
               metrics: [
-                { type: "quota", metricId: "monthly", usedRatio: 0.4 },
+                { type: "quota", metricId: "monthly", usedRatio: 0.4, limit: 500 },
               ],
             },
           ],
@@ -123,7 +123,7 @@ describe("public app view state", () => {
       providerKind: "kimi",
       access: "required",
       snapshot: { metrics: [{ id: "monthly", usedRatio: 0.4 }] },
-      history: [{ metrics: [{ metricId: "monthly", usedRatio: 0.4 }] }],
+      history: [{ metrics: [{ metricId: "monthly", usedRatio: 0.4, limit: 500 }] }],
       lastAttempt: { outcome: { reason: "session_required" } },
     });
     expect(view.instances[0]).not.toHaveProperty("origin");
