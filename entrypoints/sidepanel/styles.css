@@ -802,8 +802,38 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   fill: var(--quota);
 }
 
+.history-chart__gap {
+  fill: color-mix(in srgb, var(--text-muted) 10%, transparent);
+}
+
+.history-chart__gap-edge {
+  stroke: color-mix(in srgb, var(--text-muted) 45%, transparent);
+  stroke-width: 1;
+}
+
+.history-chart__reset {
+  stroke: var(--text-muted);
+  stroke-dasharray: 1 3;
+  stroke-width: 1;
+}
+
+.history-chart__limit {
+  stroke: var(--warm);
+  stroke-dasharray: 3 2;
+  stroke-width: 1;
+}
+
+.history-chart__trend {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-dasharray: 4 3;
+  stroke-linecap: round;
+  stroke-width: 1.25;
+}
+
 .history-chart__range,
-.history-chart__empty {
+.history-chart__empty,
+.history-chart__footnote {
   margin: 4px 0 0;
   color: var(--text-muted);
   font-size: 11px;
@@ -2142,19 +2172,6 @@ a.detail-history-action:hover {
   padding-top: 4px;
 }
 
-.history-chart__break {
-  opacity: 0.6;
-}
-
-.history-chart__break + path {
-  position: relative;
-}
-
-.history-chart pattern line {
-  stroke: var(--border);
-  stroke-width: 2;
-}
-
 .history-chart__legend {
   display: flex;
   flex-wrap: wrap;
@@ -2179,21 +2196,29 @@ a.detail-history-action:hover {
   background: var(--quota);
 }
 
+.history-chart__legend-trend {
+  width: 12px;
+  height: 0;
+  border-top: 1.5px dashed var(--text-muted);
+}
+
 .history-chart__legend-gap {
   width: 12px;
   height: 8px;
-  border: 1px solid var(--border);
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--border) 0 1px,
-    transparent 1px 4px
-  );
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
 }
 
-.history-chart__legend-break {
+.history-chart__legend-reset {
   width: 1px;
   height: 10px;
   border-left: 1px dashed var(--text-muted);
+}
+
+.history-chart__legend-limit {
+  width: 1px;
+  height: 10px;
+  border-left: 1px dashed var(--warm);
 }
 
 .current-cycle-surface > h2 {

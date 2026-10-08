@@ -154,7 +154,7 @@ history:
   quotaMetric: Quota metric
   empty: History starts after another successful refresh.
   noMetricHistory: "No {label} history is stored yet."
-  chartName: "{provider} {label} usage history"
+  chartName: "{provider} {label} usage history. Short missed reads are bridged and only long gaps are shaded."
   rangeAccessible: "History range from {start} to now"
   hoursAgo:
     zero: "{count} hours ago"
@@ -172,8 +172,52 @@ history:
     other: "{count} days ago"
   latestPercent: "{percent}% {mode}"
   legendObserved: "Observed quota {mode}"
-  legendNone: No observations
-  legendBreak: Reset or missing observations · line breaks
+  legendTrend: Trend (fitted)
+  legendGap: Long gap
+  legendReset: Quota reset
+  legendLimit: Plan limit changed
+  limitMarker: Plan limit changed · series restarts
+  gapLabel: "No observations · {duration}"
+  gapHours:
+    zero: "{count} hours"
+    one: "{count} hour"
+    two: "{count} hours"
+    few: "{count} hours"
+    many: "{count} hours"
+    other: "{count} hours"
+  gapDays:
+    zero: "{count} days"
+    one: "{count} day"
+    two: "{count} days"
+    few: "{count} days"
+    many: "{count} days"
+    other: "{count} days"
+  bridgedReads:
+    zero: "{count} short missed reads are bridged."
+    one: "{count} short missed read is bridged."
+    two: "{count} short missed reads are bridged."
+    few: "{count} short missed reads are bridged."
+    many: "{count} short missed reads are bridged."
+    other: "{count} short missed reads are bridged."
+  longGaps:
+    zero: "{count} long gaps: {labels}."
+    one: "{count} long gap shaded: {labels}."
+    two: "{count} long gaps shaded: {labels}."
+    few: "{count} long gaps shaded: {labels}."
+    many: "{count} long gaps shaded: {labels}."
+    other: "{count} long gaps shaded: {labels}."
+  resetsBreak: The line breaks at quota resets.
+  limitChangesBreak: The line breaks where the plan limit changed.
+  trendEstimate: A dashed fitted trend line is an estimate, not observed data.
+  bridgedFootnote:
+    zero: "{count} short missed reads bridged"
+    one: "{count} short missed read bridged"
+    two: "{count} short missed reads bridged"
+    few: "{count} short missed reads bridged"
+    many: "{count} short missed reads bridged"
+    other: "{count} short missed reads bridged"
+  noMissedReads: No missed reads
+  gapFootnote: " · only gaps over {hours} h are shaded"
   summary: "{observations} across {segments}. Latest value is {percent}% {mode}."
   observations:
     zero: "{count} observations"
@@ -189,7 +233,7 @@ history:
     few: "{count} chart segments"
     many: "{count} chart segments"
     other: "{count} chart segments"
-  note: Only successful, normalized quota observations are plotted. The line breaks at resets and periods without an observation rather than implying zero usage. The newest 48 hours stay at collection resolution; older retained history is compacted hourly and kept for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
+  note: Only successful, normalized quota observations are plotted. Missed reads are normal. Short ones are bridged by the observed line, and only long gaps are lightly shaded, never shown as zero usage. The line still breaks at quota resets and plan-limit changes. The dashed trend is a fitted estimate of the observed points, not a forecast guarantee. The newest 48 hours stay at collection resolution; older retained history is compacted hourly and kept for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
 
 settings:
   screen: Provider settings

@@ -29,8 +29,16 @@ export type {
 } from "./model";
 export { DETAIL_TABLE_MAX_TABLES, DETAIL_TABLE_ROW_CAP } from "./model";
 export { sanitizedFailureMessage } from "./model";
-export { quotaHistorySegments } from "./history";
-export type { MetricHistoryPoint } from "./history";
+export { quotaHistorySegments, quotaHistorySeries } from "./history";
+export type {
+  HistoryBreakKind,
+  HistoryGap,
+  MetricHistoryPoint,
+  QuotaHistoryPoint,
+  QuotaHistorySegment,
+  QuotaHistorySeries,
+  TrendLine,
+} from "./history";
 export { displayRatio, elapsedRatio, paceStatus } from "./quota";
 export type { PaceKind, PaceStatus } from "./quota";
 import type {
@@ -592,8 +600,9 @@ function isHistoryMetric(value: unknown): value is MetricHistorySample {
   }
   if (value.type === "quota") {
     return (
-      hasExactKeys(value, ["type", "metricId", "usedRatio"], ["cycle"]) &&
-      isFiniteNumber(value.usedRatio)
+      hasExactKeys(value, ["type", "metricId", "usedRatio"], ["cycle", "limit"]) &&
+      isFiniteNumber(value.usedRatio) &&
+      isOptionalFiniteNumber(value.limit)
     );
   }
   if (value.type === "counter") {
@@ -629,6 +638,7 @@ function copyHistoryMetric(metric: MetricHistorySample): MetricHistorySample {
       type: "quota",
       metricId: metric.metricId,
       usedRatio: metric.usedRatio,
+      ...(metric.limit === undefined ? {} : { limit: metric.limit }),
       ...(cycle ? { cycle } : {}),
     };
   }

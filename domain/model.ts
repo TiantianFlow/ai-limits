@@ -170,7 +170,7 @@ export interface UsageSnapshot {
 }
 
 export type MetricHistorySample =
-  | ({ metricId: string } & Pick<QuotaMetric, "type" | "usedRatio" | "cycle">)
+  | ({ metricId: string } & Pick<QuotaMetric, "type" | "usedRatio" | "limit" | "cycle">)
   | ({ metricId: string } & Pick<CounterMetric, "type" | "semantic" | "value" | "unit" | "limit" | "cycle">)
   | ({ metricId: string } & Pick<BalanceMetric, "type" | "value" | "unit" | "initialLimit" | "cycle">);
 
