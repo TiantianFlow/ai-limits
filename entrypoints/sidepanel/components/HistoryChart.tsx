@@ -133,13 +133,13 @@ function chartSummary(
   if (series.bridgedSamples > 0) {
     parts.push(l10n.count("history.bridgedReads", series.bridgedSamples));
   }
-  if (series.gaps.length > 0) {
-    parts.push(
-      l10n.count("history.longGaps", series.gaps.length, {
-        labels: series.gaps.map((gap) => gapLabel(gap.labelHours)).join("; "),
-      }),
-    );
-  }
+  parts.push(
+    series.gaps.length > 0
+      ? l10n.count("history.longGaps", series.gaps.length, {
+          labels: series.gaps.map((gap) => gapLabel(gap.labelHours)).join("; "),
+        })
+      : l10n.t("history.noLongGaps"),
+  );
   if (series.resets.length > 0) {
     parts.push(l10n.t("history.resetsBreak"));
   }
@@ -216,10 +216,11 @@ export function HistoryChart({
     ? chartSummary(series, mode, points.length, latestValue ?? 0)
     : l10n.t("history.noMetricHistory", { label: selectedMetric.label });
   const thresholdHours = Math.round(series.gapThresholdMs / (60 * 60 * 1_000));
-  const accessibleName = l10n.t("history.chartName", {
+  const chartName = l10n.t("history.chartName", {
     provider: providerName,
     label: selectedMetric.label,
   });
+  const accessibleName = latestPoint ? `${chartName}. ${summary}` : chartName;
 
   return (
     <div className="history-chart">
