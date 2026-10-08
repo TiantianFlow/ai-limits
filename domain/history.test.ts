@@ -185,7 +185,7 @@ describe("quota history", () => {
             type: "quota" as const,
             metricId: "weekly",
             usedRatio: 0.4,
-            cycle: { cadence: "rolling" as const, resetsAt: NOW + DAY },
+            cycle: { cadence: "rolling" as const, durationMs: 7 * DAY, resetsAt: NOW + DAY },
           },
         ],
       },
@@ -200,7 +200,7 @@ describe("quota history", () => {
             type: "quota" as const,
             metricId: "weekly",
             usedRatio: 0.45,
-            cycle: { cadence: "rolling" as const, resetsAt: NOW + DAY },
+            cycle: { cadence: "rolling" as const, durationMs: 7 * DAY, resetsAt: NOW + DAY },
           },
         ],
       },
@@ -211,7 +211,7 @@ describe("quota history", () => {
             type: "quota" as const,
             metricId: "weekly",
             usedRatio: 0.5,
-            cycle: { cadence: "rolling" as const, resetsAt: NOW + DAY },
+            cycle: { cadence: "rolling" as const, durationMs: 7 * DAY, resetsAt: NOW + DAY },
           },
         ],
       },
@@ -222,7 +222,7 @@ describe("quota history", () => {
             type: "quota" as const,
             metricId: "weekly",
             usedRatio: 0.03,
-            cycle: { cadence: "calendar" as const, resetsAt: NOW + 8 * DAY },
+            cycle: { cadence: "calendar" as const, durationMs: 7 * DAY, resetsAt: NOW + 8 * DAY },
           },
         ],
       },
@@ -239,34 +239,70 @@ describe("quota history", () => {
   });
 
   test.each([
-    ["start", { startedAt: NOW - 6 * DAY }, { startedAt: NOW - 5 * DAY }],
     ["duration", { durationMs: 7 * DAY }, { durationMs: 6 * DAY }],
     ["cadence", { cadence: "rolling" as const }, { cadence: "calendar" as const }],
-    ["reset", { resetsAt: NOW + DAY }, { resetsAt: NOW + 2 * DAY }],
-  ])("breaks typed quota segments when only the %s boundary changes", (_name, firstCycle, secondCycle) => {
+  ])("breaks typed quota segments when the %s changes and usage drops", (_name, firstCycle, secondCycle) => {
     const first = NOW - HOUR;
     const history = [
       {
         observedAt: first,
-        metrics: [
-          {
-            type: "quota" as const,
-            metricId: "weekly",
-            usedRatio: 0.4,
-            cycle: firstCycle,
-          },
-        ],
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.8, cycle: firstCycle }],
       },
       {
         observedAt: NOW,
-        metrics: [
-          {
-            type: "quota" as const,
-            metricId: "weekly",
-            usedRatio: 0.5,
-            cycle: secondCycle,
-          },
-        ],
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.1, cycle: secondCycle }],
+      },
+    ];
+
+    expect(quotaHistorySegments(history, "weekly")).toEqual([
+      [{ observedAt: first, usedRatio: 0.8 }],
+      [{ observedAt: NOW, usedRatio: 0.1 }],
+    ]);
+  });
+
+  test("does not break on a startedAt change or a duration change while usage rises", () => {
+    const first = NOW - HOUR;
+    const continuous = (firstCycle: object, secondCycle: object) => [
+      {
+        observedAt: first,
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.4, cycle: firstCycle }],
+      },
+      {
+        observedAt: NOW,
+        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.5, cycle: secondCycle }],
+      },
+    ];
+
+    expect(quotaHistorySegments(continuous(
+      { startedAt: NOW - 6 * DAY },
+      { startedAt: NOW - 5 * DAY },
+    ), "weekly")).toHaveLength(1);
+    expect(quotaHistorySegments(continuous(
+      { durationMs: 7 * DAY },
+      { durationMs: 6 * DAY },
+    ), "weekly")).toHaveLength(1);
+  });
+
+  test("breaks typed quota segments when only the reset boundary jumps forward", () => {
+    const first = NOW - HOUR;
+    const history = [
+      {
+        observedAt: first,
+        metrics: [{
+          type: "quota" as const,
+          metricId: "weekly",
+          usedRatio: 0.4,
+          cycle: { durationMs: DAY, resetsAt: NOW + DAY },
+        }],
+      },
+      {
+        observedAt: NOW,
+        metrics: [{
+          type: "quota" as const,
+          metricId: "weekly",
+          usedRatio: 0.5,
+          cycle: { durationMs: DAY, resetsAt: NOW + 2 * DAY },
+        }],
       },
     ];
 
@@ -442,10 +478,10 @@ describe("history gap tolerance", () => {
 
   test("breaks on a reset and a plan-limit change, not on a bridged hole", () => {
     const points = [
-      { observedAt: NOW - 4 * HOUR, usedRatio: 0.2, limit: 80, cycle: { resetsAt: NOW + DAY } },
-      { observedAt: NOW - 2 * HOUR, usedRatio: 0.4, limit: 80, cycle: { resetsAt: NOW + DAY } },
-      { observedAt: NOW - HOUR, usedRatio: 0.1, limit: 100, cycle: { resetsAt: NOW + DAY } },
-      { observedAt: NOW, usedRatio: 0.2, limit: 100, cycle: { resetsAt: NOW + 8 * DAY } },
+      { observedAt: NOW - 4 * HOUR, usedRatio: 0.2, limit: 80, cycle: { resetsAt: NOW + DAY, durationMs: 7 * DAY } },
+      { observedAt: NOW - 2 * HOUR, usedRatio: 0.4, limit: 80, cycle: { resetsAt: NOW + DAY, durationMs: 7 * DAY } },
+      { observedAt: NOW - HOUR, usedRatio: 0.1, limit: 100, cycle: { resetsAt: NOW + DAY, durationMs: 7 * DAY } },
+      { observedAt: NOW, usedRatio: 0.2, limit: 100, cycle: { resetsAt: NOW + 8 * DAY, durationMs: 7 * DAY } },
     ];
 
     const split = splitQuotaSegments(points, 2 * HOUR);
@@ -479,11 +515,11 @@ describe("history gap tolerance", () => {
   test("shades a hole that contains a reset, and still breaks the line there", () => {
     const series = quotaHistorySeries(
       [
-        { observedAt: NOW - 40 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.8, cycle: { resetsAt: NOW } }] },
-        { observedAt: NOW - 39 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.9, cycle: { resetsAt: NOW } }] },
-        { observedAt: NOW - 15 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + 7 * DAY } }] },
-        { observedAt: NOW - 14 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + 7 * DAY } }] },
-        { observedAt: NOW - 13 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + 7 * DAY } }] },
+        { observedAt: NOW - 40 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.8, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 39 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.9, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 15 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 14 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 13 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
       ],
       "weekly",
       { rangeHours: 48, now: NOW },
@@ -524,11 +560,11 @@ describe("history gap tolerance", () => {
   test("does not count a bridged read twice when the series is split", () => {
     const series = quotaHistorySeries(
       [
-        { observedAt: NOW - 5 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW } }] },
-        { observedAt: NOW - 5 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3, cycle: { resetsAt: NOW } }] },
-        { observedAt: NOW - 4 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + DAY } }] },
-        { observedAt: NOW - 4 * HOUR + INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + DAY } }] },
-        { observedAt: NOW - 4 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + DAY } }] },
+        { observedAt: NOW - 5 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 5 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 4 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 4 * HOUR + INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
+        { observedAt: NOW - 4 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
       ],
       "weekly",
       { rangeHours: 48, now: NOW },
@@ -537,6 +573,64 @@ describe("history gap tolerance", () => {
     expect(series.segments).toHaveLength(2);
     expect(series.bridgedSamples).toBe(1);
     expect(series.gaps).toHaveLength(0);
+  });
+
+  test("ignores resetsAt jitter and rolling drift, and still detects a real reset", () => {
+    const durationMs = 7 * DAY;
+    const baseReset = NOW + durationMs;
+    const rising = (step: number, resetsAt: number): UsageHistoryObservation => ({
+      observedAt: NOW - 4 * HOUR + step * HOUR,
+      metrics: [{
+        type: "quota",
+        metricId: "weekly",
+        usedRatio: 0.2 + step * 0.1,
+        cycle: { cadence: "rolling", durationMs, resetsAt },
+      }],
+    });
+
+    for (const jitter of [
+      [0, 40, -25, 80],
+      [0, 1_000, 3_000, 2_000],
+      [0, 3 * 60 * 1_000, 7 * 60 * 1_000, 12 * 60 * 1_000],
+    ]) {
+      const series = quotaHistorySeries(
+        jitter.map((offset, step) => rising(step, baseReset + offset)),
+        "weekly",
+        { rangeHours: 48, now: NOW },
+      );
+      expect(series.resets).toEqual([]);
+      expect(series.segments).toHaveLength(1);
+      expect(series.trends).toHaveLength(1);
+    }
+
+    const reset = quotaHistorySeries(
+      [
+        rising(0, baseReset),
+        rising(1, baseReset),
+        {
+          observedAt: NOW - 2 * HOUR,
+          metrics: [{
+            type: "quota",
+            metricId: "weekly",
+            usedRatio: 0.05,
+            cycle: { cadence: "rolling", durationMs, resetsAt: baseReset + durationMs },
+          }],
+        },
+        {
+          observedAt: NOW - HOUR,
+          metrics: [{
+            type: "quota",
+            metricId: "weekly",
+            usedRatio: 0.1,
+            cycle: { cadence: "rolling", durationMs, resetsAt: baseReset + durationMs },
+          }],
+        },
+      ],
+      "weekly",
+      { rangeHours: 48, now: NOW },
+    );
+    expect(reset.resets).toHaveLength(1);
+    expect(reset.segments).toHaveLength(2);
   });
 });
 

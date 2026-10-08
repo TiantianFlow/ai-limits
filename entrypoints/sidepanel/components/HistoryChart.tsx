@@ -114,14 +114,14 @@ function percent(ratio: number): number {
 /**
  * CSS px width of the hover label. The text is a fixed CSS font, so the box is
  * sized in px: CJK glyphs are about as wide as the font size, Latin about half.
+ * Not capped to the plot: the anchor clamps only a box that actually overflows.
  */
-function gapLabelWidth(label: string, chartWidth: number): number {
+function gapLabelWidth(label: string): number {
   const textWidth = Array.from(label).reduce(
     (total, char) => total + (char.charCodeAt(0) > 0xff ? GAP_LABEL_FONT : GAP_LABEL_FONT * 0.6),
     0,
   );
-  const plotWidth = ((PLOT_RIGHT - PLOT_LEFT) / VIEWBOX_WIDTH) * chartWidth;
-  return Math.min(plotWidth, Math.ceil(textWidth) + 12);
+  return Math.ceil(textWidth) + 14;
 }
 
 /**
@@ -140,12 +140,13 @@ function gapLabelAnchor(
   const plotLeft = PLOT_LEFT * scale;
   const plotRight = PLOT_RIGHT * scale;
   const plotTop = PLOT_TOP * scale;
-  const plotBottom = PLOT_BOTTOM * scale;
   const centered = (gapLeft + gapRight) / 2 - labelWidth / 2;
-  return {
-    x: Math.min(Math.max(plotLeft, centered), Math.max(plotLeft, plotRight - labelWidth)),
-    y: Math.min(plotTop + 2, Math.max(plotTop, plotBottom - GAP_LABEL_HEIGHT - 2)),
-  };
+  const overflowsLeft = centered < plotLeft;
+  const overflowsRight = centered + labelWidth > plotRight;
+  const x = overflowsLeft || overflowsRight
+    ? Math.min(Math.max(plotLeft, centered), Math.max(plotLeft, plotRight - labelWidth))
+    : centered;
+  return { x, y: plotTop + 2 };
 }
 
 function gapLabel(labelHours: number): string {
@@ -508,7 +509,7 @@ export function HistoryChart({
             const from = timePosition(gap.from, rangeStart, rangeEnd);
             const to = timePosition(gap.to, rangeStart, rangeEnd);
             const label = gapLabel(gap.labelHours);
-            const labelWidth = gapLabelWidth(label, chartWidth);
+            const labelWidth = gapLabelWidth(label);
             const anchor = gapLabelAnchor(from, to, labelWidth, chartWidth);
             return (
               <span
@@ -575,7 +576,9 @@ export function HistoryChart({
           <p className="history-chart__footnote">
             {series.bridgedSamples > 0
               ? l10n.count("history.bridgedFootnote", series.bridgedSamples)
-              : l10n.t("history.noMissedReads")}
+              : series.gaps.length > 0
+                ? l10n.t("history.longGapsOnly")
+                : l10n.t("history.noMissedReads")}
             {l10n.t("history.gapFootnote", { hours: thresholdHours })}
           </p>
         </>
