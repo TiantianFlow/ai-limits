@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 
 import { l10n } from "../../../i18n/index";
 import { formatDateTime } from "../../../i18n/format";
@@ -28,7 +28,8 @@ const PLOT_RIGHT = 312;
 const PLOT_TOP = 8;
 const PLOT_BOTTOM = 88;
 /** CSS px. The label uses a fixed font, so its box is sized in px, not viewBox units. */
-const GAP_LABEL_HEIGHT = 16;
+const GAP_LABEL_HEIGHT = 18;
+const GAP_LABEL_FONT = 11;
 /**
  * ViewBox units the fitted line is shifted down. The chart viewBox is 320 wide
  * and the side panel is about 360 px, so this is roughly 4 CSS px.
@@ -111,35 +112,40 @@ function percent(ratio: number): number {
 }
 
 /**
- * Width of the hover label in viewBox units. CJK glyphs are about twice as wide
- * as Latin at the same font size, so the box is sized per character.
+ * CSS px width of the hover label. The text is a fixed CSS font, so the box is
+ * sized in px: CJK glyphs are about as wide as the font size, Latin about half.
  */
-function gapLabelWidth(label: string): number {
+function gapLabelWidth(label: string, chartWidth: number): number {
   const textWidth = Array.from(label).reduce(
-    (total, char) => total + (char.charCodeAt(0) > 0xff ? 11 : 6),
+    (total, char) => total + (char.charCodeAt(0) > 0xff ? GAP_LABEL_FONT : GAP_LABEL_FONT * 0.6),
     0,
   );
-  return Math.min(PLOT_RIGHT - PLOT_LEFT, textWidth + 12);
+  const plotWidth = ((PLOT_RIGHT - PLOT_LEFT) / VIEWBOX_WIDTH) * chartWidth;
+  return Math.min(plotWidth, Math.ceil(textWidth) + 12);
 }
 
 /**
- * Anchor for the gap hover label, in viewBox units. Flips to the left of a gap
- * that starts near the right edge, and clamps so the label stays in the plot.
+ * Anchor for the gap hover label, in CSS px. Flips to the left of a gap that
+ * starts near the right edge, and clamps so the label stays inside the plot.
  */
 function gapLabelAnchor(
   gapStart: number,
   gapEnd: number,
   labelWidth: number,
+  chartWidth: number,
 ): { x: number; y: number } {
-  const gapLeft = Math.min(gapStart, gapEnd);
-  const gapRight = Math.max(gapStart, gapEnd);
-  const fitsRight = gapLeft + 4 + labelWidth <= PLOT_RIGHT;
+  const scale = chartWidth / VIEWBOX_WIDTH;
+  const gapLeft = Math.min(gapStart, gapEnd) * scale;
+  const gapRight = Math.max(gapStart, gapEnd) * scale;
+  const plotLeft = PLOT_LEFT * scale;
+  const plotRight = PLOT_RIGHT * scale;
+  const fitsRight = gapLeft + 4 + labelWidth <= plotRight;
   const x = fitsRight
     ? gapLeft + 4
-    : Math.max(PLOT_LEFT, gapRight - 4 - labelWidth);
+    : Math.max(plotLeft, gapRight - 4 - labelWidth);
   return {
-    x: Math.min(Math.max(PLOT_LEFT, x), PLOT_RIGHT - labelWidth),
-    y: PLOT_TOP + 3,
+    x: Math.min(Math.max(plotLeft, x), plotRight - labelWidth),
+    y: PLOT_TOP * scale,
   };
 }
 
@@ -218,6 +224,20 @@ export function HistoryChart({
   const metricSelectId = useId();
   const summaryId = useId();
   const areaGradientId = useId();
+  const chartRef = useRef<HTMLDivElement>(null);
+  // The label is positioned in CSS px, so it needs the rendered chart width.
+  // 360 is the narrowest side panel the layout is checked at.
+  const [chartWidth, setChartWidth] = useState(360);
+  useEffect(() => {
+    const element = chartRef.current;
+    if (!element) return undefined;
+    const update = (): void => setChartWidth(element.clientWidth || 360);
+    update();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const [selectedMetricId, setSelectedMetricId] = useState(
     () => metrics[0]?.id ?? "",
   );
@@ -263,7 +283,7 @@ export function HistoryChart({
   const accessibleName = latestPoint ? `${chartName}. ${summary}` : chartName;
 
   return (
-    <div className="history-chart">
+    <div className="history-chart" ref={chartRef}>
       {metrics.length > 1 ? (
         <div className="history-chart__toolbar">
           <h3>{l10n.t("common.history")}</h3>
@@ -300,6 +320,7 @@ export function HistoryChart({
           {l10n.t("history.empty")}
         </p>
       ) : (
+        <div className="history-chart__plot">
         <svg
           className="history-chart__svg"
           viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
@@ -351,11 +372,8 @@ export function HistoryChart({
           {series.gaps.map((gap) => {
             const from = timePosition(gap.from, rangeStart, rangeEnd);
             const to = timePosition(gap.to, rangeStart, rangeEnd);
-            const label = gapLabel(gap.labelHours);
-            const labelWidth = gapLabelWidth(label);
-            const labelAnchor = gapLabelAnchor(from, to, labelWidth);
             return (
-              <g key={`${gap.from}-${gap.to}`} className="history-chart__gap-group">
+              <g key={`${gap.from}-${gap.to}`}>
                 <rect
                   className="history-chart__gap"
                   x={Math.min(from, to)}
@@ -363,7 +381,7 @@ export function HistoryChart({
                   width={Math.max(2, Math.abs(to - from))}
                   height={PLOT_BOTTOM - PLOT_TOP}
                 >
-                  <title>{label}</title>
+                  <title>{gapLabel(gap.labelHours)}</title>
                 </rect>
                 <line
                   className="history-chart__gap-edge"
@@ -373,15 +391,6 @@ export function HistoryChart({
                   y2={PLOT_BOTTOM}
                   vectorEffect="non-scaling-stroke"
                 />
-                <g
-                  className="history-chart__gap-label"
-                  transform={`translate(${labelAnchor.x.toFixed(2)} ${labelAnchor.y.toFixed(2)})`}
-                >
-                  <rect width={labelWidth} height={GAP_LABEL_HEIGHT} rx="3" />
-                  <text x="6" y="12">
-                    {label}
-                  </text>
-                </g>
               </g>
             );
           })}
@@ -484,6 +493,31 @@ export function HistoryChart({
             );
           })}
         </svg>
+        {series.gaps.length > 0 ? (
+        <div className="history-chart__gap-labels">
+          {series.gaps.map((gap) => {
+            const from = timePosition(gap.from, rangeStart, rangeEnd);
+            const to = timePosition(gap.to, rangeStart, rangeEnd);
+            const label = gapLabel(gap.labelHours);
+            const labelWidth = gapLabelWidth(label, chartWidth);
+            const anchor = gapLabelAnchor(from, to, labelWidth, chartWidth);
+            return (
+              <span
+                className="history-chart__gap-label"
+                key={`label-${gap.from}-${gap.to}`}
+                style={{
+                  left: anchor.x,
+                  top: anchor.y,
+                  maxWidth: labelWidth,
+                }}
+              >
+                {label}
+              </span>
+            );
+          })}
+        </div>
+        ) : null}
+        </div>
       )}
 
       {firstPoint ? (
