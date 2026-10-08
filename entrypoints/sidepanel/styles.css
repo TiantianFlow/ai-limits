@@ -840,6 +840,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 .history-chart__gap-label {
   position: absolute;
   display: block;
+  width: max-content;
   overflow: hidden;
   padding: 1px 6px;
   border: 1px solid var(--border);
