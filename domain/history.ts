@@ -256,20 +256,11 @@ export interface GapDetection {
   thresholdMs: number;
 }
 
-function structuralBreak(
-  previous: Pick<QuotaHistoryPoint, "cycle" | "limit">,
-  current: Pick<QuotaHistoryPoint, "cycle" | "limit">,
-): boolean {
-  return (
-    cycleBoundaryChanged(current.cycle, previous.cycle) ||
-    limitChanged(previous.limit, current.limit)
-  );
-}
-
 /**
  * A hole is a long gap only when it exceeds
  * `max(4 × expected interval, range floor)`. Shorter holes are bridged.
- * A reset or plan-limit change is its own break, not a shaded gap.
+ * A reset or a plan-limit change does not hide a hole: the gap is shaded
+ * across it, and the line still breaks there separately.
  * Points must be oldest → newest.
  */
 export function detectGaps(
@@ -284,9 +275,6 @@ export function detectGaps(
   for (let index = 1; index < points.length; index += 1) {
     const previous = points[index - 1]!;
     const current = points[index]!;
-    if (structuralBreak(previous, current)) {
-      continue;
-    }
     const delta = current.observedAt - previous.observedAt;
     if (delta > thresholdMs) {
       gaps.push({
@@ -294,7 +282,13 @@ export function detectGaps(
         to: current.observedAt,
         labelHours: delta / HOUR_MS,
       });
-    } else if (delta > expectedIntervalMs * BRIDGE_INTERVAL_FACTOR) {
+      continue;
+    }
+    // A reset or a plan-limit change is its own break. The missed reads
+    // around it belong to the shaded gap, not to the bridged count.
+    if (cycleBoundaryChanged(current.cycle, previous.cycle)) continue;
+    if (limitChanged(previous.limit, current.limit)) continue;
+    if (delta > expectedIntervalMs * BRIDGE_INTERVAL_FACTOR) {
       bridgedSamples += Math.max(0, Math.round(delta / expectedIntervalMs) - 1);
     }
   }
@@ -456,13 +450,11 @@ export function quotaHistorySeries(
     expectedIntervalMs(options.rangeHours),
   );
   const interval = expectedIntervalMs(options.rangeHours);
-  const { gaps } = detectGaps(points, threshold, interval);
+  // One pass over the raw timeline. A hole that contains a reset or a
+  // plan-limit change is shaded once, and its missed reads are not also
+  // counted as bridged.
+  const { gaps, bridgedSamples } = detectGaps(points, threshold, interval);
   const { segments, resets, limitChanges } = splitQuotaSegments(points, threshold);
-  const bridgedSamples = segments.reduce(
-    (total, segment) =>
-      total + detectGaps(segment.points, threshold, interval).bridgedSamples,
-    0,
-  );
 
   return {
     segments,

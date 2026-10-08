@@ -821,15 +821,20 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   stroke-width: 1.5;
 }
 
-/* Covers the plot. The viewBox is 320 by 112, so the height matches the SVG. */
+/* Covers the plot. The viewBox is 320 by 100, so the height matches the SVG. */
 .history-chart__gap-labels {
   position: absolute;
   top: 0;
   right: 0;
   left: 0;
   height: 0;
-  padding-bottom: calc(100% * 112 / 320);
+  padding-bottom: calc(100% * 100 / 320);
   pointer-events: none;
+}
+
+.history-chart__gap:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .history-chart__gap-label {
@@ -870,7 +875,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 .history-chart__range,
 .history-chart__empty,
 .history-chart__footnote {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--text-muted);
   font-size: 11px;
 }
