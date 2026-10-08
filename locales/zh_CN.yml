@@ -154,7 +154,7 @@ history:
   quotaMetric: 额度指标
   empty: 再次成功刷新后才会开始记录历史。
   noMetricHistory: "尚未存储 {label} 的历史。"
-  chartName: "{provider} {label} 用量历史。短暂缺失的读取会被桥接，只有较长的空档会被着色。"
+  chartName: "{provider} {label} 用量历史"
   rangeAccessible: "历史范围从 {start} 到现在"
   hoursAgo:
     zero: "{count} 小时前"
@@ -200,12 +200,13 @@ history:
     many: "{count} 次短暂缺失的读取已被桥接。"
     other: "{count} 次短暂缺失的读取已被桥接。"
   longGaps:
-    zero: "{count} 处较长空档：{labels}。"
+    zero: "着色了 {count} 处较长空档：{labels}。"
     one: "着色了 {count} 处较长空档：{labels}。"
     two: "着色了 {count} 处较长空档：{labels}。"
     few: "着色了 {count} 处较长空档：{labels}。"
     many: "着色了 {count} 处较长空档：{labels}。"
     other: "着色了 {count} 处较长空档：{labels}。"
+  noLongGaps: 没有较长空档。
   resetsBreak: 折线在额度重置处断开。
   limitChangesBreak: 折线在计划限额变更处断开。
   trendEstimate: 虚线拟合趋势是估计值，不是观察到的数据。

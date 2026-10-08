@@ -85,8 +85,11 @@ describe("HistoryChart", () => {
     expect(container.querySelectorAll("rect.history-chart__gap")).toHaveLength(0);
     expect(container.querySelectorAll("line.history-chart__reset")).toHaveLength(1);
     expect(container.querySelectorAll("line.history-chart__trend")).toHaveLength(0);
-    expect(chart).toHaveAccessibleDescription(/The line breaks at quota resets/i);
-    expect(chart).not.toHaveAccessibleDescription(/dashed fitted trend line/i);
+    expect(chart).toHaveAccessibleName(/6 short missed reads are bridged/);
+    expect(chart).toHaveAccessibleName(/No long gaps/);
+    expect(chart).toHaveAccessibleName(/The line breaks at quota resets/);
+    expect(chart).not.toHaveAccessibleName(/dashed fitted trend line/);
+    expect(chart).not.toHaveAccessibleName(/long gaps are shaded/);
   });
 
   it("shades only a long gap and marks a plan-limit change without bridging it", () => {
@@ -144,6 +147,12 @@ describe("HistoryChart", () => {
     expect(container.querySelector("line.history-chart__limit title")?.textContent).toBe(
       "Plan limit changed · series restarts",
     );
+    expect(
+      screen.getByRole("img", { name: /ChatGPT Weekly messages usage history/ }),
+    ).toHaveAccessibleName(/1 long gap shaded: No observations · 8 hours/);
+    expect(
+      screen.getByRole("img", { name: /ChatGPT Weekly messages usage history/ }),
+    ).toHaveAccessibleName(/The line breaks where the plan limit changed/);
     expect(screen.getByText("Long gap")).toBeVisible();
     expect(screen.getByText("Plan limit changed")).toBeVisible();
     expect(container.querySelectorAll("path.history-chart__line")).toHaveLength(3);
@@ -172,6 +181,9 @@ describe("HistoryChart", () => {
       Number(trend?.getAttribute("y1")),
     );
     expect(screen.getByText("Trend (fitted)")).toBeVisible();
+    expect(
+      screen.getByRole("img", { name: /ChatGPT Weekly messages usage history/ }),
+    ).toHaveAccessibleName(/dashed fitted trend line is an estimate, not observed data/);
   });
 
   it("renders visible markers without connecting reset-separated singleton segments", () => {

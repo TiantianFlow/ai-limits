@@ -154,7 +154,7 @@ history:
   quotaMetric: Quota metric
   empty: History starts after another successful refresh.
   noMetricHistory: "No {label} history is stored yet."
-  chartName: "{provider} {label} usage history. Short missed reads are bridged and only long gaps are shaded."
+  chartName: "{provider} {label} usage history"
   rangeAccessible: "History range from {start} to now"
   hoursAgo:
     zero: "{count} hours ago"
@@ -200,12 +200,13 @@ history:
     many: "{count} short missed reads are bridged."
     other: "{count} short missed reads are bridged."
   longGaps:
-    zero: "{count} long gaps: {labels}."
+    zero: "{count} long gaps shaded: {labels}."
     one: "{count} long gap shaded: {labels}."
     two: "{count} long gaps shaded: {labels}."
     few: "{count} long gaps shaded: {labels}."
     many: "{count} long gaps shaded: {labels}."
     other: "{count} long gaps shaded: {labels}."
+  noLongGaps: No long gaps.
   resetsBreak: The line breaks at quota resets.
   limitChangesBreak: The line breaks where the plan limit changed.
   trendEstimate: A dashed fitted trend line is an estimate, not observed data.
