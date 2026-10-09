@@ -24,6 +24,7 @@ import {
   type WindowSpan,
 } from "./history-envelope";
 import { retainUsageHistory } from "./history";
+import { FIXTURE_NOW, REALISTIC_METERS } from "./history-realistic";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -401,6 +402,81 @@ describe("synthetic shapes", () => {
     expect(series.policy).toBe("first-use");
     expect(series.spans.filter((window) => window.kind === "observed")).toHaveLength(4);
     expect(series.idleSpans.some((span) => span.kind === "unknown")).toBe(true);
+  });
+
+  test("keeps a jittered resetsAt inside the grid window that contains the reading", () => {
+    const windowMs = 7 * DAY;
+    const anchor = NOW;
+    const history: UsageHistoryObservation[] = [];
+    for (let day = 20; day >= 0; day -= 1) {
+      const observedAt = NOW - day * DAY;
+      const steps = Math.ceil((anchor - observedAt) / windowMs);
+      const end = anchor - (steps - 1) * windowMs;
+      const drift = ((day * 137) % 4_000) - 1_500;
+      history.push(observation(observedAt, "weekly", 0.1 + (20 - day) * 0.01, {
+        cadence: "calendar",
+        durationMs: windowMs,
+        resetsAt: end + drift,
+      }));
+    }
+    const series = buildEnvelopeSeries(history, {
+      providerKind: "claude",
+      metricId: "weekly",
+      now: NOW,
+      rangeStart: NOW - 21 * DAY,
+      rangeEnd: NOW,
+    });
+    const holding = series.spans.filter((window) =>
+      window.readings.some((reading) => reading.observedAt >= window.start && reading.observedAt < window.end),
+    );
+    expect(holding.length).toBeGreaterThan(0);
+    for (const window of holding) {
+      expect(window.kind).toBe("observed");
+    }
+    for (const run of series.unknownRuns) {
+      const inside = history.some((item) => item.observedAt >= run.start && item.observedAt < run.end);
+      expect(inside).toBe(false);
+    }
+    const current = series.spans.find((window) => window.current);
+    expect(current?.kind).toBe("observed");
+    expect(current?.readings.length).toBeGreaterThan(0);
+  });
+
+  test("assigns the synthetic fixture without calling a populated window empty", () => {
+    const weekly = REALISTIC_METERS.find((meter) => meter.metricId === "weekly")!;
+    for (const hours of [48, 7 * 24, 30 * 24]) {
+      const series = buildEnvelopeSeries(weekly.history, {
+        providerKind: weekly.providerKind,
+        metricId: weekly.metricId,
+        now: FIXTURE_NOW,
+        rangeStart: FIXTURE_NOW - hours * HOUR,
+        rangeEnd: FIXTURE_NOW,
+      });
+      for (const window of series.spans) {
+        if (window.readings.length > 0) expect(window.kind).toBe("observed");
+      }
+      for (const run of series.unknownRuns) {
+        const overlap = series.spans.some((window) =>
+          window.kind === "observed" &&
+          window.readings.some((reading) => reading.observedAt >= run.start && reading.observedAt < run.end),
+        );
+        expect(overlap).toBe(false);
+      }
+    }
+    const grok = REALISTIC_METERS.find((meter) => meter.metricId === "weekly-pool")!;
+    const month = buildEnvelopeSeries(grok.history, {
+      providerKind: "grok",
+      metricId: "weekly-pool",
+      now: FIXTURE_NOW,
+      rangeStart: FIXTURE_NOW - 30 * DAY,
+      rangeEnd: FIXTURE_NOW,
+    });
+    // The 4-day hole sits inside a weekly window that has readings on both
+    // sides, so it is a possible-range band, not an empty window.
+    const gap = month.spans
+      .flatMap((window) => window.bands)
+      .some((band) => !band.open && band.to - band.from > 3 * DAY);
+    expect(gap).toBe(true);
   });
 
   test("builds a dense first-use series that goes idle when the metric is omitted", () => {

@@ -775,7 +775,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   display: block;
   width: 100%;
   height: auto;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .history-chart__guide line {
@@ -840,7 +840,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 
 .history-chart__unknown {
   fill: color-mix(in srgb, var(--text-muted) 4%, transparent);
-  stroke: var(--text-muted);
+  stroke: color-mix(in srgb, var(--text-muted) 55%, transparent);
   stroke-dasharray: 3 3;
   stroke-width: 1;
 }

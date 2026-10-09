@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { l10n, type MessageKey } from "../../../i18n/index";
 import {
@@ -39,6 +39,14 @@ const RANGE_OPTIONS = [
   { hours: 7 * 24, shortKey: "history.range7dShort", labelKey: "history.range7d" },
   { hours: 30 * 24, shortKey: "history.range30dShort", labelKey: "history.range30d" },
 ] as const;
+
+const RANGE_STORAGE_KEY = "ai-limits.historyRangeHours";
+
+function readStoredRange(): number | undefined {
+  if (typeof localStorage === "undefined") return undefined;
+  const stored = Number(localStorage.getItem(RANGE_STORAGE_KEY));
+  return RANGE_OPTIONS.some((option) => option.hours === stored) ? stored : undefined;
+}
 
 function readingsInRange(
   history: { observedAt: number; metrics: { type: string; metricId: string }[] }[],
@@ -92,19 +100,15 @@ export function HistoryView({
     metrics.find((metric) => metric.id === metricId) ?? metrics[0];
   const providerKind = instance?.providerKind;
   const openingMetric = metrics.find((item) => item.id === metricId) ?? metrics[0];
+  // A picked range is the user's, so it survives meter and provider changes
+  // and a panel reload. The v15 default applies only before any pick.
   const [rangeHours, setRangeHours] = useState<number>(() =>
-    defaultRangeHours(providerKind, openingMetric?.id ?? "", openingMetric?.cycle?.durationMs),
+    readStoredRange() ?? defaultRangeHours(providerKind, openingMetric?.id ?? "", openingMetric?.cycle?.durationMs),
   );
-  const [rangeScope, setRangeScope] = useState(instanceId);
-
-  if (instanceId !== rangeScope) {
-    setRangeScope(instanceId);
-    setRangeHours(defaultRangeHours(
-      providerKind,
-      openingMetric?.id ?? "",
-      openingMetric?.cycle?.durationMs,
-    ));
-  }
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(RANGE_STORAGE_KEY, String(rangeHours));
+  }, [rangeHours]);
 
   if (!instance || !selectedMetric) {
     return (
@@ -171,7 +175,9 @@ export function HistoryView({
           >
             {RANGE_OPTIONS.map((option) => {
               const count = readingsInRange(instance.history, selectedMetric.id, now, option.hours);
-              const sparse = count < 5;
+              const hasReadings = count > 0;
+              const underFive = count < 5;
+              const sparse = hasReadings && underFive;
               return (
                 <button
                   key={option.hours}

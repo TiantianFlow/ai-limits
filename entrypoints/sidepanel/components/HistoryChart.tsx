@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { l10n } from "../../../i18n/index";
-import { formatDateTime } from "../../../i18n/format";
+import { formatDateTime, formatPercent as formatPercentNumber } from "../../../i18n/format";
 import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import {
   buildEnvelopeSeries,
@@ -11,6 +11,7 @@ import {
   predictUsed,
   windowBar,
   DOT_JOIN_PX,
+  expectedIntervalMs,
   OPEN_STUB_PX,
   type DayBucket,
   type DetailLevel,
@@ -47,9 +48,23 @@ type InspectItem =
   | { kind: "span"; id: string }
   | { kind: "day"; id: string };
 
+/** One x scale for every mark: range start..end maps to the plot's left..right. */
 function timeX(at: number, rangeStart: number, rangeEnd: number): number {
   const duration = Math.max(1, rangeEnd - rangeStart);
-  return PLOT_LEFT + ((at - rangeStart) / duration) * (PLOT_RIGHT - PLOT_LEFT);
+  const clamped = Math.min(rangeEnd, Math.max(rangeStart, at));
+  return PLOT_LEFT + ((clamped - rangeStart) / duration) * (PLOT_RIGHT - PLOT_LEFT);
+}
+
+function clampInterval(
+  from: number,
+  to: number,
+  rangeStart: number,
+  rangeEnd: number,
+): { from: number; to: number } | null {
+  const start = Math.max(rangeStart, Math.min(from, to));
+  const end = Math.min(rangeEnd, Math.max(from, to));
+  if (end - start < 0) return null;
+  return { from: start, to: end };
 }
 
 function leftY(leftPercent: number): number {
@@ -65,9 +80,11 @@ function percent(value: number): number {
   return Math.round(value);
 }
 
-function bandPath(band: EnvelopeBand, mode: DisplayMode, rangeStart: number, rangeEnd: number): string {
-  const x1 = timeX(band.from, rangeStart, rangeEnd);
-  const x2 = timeX(band.to, rangeStart, rangeEnd);
+function bandPath(band: EnvelopeBand, mode: DisplayMode, rangeStart: number, rangeEnd: number): string | null {
+  const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
+  if (!span) return null;
+  const x1 = timeX(span.from, rangeStart, rangeEnd);
+  const x2 = timeX(span.to, rangeStart, rangeEnd);
   const yUpper = shownY(band.upper, mode);
   const yLower = shownY(band.lower, mode);
   const top = Math.min(yUpper, yLower);
@@ -236,8 +253,10 @@ export function HistoryChart({
   rangeHours,
 }: HistoryChartProps) {
   const summaryId = useId();
+  const clipId = useId();
   const chartRef = useRef<HTMLDivElement>(null);
   const [plotWidth, setPlotWidth] = useState(360);
+  const [cardWidth, setCardWidth] = useState(360);
   const [active, setActive] = useState<InspectItem | null>(null);
   const [pinned, setPinned] = useState(false);
   const [selectedMetricId, setSelectedMetricId] = useState(() => metrics[0]?.id ?? "");
@@ -254,6 +273,8 @@ export function HistoryChart({
     const update = (): void => {
       const plot = element.querySelector(".history-chart__plot");
       setPlotWidth((plot ?? element).clientWidth || 360);
+      const card = element.closest(".history-surface");
+      setCardWidth((card instanceof HTMLElement ? card.clientWidth : element.clientWidth) || 360);
     };
     update();
     const observer = new ResizeObserver(update);
@@ -330,6 +351,31 @@ export function HistoryChart({
     setPinned(true);
   }
 
+  function itemAtClientX(clientX: number): Inspectable | undefined {
+    const canvas = chartRef.current?.querySelector(".history-chart__canvas");
+    if (!canvas) return undefined;
+    const bounds = canvas.getBoundingClientRect();
+    if (bounds.width <= 0) return undefined;
+    const viewX = ((clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
+    return items.find((item) => {
+      const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
+      if (!span) return false;
+      const left = timeX(span.from, rangeStart, rangeEnd);
+      const right = timeX(span.to, rangeStart, rangeEnd);
+      const start = Math.min(left, right);
+      const end = Math.max(left, right);
+      const afterStart = viewX >= start;
+      const beforeEnd = viewX <= end;
+      return afterStart && beforeEnd;
+    });
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
+    if (pinned || event.pointerType === "touch") return;
+    const item = itemAtClientX(event.clientX);
+    setActive(item ? { kind: item.kind, id: item.id } : null);
+  }
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -357,20 +403,24 @@ export function HistoryChart({
     }
   }
 
-  const empty = readings === 0 && series.spans.every((window) => window.kind === "unknown") && series.idleSpans.length === 0;
+  const empty = readings === 0;
   const tooltip = activeItem?.lines ?? null;
   const tooltipAnchor = activeItem
-    ? tooltipPosition(activeItem.from, activeItem.to, rangeStart, rangeEnd, plotWidth)
+    ? tooltipPosition(activeItem.from, activeItem.to, rangeStart, rangeEnd, plotWidth, cardWidth)
     : null;
 
   return (
     <div className="history-chart" ref={chartRef}>
-      {readings === 0 ? null : (
+      {empty ? null : (
         <strong className="history-chart__latest">
-          {l10n.t("history.latestPercent", {
-            percent: latestShown(series, mode),
-            mode: localizeDisplayModeCompact(mode),
-          })}
+          {(() => {
+            const headline = currentWindowHeadline(series, mode);
+            if (headline.idle) return l10n.t("history.headlineIdle");
+            return l10n.t("history.latestPercent", {
+              percent: headline.label,
+              mode: localizeDisplayModeCompact(mode),
+            });
+          })()}
         </strong>
       )}
       {empty ? (
@@ -386,14 +436,28 @@ export function HistoryChart({
               provider: providerName,
               label: selectedMetric.label,
             })}
-            aria-describedby={summaryId}
+            aria-describedby={empty ? undefined : summaryId}
             onKeyDown={onKeyDown}
+            onPointerMove={onPointerMove}
+            onPointerLeave={() => {
+              if (!pinned) setActive(null);
+            }}
           >
             <svg
               className="history-chart__svg"
               viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
               aria-hidden="true"
             >
+              <defs>
+                <clipPath id={clipId}>
+                  <rect
+                    x={PLOT_LEFT}
+                    y={PLOT_TOP}
+                    width={PLOT_RIGHT - PLOT_LEFT}
+                    height={PLOT_BOTTOM - PLOT_TOP}
+                  />
+                </clipPath>
+              </defs>
               {[100, 50, 0].map((guide) => {
                 const y = leftY(guide);
                 return (
@@ -403,29 +467,33 @@ export function HistoryChart({
                   </g>
                 );
               })}
-              {level === "envelope"
-                ? <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} />
-                : null}
-              {level === "bars"
-                ? <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-                : null}
-              {level === "daily"
-                ? <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-                : null}
-              <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-              {active ? (
-                <Highlight
-                  from={items.find((item) => item.id === active.id)?.from ?? rangeStart}
-                  to={items.find((item) => item.id === active.id)?.to ?? rangeEnd}
-                  rangeStart={rangeStart}
-                  rangeEnd={rangeEnd}
-                />
-              ) : null}
+              <g clipPath={`url(#${clipId})`}>
+                {level === "envelope"
+                  ? <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} now={now} />
+                  : null}
+                {level === "bars"
+                  ? <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                  : null}
+                {level === "daily"
+                  ? <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                  : null}
+                <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                {active ? (
+                  <Highlight
+                    from={items.find((item) => item.id === active.id)?.from ?? rangeStart}
+                    to={items.find((item) => item.id === active.id)?.to ?? rangeEnd}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                  />
+                ) : null}
+              </g>
             </svg>
             <div className="history-chart__hits">
               {items.map((item) => {
-                const left = timeX(item.from, rangeStart, rangeEnd);
-                const right = timeX(item.to, rangeStart, rangeEnd);
+                const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
+                if (!span) return null;
+                const left = timeX(span.from, rangeStart, rangeEnd);
+                const right = timeX(span.to, rangeStart, rangeEnd);
                 return (
                   <button
                     key={item.id}
@@ -435,17 +503,12 @@ export function HistoryChart({
                     aria-label={item.lines[0]}
                     style={{
                       left: `${(Math.min(left, right) / VIEWBOX_WIDTH) * 100}%`,
-                      width: `${(Math.max(2, Math.abs(right - left)) / VIEWBOX_WIDTH) * 100}%`,
-                    }}
-                    onMouseEnter={() => {
-                      if (!pinned) setActive({ kind: item.kind, id: item.id });
-                    }}
-                    onMouseLeave={() => {
-                      if (!pinned) setActive((current) => (current?.id === item.id ? null : current));
+                      width: `${(Math.max(1, Math.abs(right - left)) / VIEWBOX_WIDTH) * 100}%`,
                     }}
                     onClick={() => {
-                      setPinned(true);
-                      setActive({ kind: item.kind, id: item.id });
+                      const same = pinned && active?.id === item.id;
+                      setPinned(!same);
+                      setActive(same ? null : { kind: item.kind, id: item.id });
                     }}
                   />
                 );
@@ -455,7 +518,7 @@ export function HistoryChart({
               <div
                 className="history-chart__tooltip"
                 role="tooltip"
-                style={{ left: tooltipAnchor.left, top: 4, maxWidth: TOOLTIP_MAX }}
+                style={{ left: tooltipAnchor.left, top: 4, width: tooltipAnchor.width }}
               >
                 {tooltip.map((line) => <p key={line}>{line}</p>)}
               </div>
@@ -466,25 +529,42 @@ export function HistoryChart({
           </p>
         </div>
       )}
-      <p
-        className="history-chart__range"
-        aria-label={l10n.t("history.rangeAccessible", { start: formatRangeStart(resolvedRange) })}
-      >
-        <span>{formatRangeStart(resolvedRange)}</span>
-        <span>{l10n.t("common.now")}</span>
-      </p>
-      <Legend series={series} level={level} mode={mode} />
-      <p className="history-chart__footnote">{footnote(series, level, resolvedRange)}</p>
-      <p className="visually-hidden" id={summaryId}>{summary}</p>
+      {empty ? null : (
+        <>
+          <p
+            className="history-chart__range"
+            aria-label={l10n.t("history.rangeAccessible", { start: formatRangeStart(resolvedRange) })}
+          >
+            <span>{formatRangeStart(resolvedRange)}</span>
+            <span>{l10n.t("common.now")}</span>
+          </p>
+          <Legend series={series} level={level} mode={mode} />
+          <p className="history-chart__footnote">{footnote(series, level, resolvedRange)}</p>
+        </>
+      )}
+      {empty ? null : <p className="visually-hidden" id={summaryId}>{summary}</p>}
     </div>
   );
 }
 
-function latestShown(series: EnvelopeSeries, mode: DisplayMode): number {
-  const observed = series.spans.filter((window) => window.kind === "observed");
-  const last = observed.at(-1);
-  const left = last?.values.at(-1) ?? 100;
-  return percent(mode === "left" ? left : 100 - left);
+/**
+ * Headline for the chart. The current window's latest reading, matching the
+ * Current cycle card. Idle (no window contains now) reports a full quota.
+ */
+export function currentWindowHeadline(
+  series: EnvelopeSeries,
+  mode: DisplayMode,
+): { label: string; idle: boolean } {
+  const current = series.spans.find(
+    (window) => window.current && window.kind === "observed" && window.values.length > 0,
+  );
+  if (!current) {
+    return { label: formatPercentNumber(mode === "left" ? 100 : 0), idle: true };
+  }
+  const left = current.values.at(-1) ?? 100;
+  const shown = mode === "left" ? left : 100 - left;
+  // Same rounding the Current cycle card uses, so 0.03% does not become 0%.
+  return { label: formatPercentNumber(Number(shown.toFixed(4))), idle: false };
 }
 
 function formatRangeStart(rangeHours: number): string {
@@ -545,8 +625,10 @@ function Highlight({
   rangeStart: number;
   rangeEnd: number;
 }) {
-  const left = timeX(Math.min(from, to), rangeStart, rangeEnd);
-  const right = timeX(Math.max(from, to), rangeStart, rangeEnd);
+  const span = clampInterval(from, to, rangeStart, rangeEnd);
+  if (!span) return null;
+  const left = timeX(span.from, rangeStart, rangeEnd);
+  const right = timeX(span.to, rangeStart, rangeEnd);
   return (
     <rect
       className="history-chart__highlight"
@@ -564,11 +646,14 @@ function tooltipPosition(
   rangeStart: number,
   rangeEnd: number,
   plotWidth: number,
-): { left: number } {
-  const mid = (timeX(from, rangeStart, rangeEnd) + timeX(to, rangeStart, rangeEnd)) / 2;
+  cardWidth: number,
+): { left: number; width: number } {
+  const span = clampInterval(from, to, rangeStart, rangeEnd) ?? { from, to };
+  const mid = (timeX(span.from, rangeStart, rangeEnd) + timeX(span.to, rangeStart, rangeEnd)) / 2;
   const center = (mid / VIEWBOX_WIDTH) * plotWidth;
-  const left = Math.min(Math.max(0, center - TOOLTIP_MAX / 2), Math.max(0, plotWidth - TOOLTIP_MAX));
-  return { left };
+  const width = Math.min(TOOLTIP_MAX, Math.max(80, cardWidth - 8));
+  const left = Math.min(Math.max(0, center - width / 2), Math.max(0, plotWidth - width));
+  return { left, width };
 }
 
 function chartSummary(input: {
@@ -637,52 +722,80 @@ function footnote(series: EnvelopeSeries, level: DetailLevel, rangeHours: number
   return `${lead} · ${l10n.t("history.footnoteCount", { count: series.readingsInRange, range })}`;
 }
 
+function spanRect(
+  start: number,
+  end: number,
+  rangeStart: number,
+  rangeEnd: number,
+): { x: number; width: number } | null {
+  const span = clampInterval(start, end, rangeStart, rangeEnd);
+  if (!span) return null;
+  const x = timeX(span.from, rangeStart, rangeEnd);
+  const width = timeX(span.to, rangeStart, rangeEnd) - x;
+  if (width <= 0) return null;
+  return { x, width };
+}
+
 function EnvelopeLayer({
   series,
   mode,
   rangeStart,
   rangeEnd,
   plotWidth,
+  now,
 }: {
   series: EnvelopeSeries;
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
   plotWidth: number;
+  now: number;
 }) {
   const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
   return (
     <g>
-      {series.unknownRuns.map((run) => (
-        <rect
-          key={`unknown-${run.start}`}
-          className="history-chart__unknown"
-          x={timeX(run.start, rangeStart, rangeEnd)}
-          y={PLOT_TOP}
-          width={Math.max(1, timeX(run.end, rangeStart, rangeEnd) - timeX(run.start, rangeStart, rangeEnd))}
-          height={PLOT_BOTTOM - PLOT_TOP}
-        />
-      ))}
-      {series.idleSpans.filter((span) => span.kind === "unknown").map((span) => (
-        <rect
-          key={`idle-unknown-${span.start}`}
-          className="history-chart__unknown"
-          x={timeX(span.end, rangeStart, rangeEnd)}
-          y={PLOT_TOP}
-          width={Math.max(1, timeX(span.start, rangeStart, rangeEnd) - timeX(span.end, rangeStart, rangeEnd))}
-          height={PLOT_BOTTOM - PLOT_TOP}
-        />
-      ))}
-      {series.idleSpans.filter((span) => span.kind === "idle").map((span) => (
-        <line
-          key={`idle-${span.start}`}
-          className="history-chart__idle"
-          x1={timeX(span.end, rangeStart, rangeEnd)}
-          x2={timeX(span.start, rangeStart, rangeEnd)}
-          y1={shownY(100, mode)}
-          y2={shownY(100, mode)}
-        />
-      ))}
+      {series.unknownRuns.map((run) => {
+        const box = spanRect(run.start, run.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        return (
+          <rect
+            key={`unknown-${run.start}`}
+            className="history-chart__unknown"
+            x={box.x}
+            y={PLOT_TOP}
+            width={box.width}
+            height={PLOT_BOTTOM - PLOT_TOP}
+          />
+        );
+      })}
+      {series.idleSpans.filter((span) => span.kind === "unknown").map((span) => {
+        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        return (
+          <rect
+            key={`idle-unknown-${span.start}`}
+            className="history-chart__unknown"
+            x={box.x}
+            y={PLOT_TOP}
+            width={box.width}
+            height={PLOT_BOTTOM - PLOT_TOP}
+          />
+        );
+      })}
+      {series.idleSpans.filter((span) => span.kind === "idle").map((span) => {
+        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        return (
+          <line
+            key={`idle-${span.start}`}
+            className="history-chart__idle"
+            x1={box.x}
+            x2={box.x + box.width}
+            y1={shownY(100, mode)}
+            y2={shownY(100, mode)}
+          />
+        );
+      })}
       {series.spans.map((window, index) => {
         const previous = series.spans[index - 1];
         const reset = previous && previous.kind === "observed" && previous.tailTrusted && window.kind === "observed";
@@ -697,14 +810,20 @@ function EnvelopeLayer({
                 y2={shownY(100, mode)}
               />
             ) : null}
-            {window.bands.map((band, bandIndex) => (
-              <path
-                key={`${window.id}-band-${bandIndex}`}
-                className={band.event ? "history-chart__event" : band.open ? "history-chart__open" : "history-chart__band"}
-                d={band.open ? openStub(band, mode, rangeStart, rangeEnd, pxPerUnit) : bandPath(band, mode, rangeStart, rangeEnd)}
-              />
-            ))}
-            <ReadingMarks window={window} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} pxPerUnit={pxPerUnit} />
+            {window.bands.map((band, bandIndex) => {
+              const d = band.open
+                ? openStub(band, mode, rangeStart, rangeEnd, pxPerUnit)
+                : bandPath(band, mode, rangeStart, rangeEnd);
+              if (!d) return null;
+              return (
+                <path
+                  key={`${window.id}-band-${bandIndex}`}
+                  className={band.event ? "history-chart__event" : band.open ? "history-chart__open" : "history-chart__band"}
+                  d={d}
+                />
+              );
+            })}
+            <ReadingMarks window={window} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} pxPerUnit={pxPerUnit} now={now} />
           </g>
         );
       })}
@@ -737,9 +856,11 @@ function openStub(
   rangeStart: number,
   rangeEnd: number,
   pxPerUnit: number,
-): string {
-  const x1 = timeX(band.from, rangeStart, rangeEnd);
-  const x2 = timeX(band.to, rangeStart, rangeEnd);
+): string | null {
+  const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
+  if (!span) return null;
+  const x1 = timeX(span.from, rangeStart, rangeEnd);
+  const x2 = timeX(span.to, rangeStart, rangeEnd);
   const maxUnits = OPEN_STUB_PX / Math.max(pxPerUnit, 0.01);
   const end = x1 + Math.min(Math.abs(x2 - x1), maxUnits) * Math.sign(x2 - x1 || 1);
   const y = shownY(band.upper, mode);
@@ -752,12 +873,14 @@ function ReadingMarks({
   rangeStart,
   rangeEnd,
   pxPerUnit,
+  now,
 }: {
   window: WindowSpan;
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
   pxPerUnit: number;
+  now: number;
 }) {
   const marks: React.ReactNode[] = [];
   let run: { x: number; y: number }[] = [];
@@ -769,16 +892,29 @@ function ReadingMarks({
     run = [];
   };
   window.readings.forEach((reading, index) => {
+    if (reading.observedAt < rangeStart || reading.observedAt > rangeEnd) return;
     const x = timeX(reading.observedAt, rangeStart, rangeEnd);
     const y = shownY(window.values[index] ?? reading.left, mode);
     const previous = run.at(-1);
-    const apart = previous ? Math.abs(x - previous.x) * pxPerUnit > DOT_JOIN_PX : false;
-    if (apart) flush();
-    run.push({ x, y });
-    if (apart || index === window.readings.length - 1 && (run.length < 2)) {
-      marks.push(<circle key={`dot-${reading.observedAt}`} className="history-chart__marker" cx={x} cy={y} r="2.4" />);
+    const previousReading = window.readings[index - 1];
+    const interval = expectedIntervalMs(now, reading.observedAt);
+    const timeGap = previousReading !== undefined && reading.observedAt - previousReading.observedAt > interval * 2;
+    const apart = previous !== undefined && (Math.abs(x - previous.x) * pxPerUnit > DOT_JOIN_PX || timeGap);
+    if (apart) {
+      if (run.length === 1) {
+        marks.push(
+          <circle key={`dot-${run[0]!.x}`} className="history-chart__marker" cx={run[0]!.x} cy={run[0]!.y} r="2.4" />,
+        );
+      }
+      flush();
     }
+    run.push({ x, y });
   });
+  if (run.length === 1) {
+    marks.push(
+      <circle key={`dot-${run[0]!.x}`} className="history-chart__marker" cx={run[0]!.x} cy={run[0]!.y} r="2.4" />,
+    );
+  }
   flush();
   return <g>{marks}</g>;
 }
@@ -796,21 +932,40 @@ function BarsLayer({
 }) {
   return (
     <g>
-      {series.unknownRuns.map((run) => (
-        <rect
-          key={`unknown-${run.start}`}
-          className="history-chart__unknown"
-          x={timeX(run.start, rangeStart, rangeEnd)}
-          y={PLOT_TOP}
-          width={Math.max(1, timeX(run.end, rangeStart, rangeEnd) - timeX(run.start, rangeStart, rangeEnd))}
-          height={PLOT_BOTTOM - PLOT_TOP}
-        />
-      ))}
+      {series.unknownRuns.map((run) => {
+        const box = spanRect(run.start, run.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        return (
+          <rect
+            key={`unknown-${run.start}`}
+            className="history-chart__unknown"
+            x={box.x}
+            y={PLOT_TOP}
+            width={box.width}
+            height={PLOT_BOTTOM - PLOT_TOP}
+          />
+        );
+      })}
+      {series.idleSpans.filter((span) => span.kind === "unknown").map((span) => {
+        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        return (
+          <rect
+            key={`idle-unknown-${span.start}`}
+            className="history-chart__unknown"
+            x={box.x}
+            y={PLOT_TOP}
+            width={box.width}
+            height={PLOT_BOTTOM - PLOT_TOP}
+          />
+        );
+      })}
       {series.spans.map((window) => {
         const bar = windowBar(window);
         if (!bar) return null;
-        const x = timeX(window.start, rangeStart, rangeEnd);
-        const width = Math.max(1, timeX(window.end, rangeStart, rangeEnd) - x);
+        const box = spanRect(window.start, window.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        const { x, width } = box;
         const certainLeft = 100 - bar.certainUsed;
         const yCertain = mode === "used" ? shownY(certainLeft, mode) : shownY(100, mode);
         const height = Math.max(1, Math.abs(shownY(certainLeft, mode) - shownY(mode === "used" ? 100 : certainLeft, mode)));
@@ -836,16 +991,20 @@ function BarsLayer({
           </g>
         );
       })}
-      {series.idleSpans.filter((span) => span.kind === "idle").map((span) => (
-        <line
-          key={`idle-${span.start}`}
-          className="history-chart__idle"
-          x1={timeX(span.end, rangeStart, rangeEnd)}
-          x2={timeX(span.start, rangeStart, rangeEnd)}
-          y1={shownY(100, mode)}
-          y2={shownY(100, mode)}
-        />
-      ))}
+      {series.idleSpans.filter((span) => span.kind === "idle").map((span) => {
+        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        return (
+          <line
+            key={`idle-${span.start}`}
+            className="history-chart__idle"
+            x1={box.x}
+            x2={box.x + box.width}
+            y1={shownY(100, mode)}
+            y2={shownY(100, mode)}
+          />
+        );
+      })}
     </g>
   );
 }
@@ -864,8 +1023,9 @@ function DailyLayer({
   return (
     <g>
       {days.map((bucket) => {
-        const x = timeX(bucket.start, rangeStart, rangeEnd);
-        const width = Math.max(1, timeX(bucket.end, rangeStart, rangeEnd) - x);
+        const box = spanRect(bucket.start, bucket.end, rangeStart, rangeEnd);
+        if (!box) return null;
+        const { x, width } = box;
         const bar = bucket.window ? windowBar(bucket.window) : null;
         if (!bar) {
           return (
@@ -946,7 +1106,9 @@ function Legend({
 }) {
   const noun = windowNoun(series.windowMs);
   const open = series.spans.some((window) => window.kind === "observed" && !window.tailTrusted);
-  const unknown = series.unknownRuns.length > 0 || series.idleSpans.some((span) => span.kind === "unknown");
+  const unknown = level !== "daily" && (
+    series.unknownRuns.length > 0 || series.idleSpans.some((span) => span.kind === "unknown")
+  );
   const idle = series.idleSpans.some((span) => span.kind === "idle");
   const limit = series.events.some((event) => event.kind === "limit-change");
   const rebase = series.events.some((event) => event.kind === "rebase") || series.rebaseCapped;

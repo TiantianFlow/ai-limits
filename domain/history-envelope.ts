@@ -317,6 +317,36 @@ function frameKey(start: number, end: number): string {
 }
 
 /**
+ * Jitter and slow drift move `resetsAt` by milliseconds to a few seconds.
+ * Two resets name the same window when they differ by less than half a window.
+ */
+export function sameWindowReset(left: number, right: number, windowMs: number): boolean {
+  if (!(windowMs > 0)) return left === right;
+  return Math.abs(left - right) < windowMs * 0.5;
+}
+
+/**
+ * A reading stored a few milliseconds outside its window (reset jitter)
+ * still belongs to that window. Drawing uses the clamped time.
+ */
+function clampReadingToFrame(reading: EnvelopeReading, frame: WindowFrame): EnvelopeReading {
+  if (reading.observedAt >= frame.start && reading.observedAt < frame.end) return reading;
+  const observedAt = Math.min(frame.end - 1, Math.max(frame.start, reading.observedAt));
+  return { ...reading, observedAt };
+}
+
+/** Fixed-grid window that contains `at`, stepped back from `anchor`. */
+export function gridFrameContaining(
+  anchor: number,
+  windowMs: number,
+  at: number,
+): WindowFrame {
+  const steps = Math.ceil((anchor - at) / windowMs);
+  const end = anchor - (steps - 1) * windowMs;
+  return { start: end - windowMs, end, windowMs };
+}
+
+/**
  * Fixed-grid frames covering `[rangeStart, rangeEnd]`.
  * `anchor` is a known resetsAt; windows step backward and forward by `windowMs`.
  */
@@ -660,13 +690,45 @@ function resolvePolicy(
   return { policy, windowMs };
 }
 
-function groupByReset(readings: readonly EnvelopeReading[]): Map<number, EnvelopeReading[]> {
+/**
+ * Group readings that name the same window.
+ * On a fixed grid, membership is the window that contains `observedAt`
+ * (jittered `resetsAt` is only a hint). First-use readings cluster when
+ * their `resetsAt` values sit within half a window of each other.
+ */
+function groupReadings(
+  readings: readonly EnvelopeReading[],
+  policy: WindowPolicy,
+  windowMs: number,
+  anchor: number | undefined,
+): Map<number, EnvelopeReading[]> {
   const groups = new Map<number, EnvelopeReading[]>();
+  const put = (end: number, reading: EnvelopeReading): void => {
+    const group = groups.get(end) ?? [];
+    group.push(reading);
+    groups.set(end, group);
+  };
   for (const reading of readings) {
     if (reading.resetsAt === undefined) continue;
-    const group = groups.get(reading.resetsAt) ?? [];
-    group.push(reading);
-    groups.set(reading.resetsAt, group);
+    if (policy === "fixed" && anchor !== undefined && windowMs > 0) {
+      const frame = gridFrameContaining(anchor, windowMs, reading.observedAt);
+      if (reading.observedAt >= frame.start && reading.observedAt < frame.end) {
+        put(frame.end, reading);
+      }
+      continue;
+    }
+    if (!(windowMs > 0)) {
+      put(reading.resetsAt, reading);
+      continue;
+    }
+    let matched: number | undefined;
+    for (const end of groups.keys()) {
+      if (sameWindowReset(end, reading.resetsAt, windowMs)) {
+        matched = end;
+        break;
+      }
+    }
+    put(matched ?? reading.resetsAt, reading);
   }
   return groups;
 }
@@ -688,13 +750,11 @@ function migrateUnanchored(
   for (const reading of readings) {
     if (reading.resetsAt !== undefined) continue;
     if (policy === "fixed" && anchor !== undefined && windowMs > 0) {
-      const steps = Math.ceil((anchor - reading.observedAt) / windowMs);
-      const end = anchor - (steps - 1) * windowMs;
-      const start = end - windowMs;
-      if (reading.observedAt >= start && reading.observedAt < end) {
-        const group = assigned.get(end) ?? [];
+      const frame = gridFrameContaining(anchor, windowMs, reading.observedAt);
+      if (reading.observedAt >= frame.start && reading.observedAt < frame.end) {
+        const group = assigned.get(frame.end) ?? [];
         group.push(reading);
-        assigned.set(end, group);
+        assigned.set(frame.end, group);
       }
       continue;
     }
@@ -759,21 +819,24 @@ export function buildEnvelopeSeries(
   ];
 
   const frames: WindowFrame[] = [];
-  if (policy === "fixed" && windowMs > 0 && anchor !== undefined) {
+  const fixedGrid = policy === "fixed" && windowMs > 0 && anchor !== undefined;
+  if (fixedGrid && anchor !== undefined) {
     frames.push(...fixedGridFrames(anchor, windowMs, rangeStart, rangeEnd));
   }
-  const grouped = groupByReset(members);
-  for (const [end, group] of grouped) {
-    const known = group.find((reading) => reading.durationMs && reading.durationMs > 0);
-    const length = known?.durationMs ?? windowMs;
-    if (!(length > 0)) continue;
-    const start = end - length;
-    if (!frames.some((frame) => frame.end === end)) {
-      frames.push({ start, end, windowMs: length });
+  const grouped = groupReadings(members, policy, windowMs, anchor);
+  if (!fixedGrid) {
+    for (const [end, group] of grouped) {
+      const known = group.find((reading) => reading.durationMs && reading.durationMs > 0);
+      const length = known?.durationMs ?? windowMs;
+      if (!(length > 0)) continue;
+      const start = end - length;
+      if (!frames.some((frame) => sameWindowReset(frame.end, end, length))) {
+        frames.push({ start, end, windowMs: length });
+      }
     }
   }
   for (const [end, group] of migrated.assigned) {
-    if (!frames.some((frame) => frame.end === end)) {
+    if (!frames.some((frame) => frame.end === end || sameWindowReset(frame.end, end, windowMs))) {
       frames.push({ start: end - windowMs, end, windowMs });
     }
     const existing = grouped.get(end) ?? [];
@@ -798,9 +861,9 @@ export function buildEnvelopeSeries(
   const events: HistoryEventMarker[] = [];
   let rebaseCapped = false;
   const windows = unique.map((frame) => {
-    const readings = (grouped.get(frame.end) ?? []).filter(
-      (reading) => reading.observedAt >= frame.start && reading.observedAt <= frame.end,
-    );
+    const readings = (grouped.get(frame.end) ?? [])
+      .filter((reading) => reading.observedAt >= frame.start && reading.observedAt < frame.end)
+      .map((reading) => clampReadingToFrame(reading, frame));
     const draft: HistoryEventMarker[] = [];
     const built = buildWindowEnvelope(frame, readings, options.now, draft);
     const capped = capRebaseMarkers(built, draft);
