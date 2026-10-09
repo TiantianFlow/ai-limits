@@ -6,18 +6,11 @@ import type {
 } from "./model";
 import {
   appendUsageObservation,
-  buildTrends,
-  detectGaps,
-  expectedIntervalMs,
-  fitTrend,
-  gapThresholdMs,
-  minimumGapMs,
+  cycleBoundaryChanged,
   observationFromUsage,
-  predictTrend,
   quotaHistorySegments,
   quotaHistorySeries,
   retainUsageHistory,
-  splitQuotaSegments,
 } from "./history";
 
 const HOUR = 60 * 60 * 1_000;
@@ -175,7 +168,7 @@ describe("quota history", () => {
     );
   });
 
-  test("bridges a missing sample and a hole at the threshold, and splits on a longer gap or a changed cycle", () => {
+  test("keeps a missing sample inside the window and splits when the cycle resets", () => {
     const first = NOW - 8 * HOUR;
     const history = [
       {
@@ -406,77 +399,8 @@ describe("quota history", () => {
   });
 });
 
-const INTERVAL_15 = 15 * 60 * 1_000;
-
-describe("history gap tolerance", () => {
-  test("derives the expected interval from collection cadence and stored resolution", () => {
-    expect(expectedIntervalMs(48)).toBe(INTERVAL_15);
-    expect(expectedIntervalMs(undefined)).toBe(INTERVAL_15);
-    expect(expectedIntervalMs(7 * 24)).toBe(HOUR);
-    expect(expectedIntervalMs(30 * 24)).toBe(HOUR);
-    expect(expectedIntervalMs(48, NOW, NOW - 49 * HOUR)).toBe(HOUR);
-    expect(expectedIntervalMs(48, NOW, NOW - HOUR)).toBe(INTERVAL_15);
-  });
-
-  test("floors the gap threshold at 2 h, 6 h, and 12 h", () => {
-    expect(minimumGapMs(48)).toBe(2 * HOUR);
-    expect(minimumGapMs(undefined)).toBe(2 * HOUR);
-    expect(minimumGapMs(7 * 24)).toBe(6 * HOUR);
-    expect(minimumGapMs(30 * 24)).toBe(12 * HOUR);
-    expect(gapThresholdMs(48)).toBe(2 * HOUR);
-    expect(gapThresholdMs(7 * 24)).toBe(6 * HOUR);
-    expect(gapThresholdMs(30 * 24)).toBe(12 * HOUR);
-  });
-
-  test("bridges a single missed sample and a one-to-two interval hole", () => {
-    const start = NOW - 2 * HOUR;
-    const points = [0, 1, 3, 6].map((step) => ({
-      observedAt: start + step * INTERVAL_15,
-    }));
-
-    expect(detectGaps(points, 2 * HOUR, INTERVAL_15)).toEqual({
-      gaps: [],
-      bridgedSamples: 1 + 2,
-      thresholdMs: 2 * HOUR,
-    });
-  });
-
-  test("bridges a hole equal to the threshold and shades one just past it", () => {
-    const atThreshold = [
-      { observedAt: NOW - 4 * HOUR },
-      { observedAt: NOW - 2 * HOUR },
-    ];
-    const pastThreshold = [
-      { observedAt: NOW - 4 * HOUR },
-      { observedAt: NOW - 2 * HOUR + 60 * 1_000 },
-    ];
-
-    expect(detectGaps(atThreshold, 2 * HOUR, INTERVAL_15).gaps).toEqual([]);
-    expect(detectGaps(atThreshold, 2 * HOUR, INTERVAL_15).bridgedSamples).toBe(7);
-
-    const shaded = detectGaps(pastThreshold, 2 * HOUR, INTERVAL_15);
-    expect(shaded.bridgedSamples).toBe(0);
-    expect(shaded.gaps).toEqual([
-      {
-        from: NOW - 4 * HOUR,
-        to: NOW - 2 * HOUR + 60 * 1_000,
-        labelHours: (2 * HOUR + 60 * 1_000) / HOUR,
-      },
-    ]);
-  });
-
-  test("labels a long gap with its span in hours", () => {
-    const points = [
-      { observedAt: NOW - 3 * DAY },
-      { observedAt: NOW },
-    ];
-
-    expect(detectGaps(points, 12 * HOUR, HOUR).gaps).toEqual([
-      { from: NOW - 3 * DAY, to: NOW, labelHours: 72 },
-    ]);
-  });
-
-  test("breaks on a reset and a plan-limit change, not on a bridged hole", () => {
+describe("history window identity", () => {
+  test("breaks on a reset and a plan-limit change, not on a hole inside the window", () => {
     const points = [
       { observedAt: NOW - 4 * HOUR, usedRatio: 0.2, limit: 80, cycle: { resetsAt: NOW + DAY, durationMs: 7 * DAY } },
       { observedAt: NOW - 2 * HOUR, usedRatio: 0.4, limit: 80, cycle: { resetsAt: NOW + DAY, durationMs: 7 * DAY } },
@@ -484,95 +408,24 @@ describe("history gap tolerance", () => {
       { observedAt: NOW, usedRatio: 0.2, limit: 100, cycle: { resetsAt: NOW + 8 * DAY, durationMs: 7 * DAY } },
     ];
 
-    const split = splitQuotaSegments(points, 2 * HOUR);
-    expect(split.segments.map((segment) => segment.breakBefore)).toEqual([
+    const series = quotaHistorySeries(points.map((point) => ({
+      observedAt: point.observedAt,
+      metrics: [{
+        type: "quota" as const,
+        metricId: "weekly",
+        usedRatio: point.usedRatio,
+        limit: point.limit,
+        cycle: point.cycle,
+      }],
+    })), "weekly");
+    expect(series.segments.map((segment) => segment.breakBefore)).toEqual([
       undefined,
       "limit-change",
       "reset",
     ]);
-    expect(split.limitChanges).toEqual([(points[1]!.observedAt + points[2]!.observedAt) / 2]);
-    expect(split.resets).toEqual([(points[2]!.observedAt + points[3]!.observedAt) / 2]);
-    expect(split.segments[0]?.points).toHaveLength(2);
-  });
-
-  test("counts only bridged misses, not the long gap", () => {
-    const series = quotaHistorySeries(
-      [
-        { observedAt: NOW - 10 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1 }] },
-        { observedAt: NOW - 10 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2 }] },
-        { observedAt: NOW, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3 }] },
-      ],
-      "weekly",
-      { rangeHours: 48, now: NOW },
-    );
-
-    expect(series.bridgedSamples).toBe(1);
-    expect(series.gaps).toHaveLength(1);
-    expect(series.segments).toHaveLength(2);
-    expect(series.gapThresholdMs).toBe(2 * HOUR);
-  });
-
-  test("shades a hole that contains a reset, and still breaks the line there", () => {
-    const series = quotaHistorySeries(
-      [
-        { observedAt: NOW - 40 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.8, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 39 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.9, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 15 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 14 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 13 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
-      ],
-      "weekly",
-      { rangeHours: 48, now: NOW },
-    );
-
-    expect(series.gaps).toContainEqual({
-      from: NOW - 39 * HOUR, to: NOW - 15 * HOUR, labelHours: 24,
-    });
-    expect(series.resets).toHaveLength(1);
-    expect(series.segments.map((segment) => segment.points.length)).toEqual([2, 3]);
-    const shadedReads = series.gaps.reduce(
-      (total, gap) => total + Math.round(gap.labelHours * HOUR / INTERVAL_15) - 1,
-      0,
-    );
-    expect(series.bridgedSamples).toBeLessThan(shadedReads);
-  });
-
-  test("shades a hole that contains a plan-limit change", () => {
-    const series = quotaHistorySeries(
-      [
-        { observedAt: NOW - 40 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.4, limit: 100 }] },
-        { observedAt: NOW - 20 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, limit: 200 }] },
-        { observedAt: NOW - 19 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.25, limit: 200 }] },
-        { observedAt: NOW - 18 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3, limit: 200 }] },
-        { observedAt: NOW, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.35, limit: 200 }] },
-      ],
-      "weekly",
-      { rangeHours: 48, now: NOW },
-    );
-
-    expect(series.gaps).toContainEqual({
-      from: NOW - 40 * HOUR, to: NOW - 20 * HOUR, labelHours: 20,
-    });
-    expect(series.limitChanges).toHaveLength(1);
-    expect(series.gaps.filter((gap) => gap.labelHours === 20)).toHaveLength(1);
-  });
-
-  test("does not count a bridged read twice when the series is split", () => {
-    const series = quotaHistorySeries(
-      [
-        { observedAt: NOW - 5 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 5 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.3, cycle: { resetsAt: NOW, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 4 * HOUR, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.1, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 4 * HOUR + INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.15, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
-        { observedAt: NOW - 4 * HOUR + 2 * INTERVAL_15, metrics: [{ type: "quota", metricId: "weekly", usedRatio: 0.2, cycle: { resetsAt: NOW + 7 * DAY, durationMs: 7 * DAY } }] },
-      ],
-      "weekly",
-      { rangeHours: 48, now: NOW },
-    );
-
-    expect(series.segments).toHaveLength(2);
-    expect(series.bridgedSamples).toBe(1);
-    expect(series.gaps).toHaveLength(0);
+    expect(series.limitChanges).toEqual([(points[1]!.observedAt + points[2]!.observedAt) / 2]);
+    expect(series.resets).toEqual([(points[2]!.observedAt + points[3]!.observedAt) / 2]);
+    expect(series.segments[0]?.points).toHaveLength(2);
   });
 
   test("ignores resetsAt jitter and rolling drift, and still detects a real reset", () => {
@@ -600,7 +453,6 @@ describe("history gap tolerance", () => {
       );
       expect(series.resets).toEqual([]);
       expect(series.segments).toHaveLength(1);
-      expect(series.trends).toHaveLength(1);
     }
 
     const reset = quotaHistorySeries(
@@ -632,95 +484,11 @@ describe("history gap tolerance", () => {
     expect(reset.resets).toHaveLength(1);
     expect(reset.segments).toHaveLength(2);
   });
-});
 
-describe("history trend fit", () => {
-  test("recovers slope and intercept on a known line", () => {
-    const points = [0, 1, 2, 3].map((hour) => ({
-      observedAt: NOW + hour * HOUR,
-      usedRatio: 0.2 + hour * 0.1,
-    }));
-
-    const fit = fitTrend(points);
-    expect(fit?.originMs).toBe(NOW);
-    expect(fit?.intercept).toBeCloseTo(0.2);
-    expect(fit?.slope).toBeCloseTo(0.1 / HOUR);
-    expect(predictTrend(fit!, NOW + 2 * HOUR)).toBeCloseTo(0.4);
-  });
-
-  test("returns null for fewer than two points and for a single timestamp", () => {
-    expect(fitTrend([])).toBeNull();
-    expect(fitTrend([{ observedAt: NOW, usedRatio: 0.4 }])).toBeNull();
-    expect(
-      fitTrend([
-        { observedAt: NOW, usedRatio: 0.2 },
-        { observedAt: NOW, usedRatio: 0.8 },
-      ]),
-    ).toBeNull();
-  });
-
-  test("fits two points but withholds a trend until a segment has three", () => {
-    const two = [
-      { observedAt: NOW - HOUR, usedRatio: 0.2 },
-      { observedAt: NOW, usedRatio: 0.4 },
-    ];
-    expect(fitTrend(two)?.slope).toBeCloseTo(0.2 / HOUR);
-    expect(buildTrends([{ points: two }])).toEqual([]);
-    expect(
-      buildTrends([
-        {
-          points: [
-            ...two,
-            { observedAt: NOW + HOUR, usedRatio: 0.6 },
-          ],
-        },
-      ]),
-    ).toHaveLength(1);
-  });
-
-  test("clamps the prediction to 0–100%", () => {
-    const fit = fitTrend([
-      { observedAt: NOW, usedRatio: 0.9 },
-      { observedAt: NOW + HOUR, usedRatio: 1 },
-    ])!;
-
-    expect(predictTrend(fit, NOW + 5 * HOUR)).toBe(1);
-    expect(predictTrend({ ...fit, slope: -fit.slope, intercept: 0.1 }, NOW + 5 * HOUR)).toBe(0);
-  });
-
-  test("keeps only the newest trend when there are many short cycles", () => {
-    const segments = Array.from({ length: 9 }, (_, index) => ({
-      points: [0, 1, 2].map((step) => ({
-        observedAt: NOW + (index * 3 + step) * HOUR,
-        usedRatio: 0.1 * (step + 1),
-      })),
-    }));
-
-    const trends = buildTrends(segments);
-    expect(trends).toHaveLength(1);
-    expect(trends[0]?.from).toBe(segments[8]!.points[0]!.observedAt);
-    expect(trends[0]?.to).toBe(segments[8]!.points[2]!.observedAt);
-  });
-
-  test("reports used ratios so Left mode can complement them", () => {
-    const series = quotaHistorySeries(
-      [0, 1, 2].map((hour) => ({
-        observedAt: NOW + hour * HOUR,
-        metrics: [{ type: "quota" as const, metricId: "weekly", usedRatio: 0.25 + hour * 0.25 }],
-      })),
-      "weekly",
-      { rangeHours: 48, now: NOW + 2 * HOUR },
-    );
-
-    expect(series.trends).toEqual([
-      {
-        from: NOW,
-        to: NOW + 2 * HOUR,
-        fromRatio: expect.closeTo(0.25),
-        toRatio: expect.closeTo(0.75),
-      },
-    ]);
-    expect(1 - series.trends[0]!.fromRatio).toBeCloseTo(0.75);
-    expect(1 - series.trends[0]!.toRatio).toBeCloseTo(0.25);
+  test("detects a calendar reset that has no durationMs when usage drops", () => {
+    const previous = { cadence: "calendar" as const, resetsAt: NOW };
+    const next = { cadence: "calendar" as const, resetsAt: NOW + 10 * DAY };
+    expect(cycleBoundaryChanged(next, previous, 0.99, 0)).toBe(true);
+    expect(cycleBoundaryChanged(next, previous, 0.4, 0.5)).toBe(false);
   });
 });
