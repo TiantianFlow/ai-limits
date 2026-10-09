@@ -405,6 +405,10 @@ function translatePace(pace: ReturnType<typeof paceLine>): string {
     case "history.paceLeft": return l10n.t("history.paceLeft", { percent, when });
     case "history.paceRunOut": return l10n.t("history.paceRunOut", { out, when });
     case "history.paceExpired": return l10n.t("history.paceExpired", { when });
+    case "history.paceExpiredNext": return l10n.t("history.paceExpiredNext", {
+      when,
+      next: pace.detail.next === undefined ? "" : formatDateTime(Number(pace.detail.next)),
+    });
     case "history.paceNoReading": return l10n.t("history.paceNoReading");
     default: return l10n.t("history.paceNoWindow");
   }
@@ -419,6 +423,8 @@ function currentReading(
   used: number;
   start: number | undefined;
   resetsAt: number | undefined;
+  /** Next grid reset when a fixed window has closed. Absent for first-use. */
+  nextResetAt: number | undefined;
   expired: boolean;
   policy: "fixed" | "first-use";
 } | undefined {
@@ -456,6 +462,7 @@ function currentReading(
     used: reading.usedRatio * 100,
     start,
     resetsAt,
+    nextResetAt: reading.nextResetAt,
     expired: reading.closed,
     policy,
   };
@@ -532,7 +539,7 @@ export function HistoryChart({
     resetsAt: current?.resetsAt,
     now,
     mode,
-    ...(current?.expired ? { expired: true } : {}),
+    ...(current?.expired ? { expired: true, nextResetAt: current.nextResetAt } : {}),
     ...(current ? { policy: current.policy } : {}),
   });
 

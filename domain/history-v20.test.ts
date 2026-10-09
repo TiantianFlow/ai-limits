@@ -247,6 +247,22 @@ describe("history v20 pace", () => {
     expect(line.detail.when).toBe(String(NOW - 2 * HOUR));
   });
 
+  it("names the next grid reset on the same line as the closed window", () => {
+    const past = NOW - 2 * HOUR;
+    const line = paceLine({
+      currentUsed: 31.25,
+      windowStart: undefined,
+      resetsAt: past,
+      now: NOW,
+      mode: "used",
+      expired: true,
+      nextResetAt: past + 5 * HOUR,
+      policy: "fixed",
+    });
+    expect(line.detailKey).toBe("history.paceExpiredNext");
+    expect(line.detail.next).toBe(String(past + 5 * HOUR));
+  });
+
   it("does not call a fixed grid a first-use window when nothing is stored", () => {
     const line = paceLine({
       currentUsed: undefined,

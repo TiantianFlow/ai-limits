@@ -459,6 +459,11 @@ export interface PaceInput {
    * status names that reset instead of an active window.
    */
   expired?: boolean;
+  /**
+   * Next grid reset after a closed window. Named in addition to the past
+   * reset so the header matches the overview and current-cycle cards.
+   */
+  nextResetAt?: number;
   /** A fixed-grid meter never starts at first use. */
   policy?: "fixed" | "first-use";
 }
@@ -472,6 +477,15 @@ export function paceLine(input: PaceInput): { shown: number; detailKey: string; 
   const shown = input.mode === "used" ? used : 100 - used;
   const when = input.resetsAt;
   if (input.expired && when !== undefined) {
+    const next = input.nextResetAt;
+    if (next !== undefined && next > input.now) {
+      return {
+        shown,
+        detailKey: "history.paceExpiredNext",
+        detail: { when: String(when), next: String(next) },
+        warn: false,
+      };
+    }
     return { shown, detailKey: "history.paceExpired", detail: { when: String(when) }, warn: false };
   }
   if (when === undefined) {

@@ -128,10 +128,10 @@ export function createFixtureState(
         accountLabel: "Kimi Coding Moderato",
         planLabel: "Moderato",
         metrics: [
-          quota("five-hour", "5-hour usage", "general", 0.55, rollingFiveHour),
-          quota("weekly", "Weekly usage", "general", 0.22, rollingWeek),
+          quota("five-hour-coding", "5-hour usage", "general", 0.55, rollingFiveHour),
+          quota("weekly-coding", "Weekly usage", "general", 0.22, rollingWeek),
         ],
-        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["five-hour", "weekly"] }],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["five-hour-coding", "weekly-coding"] }],
       }, now),
     },
     {

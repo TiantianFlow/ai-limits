@@ -2813,7 +2813,7 @@ describe("Cockpit", () => {
     );
 
     const kimiCard = within(screen.getByRole("article", { name: "Kimi" }));
-    const weekly = within(kimiCard.getByRole("group", { name: "Weekly usage" }));
+    const weekly = within(kimiCard.getByRole("group", { name: "7-day usage" }));
     expect(weekly.getByText("0% used")).toBeVisible();
     expect(weekly.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
     expect(weekly.getByText("Waiting for a new reading")).toBeVisible();
@@ -2825,7 +2825,7 @@ describe("Cockpit", () => {
     const fiveHour = within(kimiCard.getByRole("group", { name: "5-hour usage" }));
     expect(fiveHour.getByText("0% used")).toBeVisible();
     expect(fiveHour.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
-    expect(fiveHour.queryByText(/^Resets /)).not.toBeInTheDocument();
+    expect(fiveHour.getByText(/^Resets /)).toBeVisible();
     expect(fiveHour.queryByText("No reset timing")).not.toBeInTheDocument();
 
     const claudeCard = within(screen.getByRole("article", { name: "Claude" }));
@@ -2834,7 +2834,7 @@ describe("Cockpit", () => {
     expect(claudeWeekly.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
     expect(claudeWeekly.getByText(/^Resets /)).toBeVisible();
 
-    fireEvent.click(kimiCard.getByRole("button", { name: "Open Kimi history for Weekly usage" }));
+    fireEvent.click(kimiCard.getByRole("button", { name: "Open Kimi history for 7-day usage" }));
     const cycle = within(screen.getByRole("region", { name: "Current cycle" }));
     expect(cycle.getByText("0% used")).toBeVisible();
     expect(cycle.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
