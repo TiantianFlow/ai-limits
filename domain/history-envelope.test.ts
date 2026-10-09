@@ -27,7 +27,7 @@ import {
   type WindowSpan,
 } from "./history-envelope";
 import { retainUsageHistory } from "./history";
-import { FIXTURE_NOW, REALISTIC_METERS } from "./history-realistic";
+import { FIXTURE_NOW, REALISTIC_METERS, idleGrid } from "./history-realistic";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -352,6 +352,54 @@ describe("migration, policy, and compaction", () => {
     expect(CALENDAR_NOMINAL_MS).toBe(28 * DAY);
   });
 
+  test("draws a calendar month that stores startedAt and resetsAt but no durationMs", () => {
+    // Shape of a monthly total: one cycle of sparse readings climbing toward
+    // the cap, then a reset and two readings. Values are synthetic.
+    const cycleStart = NOW - 26 * DAY;
+    const cycleEnd = cycleStart + 30 * DAY;
+    const nextEnd = cycleEnd + 31 * DAY;
+    const history: UsageHistoryObservation[] = [];
+    for (let index = 0; index < 44; index += 1) {
+      const at = cycleStart + ((index + 0.5) / 44) * (cycleEnd - cycleStart);
+      history.push(observation(at, "monthly-total", 0.02 + (index / 43) * 0.97, {
+        cadence: "calendar",
+        startedAt: cycleStart,
+        resetsAt: cycleEnd,
+      }));
+    }
+    history.push(
+      observation(cycleEnd + 6 * HOUR, "monthly-total", 0.01, {
+        cadence: "calendar",
+        startedAt: cycleEnd,
+        resetsAt: nextEnd,
+      }),
+      observation(cycleEnd + 20 * HOUR, "monthly-total", 0.04, {
+        cadence: "calendar",
+        startedAt: cycleEnd,
+        resetsAt: nextEnd,
+      }),
+    );
+    const series = buildEnvelopeSeries(history, {
+      providerKind: "kimi",
+      metricId: "monthly-total",
+      now: cycleEnd + 2 * DAY,
+      rangeStart: cycleEnd + 2 * DAY - 30 * DAY,
+      rangeEnd: cycleEnd + 2 * DAY,
+    });
+    const observed = series.spans.filter((window) => window.kind === "observed");
+    expect(observed.length).toBeGreaterThanOrEqual(2);
+    const first = observed[0]!;
+    const span = first.end - first.start;
+    expect(span).toBeGreaterThan(20 * DAY);
+    expect(span).toBeLessThan(40 * DAY);
+    expect(first.readings.length).toBeGreaterThan(20);
+    const unknownOverReadings = series.spans.filter((window) =>
+      window.kind === "unknown" &&
+      history.some((item) => item.observedAt >= window.start && item.observedAt < window.end),
+    );
+    expect(unknownOverReadings).toEqual([]);
+  });
+
   test("keeps the last reading before a window boundary while compacting the hour", () => {
     const hourStart = NOW - 10 * DAY;
     const before = hourStart + 20 * 60 * 1_000;
@@ -385,6 +433,41 @@ describe("synthetic shapes", () => {
       rangeEnd: NOW,
     });
     expect(series.spans.filter((window) => window.kind === "observed").length).toBeGreaterThanOrEqual(3);
+  });
+
+  test("treats a fixed 5-hour grid that reports 0% as idle between windows", () => {
+    const anchor = NOW - 46 * HOUR;
+    const history = idleGrid({
+      metricId: "five-hour-coding",
+      windowMs: 5 * HOUR,
+      now: NOW,
+      anchor,
+    });
+    const series = buildEnvelopeSeries(history, {
+      providerKind: "kimi",
+      metricId: "five-hour-coding",
+      now: NOW,
+      rangeStart: NOW - 48 * HOUR,
+      rangeEnd: NOW,
+    });
+    const idle = series.idleSpans.filter((span) => span.kind === "idle");
+    expect(idle.length).toBeGreaterThan(0);
+    const idleMs = idle.reduce((sum, span) => sum + (span.end - span.start), 0);
+    expect(idleMs).toBeGreaterThan(20 * HOUR);
+    // The hole before the first non-zero reading stays "No readings".
+    // Everything after the zeros is idle, with no blank strip.
+    const unknown = series.idleSpans.filter((span) => span.kind === "unknown");
+    expect(unknown.every((span) => span.end <= history[0]!.observedAt + 5 * HOUR)).toBe(true);
+    const covered = uncoveredGaps(
+      [
+        ...series.spans.map((window) => ({ from: window.start, to: window.end })),
+        ...series.idleSpans.map((span) => ({ from: span.start, to: span.end })),
+      ],
+      NOW - 48 * HOUR,
+      NOW,
+      60_000,
+    );
+    expect(covered).toEqual([]);
   });
 
   test("builds a sparse first-use 5-hour series with multi-hour holes", () => {
