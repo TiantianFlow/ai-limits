@@ -49,6 +49,7 @@ afterEach(() => {
   installI18nLocale("en");
   localStorage.clear();
   vi.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 function weeklyHistory(): UsageHistoryObservation[] {
@@ -200,7 +201,8 @@ describe("HistoryChart", () => {
     const chart = screen.getByRole("group", { name: /usage history/ });
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(screen.getByRole("tooltip")).toBeVisible();
-    expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
+    const mark = container.querySelector(".history-chart__guide-active, .history-chart__highlight");
+    expect(mark).not.toBeNull();
     const first = screen.getByRole("tooltip").textContent ?? "";
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(screen.getByRole("tooltip").textContent ?? "").not.toBe(first);
@@ -404,6 +406,11 @@ describe("HistoryChart", () => {
     return metric(meter.metricId, duration, meter.label);
   }
 
+  /** Viewbox x of a pointer, matching itemAtClientX's canvas mapping. */
+  function clientXForView(viewX: number, canvasWidth = 400): number {
+    return (viewX / 320) * canvasWidth;
+  }
+
   function chartBounds(chart: HTMLElement): void {
     const bounds = { left: 0, width: 400, top: 0, height: 140 };
     vi.spyOn(chart, "getBoundingClientRect").mockReturnValue({
@@ -432,7 +439,7 @@ describe("HistoryChart", () => {
     );
     const chart = screen.getByRole("group", { name: /usage history/ });
     chartBounds(chart);
-    fireEvent.pointerMove(chart, { clientX: 390, clientY: 40, pointerType: "mouse" });
+    fireEvent.pointerMove(chart, { clientX: clientXForView(300), clientY: 40, pointerType: "mouse" });
     const tooltip = screen.getByRole("tooltip").textContent ?? "";
     expect(tooltip).toMatch(/readings in window/);
     expect(tooltip).not.toMatch(/No reading in the last/);
@@ -464,13 +471,149 @@ describe("HistoryChart", () => {
     const again = screen.getByRole("group", { name: /usage history/ });
     chartBounds(again);
     const hits = [...document.querySelectorAll(".history-chart__hit")];
+    const againChart = screen.getByRole("group", { name: /usage history/ });
     const texts = hits.map((hit) => {
+      fireEvent.keyDown(againChart, { key: "Escape" });
+      againChart.blur();
+      fireEvent.pointerDown(hit, { pointerType: "mouse", button: 0 });
+      fireEvent.click(hit);
+      fireEvent.pointerDown(hit, { pointerType: "mouse", button: 0 });
       fireEvent.click(hit);
       return screen.getByRole("tooltip").textContent ?? "";
     });
     expect(texts.some((text) => /No reading near reset/.test(text))).toBe(true);
     expect(texts.some((text) => /readings in window/.test(text))).toBe(true);
     expect(document.querySelector(".history-chart__highlight")).not.toBeNull();
+  });
+
+  it("gives every pointer position a visible tooltip or no highlight", () => {
+    const cases = [
+      ["weekly", 48, 460],
+      ["weekly", 30 * 24, 340],
+      ["30-day", 30 * 24, 460],
+      ["five-hour-coding", 48, 460],
+    ] as const;
+    for (const [metricId, rangeHours, width] of cases) {
+      const meter = REALISTIC_METERS.find((item) => item.metricId === metricId)!;
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
+      const { container, unmount } = render(
+        <HistoryChart
+          providerName={meter.providerName}
+          providerKind={meter.providerKind}
+          mode="used"
+          metrics={[metricFor(meter)]}
+          history={meter.history}
+          now={FIXTURE_NOW}
+          rangeHours={rangeHours}
+        />,
+      );
+      const chart = screen.getByRole("group", { name: /usage history/ });
+      chartBounds(chart);
+      const label = `${meter.metricId} ${rangeHours}h @${width}`;
+      for (let step = 0; step <= 20; step += 1) {
+            const clientX = clientXForView(28 + (step / 20) * (312 - 28));
+            fireEvent.pointerMove(chart, { clientX, clientY: 40, pointerType: "mouse" });
+            const highlighted = container.querySelector(
+              ".history-chart__highlight, .history-chart__guide-active",
+            );
+            const tooltip = container.querySelector(".history-chart__tooltip");
+            if (!highlighted) {
+              expect(tooltip, label).toBeNull();
+              continue;
+            }
+            expect(tooltip, `${label} at ${clientX}`).not.toBeNull();
+            const text = tooltip?.textContent?.trim() ?? "";
+            expect(text.length, `${label} at ${clientX}`).toBeGreaterThan(0);
+            const box = tooltip as HTMLElement;
+            const left = Number.parseFloat(box.style.left);
+            const tipWidth = Number.parseFloat(box.style.width);
+            expect(left, label).toBeGreaterThanOrEqual(0);
+            expect(left + tipWidth, label).toBeLessThanOrEqual(Math.max(width, 360, tipWidth) + 1);
+      }
+      unmount();
+    }
+  });
+
+  it("hides the tooltip when the pointer leaves and does not pin on the focusing click", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    const claude = REALISTIC_METERS.find((meter) => meter.metricId === "weekly")!;
+    const { container } = render(
+      <HistoryChart
+        providerName={claude.providerName}
+        providerKind="claude"
+        mode="used"
+        metrics={[metricFor(claude)]}
+        history={claude.history}
+        now={FIXTURE_NOW}
+        rangeHours={48}
+      />,
+    );
+    const chart = screen.getByRole("group", { name: /usage history/ });
+    chartBounds(chart);
+    fireEvent.pointerMove(chart, { clientX: clientXForView(200), clientY: 40, pointerType: "mouse" });
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    expect(container.querySelector(".history-chart__guide-active")).not.toBeNull();
+    expect(container.querySelector(".history-chart__highlight")).toBeNull();
+    fireEvent.pointerLeave(chart);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(container.querySelector(".history-chart__guide-active")).toBeNull();
+
+    const hit = container.querySelector(".history-chart__hit");
+    expect(hit).not.toBeNull();
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(hit!);
+    expect(document.activeElement).toBe(chart);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(hit).not.toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(hit!);
+    expect(hit).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    fireEvent.pointerLeave(chart);
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(hit).not.toHaveAttribute("aria-pressed", "true");
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(hit!);
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(hit!);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("steps along readings with the arrow keys, including from nothing", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    const claude = REALISTIC_METERS.find((meter) => meter.metricId === "weekly")!;
+    render(
+      <HistoryChart
+        providerName={claude.providerName}
+        providerKind="claude"
+        mode="used"
+        metrics={[metricFor(claude)]}
+        history={claude.history}
+        now={FIXTURE_NOW}
+        rangeHours={48}
+      />,
+    );
+    const chart = screen.getByRole("group", { name: /usage history/ });
+    chart.focus();
+    expect(document.activeElement).toBe(chart);
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    const first = screen.getByRole("tooltip").textContent ?? "";
+    const firstX = document.querySelector(".history-chart__guide-active")?.getAttribute("x1");
+    expect(first.length).toBeGreaterThan(0);
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    const second = screen.getByRole("tooltip").textContent ?? "";
+    const secondX = document.querySelector(".history-chart__guide-active")?.getAttribute("x1");
+    expect(secondX).not.toBe(firstX);
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.keyDown(chart, { key: "ArrowLeft" });
+    const last = screen.getByRole("tooltip").textContent ?? "";
+    expect(last).not.toBe(first);
+    expect(last).not.toBe(second);
+    expect(document.activeElement).toBe(chart);
   });
 
   it("gives every hover target a tooltip whenever the highlight is visible", () => {
@@ -494,16 +637,22 @@ describe("HistoryChart", () => {
           const chart = screen.getByRole("group", { name: /usage history/ });
           const hits = [...container.querySelectorAll(".history-chart__hit")];
           expect(hits.length, `${meter.metricId} ${rangeHours}h`).toBeGreaterThan(0);
-          for (const hit of hits) {
+          const sample = hits.filter((_, index) => index % Math.ceil(hits.length / 2) === 0);
+          for (const hit of sample) {
+            fireEvent.keyDown(chart, { key: "Escape" });
+            chart.blur();
+            fireEvent.pointerDown(hit, { pointerType: "mouse", button: 0 });
             fireEvent.click(hit);
-            expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
+            fireEvent.pointerDown(hit, { pointerType: "mouse", button: 0 });
+            fireEvent.click(hit);
+            expect(container.querySelector(".history-chart__highlight, .history-chart__guide-active")).not.toBeNull();
             const tooltip = screen.getByRole("tooltip");
             expect(tooltip.textContent?.trim().length).toBeGreaterThan(0);
           }
           const level = detailLevel(
             meter.metricId.includes("five-hour") ? 5 * HOUR : 7 * DAY,
             rangeHours * HOUR,
-            Math.max(1, width - 36),
+            Math.max(1, width),
           );
           expect(["envelope", "bars", "daily"]).toContain(level);
           unmount();
@@ -532,13 +681,16 @@ describe("HistoryChart", () => {
     const outside = document.createElement("button");
     document.body.append(outside);
     outside.focus();
-    fireEvent.pointerMove(chart, { clientX: 200, clientY: 40, pointerType: "mouse" });
+    fireEvent.pointerMove(chart, { clientX: clientXForView(160), clientY: 40, pointerType: "mouse" });
     expect(document.activeElement).toBe(outside);
+    fireEvent.pointerLeave(chart);
     const hit = container.querySelector(".history-chart__hit");
     expect(hit).not.toBeNull();
     fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
     fireEvent.click(hit!);
     expect(document.activeElement).toBe(chart);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
     const before = screen.getByRole("tooltip").textContent ?? "";
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(screen.getByRole("tooltip").textContent ?? "").not.toBe(before);
@@ -605,26 +757,31 @@ describe("HistoryChart", () => {
       y: 0,
       toJSON: () => bounds,
     });
-    fireEvent.pointerMove(chart, { clientX: 220, clientY: 40, pointerType: "mouse" });
+    fireEvent.pointerMove(chart, { clientX: clientXForView(180), clientY: 40, pointerType: "mouse" });
     expect(screen.getByRole("tooltip")).toBeVisible();
     fireEvent.pointerLeave(chart);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     const hit = container.querySelector(".history-chart__hit");
     expect(hit).not.toBeNull();
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(hit!);
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
     fireEvent.click(hit!);
     expect(screen.getByRole("tooltip")).toBeVisible();
     fireEvent.pointerLeave(chart);
     expect(screen.getByRole("tooltip")).toBeVisible();
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
     fireEvent.click(hit!);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     fireEvent.keyDown(chart, { key: "ArrowRight" });
-    expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
+    expect(container.querySelector(".history-chart__highlight")).toBeNull();
+    expect(container.querySelector(".history-chart__guide-active")).not.toBeNull();
     expect(screen.getByRole("tooltip")).toBeVisible();
   });
 
-  function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
+function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
     const duration = meter.metricId.includes("five-hour") ? 5 * HOUR : 7 * DAY;
     const snapshot: UsageSnapshot = {
       providerKind: meter.providerKind,

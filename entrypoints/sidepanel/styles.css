@@ -909,9 +909,30 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   pointer-events: auto;
 }
 
-.history-chart__hit:hover,
-.history-chart__hit:focus-visible {
-  background: color-mix(in srgb, var(--text) 10%, transparent);
+.history-chart__hit.is-pinned {
+  box-shadow: inset 0 0 0 1px var(--quota);
+}
+
+.history-chart__guide-active {
+  stroke: var(--quota);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.history-chart__dot-active {
+  fill: var(--quota);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+
+.is-pinned .history-chart__guide-active {
+  stroke-width: 2;
+}
+
+.history-chart__highlight.is-pinned {
+  stroke: var(--quota);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .history-chart__tooltip {

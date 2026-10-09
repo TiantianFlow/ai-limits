@@ -108,6 +108,33 @@ function weeklyGrid(options: {
   return history.sort((left, right) => left.observedAt - right.observedAt);
 }
 
+/**
+ * First-use 5-hour windows with a long idle stretch, then one window whose
+ * only reading is well before its reset. At 48 h that tail is a circle and
+ * the stretch to the next window is blank unless the chart covers it.
+ */
+export function firstUseIdleGap(options: {
+  metricId: string;
+  windowMs: number;
+  now: number;
+}): UsageHistoryObservation[] {
+  const history: UsageHistoryObservation[] = [];
+  const push = (observedAt: number, usedRatio: number): void => {
+    const windowStart = Math.floor(observedAt / HOUR) * HOUR;
+    history.push(quota(options.metricId, observedAt, usedRatio, {
+      cadence: "rolling",
+      durationMs: options.windowMs,
+      resetsAt: windowStart + options.windowMs,
+    }));
+  };
+  // Two windows about a day ago, then nothing until one window near now
+  // whose reading sits hours before the reset.
+  push(options.now - 40 * HOUR, 0.2);
+  push(options.now - 30 * HOUR, 0.15);
+  push(options.now - 6 * HOUR, 0.08);
+  return history;
+}
+
 /** Sparse first-use windows: hour-quantized starts, reported even at 0% used. */
 function sparseFirstUse(options: {
   metricId: string;
@@ -292,14 +319,21 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
     seed: 47,
     now,
   }).filter((_, index) => index % 7 === 0);
-  const kimiShort = sparseFirstUse({
-    metricId: "five-hour-coding",
-    count: 46,
-    spanDays: 27,
-    windowMs: 5 * HOUR,
-    seed: 53,
-    now,
-  });
+  const kimiShort = [
+    ...sparseFirstUse({
+      metricId: "five-hour-coding",
+      count: 46,
+      spanDays: 27,
+      windowMs: 5 * HOUR,
+      seed: 53,
+      now,
+    }),
+    ...firstUseIdleGap({
+      metricId: "five-hour-coding",
+      windowMs: 5 * HOUR,
+      now,
+    }),
+  ];
   const kimiMonth = calendarReset({ metricId: "monthly-total", seed: 71, now });
   const chatgpt = rollingUntilUsed({ metricId: "30-day", seed: 83, now });
   const cursorMonth = monthlyDurationSwitch({ metricId: "other-models-monthly", seed: 97, now });

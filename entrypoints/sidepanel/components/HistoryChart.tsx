@@ -169,8 +169,10 @@ function windowTooltip(
   window: WindowSpan,
   mode: DisplayMode,
   now: number,
+  readingAt?: number,
 ): string[] {
   const lines = [formatSpan(window.start, window.end, window.current)];
+  if (readingAt !== undefined) lines.push(formatDateTime(readingAt));
   if (window.kind === "unknown") {
     lines.push(l10n.t("history.tooltipNoReadings"));
     lines.push(l10n.t("history.tooltipPossibleRange"));
@@ -260,6 +262,7 @@ export function HistoryChart({
   const summaryId = useId();
   const clipId = useId();
   const chartRef = useRef<HTMLDivElement>(null);
+  const focusedBeforePress = useRef(false);
   const [plotWidth, setPlotWidth] = useState(360);
   const [cardWidth, setCardWidth] = useState(360);
   const [active, setActive] = useState<InspectItem | null>(null);
@@ -314,7 +317,7 @@ export function HistoryChart({
   }, [history, selectedMetric, providerKind, now, rangeStart, rangeEnd]);
 
   const level: DetailLevel = series
-    ? detailLevel(series.windowMs || 60 * 60 * 1_000, rangeEnd - rangeStart, Math.max(1, plotWidth - 36))
+    ? detailLevel(series.windowMs || 60 * 60 * 1_000, rangeEnd - rangeStart, Math.max(1, plotWidth))
     : "bars";
   const days = useMemo(
     () => (series && level === "daily"
@@ -325,7 +328,7 @@ export function HistoryChart({
 
   if (!selectedMetric || !series) return null;
 
-  const items = inspectItems(series, days, level, mode, now);
+  const items = inspectItems(series, days, level, mode, now, rangeStart, rangeEnd, Math.max(plotWidth, 1));
   const activeItem = items.find((item) => item.id === active?.id) ?? null;
   const readings = series.readingsInRange;
   const withReadings = series.spans.filter((window) => window.kind === "observed").length;
@@ -349,11 +352,25 @@ export function HistoryChart({
   function move(step: number): void {
     if (items.length === 0) return;
     const index = items.findIndex((item) => item.id === active?.id);
-    const next = index < 0 ? (step > 0 ? 0 : items.length - 1) : Math.min(items.length - 1, Math.max(0, index + step));
+    if (index < 0) {
+      const item = step > 0 ? items[0] : items.at(-1);
+      if (item) setActive({ kind: item.kind, id: item.id });
+      return;
+    }
+    const here = items[index]?.guide?.x;
+    let next = index;
+    const forward = step > 0;
+    let cursor = index + step;
+    const limit = items.length;
+    while (forward ? cursor < limit : cursor >= 0) {
+      next = cursor;
+      const guide = items[cursor]?.guide?.x;
+      if (here === undefined || guide === undefined || Math.abs(guide - here) > 0.5) break;
+      cursor += step;
+    }
     const item = items[next];
     if (!item) return;
     setActive({ kind: item.kind, id: item.id });
-    setPinned(true);
   }
 
   function itemAtClientX(clientX: number): Inspectable | undefined {
@@ -363,13 +380,10 @@ export function HistoryChart({
     if (bounds.width <= 0) return undefined;
     const viewX = ((clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
     const hits = items.filter((item) => {
-      const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
-      if (!span) return false;
-      const left = timeX(span.from, rangeStart, rangeEnd);
-      const right = timeX(span.to, rangeStart, rangeEnd);
-      const start = Math.min(left, right);
-      const end = Math.max(left, right);
-      const afterStart = viewX >= start;
+      const box = item.hit;
+      if (!box) return false;
+      const end = box.x + box.width;
+      const afterStart = viewX >= box.x;
       const beforeEnd = viewX <= end;
       return afterStart && beforeEnd;
     });
@@ -394,17 +408,11 @@ export function HistoryChart({
     } else if (event.key === "Home") {
       event.preventDefault();
       const first = items[0];
-      if (first) {
-        setActive({ kind: first.kind, id: first.id });
-        setPinned(true);
-      }
+      if (first) setActive({ kind: first.kind, id: first.id });
     } else if (event.key === "End") {
       event.preventDefault();
       const last = items.at(-1);
-      if (last) {
-        setActive({ kind: last.kind, id: last.id });
-        setPinned(true);
-      }
+      if (last) setActive({ kind: last.kind, id: last.id });
     } else if (event.key === "Escape") {
       setActive(null);
       setPinned(false);
@@ -456,6 +464,11 @@ export function HistoryChart({
             onPointerLeave={() => {
               if (!pinned) setActive(null);
             }}
+            onBlur={(event) => {
+              const next = event.relatedTarget;
+              if (next instanceof Node && event.currentTarget.contains(next)) return;
+              if (!pinned) setActive(null);
+            }}
           >
             <svg
               className="history-chart__svg"
@@ -482,48 +495,59 @@ export function HistoryChart({
                 );
               })}
               <g clipPath={`url(#${clipId})`}>
-                {level === "envelope"
-                  ? <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} now={now} />
-                  : null}
-                {level === "bars"
-                  ? <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-                  : null}
-                {level === "daily"
-                  ? <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-                  : null}
+                {level === "envelope" ? (
+                  <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} now={now} />
+                ) : null}
+                {level === "bars" ? (
+                  <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                ) : null}
+                {level === "daily" ? (
+                  <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                ) : null}
                 <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
                 {activeItem ? (
                   <Highlight
-                    from={activeItem.from}
-                    to={activeItem.to}
+                    item={activeItem}
+                    mode={mode}
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
+                    pinned={pinned}
                   />
                 ) : null}
               </g>
             </svg>
             <div className="history-chart__hits">
               {items.map((item) => {
-                const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
-                if (!span) return null;
-                const left = timeX(span.from, rangeStart, rangeEnd);
-                const right = timeX(span.to, rangeStart, rangeEnd);
+                if (!item.hit) return null;
+                const pinnedHere = pinned && active?.id === item.id;
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    className="history-chart__hit"
+                    className={pinnedHere ? "history-chart__hit is-pinned" : "history-chart__hit"}
                     tabIndex={-1}
                     aria-label={item.lines[0]}
+                    aria-pressed={pinnedHere}
                     style={{
-                      left: `${(Math.min(left, right) / VIEWBOX_WIDTH) * 100}%`,
-                      width: `${(Math.max(1, Math.abs(right - left)) / VIEWBOX_WIDTH) * 100}%`,
+                      left: `${(item.hit.x / VIEWBOX_WIDTH) * 100}%`,
+                      width: `${(item.hit.width / VIEWBOX_WIDTH) * 100}%`,
                     }}
                     onPointerDown={(event) => {
                       if (event.pointerType === "mouse" && event.button !== 0) return;
-                      chartRef.current?.querySelector<HTMLElement>(".history-chart__canvas")?.focus();
+                      const canvas = chartRef.current?.querySelector<HTMLElement>(".history-chart__canvas");
+                      // The press that first focuses the chart must not also pin.
+                      focusedBeforePress.current = document.activeElement === canvas;
+                      canvas?.focus();
+                    }}
+                    onMouseDown={(event) => {
+                      // The hit is the top element, so a click would focus the
+                      // button. Keep focus on the chart, where the arrow keys are.
+                      event.preventDefault();
                     }}
                     onClick={() => {
+                      // A press that only just focused the chart does not pin
+                      // or select. The next click on the focused chart does.
+                      if (!focusedBeforePress.current) return;
                       const same = pinned && active?.id === item.id;
                       setPinned(!same);
                       setActive(same ? null : { kind: item.kind, id: item.id });
@@ -598,59 +622,167 @@ interface Inspectable {
   from: number;
   to: number;
   lines: string[];
+  /** Screen box of this target. Missing when the target paints nothing. */
+  hit?: { x: number; width: number };
+  /** A reading on a line: guide and dot, not a shaded window. */
+  guide?: { x: number; y: number };
 }
 
+function hitBox(
+  from: number,
+  to: number,
+  rangeStart: number,
+  rangeEnd: number,
+): { x: number; width: number } | undefined {
+  const box = spanRect(from, to, rangeStart, rangeEnd);
+  if (!box || box.width < 0.4) return undefined;
+  return box;
+}
+
+/**
+ * Targets are what the chart paints. A window drawn as a line is one target
+ * per reading (a guide and a dot). A bar, an outline, or an idle stretch stays
+ * one target. A region with no mark is not a target.
+ */
 function inspectItems(
   series: EnvelopeSeries,
   days: DayBucket[],
   level: DetailLevel,
   mode: DisplayMode,
   now: number,
+  rangeStart: number,
+  rangeEnd: number,
+  plotWidth: number,
 ): Inspectable[] {
   if (level === "daily") {
-    return days.map((bucket) => ({
-      kind: "day" as const,
-      id: `day-${bucket.start}`,
-      from: bucket.start,
-      to: bucket.end,
-      lines: dayTooltip(bucket, mode, series.policy),
-    }));
+    return days.flatMap((bucket) => {
+      const hit = hitBox(bucket.start, bucket.end, rangeStart, rangeEnd);
+      if (!hit) return [];
+      return [{
+        kind: "day" as const,
+        id: `day-${bucket.start}`,
+        from: bucket.start,
+        to: bucket.end,
+        lines: dayTooltip(bucket, mode, series.policy),
+        hit,
+      }];
+    });
   }
-  const quotaSpans = series.spans.map((window) => ({
-    kind: "window" as const,
-    id: window.id,
-    from: window.start,
-    to: window.end,
-    lines: windowTooltip(window, mode, now),
-  }));
-  const gaps = [...series.idleSpans, ...series.unknownRuns].map((span, index) => ({
-    kind: "span" as const,
-    id: `span-${span.start}-${span.end}-${index}`,
-    from: Math.min(span.start, span.end),
-    to: Math.max(span.start, span.end),
-    lines: spanTooltip(span, mode),
-  }));
-  return [...quotaSpans, ...gaps].sort((left, right) => left.from - right.from);
+  const lineWindows = level === "envelope";
+  const windowItems = series.spans.flatMap((window) => {
+    if (lineWindows && window.kind === "observed" && window.readings.length > 0) {
+      return readingTargets(window, mode, now, rangeStart, rangeEnd, plotWidth);
+    }
+    const hit = hitBox(window.start, window.end, rangeStart, rangeEnd);
+    if (!hit) return [];
+    return [{
+      kind: "window" as const,
+      id: window.id,
+      from: window.start,
+      to: window.end,
+      lines: windowTooltip(window, mode, now),
+      hit,
+    }];
+  });
+  const gaps = [...series.idleSpans, ...series.unknownRuns].flatMap((span, index) => {
+    const from = Math.min(span.start, span.end);
+    const to = Math.max(span.start, span.end);
+    const hit = hitBox(from, to, rangeStart, rangeEnd);
+    if (!hit) return [];
+    return [{
+      kind: "span" as const,
+      id: `span-${span.start}-${span.end}-${index}`,
+      from,
+      to,
+      lines: spanTooltip(span, mode),
+      hit,
+    }];
+  });
+  return [...windowItems, ...gaps].sort((left, right) => left.from - right.from || left.to - right.to);
+}
+
+/** One keyboard/hover step per reading of a window drawn as a line. */
+function readingTargets(
+  window: WindowSpan,
+  mode: DisplayMode,
+  now: number,
+  rangeStart: number,
+  rangeEnd: number,
+  plotWidth: number,
+): Inspectable[] {
+  // About 8 px between steps. The guide snaps to the last reading of a
+  // closer run, and the last reading of the window is always its own step.
+  const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
+  const minGap = 8 / Math.max(pxPerUnit, 0.01);
+  const visible = window.readings.filter((reading) => {
+    const afterStart = reading.observedAt >= rangeStart;
+    const beforeEnd = reading.observedAt <= rangeEnd;
+    return afterStart && beforeEnd;
+  });
+  const kept: { at: number; x: number; y: number }[] = [];
+  visible.forEach((reading, index) => {
+    const x = timeX(reading.observedAt, rangeStart, rangeEnd);
+    const y = shownY(window.values[window.readings.indexOf(reading)] ?? reading.left, mode);
+    const previous = kept.at(-1);
+    if (previous && x - previous.x < minGap) return;
+    kept.push({ at: reading.observedAt, x, y });
+  });
+  return kept.map((point, index) => {
+    const before = kept[index - 1]?.x ?? point.x;
+    const after = kept[index + 1]?.x ?? point.x;
+    // The first reading owns the empty paper to its left, so a hover there
+    // still names a reading. The guide itself stays on the reading.
+    const rawLeft = index === 0 ? PLOT_LEFT : (before + point.x) / 2;
+    const rawRight = index === kept.length - 1 ? PLOT_RIGHT : (point.x + after) / 2;
+    const left = Math.max(PLOT_LEFT, Math.min(rawLeft, PLOT_RIGHT - 0.8));
+    const right = Math.min(PLOT_RIGHT, Math.max(rawRight, left + 0.8));
+    return {
+      kind: "window" as const,
+      id: `${window.id}-reading-${point.at}`,
+      from: point.at,
+      to: point.at,
+      lines: windowTooltip(window, mode, now, point.at),
+      hit: { x: left, width: Math.max(0.4, right - left) },
+      guide: { x: point.x, y: point.y },
+    };
+  });
 }
 
 function Highlight({
-  from,
-  to,
+  item,
+  mode,
   rangeStart,
   rangeEnd,
+  pinned,
 }: {
-  from: number;
-  to: number;
+  item: Inspectable;
+  mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
+  pinned: boolean;
 }) {
-  const span = clampInterval(from, to, rangeStart, rangeEnd);
+  if (item.guide) {
+    const y = shownY(0, mode);
+    return (
+      <g className={pinned ? "is-pinned" : undefined}>
+        <line
+          className="history-chart__guide-active"
+          x1={item.guide.x}
+          x2={item.guide.x}
+          y1={PLOT_TOP}
+          y2={PLOT_BOTTOM}
+        />
+        <circle className="history-chart__dot-active" cx={item.guide.x} cy={item.guide.y} r="3.2" />
+      </g>
+    );
+  }
+  const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
   if (!span) return null;
   const left = timeX(span.from, rangeStart, rangeEnd);
   const right = timeX(span.to, rangeStart, rangeEnd);
   return (
     <rect
-      className="history-chart__highlight"
+      className={pinned ? "history-chart__highlight is-pinned" : "history-chart__highlight"}
       x={left}
       y={PLOT_TOP}
       width={Math.max(1, right - left)}
@@ -670,7 +802,7 @@ function tooltipPosition(
   const span = clampInterval(from, to, rangeStart, rangeEnd) ?? { from, to };
   const mid = (timeX(span.from, rangeStart, rangeEnd) + timeX(span.to, rangeStart, rangeEnd)) / 2;
   const center = (mid / VIEWBOX_WIDTH) * plotWidth;
-  const width = Math.min(TOOLTIP_MAX, Math.max(80, cardWidth - 8));
+  const width = Math.min(TOOLTIP_MAX, Math.max(80, cardWidth - 8), Math.max(80, plotWidth));
   const left = Math.min(Math.max(0, center - width / 2), Math.max(0, plotWidth - width));
   return { left, width };
 }
@@ -742,9 +874,10 @@ function footnote(series: EnvelopeSeries, level: DetailLevel, rangeHours: number
 }
 
 /**
- * Viewbox x intervals that a mark actually paints. An open tail contributes
- * only its stub; the rest of that tail is the outline. Window bounds are not
- * coverage.
+ * Viewbox x intervals that a mark actually paints. An untrusted tail, open
+ * or closed, is the short dotted stub plus the possible-range band through
+ * the reset. A trusted tail is the band that holds the last value. Window
+ * bounds are not coverage.
  */
 export function drawnXSpans(options: {
   series: EnvelopeSeries;
@@ -857,6 +990,21 @@ function EnvelopeLayer({
       {series.idleSpans.filter((span) => span.kind === "idle").map((span) => {
         const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
         if (!box) return null;
+        // A baseline only covers the bottom edge. A stretch at least a window
+        // wide is the dashed "no readings" column, or the paper between that
+        // outline and the next circle stays blank.
+        if (!(span.end - span.start < series.windowMs)) {
+          return (
+            <rect
+              key={`idle-${span.start}`}
+              className="history-chart__unknown"
+              x={box.x}
+              y={PLOT_TOP}
+              width={box.width}
+              height={PLOT_BOTTOM - PLOT_TOP}
+            />
+          );
+        }
         return (
           <line
             key={`idle-${span.start}`}
@@ -886,6 +1034,10 @@ function EnvelopeLayer({
               const d = band.open
                 ? openStub(band, mode, rangeStart, rangeEnd, pxPerUnit)
                 : bandPath(band, mode, rangeStart, rangeEnd);
+              // The dotted stub is at most 10 px. The rest of an open tail,
+              // including a closed window's, is the possible-range band.
+              // Gating that band on the current window left a blank column
+              // between the stub and the reset circle.
               const rest = band.open
                 ? openTailBand(band, mode, rangeStart, rangeEnd, pxPerUnit)
                 : null;
