@@ -8,6 +8,7 @@ import {
   buildEnvelopeSeries,
   buildWindowEnvelope,
   capRebaseMarkers,
+  coverageSpans,
   dailyBuckets,
   detailLevel,
   expectedIntervalMs,
@@ -17,7 +18,9 @@ import {
   isIdleProofReading,
   meterPolicy,
   predictUsed,
+  sameResetKey,
   tailToleranceMs,
+  uncoveredGaps,
   windowBar,
   windowTrend,
   type EnvelopeReading,
@@ -505,5 +508,78 @@ describe("synthetic shapes", () => {
     });
     expect(series.spans.filter((window) => window.kind === "observed").length).toBeGreaterThan(0);
     expect(series.idleSpans.some((span) => span.proofReadings > 0)).toBe(true);
+  });
+
+  test("covers the x range of every fixture meter at 48 h, 7 d, and 30 d", () => {
+    const epsilon = 60 * 1_000;
+    for (const meter of REALISTIC_METERS.filter((item) => item.history.length > 0)) {
+      for (const hours of [48, 7 * 24, 30 * 24]) {
+        const rangeStart = FIXTURE_NOW - hours * HOUR;
+        const series = buildEnvelopeSeries(meter.history, {
+          providerKind: meter.providerKind,
+          metricId: meter.metricId,
+          now: FIXTURE_NOW,
+          rangeStart,
+          rangeEnd: FIXTURE_NOW,
+        });
+        const first = series.spans
+          .flatMap((window) => window.readings.map((reading) => reading.observedAt))
+          .reduce<number | undefined>(
+            (earliest, at) => earliest === undefined ? at : Math.min(earliest, at),
+            undefined,
+          );
+        const from = Math.max(rangeStart, first ?? rangeStart);
+        const gaps = uncoveredGaps(coverageSpans(series, rangeStart, FIXTURE_NOW), from, FIXTURE_NOW, epsilon);
+        expect(gaps, `${meter.metricId} ${hours}h`).toEqual([]);
+      }
+    }
+  });
+
+  test("treats a 31-day to 30-day drop as a reset, not a mid-window rise", () => {
+    const cursor = REALISTIC_METERS.find((meter) => meter.metricId === "other-models-monthly")!;
+    const series = buildEnvelopeSeries(cursor.history, {
+      providerKind: "cursor",
+      metricId: "other-models-monthly",
+      now: FIXTURE_NOW,
+      rangeStart: FIXTURE_NOW - 30 * DAY,
+      rangeEnd: FIXTURE_NOW,
+    });
+    expect(series.events.filter((event) => event.kind === "rebase")).toEqual([]);
+    const observed = series.spans.filter((window) => window.kind === "observed");
+    expect(observed.length).toBeGreaterThanOrEqual(2);
+    const boundary = observed.find((window) =>
+      window.readings.some((reading) => reading.durationMs === 30 * DAY),
+    );
+    expect(boundary?.readings.every((reading) => reading.durationMs === 30 * DAY)).toBe(true);
+    const previous = observed.find((window) =>
+      window.readings.length > 1 &&
+      window.readings.every((reading) => reading.durationMs === 31 * DAY),
+    );
+    expect(previous).toBeDefined();
+    expect(previous!.end).toBeLessThanOrEqual(boundary!.end);
+  });
+
+  test("still marks a rise that stays inside one reset key", () => {
+    const resetsAt = NOW + 7 * DAY;
+    const history = [
+      observation(NOW - 3 * DAY, "weekly", 0.6, { cadence: "calendar", durationMs: 7 * DAY, resetsAt }),
+      observation(NOW - 2 * DAY, "weekly", 0.1, { cadence: "calendar", durationMs: 7 * DAY, resetsAt }),
+    ];
+    const series = buildEnvelopeSeries(history, {
+      providerKind: "claude",
+      metricId: "weekly",
+      now: NOW,
+      rangeStart: NOW - 14 * DAY,
+      rangeEnd: NOW,
+    });
+    expect(series.events.some((event) => event.kind === "rebase")).toBe(true);
+    expect(sameResetKey(
+      { observedAt: NOW - 3 * DAY, usedRatio: 0.6, left: 40, resetsAt, durationMs: 7 * DAY },
+      { observedAt: NOW - 2 * DAY, usedRatio: 0.1, left: 90, resetsAt, durationMs: 7 * DAY },
+    )).toBe(true);
+    expect(sameResetKey(
+      { observedAt: NOW - 3 * DAY, usedRatio: 0.6, left: 40, resetsAt, durationMs: 31 * DAY },
+      { observedAt: NOW - 2 * DAY, usedRatio: 0.1, left: 90, resetsAt: resetsAt + 30 * DAY, durationMs: 30 * DAY },
+    )).toBe(false);
   });
 });

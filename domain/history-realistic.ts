@@ -182,6 +182,68 @@ function rollingUntilUsed(options: {
   return history;
 }
 
+/**
+ * Weekly grid with a multi-day hole and readings that omit resetsAt,
+ * the shape of a 2-hour meter stored beside the weekly pool.
+ * `missingResetEvery` drops resetsAt on every Nth kept reading.
+ */
+export function weeklyWithHoleAndMissingResets(options: {
+  metricId: string;
+  windowMs: number;
+  days: number;
+  holeHours: number;
+  holeEndAgoHours: number;
+  missingResetEvery: number;
+  seed: number;
+  now: number;
+}): UsageHistoryObservation[] {
+  const history = weeklyGrid(options);
+  return history.map((observation, index) => {
+    if (options.missingResetEvery <= 0 || index % options.missingResetEvery !== 0) return observation;
+    return {
+      ...observation,
+      metrics: observation.metrics.map((sample) => {
+        if (sample.type !== "quota" || !sample.cycle) return sample;
+        const { resetsAt: _dropped, ...cycle } = sample.cycle;
+        return { ...sample, cycle };
+      }),
+    };
+  });
+}
+
+/**
+ * Monthly fixed meter whose window is 31 days, then 30, and whose used
+ * ratio drops to 0 at that boundary. That is a reset, not a mid-window rise.
+ */
+export function monthlyDurationSwitch(options: {
+  metricId: string;
+  seed: number;
+  now: number;
+}): UsageHistoryObservation[] {
+  const random = mulberry32(options.seed);
+  const history: UsageHistoryObservation[] = [];
+  const boundary = options.now - 10 * DAY;
+  const previousEnd = boundary;
+  const nextEnd = boundary + 30 * DAY;
+  for (let at = options.now - 29 * DAY; at <= options.now; at += 12 * HOUR) {
+    const before = at < boundary;
+    const windowStart = before ? previousEnd - 31 * DAY : boundary;
+    const windowEnd = before ? previousEnd : nextEnd;
+    const progress = (at - windowStart) / (windowEnd - windowStart);
+    history.push(quota(
+      options.metricId,
+      at,
+      before ? 0.2 + progress * 0.5 : progress * 0.35,
+      {
+        cadence: "calendar",
+        durationMs: before ? 31 * DAY : 30 * DAY,
+        resetsAt: windowEnd + jitter(random, at),
+      },
+    ));
+  }
+  return history;
+}
+
 function currentUsed(history: UsageHistoryObservation[], metricId: string, now: number): number | undefined {
   const readings = history
     .map((observation) => ({
@@ -211,12 +273,13 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
     seed: 11,
     now,
   });
-  const grok = weeklyGrid({
+  const grok = weeklyWithHoleAndMissingResets({
     metricId: "weekly-pool",
     windowMs: 7 * DAY,
     days: 30,
     holeHours: 4 * 24,
     holeEndAgoHours: 5 * 24,
+    missingResetEvery: 3,
     seed: 29,
     now,
   });
@@ -239,6 +302,7 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
   });
   const kimiMonth = calendarReset({ metricId: "monthly-total", seed: 71, now });
   const chatgpt = rollingUntilUsed({ metricId: "30-day", seed: 83, now });
+  const cursorMonth = monthlyDurationSwitch({ metricId: "other-models-monthly", seed: 97, now });
   return [
     {
       providerKind: "claude",
@@ -279,6 +343,14 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
       label: "Monthly models",
       history: [],
       currentUsedRatio: undefined,
+    },
+    {
+      providerKind: "cursor",
+      providerName: "Sample Cursor",
+      metricId: "other-models-monthly",
+      label: "Other models",
+      history: cursorMonth,
+      currentUsedRatio: currentUsed(cursorMonth, "other-models-monthly", now),
     },
   ];
 }
