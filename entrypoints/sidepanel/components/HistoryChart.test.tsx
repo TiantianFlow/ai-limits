@@ -2,7 +2,11 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ProviderInstanceView, UsageSnapshot } from "../../../domain/public-protocol";
+import {
+  detailLevel,
+  type ProviderInstanceView,
+  type UsageSnapshot,
+} from "../../../domain/public-protocol";
 import type { QuotaMetric, UsageHistoryObservation } from "../../../domain/model";
 import { FIXTURE_NOW, REALISTIC_METERS, type RealisticMeter } from "../../../domain/history-realistic";
 import { HistoryView } from "../views/HistoryView";
@@ -227,14 +231,6 @@ describe("HistoryChart", () => {
     expect(screen.getByText(/阴影 = 读数之间的可能范围/)).toBeVisible();
   });
 
-  function metricFor(meter: RealisticMeter): QuotaMetric {
-    return metric(
-      meter.metricId,
-      meter.metricId.includes("five-hour") ? 5 * HOUR : meter.metricId === "30-day" ? 30 * DAY : 7 * DAY,
-      meter.label,
-    );
-  }
-
   function drawnOutsidePlot(container: HTMLElement): string[] {
     const plot = { left: 28, right: 312, top: 8, bottom: 92 };
     const epsilon = 0.6;
@@ -310,6 +306,190 @@ describe("HistoryChart", () => {
         }
       }
     }
+  });
+
+  function metricFor(meter: RealisticMeter): QuotaMetric {
+    const duration = meter.metricId.includes("five-hour")
+      ? 5 * HOUR
+      : meter.metricId === "30-day" || meter.metricId.includes("monthly")
+        ? 30 * DAY
+        : 7 * DAY;
+    return metric(meter.metricId, duration, meter.label);
+  }
+
+  function chartBounds(chart: HTMLElement): void {
+    const bounds = { left: 0, width: 400, top: 0, height: 140 };
+    vi.spyOn(chart, "getBoundingClientRect").mockReturnValue({
+      ...bounds,
+      right: 400,
+      bottom: 140,
+      x: 0,
+      y: 0,
+      toJSON: () => bounds,
+    });
+  }
+
+  it("does not call a current window stale when its latest reading is recent", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    const claude = REALISTIC_METERS.find((meter) => meter.metricId === "weekly")!;
+    render(
+      <HistoryChart
+        providerName={claude.providerName}
+        providerKind="claude"
+        mode="used"
+        metrics={[metricFor(claude)]}
+        history={claude.history}
+        now={FIXTURE_NOW}
+        rangeHours={48}
+      />,
+    );
+    const chart = screen.getByRole("group", { name: /usage history/ });
+    chartBounds(chart);
+    fireEvent.pointerMove(chart, { clientX: 390, clientY: 40, pointerType: "mouse" });
+    const tooltip = screen.getByRole("tooltip").textContent ?? "";
+    expect(tooltip).toMatch(/readings in window/);
+    expect(tooltip).not.toMatch(/No reading in the last/);
+    expect(tooltip).not.toMatch(/No reading near reset/);
+
+    const windowEnd = FIXTURE_NOW - 2 * DAY;
+    const windowStart = windowEnd - 7 * DAY;
+    const staleHistory = [0, 1, 2].map((day) => ({
+      observedAt: windowStart + day * DAY,
+      metrics: [{
+        type: "quota" as const,
+        metricId: "weekly",
+        usedRatio: 0.2 + day * 0.05,
+        cycle: { cadence: "calendar" as const, durationMs: 7 * DAY, resetsAt: windowEnd },
+      }],
+    }));
+    cleanup();
+    render(
+      <HistoryChart
+        providerName="Claude"
+        providerKind="claude"
+        mode="used"
+        metrics={[metric("weekly", 7 * DAY, "Weekly messages")]}
+        history={staleHistory}
+        now={windowEnd + 2 * DAY}
+        rangeHours={14 * 24}
+      />,
+    );
+    const again = screen.getByRole("group", { name: /usage history/ });
+    chartBounds(again);
+    const hits = [...document.querySelectorAll(".history-chart__hit")];
+    const texts = hits.map((hit) => {
+      fireEvent.click(hit);
+      return screen.getByRole("tooltip").textContent ?? "";
+    });
+    expect(texts.some((text) => /No reading near reset/.test(text))).toBe(true);
+    expect(texts.some((text) => /readings in window/.test(text))).toBe(true);
+    expect(document.querySelector(".history-chart__highlight")).not.toBeNull();
+  });
+
+  it("gives every hover target a tooltip whenever the highlight is visible", () => {
+    const widths = [340, 460];
+    const ranges = [48, 7 * 24, 30 * 24];
+    for (const meter of REALISTIC_METERS.filter((item) => item.history.length > 0)) {
+      for (const width of widths) {
+        vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
+        for (const rangeHours of ranges) {
+          const { container, unmount } = render(
+            <HistoryChart
+              providerName={meter.providerName}
+              providerKind={meter.providerKind}
+              mode="used"
+              metrics={[metricFor(meter)]}
+              history={meter.history}
+              now={FIXTURE_NOW}
+              rangeHours={rangeHours}
+            />,
+          );
+          const chart = screen.getByRole("group", { name: /usage history/ });
+          const hits = [...container.querySelectorAll(".history-chart__hit")];
+          expect(hits.length, `${meter.metricId} ${rangeHours}h`).toBeGreaterThan(0);
+          for (const hit of hits) {
+            fireEvent.click(hit);
+            expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
+            const tooltip = screen.getByRole("tooltip");
+            expect(tooltip.textContent?.trim().length).toBeGreaterThan(0);
+          }
+          const level = detailLevel(
+            meter.metricId.includes("five-hour") ? 5 * HOUR : 7 * DAY,
+            rangeHours * HOUR,
+            Math.max(1, width - 36),
+          );
+          expect(["envelope", "bars", "daily"]).toContain(level);
+          unmount();
+        }
+      }
+    }
+  });
+
+  it("focuses the chart on click and leaves focus alone on hover", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(400);
+    const claude = REALISTIC_METERS.find((meter) => meter.metricId === "weekly")!;
+    const { container } = render(
+      <HistoryChart
+        providerName={claude.providerName}
+        providerKind="claude"
+        mode="used"
+        metrics={[metricFor(claude)]}
+        history={claude.history}
+        now={FIXTURE_NOW}
+        rangeHours={30 * 24}
+      />,
+    );
+    const chart = screen.getByRole("group", { name: /usage history/ });
+    expect(chart).toHaveAttribute("tabindex", "0");
+    chartBounds(chart);
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    fireEvent.pointerMove(chart, { clientX: 200, clientY: 40, pointerType: "mouse" });
+    expect(document.activeElement).toBe(outside);
+    const hit = container.querySelector(".history-chart__hit");
+    expect(hit).not.toBeNull();
+    fireEvent.pointerDown(hit!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(hit!);
+    expect(document.activeElement).toBe(chart);
+    const before = screen.getByRole("tooltip").textContent ?? "";
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(screen.getByRole("tooltip").textContent ?? "").not.toBe(before);
+    expect(document.activeElement).toBe(chart);
+    outside.remove();
+  });
+
+  it("says 0% used · idle when the 5-hour meter has no active window", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(400);
+    const kimi = REALISTIC_METERS.find((meter) => meter.metricId === "five-hour-coding")!;
+    const { container, rerender } = render(
+      <HistoryChart
+        providerName={kimi.providerName}
+        providerKind="kimi"
+        mode="used"
+        metrics={[metricFor(kimi)]}
+        history={kimi.history.filter((item) =>
+          item.metrics.some((sample) => sample.type === "quota" && sample.metricId === "five-hour-coding"),
+        )}
+        now={FIXTURE_NOW}
+        rangeHours={7 * 24}
+      />,
+    );
+    expect(container.querySelector(".history-chart__latest")?.textContent).toBe("0% used · idle");
+    rerender(
+      <HistoryChart
+        providerName={kimi.providerName}
+        providerKind="kimi"
+        mode="left"
+        metrics={[metricFor(kimi)]}
+        history={kimi.history.filter((item) =>
+          item.metrics.some((sample) => sample.type === "quota" && sample.metricId === "five-hour-coding"),
+        )}
+        now={FIXTURE_NOW}
+        rangeHours={7 * 24}
+      />,
+    );
+    expect(container.querySelector(".history-chart__latest")?.textContent).toBe("100% left · idle");
   });
 
   it("opens the tooltip on hover, pins it on click, and steps it with the keyboard", () => {

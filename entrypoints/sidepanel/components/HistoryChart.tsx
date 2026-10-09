@@ -168,8 +168,9 @@ function observedRange(values: number[], mode: DisplayMode): string {
 function windowTooltip(
   window: WindowSpan,
   mode: DisplayMode,
+  now: number,
 ): string[] {
-  const lines = [formatSpan(window.start, window.current ? window.end : window.end, window.current)];
+  const lines = [formatSpan(window.start, window.end, window.current)];
   if (window.kind === "unknown") {
     lines.push(l10n.t("history.tooltipNoReadings"));
     lines.push(l10n.t("history.tooltipPossibleRange"));
@@ -179,11 +180,15 @@ function windowTooltip(
   if (window.values.length > 0) lines.push(observedRange(window.values, mode));
   const last = window.readings.at(-1);
   const endValue = window.values.at(-1);
+  // The current window's end is its reset, which can be days ahead of now.
+  // "No reading in the last …" is the gap since the last reading, not the
+  // time left until that reset.
+  const sinceLast = last ? Math.max(0, now - last.observedAt) : 0;
   if (window.current && window.tailTrusted) {
     lines.push(l10n.t("history.tooltipLatestCurrent"));
-  } else if (window.current && last) {
+  } else if (window.current && last && sinceLast > 0) {
     lines.push(l10n.t("history.tooltipCurrentOpen", {
-      duration: formatDuration(Math.max(0, window.end - last.observedAt)),
+      duration: formatDuration(sinceLast),
     }));
   } else if (window.tailTrusted && endValue !== undefined) {
     lines.push(l10n.t("history.tooltipEnded", {
@@ -320,7 +325,7 @@ export function HistoryChart({
 
   if (!selectedMetric || !series) return null;
 
-  const items = inspectItems(series, days, level, mode);
+  const items = inspectItems(series, days, level, mode, now);
   const activeItem = items.find((item) => item.id === active?.id) ?? null;
   const readings = series.readingsInRange;
   const withReadings = series.spans.filter((window) => window.kind === "observed").length;
@@ -357,7 +362,7 @@ export function HistoryChart({
     const bounds = canvas.getBoundingClientRect();
     if (bounds.width <= 0) return undefined;
     const viewX = ((clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
-    return items.find((item) => {
+    const hits = items.filter((item) => {
       const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
       if (!span) return false;
       const left = timeX(span.from, rangeStart, rangeEnd);
@@ -368,6 +373,9 @@ export function HistoryChart({
       const beforeEnd = viewX <= end;
       return afterStart && beforeEnd;
     });
+    // Overlapping targets (a window and the outline merged across it) would
+    // otherwise highlight a span whose tooltip belongs to a different item.
+    return hits.sort((left, right) => (left.to - left.from) - (right.to - right.from))[0];
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
@@ -415,7 +423,13 @@ export function HistoryChart({
         <strong className="history-chart__latest">
           {(() => {
             const headline = currentWindowHeadline(series, mode);
-            if (headline.idle) return l10n.t("history.headlineIdle");
+            // Idle still reports the same percent the Current cycle card shows.
+            if (headline.idle) {
+              return `${l10n.t("history.latestPercent", {
+                percent: headline.label,
+                mode: localizeDisplayModeCompact(mode),
+              })} · ${l10n.t("history.headlineIdle")}`;
+            }
             return l10n.t("history.latestPercent", {
               percent: headline.label,
               mode: localizeDisplayModeCompact(mode),
@@ -478,10 +492,10 @@ export function HistoryChart({
                   ? <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
                   : null}
                 <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-                {active ? (
+                {activeItem ? (
                   <Highlight
-                    from={items.find((item) => item.id === active.id)?.from ?? rangeStart}
-                    to={items.find((item) => item.id === active.id)?.to ?? rangeEnd}
+                    from={activeItem.from}
+                    to={activeItem.to}
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                   />
@@ -504,6 +518,10 @@ export function HistoryChart({
                     style={{
                       left: `${(Math.min(left, right) / VIEWBOX_WIDTH) * 100}%`,
                       width: `${(Math.max(1, Math.abs(right - left)) / VIEWBOX_WIDTH) * 100}%`,
+                    }}
+                    onPointerDown={(event) => {
+                      if (event.pointerType === "mouse" && event.button !== 0) return;
+                      chartRef.current?.querySelector<HTMLElement>(".history-chart__canvas")?.focus();
                     }}
                     onClick={() => {
                       const same = pinned && active?.id === item.id;
@@ -587,6 +605,7 @@ function inspectItems(
   days: DayBucket[],
   level: DetailLevel,
   mode: DisplayMode,
+  now: number,
 ): Inspectable[] {
   if (level === "daily") {
     return days.map((bucket) => ({
@@ -602,7 +621,7 @@ function inspectItems(
     id: window.id,
     from: window.start,
     to: window.end,
-    lines: windowTooltip(window, mode),
+    lines: windowTooltip(window, mode, now),
   }));
   const gaps = [...series.idleSpans, ...series.unknownRuns].map((span, index) => ({
     kind: "span" as const,
