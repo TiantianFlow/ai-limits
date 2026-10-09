@@ -25,6 +25,11 @@ export const ESTIMATE_MIN_POINTS = 2;
 export const DOT_ISOLATION_PX = 12;
 /** A gap shorter than this (px) is not marked under the axis. */
 export const NO_DATA_MIN_PX = 3;
+/**
+ * On a bar chart the dashed baseline already shows the ordinary holes between
+ * windows. Only a hole wider than this gets the second mark under the axis.
+ */
+export const BAR_GAP_MIN_PX = 28;
 /** Reset ticks are drawn only for windows at least this long. */
 export const RESET_TICK_MIN_HOURS = 24;
 /** A window younger than this fraction of its length is not projected. */
@@ -236,6 +241,27 @@ function gapsOf(covered: { start: number; end: number }[], rangeStart: number, r
   return out;
 }
 
+/**
+ * A gap mark under the axis is the only mark for a stretch with no readings.
+ * Where the idle baseline already covers that stretch, the second row is noise.
+ */
+function gapsBesideIdle(gaps: ChartGap[], idle: ChartIdle[], minMs: number): ChartGap[] {
+  const kept: ChartGap[] = [];
+  for (const gap of gaps) {
+    let cursor = gap.start;
+    const over = idle
+      .map((span) => ({ start: Math.max(span.start, gap.start), end: Math.min(span.end, gap.end) }))
+      .filter((span) => span.end - span.start > 1)
+      .sort((left, right) => left.start - right.start);
+    for (const span of over) {
+      if (span.start - cursor > minMs) kept.push({ start: cursor, end: span.start });
+      cursor = Math.max(cursor, span.end);
+    }
+    if (gap.end - cursor > minMs) kept.push({ start: cursor, end: gap.end });
+  }
+  return kept;
+}
+
 function dayStart(at: number): number {
   const date = new Date(at);
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -360,7 +386,16 @@ export function buildChartModel(input: ChartBuildInput): ChartModel {
     drawnWindows,
     runs,
     idle,
-    gaps: gapsOf(covered, input.rangeStart, input.rangeEnd, Math.max(60_000, NO_DATA_MIN_PX / pxPerMs)),
+    gaps: gapsBesideIdle(
+      gapsOf(
+        covered,
+        input.rangeStart,
+        input.rangeEnd,
+        Math.max(60_000, (tier === "line" ? NO_DATA_MIN_PX : BAR_GAP_MIN_PX) / pxPerMs),
+      ),
+      idle,
+      Math.max(60_000, (tier === "line" ? NO_DATA_MIN_PX : BAR_GAP_MIN_PX) / pxPerMs),
+    ),
     resets: [...new Set(resets)],
     bars,
     readingsInRange,
