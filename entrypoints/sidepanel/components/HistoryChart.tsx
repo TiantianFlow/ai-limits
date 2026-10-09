@@ -42,6 +42,8 @@ const PLOT_RIGHT = 312;
 const PLOT_TOP = 8;
 const PLOT_BOTTOM = 92;
 const TOOLTIP_MAX = 180;
+/** Screen pixels of the idle baseline. ViewBox units shrink with the panel. */
+const IDLE_BASELINE_PX = 8;
 
 type InspectItem =
   | { kind: "window"; id: string }
@@ -509,10 +511,10 @@ export function HistoryChart({
                   <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} now={now} />
                 ) : null}
                 {level === "bars" ? (
-                  <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                  <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} />
                 ) : null}
                 {level === "daily" ? (
-                  <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+                  <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} />
                 ) : null}
                 <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
                 {activeItem ? (
@@ -901,6 +903,45 @@ function footnote(series: EnvelopeSeries, level: DetailLevel, rangeHours: number
  * the reset. A trusted tail is the band that holds the last value. Window
  * bounds are not coverage.
  */
+/**
+ * ViewBox x intervals of marks the chart paints. A rect shorter than two
+ * screen pixels is a hairline, not a baseline, so it does not count. Paths
+ * count from their own coordinates. The span's time interval does not.
+ */
+export function paintedXSpans(container: ParentNode, plotWidth: number): { from: number; to: number }[] {
+  const pxPerUnit = Math.max(plotWidth, 1) / VIEWBOX_WIDTH;
+  const minScreenPx = 2;
+  const spans: { from: number; to: number }[] = [];
+  container.querySelectorAll("svg rect, svg path").forEach((node) => {
+    if (node.parentElement?.tagName === "clipPath") return;
+    if (node.tagName === "path") {
+      const numbers = [...(node.getAttribute("d") ?? "").matchAll(/-?\d+(?:\.\d+)?/g)].map((item) => Number(item[0]));
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (let index = 0; index + 1 < numbers.length; index += 2) {
+        minX = Math.min(minX, numbers[index]!);
+        maxX = Math.max(maxX, numbers[index]!);
+        minY = Math.min(minY, numbers[index + 1]!);
+        maxY = Math.max(maxY, numbers[index + 1]!);
+      }
+      if (!Number.isFinite(minX)) return;
+      const tall = (maxY - minY) * pxPerUnit >= minScreenPx;
+      const wide = (maxX - minX) * pxPerUnit >= minScreenPx;
+      if (!tall && !wide) return;
+      if (maxX - minX > 0.2) spans.push({ from: minX, to: maxX });
+      return;
+    }
+    const height = Number(node.getAttribute("height"));
+    const width = Number(node.getAttribute("width"));
+    if (height * pxPerUnit < minScreenPx || width * pxPerUnit < minScreenPx) return;
+    const x = Number(node.getAttribute("x"));
+    spans.push({ from: x, to: x + width });
+  });
+  return spans;
+}
+
 export function drawnXSpans(options: {
   series: EnvelopeSeries;
   rangeStart: number;
@@ -957,6 +998,27 @@ export function drawnXSpans(options: {
     if (window.kind === "observed") pushBox(window.start, window.end);
   }
   return spans;
+}
+
+/** Idle baseline tall enough to see. ViewBox units would shrink to a hairline. */
+function IdleBaseline({
+  box,
+  plotWidth,
+}: {
+  box: { x: number; width: number };
+  plotWidth: number;
+}) {
+  const pxPerUnit = Math.max(plotWidth, 1) / VIEWBOX_WIDTH;
+  const height = IDLE_BASELINE_PX / pxPerUnit;
+  return (
+    <rect
+      className="history-chart__idle"
+      x={box.x}
+      y={Math.max(PLOT_TOP, PLOT_BOTTOM - height)}
+      width={box.width}
+      height={Math.min(height, PLOT_BOTTOM - PLOT_TOP)}
+    />
+  );
 }
 
 function spanRect(
@@ -1038,14 +1100,7 @@ function EnvelopeLayer({
           );
         }
         return (
-          <rect
-            key={`idle-${span.start}`}
-            className="history-chart__idle"
-            x={box.x}
-            y={PLOT_BOTTOM - 2.5}
-            width={box.width}
-            height={2.5}
-          />
+          <IdleBaseline key={`idle-${span.start}`} box={box} plotWidth={plotWidth} />
         );
       })}
       {series.spans.map((window, index) => {
@@ -1235,11 +1290,13 @@ function BarsLayer({
   mode,
   rangeStart,
   rangeEnd,
+  plotWidth,
 }: {
   series: EnvelopeSeries;
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
+  plotWidth: number;
 }) {
   return (
     <g>
@@ -1306,14 +1363,7 @@ function BarsLayer({
         const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
         if (!box) return null;
         return (
-          <rect
-            key={`idle-${span.start}`}
-            className="history-chart__idle"
-            x={box.x}
-            y={PLOT_BOTTOM - 2.5}
-            width={box.width}
-            height={2.5}
-          />
+          <IdleBaseline key={`idle-${span.start}`} box={box} plotWidth={plotWidth} />
         );
       })}
     </g>
@@ -1325,11 +1375,13 @@ function DailyLayer({
   mode,
   rangeStart,
   rangeEnd,
+  plotWidth,
 }: {
   days: DayBucket[];
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
+  plotWidth: number;
 }) {
   return (
     <g>
@@ -1340,14 +1392,7 @@ function DailyLayer({
         const bar = bucket.window ? windowBar(bucket.window) : null;
         if (!bar) {
           return (
-            <rect
-              key={bucket.start}
-              className="history-chart__idle"
-              x={x}
-              y={PLOT_BOTTOM - 2.5}
-              width={width}
-              height={2.5}
-            />
+            <IdleBaseline key={bucket.start} box={{ x, width }} plotWidth={plotWidth} />
           );
         }
         const certainLeft = 100 - bar.certainUsed;
