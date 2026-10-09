@@ -1,7 +1,10 @@
 /**
  * Dev-only hover regression. Moves a real mouse across the weekly 30-day
- * chart at three panel widths. Skips when no Chromium is installed.
+ * chart and a sparse Kimi-like chart at three panel widths.
  * Run: pnpm test:history-hover
+ *
+ * Uses the Chromium revision that ships with the installed playwright-core.
+ * A missing browser fails with an install hint rather than passing as skipped.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,8 +21,10 @@ let browser;
 try {
   browser = await chromium.launch(executable ? { executablePath: executable, headless: true } : { headless: true });
 } catch (error) {
-  console.log(`history hover skipped: no Chromium installed (${error instanceof Error ? error.message : error})`);
-  process.exit(0);
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(`history hover failed: Chromium is not installed (${reason})`);
+  console.error("Install it with: pnpm exec playwright-core install chromium");
+  process.exit(1);
 }
 
 const server = await createServer({
@@ -99,6 +104,37 @@ try {
       }
     }
     console.log(`${width}px ${distinct.length} times`);
+
+    const kimi = page.locator(`[data-kimi="${width}"]`);
+    await kimi.scrollIntoViewIfNeeded();
+    const kimiCanvas = kimi.locator(".history-chart__canvas");
+    const plot = await kimiCanvas.boundingBox();
+    if (!plot) throw new Error(`No Kimi canvas at ${width}px`);
+    const hoverBox = async (selector) => {
+      const target = kimiCanvas.locator(selector).first();
+      const box = await target.boundingBox();
+      if (!box) throw new Error(`No ${selector} at ${width}px`);
+      await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, plot.height - 4));
+      await page.waitForTimeout(25);
+      return kimiCanvas.locator(".history-chart__tooltip");
+    };
+    const idleTip = await hoverBox(".history-chart__idle");
+    const idleText = (await idleTip.innerText()).replace(/\s+/g, " ");
+    if (!/Idle — no active window/.test(idleText)) failures.push(`${width}px idle tooltip was "${idleText}"`);
+    const emptyTip = await hoverBox(".history-chart__unknown");
+    const emptyText = (await emptyTip.innerText()).replace(/\s+/g, " ");
+    if (!/No readings/.test(emptyText)) failures.push(`${width}px empty tooltip was "${emptyText}"`);
+    const tipBox = await emptyTip.boundingBox();
+    if (tipBox && (tipBox.y < plot.y - 1 || tipBox.y + tipBox.height > plot.y + plot.height + 1)) {
+      failures.push(`${width}px tooltip spills the plot`);
+    }
+    const guide = await kimiCanvas.locator(".history-chart__guide-active").first().boundingBox();
+    if (guide) {
+      const pointer = (await kimiCanvas.locator(".history-chart__unknown").first().boundingBox());
+      if (pointer && Math.abs(guide.x - (pointer.x + pointer.width / 2)) > 8) {
+        failures.push(`${width}px guide is far from the pointer`);
+      }
+    }
   }
   if (failures.length > 0) throw new Error(failures.join("; "));
   console.log("history hover passed");

@@ -71,7 +71,10 @@ function clampInterval(
 
 function leftY(leftPercent: number): number {
   const clamped = Math.min(100, Math.max(0, leftPercent));
-  return PLOT_BOTTOM - (clamped / 100) * (PLOT_BOTTOM - PLOT_TOP);
+  const y = PLOT_BOTTOM - (clamped / 100) * (PLOT_BOTTOM - PLOT_TOP);
+  // A value of exactly 0% or 100% lands on the plot edge, where the stroke
+  // is clipped in half. Keep the line one unit inside.
+  return Math.min(PLOT_BOTTOM - 1, Math.max(PLOT_TOP + 1, y));
 }
 
 function shownY(leftPercent: number, mode: DisplayMode): number {
@@ -182,9 +185,7 @@ function windowTooltip(
     if (left !== undefined) lines.push(observedRange([left], mode));
     const last = window.readings.at(-1);
     if (!window.current && !window.tailTrusted && last && last.observedAt === readingAt) {
-      lines.push(l10n.t("history.tooltipOpenEnd", {
-        duration: formatDuration(Math.max(0, window.end - last.observedAt)),
-      }));
+      lines.push(l10n.t("history.tooltipOpenEnd"));
     }
     return lines;
   }
@@ -212,9 +213,7 @@ function windowTooltip(
       mode: localizeDisplayModeCompact(mode),
     }));
   } else if (last) {
-    lines.push(l10n.t("history.tooltipOpenEnd", {
-      duration: formatDuration(Math.max(0, window.end - last.observedAt)),
-    }));
+    lines.push(l10n.t("history.tooltipOpenEnd"));
   }
   return lines;
 }
@@ -244,7 +243,9 @@ function dayTooltip(bucket: DayBucket, mode: DisplayMode, policy: EnvelopeSeries
 }
 
 function spanTooltip(span: IdleSpan, _mode: DisplayMode): string[] {
-  if (span.kind === "unknown") return [l10n.t("history.spanUnknownTitle")];
+  if (span.kind === "unknown") {
+    return [`${l10n.t("history.spanUnknownTitle")} · ${formatSpan(span.start, span.end, false)}`];
+  }
   return [l10n.t("history.spanIdle")];
 }
 
@@ -273,6 +274,7 @@ export function HistoryChart({
   const [plotWidth, setPlotWidth] = useState(360);
   const [active, setActive] = useState<InspectItem | null>(null);
   const [pinned, setPinned] = useState(false);
+  const [hoverX, setHoverX] = useState<number | undefined>(undefined);
   const [selectedMetricId, setSelectedMetricId] = useState(() => metrics[0]?.id ?? "");
 
   useEffect(() => {
@@ -363,6 +365,7 @@ export function HistoryChart({
       return;
     }
     const here = items[index]?.guide?.x;
+    const hereAt = items[index]?.from ?? 0;
     let next = index;
     const forward = step > 0;
     let cursor = index + step;
@@ -370,7 +373,9 @@ export function HistoryChart({
     while (forward ? cursor < limit : cursor >= 0) {
       next = cursor;
       const guide = items[cursor]?.guide?.x;
-      if (here === undefined || guide === undefined || Math.abs(guide - here) > 0.5) break;
+      const sameX = here !== undefined && guide !== undefined && Math.abs(guide - here) <= 0.5;
+      const sameTime = (items[cursor]?.from ?? 0) === hereAt;
+      if (!sameX && !sameTime) break;
       cursor += step;
     }
     const item = items[next];
@@ -393,10 +398,15 @@ export function HistoryChart({
       return starts && ends;
     });
     if (hits.length === 0) return undefined;
-    // A line target owns the paper out to the midpoint of its neighbors, so
-    // the nearest reading wins. A span only wins where no reading covers it.
-    const readings = hits.filter((item) => item.guide);
-    const pool = readings.length > 0 ? readings : hits;
+    // Snap to a reading only when the pointer is within a few px of it.
+    // Farther away, the idle or empty stretch under the pointer wins.
+    const pxPerUnit = bounds.width / VIEWBOX_WIDTH;
+    const snapPx = 6;
+    const readings = hits.filter((item) =>
+      item.guide !== undefined && Math.abs(item.guide.x - viewX) * pxPerUnit <= snapPx,
+    );
+    const stretches = hits.filter((item) => item.kind === "span");
+    const pool = readings.length > 0 ? readings : stretches.length > 0 ? stretches : hits;
     return pool.sort((left, right) => {
       const leftAt = left.guide?.x ?? left.hit!.x + left.hit!.width / 2;
       const rightAt = right.guide?.x ?? right.hit!.x + right.hit!.width / 2;
@@ -406,6 +416,11 @@ export function HistoryChart({
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
     if (pinned || event.pointerType === "touch") return;
+    const canvas = chartRef.current?.querySelector(".history-chart__canvas");
+    if (canvas instanceof Element) {
+      const bounds = canvas.getBoundingClientRect();
+      if (bounds.width > 0) setHoverX(((event.clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH);
+    }
     const item = itemAtClientX(event.clientX);
     setActive(item ? { kind: item.kind, id: item.id } : null);
   }
@@ -489,11 +504,13 @@ export function HistoryChart({
             >
               <defs>
                 <clipPath id={clipId}>
+                  {/* The 100% line sits on the top edge. Inset by half the
+                      stroke so the line is not clipped in half. */}
                   <rect
                     x={PLOT_LEFT}
-                    y={PLOT_TOP}
+                    y={PLOT_TOP - 1.5}
                     width={PLOT_RIGHT - PLOT_LEFT}
-                    height={PLOT_BOTTOM - PLOT_TOP}
+                    height={PLOT_BOTTOM - PLOT_TOP + 3}
                   />
                 </clipPath>
               </defs>
@@ -524,6 +541,7 @@ export function HistoryChart({
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     pinned={pinned}
+                    pointerX={hoverX}
                   />
                 ) : null}
               </g>
@@ -572,6 +590,15 @@ export function HistoryChart({
               <div
                 className="history-chart__tooltip"
                 role="tooltip"
+                ref={(node) => {
+                  if (!node) return;
+                  requestAnimationFrame(() => {
+                    const plot = node.closest(".history-chart__canvas");
+                    if (!(plot instanceof HTMLElement) || !node.isConnected) return;
+                    const room = plot.clientHeight - node.offsetTop - node.offsetHeight;
+                    if (room < 0) node.style.top = `${Math.max(0, node.offsetTop + room)}px`;
+                  });
+                }}
                 style={{
                   left: tooltipAnchor.left,
                   top: tooltipAnchor.top,
@@ -685,9 +712,15 @@ function inspectItems(
     });
   }
   const lineWindows = level === "envelope";
+  // Idle and empty stretches own their own hover. A reading's hit stops at
+  // the stretch instead of claiming the paper out to the plot edge.
+  const stretchEdges = [...series.idleSpans, ...series.unknownRuns].flatMap((span) => [
+    timeX(Math.min(span.start, span.end), rangeStart, rangeEnd),
+    timeX(Math.max(span.start, span.end), rangeStart, rangeEnd),
+  ]);
   const windowItems = series.spans.flatMap((window) => {
     if (lineWindows && window.kind === "observed" && window.readings.length > 0) {
-      return readingTargets(window, mode, now, rangeStart, rangeEnd, plotWidth);
+      return readingTargets(window, mode, now, rangeStart, rangeEnd, plotWidth, stretchEdges);
     }
     const hit = hitBox(window.start, window.end, rangeStart, rangeEnd);
     if (!hit) return [];
@@ -725,6 +758,7 @@ function readingTargets(
   rangeStart: number,
   rangeEnd: number,
   plotWidth: number,
+  stretchEdges: readonly number[] = [],
 ): Inspectable[] {
   // About 8 px between steps. The guide snaps to the last reading of a
   // closer run, and the last reading of the window is always its own step.
@@ -748,8 +782,16 @@ function readingTargets(
     const after = kept[index + 1]?.x ?? point.x;
     // The first reading owns the empty paper to its left, so a hover there
     // still names a reading. The guide itself stays on the reading.
-    const rawLeft = index === 0 ? PLOT_LEFT : (before + point.x) / 2;
-    const rawRight = index === kept.length - 1 ? PLOT_RIGHT : (point.x + after) / 2;
+    const edgeLeft = stretchEdges.filter((edge) => edge <= point.x).reduce(
+      (nearest, edge) => Math.max(nearest, edge),
+      index === 0 ? PLOT_LEFT : (before + point.x) / 2,
+    );
+    const edgeRight = stretchEdges.filter((edge) => edge >= point.x).reduce(
+      (nearest, edge) => Math.min(nearest, edge),
+      index === kept.length - 1 ? PLOT_RIGHT : (point.x + after) / 2,
+    );
+    const rawLeft = index === 0 ? edgeLeft : Math.max(edgeLeft, (before + point.x) / 2);
+    const rawRight = index === kept.length - 1 ? edgeRight : Math.min(edgeRight, (point.x + after) / 2);
     const left = Math.max(PLOT_LEFT, Math.min(rawLeft, PLOT_RIGHT - 0.8));
     const right = Math.min(PLOT_RIGHT, Math.max(rawRight, left + 0.8));
     return {
@@ -770,13 +812,26 @@ function Highlight({
   rangeStart,
   rangeEnd,
   pinned,
+  pointerX,
 }: {
   item: Inspectable;
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
   pinned: boolean;
+  pointerX?: number;
 }) {
+  if (item.kind === "span" && pointerX !== undefined) {
+    return (
+      <line
+        className="history-chart__guide-active"
+        x1={pointerX}
+        x2={pointerX}
+        y1={PLOT_TOP}
+        y2={PLOT_BOTTOM}
+      />
+    );
+  }
   if (item.guide) {
     const y = shownY(0, mode);
     return (
@@ -1466,6 +1521,10 @@ function Legend({
     series.unknownRuns.length > 0 || series.idleSpans.some((span) => span.kind === "unknown")
   );
   const idle = series.idleSpans.some((span) => span.kind === "idle");
+  const reset = series.spans.some((window, index) => {
+    const previous = series.spans[index - 1];
+    return previous?.kind === "observed" && previous.tailTrusted && window.kind === "observed";
+  });
   const limit = series.events.some((event) => event.kind === "limit-change");
   const rebase = series.events.some((event) => event.kind === "rebase") || series.rebaseCapped;
   return (
@@ -1489,6 +1548,7 @@ function Legend({
       ) : null}
       {unknown ? <li><span className="history-chart__legend-unknown" aria-hidden="true" />{l10n.t("history.legendUnknown")}</li> : null}
       {idle ? <li><span className="history-chart__legend-idle" aria-hidden="true" />{l10n.t("history.legendIdle")}</li> : null}
+      {reset && level === "envelope" ? <li><span className="history-chart__legend-reset" aria-hidden="true" />{l10n.t("history.legendReset")}</li> : null}
       {limit ? <li><span className="history-chart__legend-limit" aria-hidden="true" />{l10n.t("history.legendLimit")}</li> : null}
       {rebase ? <li><span className="history-chart__legend-limit" aria-hidden="true" />{l10n.t(series.rebaseCapped ? "history.legendRebaseCapped" : "history.legendRebase")}</li> : null}
       {series.trend.fit ? (
