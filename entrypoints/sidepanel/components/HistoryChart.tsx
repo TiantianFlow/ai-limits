@@ -741,6 +741,59 @@ function footnote(series: EnvelopeSeries, level: DetailLevel, rangeHours: number
   return `${lead} · ${l10n.t("history.footnoteCount", { count: series.readingsInRange, range })}`;
 }
 
+/**
+ * Viewbox x intervals that a mark actually paints. An open tail contributes
+ * only its stub; the rest of that tail is the outline. Window bounds are not
+ * coverage.
+ */
+export function drawnXSpans(options: {
+  series: EnvelopeSeries;
+  rangeStart: number;
+  rangeEnd: number;
+  plotWidth: number;
+  level: DetailLevel;
+}): { from: number; to: number }[] {
+  const { series, rangeStart, rangeEnd, plotWidth, level } = options;
+  const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
+  const spans: { from: number; to: number }[] = [];
+  const pushBox = (start: number, end: number): void => {
+    const box = spanRect(start, end, rangeStart, rangeEnd);
+    if (box) spans.push({ from: box.x, to: box.x + box.width });
+  };
+  for (const run of series.unknownRuns) pushBox(run.start, run.end);
+  for (const span of series.idleSpans) pushBox(span.start, span.end);
+  if (level === "envelope") {
+    for (const window of series.spans) {
+      if (window.kind !== "observed") continue;
+      for (const band of window.bands) {
+        if (band.open) {
+          const drawn = openStubSpan(band, rangeStart, rangeEnd, pxPerUnit);
+          if (drawn) spans.push(drawn);
+          const rest = openTailBox(band, rangeStart, rangeEnd, pxPerUnit);
+          if (rest) spans.push(rest);
+        } else {
+          const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
+          if (!span) continue;
+          spans.push({
+            from: timeX(span.from, rangeStart, rangeEnd),
+            to: timeX(span.to, rangeStart, rangeEnd),
+          });
+        }
+      }
+      for (const reading of window.readings) {
+        if (reading.observedAt < rangeStart || reading.observedAt > rangeEnd) continue;
+        const x = timeX(reading.observedAt, rangeStart, rangeEnd);
+        spans.push({ from: x - 2.4, to: x + 2.4 });
+      }
+    }
+    return spans;
+  }
+  for (const window of series.spans) {
+    if (window.kind === "observed") pushBox(window.start, window.end);
+  }
+  return spans;
+}
+
 function spanRect(
   start: number,
   end: number,
@@ -833,13 +886,20 @@ function EnvelopeLayer({
               const d = band.open
                 ? openStub(band, mode, rangeStart, rangeEnd, pxPerUnit)
                 : bandPath(band, mode, rangeStart, rangeEnd);
-              if (!d) return null;
+              const rest = band.open
+                ? openTailBand(band, mode, rangeStart, rangeEnd, pxPerUnit)
+                : null;
+              if (!d && !rest) return null;
               return (
-                <path
-                  key={`${window.id}-band-${bandIndex}`}
-                  className={band.event ? "history-chart__event" : band.open ? "history-chart__open" : "history-chart__band"}
-                  d={d}
-                />
+                <g key={`${window.id}-band-${bandIndex}`}>
+                  {rest ? <path className="history-chart__band" d={rest} /> : null}
+                  {d ? (
+                    <path
+                      className={band.event ? "history-chart__event" : band.open ? "history-chart__open" : "history-chart__band"}
+                      d={d}
+                    />
+                  ) : null}
+                </g>
               );
             })}
             <ReadingMarks window={window} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} pxPerUnit={pxPerUnit} now={now} />
@@ -876,14 +936,62 @@ function openStub(
   rangeEnd: number,
   pxPerUnit: number,
 ): string | null {
+  const drawn = openStubSpan(band, rangeStart, rangeEnd, pxPerUnit);
+  if (!drawn) return null;
+  const y = shownY(band.upper, mode);
+  return `M ${drawn.from.toFixed(2)} ${y.toFixed(2)} L ${drawn.to.toFixed(2)} ${y.toFixed(2)}`;
+}
+
+/** The dotted stub, at most OPEN_STUB_PX of screen, in viewbox units. */
+function openStubSpan(
+  band: EnvelopeBand,
+  rangeStart: number,
+  rangeEnd: number,
+  pxPerUnit: number,
+): { from: number; to: number } | null {
   const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
   if (!span) return null;
   const x1 = timeX(span.from, rangeStart, rangeEnd);
   const x2 = timeX(span.to, rangeStart, rangeEnd);
   const maxUnits = OPEN_STUB_PX / Math.max(pxPerUnit, 0.01);
   const end = x1 + Math.min(Math.abs(x2 - x1), maxUnits) * Math.sign(x2 - x1 || 1);
-  const y = shownY(band.upper, mode);
-  return `M ${x1.toFixed(2)} ${y.toFixed(2)} L ${end.toFixed(2)} ${y.toFixed(2)}`;
+  if (Math.abs(end - x1) <= 0.05) return null;
+  return { from: Math.min(x1, end), to: Math.max(x1, end) };
+}
+
+/**
+ * The open tail past the stub, as a possible-range band. The stub stays the
+ * dotted mark; the band fills the column the stub does not cover.
+ */
+function openTailBand(
+  band: EnvelopeBand,
+  mode: DisplayMode,
+  rangeStart: number,
+  rangeEnd: number,
+  pxPerUnit: number,
+): string | null {
+  const box = openTailBox(band, rangeStart, rangeEnd, pxPerUnit);
+  if (!box) return null;
+  const yUpper = shownY(band.upper, mode);
+  const yLower = shownY(band.lower, mode);
+  const top = Math.min(yUpper, yLower);
+  const bottom = Math.max(yUpper, yLower);
+  return `M ${box.from.toFixed(2)} ${top.toFixed(2)} L ${box.to.toFixed(2)} ${top.toFixed(2)} L ${box.to.toFixed(2)} ${bottom.toFixed(2)} L ${box.from.toFixed(2)} ${bottom.toFixed(2)} Z`;
+}
+
+/** Viewbox x of the whole open tail. The stub is drawn over its first 10 px. */
+function openTailBox(
+  band: EnvelopeBand,
+  rangeStart: number,
+  rangeEnd: number,
+  _pxPerUnit: number,
+): { from: number; to: number } | null {
+  const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
+  if (!span) return null;
+  const from = timeX(span.from, rangeStart, rangeEnd);
+  const to = timeX(span.to, rangeStart, rangeEnd);
+  if (Math.abs(to - from) <= 0.4) return null;
+  return { from: Math.min(from, to), to: Math.max(from, to) };
 }
 
 function ReadingMarks({

@@ -101,7 +101,10 @@ export interface EnvelopeBand {
   upper: number;
   lower: number;
   event?: boolean;
-  /** Open tail: a short stub, not a fill to the floor. */
+  /**
+   * Open tail. The first 10 px are a dotted stub; the rest of the tail is the
+   * full possible range, drawn as a band rather than left blank.
+   */
   open?: boolean;
 }
 
@@ -478,7 +481,9 @@ export function buildWindowEnvelope(
     bands.push({
       from: last.observedAt,
       to: cutoff,
-      upper: prevValue,
+      // Untrusted: usage until the reset can be anything, so the range is the
+      // whole scale. Trusted: the last value holds.
+      upper: tailTrusted ? prevValue : 100,
       lower: endLower,
       open: !tailTrusted,
     });

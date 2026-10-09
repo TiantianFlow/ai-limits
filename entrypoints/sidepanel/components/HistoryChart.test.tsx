@@ -3,7 +3,10 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  buildEnvelopeSeries,
   detailLevel,
+  meterPolicy,
+  uncoveredGaps,
   type ProviderInstanceView,
   type UsageSnapshot,
 } from "../../../domain/public-protocol";
@@ -12,7 +15,7 @@ import { FIXTURE_NOW, REALISTIC_METERS, type RealisticMeter } from "../../../dom
 import { HistoryView } from "../views/HistoryView";
 import { formatPercent } from "../../../i18n/format";
 import { installI18nLocale } from "../../../test/i18n-harness";
-import { HistoryChart } from "./HistoryChart";
+import { drawnXSpans, HistoryChart } from "./HistoryChart";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -267,6 +270,90 @@ describe("HistoryChart", () => {
     });
     return problems.slice(0, 6);
   }
+
+  it("draws a visible band across the Cursor reset, not empty paper", () => {
+    const cursor = REALISTIC_METERS.find((meter) => meter.metricId === "other-models-monthly")!;
+    const rangeMs = 30 * DAY;
+    const rangeStart = FIXTURE_NOW - rangeMs;
+    const series = buildEnvelopeSeries(cursor.history, {
+      providerKind: "cursor",
+      metricId: "other-models-monthly",
+      now: FIXTURE_NOW,
+      rangeStart,
+      rangeEnd: FIXTURE_NOW,
+    });
+    const plotLeft = 28;
+    const plotRight = 312;
+    const timeAt = (at: number): number =>
+      plotLeft + ((at - rangeStart) / rangeMs) * (plotRight - plotLeft);
+    const observed = series.spans.filter((window) => window.kind === "observed");
+    const boundary = observed.find((window) => window.readings.every((reading) => reading.durationMs === 30 * DAY));
+    const previous = observed.find((window) =>
+      window.readings.length > 1 && window.readings.every((reading) => reading.durationMs === 31 * DAY),
+    );
+    expect(boundary).toBeDefined();
+    expect(previous).toBeDefined();
+    const lastUpper = previous!.readings.at(-1)!.observedAt;
+    const firstLower = boundary!.readings[0]!.observedAt;
+    const gap = { from: timeAt(lastUpper), to: timeAt(firstLower) };
+    const plotHeight = 92 - 8;
+    const pxPerUnit = 340 / 320;
+    const stubUnits = 10 / pxPerUnit;
+    const covers = (band: { from: number; to: number; upper: number; lower: number; open?: boolean }): boolean => {
+      const from = timeAt(Math.max(rangeStart, band.from));
+      const to = timeAt(Math.min(FIXTURE_NOW, band.to));
+      const drawnTo = band.open ? Math.min(to, from + stubUnits) : to;
+      const overlaps = from <= gap.from + 0.6 && drawnTo >= gap.to - 0.6;
+      return overlaps && Math.abs(band.upper - band.lower) >= plotHeight / 2;
+    };
+    const drawn = [...previous!.bands, ...boundary!.bands].some(covers);
+    expect(drawn, "the column between the two windows needs a band at least half the plot tall").toBe(true);
+  });
+
+  it("covers the drawn chart from the first reading to now, stub included", () => {
+    const widths = [340, 460];
+    const ranges = [48, 7 * 24, 30 * 24];
+    const plotLeft = 28;
+    const plotRight = 312;
+    const epsilon = 0.6;
+    for (const meter of REALISTIC_METERS.filter((item) => item.history.length > 0)) {
+      const policy = meterPolicy(meter.providerKind, meter.metricId);
+      for (const width of widths) {
+        for (const rangeHours of ranges) {
+          const rangeMs = rangeHours * HOUR;
+          const rangeStart = FIXTURE_NOW - rangeMs;
+          const series = buildEnvelopeSeries(meter.history, {
+            providerKind: meter.providerKind,
+            metricId: meter.metricId,
+            now: FIXTURE_NOW,
+            rangeStart,
+            rangeEnd: FIXTURE_NOW,
+          });
+          const windowMs = policy?.windowMs
+            ?? series.spans.find((window) => window.kind === "observed")?.windowMs
+            ?? 7 * DAY;
+          const level = detailLevel(windowMs, rangeMs, width);
+          const first = series.spans
+            .flatMap((window) => window.readings.map((reading) => reading.observedAt))
+            .reduce<number | undefined>(
+              (earliest, at) => earliest === undefined ? at : Math.min(earliest, at),
+              undefined,
+            );
+          const fromAt = Math.max(rangeStart, first ?? rangeStart);
+          const duration = Math.max(1, rangeMs);
+          const fromX = plotLeft + ((fromAt - rangeStart) / duration) * (plotRight - plotLeft);
+          const gaps = uncoveredGaps(
+            drawnXSpans({ series, rangeStart, rangeEnd: FIXTURE_NOW, plotWidth: width, level })
+              .map((span) => ({ from: span.from, to: span.to })),
+            fromX,
+            plotRight,
+            epsilon,
+          );
+          expect(gaps, `${meter.metricId} ${rangeHours}h @${width}`).toEqual([]);
+        }
+      }
+    }
+  });
 
   it("renders the synthetic fixture inside the plot at every range and mode", () => {
     const widths = [340, 400, 460];
