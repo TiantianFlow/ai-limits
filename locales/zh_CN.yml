@@ -298,6 +298,7 @@ history:
   paceNoWindow: 没有活动窗口 · 首次使用时开始
   paceNoReading: 等待新的读数
   paceExpired: "已于 {when} 重置 · 等待新的读数"
+  paceExpiredNext: "已于 {when} 重置 · 等待新的读数 · {next} 重置"
   paceResets: "{when} 重置"
   paceNone: "本窗口没有用量 · {when} 重置"
   paceLimit: "已达上限 · {when} 重置"

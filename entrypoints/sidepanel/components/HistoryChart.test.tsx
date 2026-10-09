@@ -779,7 +779,13 @@ describe("HistoryChart", () => {
   it("gives every hover target a tooltip whenever the highlight is visible", () => {
     // One meter, one width, two ranges. The full matrix of meters × widths ×
     // ranges exceeded the 5s default while the suite was loaded, without
-    // waiting on a clock. Pointer math itself is covered by the sweep tests.
+    // waiting on a clock. Dropped cases still run elsewhere in this file:
+    // every meter, both widths (340 and 460), and all three ranges (48h, 7d,
+    // 30d) render in "renders the synthetic fixture inside the plot" and
+    // "covers the drawn chart"; a pointer sweep that requires a tooltip
+    // whenever a highlight is visible runs in "gives every pointer position
+    // a visible tooltip or no highlight" for weekly at 48h/460 and 30d/340,
+    // 30-day at 30d/460, and five-hour-coding at 48h/460.
     const widths = [340];
     const ranges = [48, 30 * 24];
     const meters = REALISTIC_METERS.filter((item) => item.metricId === "weekly");
@@ -1087,8 +1093,31 @@ function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
       />,
     );
     expect(container.querySelector(".history-chart__latest")?.textContent).toContain("0%");
-    expect(container.querySelector(".history-chart__status")?.textContent).toMatch(/Reset .*waiting for a new reading/);
-    expect(container.querySelector(".history-chart__status")?.textContent).not.toMatch(/first use/);
+    const weeklyStatus = container.querySelector(".history-chart__status")?.textContent ?? "";
+    expect(weeklyStatus).toMatch(/Reset .*waiting for a new reading/);
+    expect(weeklyStatus).toMatch(/Resets /);
+    expect(weeklyStatus).not.toMatch(/first use/);
+
+    const kimiFiveHour = [
+      observation("five-hour-coding", FIXTURE_NOW - 2 * HOUR, 0.3125, {
+        cycle: { cadence: "rolling", durationMs: 5 * HOUR, resetsAt: FIXTURE_NOW - 2 * HOUR },
+      }),
+    ];
+    rerender(
+      <HistoryChart
+        providerName="Kimi"
+        providerKind="kimi"
+        mode="used"
+        metrics={[metric("five-hour-coding", 5 * HOUR, "5-hour usage")]}
+        history={kimiFiveHour}
+        now={FIXTURE_NOW}
+        rangeHours={30 * 24}
+      />,
+    );
+    const kimiStatus = container.querySelector(".history-chart__status")?.textContent ?? "";
+    expect(container.querySelector(".history-chart__latest")?.textContent).toContain("0%");
+    expect(kimiStatus).toMatch(/Reset .*waiting for a new reading/);
+    expect(kimiStatus).toMatch(/Resets /);
 
     const firstUse = [
       observation("five-hour", FIXTURE_NOW - 2 * DAY, 0.4, {

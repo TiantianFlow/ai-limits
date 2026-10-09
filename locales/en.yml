@@ -298,6 +298,7 @@ history:
   paceNoWindow: No active window · starts at first use
   paceNoReading: Waiting for a new reading
   paceExpired: "Reset {when} · waiting for a new reading"
+  paceExpiredNext: "Reset {when} · waiting for a new reading · Resets {next}"
   paceResets: "Resets {when}"
   paceNone: "No usage this window · resets {when}"
   paceLimit: "Limit reached · resets {when}"
