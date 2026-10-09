@@ -818,8 +818,13 @@ describe("side-panel App", () => {
       await within(guide).findByText("Enter a valid ElevenLabs API key."),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    // Monthly credits reset on the 1st, which is already past this fixture's
+    // clock, so the shared closed-window reading replaces the stored 25%.
     expect(screen.getByRole("article", { name: "ElevenLabs" })).toHaveTextContent(
-      "25% used",
+      "0% used",
+    );
+    expect(screen.getByRole("article", { name: "ElevenLabs" })).toHaveTextContent(
+      "waiting for a new reading",
     );
     expect(commands).toContainEqual({
       type: "CONNECT_API_KEY_PROVIDER",
@@ -923,13 +928,16 @@ describe("side-panel App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("72% used")).toBeVisible();
+    // The panel clock is the real date, after this fixture's August reset,
+    // so the shared closed-window reading is 0% and waiting.
+    expect(await screen.findByRole("article", { name: "ChatGPT" })).toHaveTextContent("0% used");
+    expect(screen.getByRole("article", { name: "ChatGPT" })).toHaveTextContent("waiting for a new reading");
     fireEvent.click(screen.getByRole("button", { name: "Refresh usage" }));
 
     const pendingButton = screen.getByRole("button", { name: "Refreshing usage" });
     expect(pendingButton).toBeDisabled();
     expect(pendingButton).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByText("72% used")).toBeVisible();
+    expect(screen.getByRole("article", { name: "ChatGPT" })).toHaveTextContent("0% used");
     expect(
       within(screen.getByRole("article", { name: "ChatGPT" })).getByText(
         "Fetching usage…",
@@ -1109,7 +1117,8 @@ describe("side-panel App", () => {
       });
     });
     expect(await within(kimi).findByText("Waiting for Kimi…")).toBeVisible();
-    expect(within(kimi).getByText("55% used")).toBeVisible();
+    expect(kimi).toHaveTextContent("0% used");
+    expect(kimi).toHaveTextContent("waiting for a new reading");
 
     act(() =>
       finishRefresh?.({ state, report: report(successfulOutcomes(state)) }),

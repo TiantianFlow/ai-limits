@@ -5,6 +5,8 @@ import { formatDateTime } from "../../../i18n/format";
 import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import {
   buildChartModel,
+  closedWindowReading,
+  fallbackPolicy,
   meterPolicy,
   paceLine,
   wholePercent,
@@ -39,6 +41,12 @@ const PLOT_LEFT = 8;
 const PLOT_RIGHT = 312;
 const PLOT_TOP = 22;
 const PLOT_BOTTOM = 106;
+/**
+ * Empty-stretch marks sit on this y. A 1px stroke centered on the baseline
+ * (y = PLOT_BOTTOM) hangs half a pixel below the axis and, once the viewBox
+ * scales up in the side panel, reads as about 4px under the plot.
+ */
+const MARK_Y = PLOT_BOTTOM - 1.5;
 const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
 
 interface Focus {
@@ -414,7 +422,6 @@ function currentReading(
   expired: boolean;
   policy: "fixed" | "first-use";
 } | undefined {
-  const policy = meterPolicy(providerKind, metricId)?.policy ?? "first-use";
   const readings = history.flatMap((observation) =>
     observation.metrics
       .filter((sample) => sample.type === "quota" && sample.metricId === metricId && !(observation.observedAt > now))
@@ -431,18 +438,25 @@ function currentReading(
   if (!chosen || chosen.sample.type !== "quota") return undefined;
   const resetsAt = chosen.sample.cycle?.resetsAt;
   const duration = chosen.sample.cycle?.durationMs;
+  const policy = meterPolicy(providerKind, metricId)?.policy
+    ?? fallbackPolicy(chosen.sample.cycle?.cadence, duration);
   const startedAt = chosen.sample.cycle?.startedAt;
-  const expired = resetsAt !== undefined && resetsAt < now;
-  const start = expired
+  const reading = closedWindowReading({
+    usedRatio: chosen.sample.usedRatio,
+    resetsAt,
+    now,
+    policy,
+    durationMs: duration,
+  });
+  const start = reading.closed
     ? undefined
     : startedAt ?? (resetsAt !== undefined && duration !== undefined ? resetsAt - duration : undefined);
-  // A closed window has reset. The headline is 0% used, and the status names
-  // the reset the current-cycle card also names — never "starts at first use".
+  // Same closed-window story as the overview and current-cycle cards.
   return {
-    used: expired ? 0 : chosen.sample.usedRatio * 100,
+    used: reading.usedRatio * 100,
     start,
     resetsAt,
-    expired,
+    expired: reading.closed,
     policy,
   };
 }
@@ -718,18 +732,31 @@ export function HistoryChart({
                   />
                 ))
                 : null}
-              {model.idle.flatMap((span) => idlePieces(span, model).map((piece) => (
-                <line
-                  key={`idle-${span.start}-${piece.start}`}
-                  className="history-chart__idle"
-                  data-idle={span.reason}
-                  x1={timeX(piece.start, rangeStart, rangeEnd)}
-                  x2={timeX(piece.end, rangeStart, rangeEnd)}
-                  y1={valueY(0, mode)}
-                  y2={valueY(0, mode)}
-                  strokeDasharray="2 3"
-                />
-              )))}
+              {model.tier === "line"
+                ? model.idle.flatMap((span) => idlePieces(span, model).map((piece) => (
+                  <line
+                    key={`idle-${span.start}-${piece.start}`}
+                    className="history-chart__idle"
+                    data-idle={span.reason}
+                    x1={timeX(piece.start, rangeStart, rangeEnd)}
+                    x2={timeX(piece.end, rangeStart, rangeEnd)}
+                    y1={MARK_Y}
+                    y2={MARK_Y}
+                    strokeDasharray="2 3"
+                  />
+                )))
+                : model.idle.map((span) => (
+                  <line
+                    key={`idle-${span.start}`}
+                    className="history-chart__idle"
+                    data-idle={span.reason}
+                    x1={timeX(span.start, rangeStart, rangeEnd)}
+                    x2={timeX(span.end, rangeStart, rangeEnd)}
+                    y1={MARK_Y}
+                    y2={MARK_Y}
+                    strokeDasharray="2 3"
+                  />
+                ))}
               {model.gaps.map((gap) => (
                 gapRepeatsIdle(gap, model) ? null : (
                 <line
@@ -737,9 +764,9 @@ export function HistoryChart({
                   className="history-chart__gap"
                   x1={timeX(gap.start, rangeStart, rangeEnd)}
                   x2={timeX(gap.end, rangeStart, rangeEnd)}
-                  y1={PLOT_BOTTOM + 3}
-                  y2={PLOT_BOTTOM + 3}
-                  strokeDasharray="2 2"
+                  y1={MARK_Y}
+                  y2={MARK_Y}
+                  strokeDasharray="2 3"
                 />
                 )
               ))}
@@ -749,7 +776,7 @@ export function HistoryChart({
                 </text>
               ))}
               {model.resets.map((at) => (
-                <line key={`reset-${at}`} className="history-chart__reset" x1={timeX(at, rangeStart, rangeEnd)} x2={timeX(at, rangeStart, rangeEnd)} y1={PLOT_BOTTOM - 6} y2={PLOT_BOTTOM} />
+                <line key={`reset-${at}`} className="history-chart__reset" x1={timeX(at, rangeStart, rangeEnd)} x2={timeX(at, rangeStart, rangeEnd)} y1={PLOT_BOTTOM - 6} y2={PLOT_BOTTOM - 1} />
               ))}
               {labelTouchesCap(model, mode) ? null : (
                 <text className="history-chart__tick" x={PLOT_RIGHT - 2} y={PLOT_TOP - 2} textAnchor="end">{l10n.t("history.axisCap")}</text>

@@ -109,8 +109,8 @@ export type {
   PaceInput,
   SegmentStyle,
 } from "./history-v20";
-export { displayRatio, elapsedRatio, paceStatus } from "./quota";
-export type { PaceKind, PaceStatus } from "./quota";
+export { closedWindowReading, displayRatio, elapsedRatio, paceStatus } from "./quota";
+export type { ClosedWindowReading, PaceKind, PaceStatus } from "./quota";
 import type {
   DeferredReason,
   DetailTable,

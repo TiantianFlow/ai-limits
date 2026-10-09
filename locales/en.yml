@@ -431,6 +431,7 @@ freshness:
 
 pace:
   unavailable: Pace unavailable
+  waiting: Waiting for a new reading
   onPace: On pace
   ahead: "{points} pts over pace"
   behind: "{points} pts under pace"
@@ -445,6 +446,8 @@ quota:
   meterTimeElapsed: "{label} time elapsed"
   meterTimeRemaining: "{label} time remaining"
   noResetTiming: No reset timing
+  expiredWaiting: "Reset {when} · waiting for a new reading"
+  expiredEstimate: Estimate · waiting for a new reading
   segmentPercent: "{label} {percent}%"
   resets: "Resets {when}"
   elapsedHours:
