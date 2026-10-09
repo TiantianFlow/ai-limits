@@ -7,10 +7,11 @@ import {
   localizeMetricScope,
   localizeProviderName,
 } from "../../../i18n/presentation";
-import type {
-  DisplayMode,
-  ProviderInstanceId,
-  ProviderInstanceView,
+import {
+  meterPolicy,
+  type DisplayMode,
+  type ProviderInstanceId,
+  type ProviderInstanceView,
 } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
 import { quotaMetrics } from "../metrics";
@@ -39,6 +40,31 @@ const RANGE_OPTIONS = [
   { hours: 30 * 24, shortKey: "history.range30dShort", labelKey: "history.range30d" },
 ] as const;
 
+function readingsInRange(
+  history: { observedAt: number; metrics: { type: string; metricId: string }[] }[],
+  metricId: string,
+  now: number,
+  hours: number,
+): number {
+  const start = now - hours * 60 * 60 * 1_000;
+  return history.filter((observation) =>
+    observation.observedAt >= start &&
+    observation.observedAt <= now &&
+    observation.metrics.some((sample) => sample.type === "quota" && sample.metricId === metricId),
+  ).length;
+}
+
+function defaultRangeHours(
+  providerKind: ProviderInstanceView["providerKind"],
+  metricId: string,
+  durationMs: number | undefined,
+): number {
+  const windowMs = meterPolicy(providerKind, metricId)?.windowMs ?? durationMs ?? 0;
+  const dayMs = 24 * 60 * 60 * 1_000;
+  const shortWindow = windowMs > 0 && !(windowMs > dayMs);
+  return shortWindow ? 7 * 24 : 30 * 24;
+}
+
 export function HistoryView({
   instances,
   instanceId,
@@ -64,11 +90,15 @@ export function HistoryView({
   const metrics = instance?.snapshot ? quotaMetrics(instance.snapshot) : [];
   const selectedMetric =
     metrics.find((metric) => metric.id === metricId) ?? metrics[0];
-  const [rangeHours, setRangeHours] = useState<number>(48);
+  const [rangeHours, setRangeHours] = useState<number>(30 * 24);
+  const providerKind = instance?.providerKind;
 
   useEffect(() => {
-    setRangeHours(48);
-  }, [instanceId]);
+    // Switching quota windows keeps the range the user already picked.
+    if (!providerKind) return;
+    const metric = metrics.find((item) => item.id === metricId) ?? metrics[0];
+    setRangeHours(defaultRangeHours(providerKind, metric?.id ?? "", metric?.cycle?.durationMs));
+  }, [instanceId, providerKind]);
 
   if (!instance || !selectedMetric) {
     return (
@@ -133,18 +163,34 @@ export function HistoryView({
             role="radiogroup"
             aria-label={l10n.t("history.range")}
           >
-            {RANGE_OPTIONS.map((option) => (
-              <button
-                key={option.hours}
-                role="radio"
-                type="button"
-                aria-label={l10n.t(option.labelKey as MessageKey)}
-                aria-checked={rangeHours === option.hours}
-                onClick={() => setRangeHours(option.hours)}
-              >
-                <span>{l10n.t(option.shortKey as MessageKey)}</span>
-              </button>
-            ))}
+            {RANGE_OPTIONS.map((option) => {
+              const count = readingsInRange(instance.history, selectedMetric.id, now, option.hours);
+              const sparse = count < 5;
+              return (
+                <button
+                  key={option.hours}
+                  role="radio"
+                  type="button"
+                  aria-label={sparse
+                    ? l10n.t("history.rangeSparse", {
+                        range: l10n.t(option.labelKey as MessageKey),
+                        count,
+                      })
+                    : l10n.t(option.labelKey as MessageKey)}
+                  aria-checked={rangeHours === option.hours}
+                  onClick={() => setRangeHours(option.hours)}
+                >
+                  <span>
+                    {sparse
+                      ? l10n.t("history.rangeCount", {
+                          range: l10n.t(option.shortKey as MessageKey),
+                          count,
+                        })
+                      : l10n.t(option.shortKey as MessageKey)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -159,6 +205,7 @@ export function HistoryView({
           </div>
           <HistoryChart
             providerName={label}
+            providerKind={instance.providerKind}
             mode={mode}
             metrics={localizedMetrics.filter(
               (metric) => metric.id === selectedMetric.id,

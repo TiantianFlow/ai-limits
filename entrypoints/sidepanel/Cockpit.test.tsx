@@ -1146,9 +1146,9 @@ describe("Cockpit", () => {
       screen.getByRole("radiogroup", { name: "Show used or left" }),
     ).toBeVisible();
     const ranges = screen.getByRole("radiogroup", { name: "History range" });
-    expect(within(ranges).getByRole("radio", { name: "48 hours" })).toBeVisible();
-    expect(within(ranges).getByRole("radio", { name: "7 days" })).toBeVisible();
-    expect(within(ranges).getByRole("radio", { name: "30 days" })).toBeVisible();
+    expect(within(ranges).getByRole("radio", { name: /48 hours/ })).toBeVisible();
+    expect(within(ranges).getByRole("radio", { name: /7 days/ })).toBeVisible();
+    expect(within(ranges).getByRole("radio", { name: /30 days/ })).toBeVisible();
     expect(screen.getByRole("region", { name: "Usage history chart" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Current cycle" })).toBeVisible();
     expect(screen.getByText(/Only successful, normalized quota observations are plotted/)).toBeVisible();
@@ -1176,9 +1176,9 @@ describe("Cockpit", () => {
     ).toEqual(["Used", "Left"]);
     expect(
       within(groups[1]!).getAllByRole("radio").map((radio) => radio.textContent),
-    ).toEqual(["48H", "7D", "30D"]);
+    ).toEqual(["48H · 3", "7D · 3", "30D · 3"]);
     expect(
-      within(groups[1]!).getByRole("radio", { name: "48 hours" }),
+      within(groups[1]!).getByRole("radio", { name: /7 days/ }),
     ).toBeChecked();
   });
 
@@ -1297,7 +1297,7 @@ describe("Cockpit", () => {
         name: "Open ChatGPT history for 5-hour messages",
       }),
     );
-    const sevenDays = screen.getByRole("radio", { name: "7 days" });
+    const sevenDays = screen.getByRole("radio", { name: /7 days/ });
 
     fireEvent.click(sevenDays);
     expect(sevenDays).toBeChecked();
@@ -2763,7 +2763,7 @@ describe("Cockpit", () => {
       }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("img", {
+      screen.getByRole("group", {
         name: /ChatGPT 5-hour messages usage history/,
       }),
     ).toBeVisible();
