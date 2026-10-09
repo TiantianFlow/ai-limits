@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 import { l10n, type MessageKey } from "../../../i18n/index";
 import {
@@ -55,7 +55,7 @@ function readingsInRange(
 }
 
 function defaultRangeHours(
-  providerKind: ProviderInstanceView["providerKind"],
+  providerKind: ProviderInstanceView["providerKind"] | undefined,
   metricId: string,
   durationMs: number | undefined,
 ): number {
@@ -90,15 +90,21 @@ export function HistoryView({
   const metrics = instance?.snapshot ? quotaMetrics(instance.snapshot) : [];
   const selectedMetric =
     metrics.find((metric) => metric.id === metricId) ?? metrics[0];
-  const [rangeHours, setRangeHours] = useState<number>(30 * 24);
   const providerKind = instance?.providerKind;
+  const openingMetric = metrics.find((item) => item.id === metricId) ?? metrics[0];
+  const [rangeHours, setRangeHours] = useState<number>(() =>
+    defaultRangeHours(providerKind, openingMetric?.id ?? "", openingMetric?.cycle?.durationMs),
+  );
+  const [rangeScope, setRangeScope] = useState(instanceId);
 
-  useEffect(() => {
-    // Switching quota windows keeps the range the user already picked.
-    if (!providerKind) return;
-    const metric = metrics.find((item) => item.id === metricId) ?? metrics[0];
-    setRangeHours(defaultRangeHours(providerKind, metric?.id ?? "", metric?.cycle?.durationMs));
-  }, [instanceId, providerKind]);
+  if (instanceId !== rangeScope) {
+    setRangeScope(instanceId);
+    setRangeHours(defaultRangeHours(
+      providerKind,
+      openingMetric?.id ?? "",
+      openingMetric?.cycle?.durationMs,
+    ));
+  }
 
   if (!instance || !selectedMetric) {
     return (

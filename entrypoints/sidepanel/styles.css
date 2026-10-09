@@ -851,6 +851,11 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   stroke-linecap: round;
 }
 
+.history-chart__highlight {
+  fill: color-mix(in srgb, var(--text) 10%, transparent);
+  stroke: none;
+}
+
 .history-chart__bar {
   fill: var(--quota);
 }

@@ -122,6 +122,17 @@ describe("HistoryChart", () => {
     expect(container.querySelectorAll(".history-chart__bar").length).toBeGreaterThan(0);
     expect(container.querySelector(".history-chart__band")).toBeNull();
     expect(screen.getByText(/Bars show certain usage only/)).toBeVisible();
+
+    const chart = screen.getByRole("group", { name: /usage history/ });
+    expect(container.querySelector(".history-chart__highlight")).toBeNull();
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
+    fireEvent.keyDown(chart, { key: "Home" });
+    expect(container.querySelectorAll(".history-chart__highlight")).toHaveLength(1);
+    fireEvent.keyDown(chart, { key: "End" });
+    expect(container.querySelectorAll(".history-chart__highlight")).toHaveLength(1);
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(container.querySelector(".history-chart__highlight")).toBeNull();
   });
 
   it("draws one bar per day for a short window squeezed under 4 px", () => {
@@ -149,11 +160,14 @@ describe("HistoryChart", () => {
     );
     expect(container.querySelectorAll(".history-chart__bar").length).toBeGreaterThan(0);
     expect(screen.getByText(/Each bar = busiest/)).toBeVisible();
+
+    fireEvent.keyDown(screen.getByRole("group", { name: /usage history/ }), { key: "ArrowRight" });
+    expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
   });
 
   it("shows a window tooltip and moves between windows with the arrow keys", () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
-    render(
+    const { container } = render(
       <HistoryChart
         providerName="Claude"
         providerKind="claude"
@@ -174,6 +188,7 @@ describe("HistoryChart", () => {
     const chart = screen.getByRole("group", { name: /usage history/ });
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(screen.getByRole("tooltip")).toBeVisible();
+    expect(container.querySelector(".history-chart__highlight")).not.toBeNull();
     const first = screen.getByRole("tooltip").textContent ?? "";
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(screen.getByRole("tooltip").textContent ?? "").not.toBe(first);
