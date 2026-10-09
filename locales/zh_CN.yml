@@ -199,7 +199,7 @@ history:
   dayNone: 这一天没有读数
   dayBusiest: "最忙的{noun}：{span}"
   dayOpen: "{observed} · 重置附近没有读数"
-  spanIdle: "空闲 — 没有活动窗口（0% {mode}）"
+  spanIdle: "空闲 — 没有活动窗口"
   spanConfirmed:
     zero: "由 {count} 条读数确认"
     one: "由 {count} 条读数确认"

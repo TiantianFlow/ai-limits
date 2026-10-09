@@ -199,7 +199,7 @@ history:
   dayNone: No readings this day
   dayBusiest: "Busiest {noun}: {span}"
   dayOpen: "{observed} · no reading near reset"
-  spanIdle: "Idle — no active window (0% {mode})"
+  spanIdle: "Idle — no active window"
   spanConfirmed:
     zero: "Confirmed by {count} readings"
     one: "Confirmed by {count} reading"

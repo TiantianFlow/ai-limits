@@ -112,11 +112,13 @@ function weeklyGrid(options: {
  * First-use 5-hour windows with a long idle stretch, then one window whose
  * only reading is well before its reset. At 48 h that tail is a circle and
  * the stretch to the next window is blank unless the chart covers it.
+ * `short` adds a gap shorter than one window between two of those windows.
  */
 export function firstUseIdleGap(options: {
   metricId: string;
   windowMs: number;
   now: number;
+  short?: boolean;
 }): UsageHistoryObservation[] {
   const history: UsageHistoryObservation[] = [];
   const push = (observedAt: number, usedRatio: number): void => {
@@ -130,6 +132,7 @@ export function firstUseIdleGap(options: {
   // Two windows about a day ago, then nothing until one window near now
   // whose reading sits hours before the reset.
   push(options.now - 40 * HOUR, 0.2);
+  if (options.short) push(options.now - 34 * HOUR, 0.1);
   push(options.now - 30 * HOUR, 0.15);
   push(options.now - 6 * HOUR, 0.08);
   return history;
@@ -332,6 +335,7 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
       metricId: "five-hour-coding",
       windowMs: 5 * HOUR,
       now,
+      short: true,
     }),
   ];
   const kimiMonth = calendarReset({ metricId: "monthly-total", seed: 71, now });

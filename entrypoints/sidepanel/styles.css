@@ -846,9 +846,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 }
 
 .history-chart__idle {
-  stroke: var(--text-muted);
-  stroke-width: 2;
-  stroke-linecap: round;
+  fill: var(--text-muted);
 }
 
 .history-chart__highlight {
@@ -891,11 +889,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 
 .history-chart__hits {
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 0;
-  padding-bottom: calc(100% * 92 / 320);
+  inset: 0;
   pointer-events: none;
 }
 
@@ -939,14 +933,15 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   position: absolute;
   z-index: 2;
   display: grid;
-  gap: 2px;
-  padding: 6px 8px;
+  gap: 1px;
+  max-width: 180px;
+  padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.25;
   pointer-events: none;
 }
 
