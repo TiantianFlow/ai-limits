@@ -154,13 +154,20 @@ function markIsolated(points: ChartPoint[], pxPerMs: number): void {
   indexes.forEach((index, place) => {
     const previous = indexes[place - 1];
     const next = indexes[place + 1];
+    // An endpoint of a run with several readings is not isolated. A lone
+    // reading, or one whose neighbours are both farther than the gap, is.
+    if (indexes.length > 1 && (previous === undefined || next === undefined)) return;
     const before = previous === undefined ? Infinity : (points[index]!.at - points[previous]!.at) * pxPerMs;
     const after = next === undefined ? Infinity : (points[next]!.at - points[index]!.at) * pxPerMs;
     points[index]!.dot = before > DOT_ISOLATION_PX && after > DOT_ISOLATION_PX;
   });
 }
 
-/** One run per window with usage, plus the drop to 0 at a reset that is still ahead of now. */
+/**
+ * One run per window with usage. The last reading holds flat to the reset or
+ * to now, whichever comes first, and a reset that has already happened drops
+ * to 0% used (the refill in Left mode).
+ */
 export function buildRuns(windows: readonly ChartWindow[], now: number, pxPerMs: number): ChartRun[] {
   return windows.map((window) => {
     const points: ChartPoint[] = [];
@@ -185,10 +192,10 @@ export function buildRuns(windows: readonly ChartWindow[], now: number, pxPerMs:
     });
     const holdUntil = Math.min(window.end, now);
     if (holdUntil - last.observedAt > 60_000) {
-      styles.push(window.tailKnown ? "known" : "estimated");
+      styles.push("estimated");
       points.push({ at: holdUntil, used: lastUsed, reading: false });
     }
-    if (window.end <= now && window.end > last.observedAt) {
+    if (window.end <= now && window.end - last.observedAt > 60_000) {
       styles.push("known");
       points.push({ at: window.end, used: 0, reading: false });
     }
@@ -239,7 +246,9 @@ function dayBars(windows: readonly ChartWindow[], rangeStart: number, rangeEnd: 
   const bars: ChartBar[] = [];
   for (let start = dayStart(rangeStart); start < rangeEnd; start += day) {
     const end = Math.min(start + day, rangeEnd);
-    const inside = windows.filter((window) => window.start < end && window.end > Math.max(start, rangeStart));
+    const inside = windows.filter((window) =>
+      window.peak > 0 && window.start < end && window.end > Math.max(start, rangeStart),
+    );
     if (inside.length === 0) continue;
     const busiest = inside.reduce((best, window) => (window.peak > best.peak ? window : best));
     bars.push({
@@ -260,7 +269,7 @@ function dayBars(windows: readonly ChartWindow[], rangeStart: number, rangeEnd: 
 
 function windowBars(windows: readonly ChartWindow[], rangeStart: number, rangeEnd: number): ChartBar[] {
   return windows
-    .filter((window) => window.end > rangeStart && window.start < rangeEnd)
+    .filter((window) => window.peak > 0 && window.end > rangeStart && window.start < rangeEnd)
     .map((window) => ({
       id: window.id,
       start: Math.max(window.start, rangeStart),
@@ -292,9 +301,10 @@ export function buildChartModel(input: ChartBuildInput): ChartModel {
   const rangeMs = Math.max(1, input.rangeEnd - input.rangeStart);
   const pxPerMs = input.widthPx / rangeMs;
   const tier = chartTier(full.windowMs, rangeMs, input.widthPx);
-  const drawnWindows = full.spans
+  const windows = full.spans
     .map(toWindow)
-    .filter((window): window is ChartWindow => window !== null && window.peak > 0 && window.end > input.rangeStart);
+    .filter((window): window is ChartWindow => window !== null && window.end > input.rangeStart);
+  const drawnWindows = windows.filter((window) => window.peak > 0);
   const runs = buildRuns(drawnWindows, input.now, pxPerMs)
     .map((run) => clipRun(run, input.rangeStart))
     .filter((run): run is ChartRun => run !== null && run.points.length > 0);
@@ -333,9 +343,9 @@ export function buildChartModel(input: ChartBuildInput): ChartModel {
       .filter((end) => end > input.rangeStart && end < input.rangeEnd)
     : [];
   const bars = tier === "window-bars"
-    ? windowBars(drawnWindows, input.rangeStart, input.rangeEnd)
+    ? windowBars(windows, input.rangeStart, input.rangeEnd)
     : tier === "day-bars"
-      ? dayBars(drawnWindows, input.rangeStart, input.rangeEnd, input.now)
+      ? dayBars(windows, input.rangeStart, input.rangeEnd, input.now)
       : [];
   const readingsInRange = full.spans
     .flatMap((span) => span.readings)

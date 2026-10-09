@@ -946,8 +946,8 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 }
 
 .history-chart__reset {
-  stroke: var(--text-muted);
-  stroke-width: 1;
+  stroke: var(--quota);
+  stroke-width: 1.5;
 }
 
 .history-chart__legend-reset {

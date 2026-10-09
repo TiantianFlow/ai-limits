@@ -49,6 +49,11 @@ interface Focus {
   to: number;
 }
 
+/** True when `at` falls inside the span, grown by `pad` on both sides. */
+function coversSpan(start: number, end: number, at: number, pad = 0): boolean {
+  return Math.min(at, end + pad) === at && Math.max(at, start - pad) === at;
+}
+
 function timeX(at: number, start: number, end: number): number {
   const span = Math.max(1, end - start);
   const clamped = Math.min(end, Math.max(start, at));
@@ -104,14 +109,15 @@ function describeWindow(window: ChartWindow, mode: DisplayMode): Focus {
 /** What the line says at `at`: a reading, a hold, or the gap between two readings. */
 function describeAt(model: ChartModel, at: number, mode: DisplayMode): Focus | null {
   const hour = 60 * 60 * 1_000;
-  const tolerance = (8 / Math.max(0.001, model.pxPerHour)) * hour;
-  const window = model.drawnWindows.find((item) => item.start <= at && item.end >= at)
-    ?? model.drawnWindows.find((item) => item.start - tolerance <= at && item.end + tolerance >= at);
+  const tolerance = Math.min(15 * 60 * 1_000, (8 / Math.max(0.001, model.pxPerHour)) * hour);
+  const exact = model.drawnWindows.find((item) => coversSpan(item.start, item.end, at));
+  const padded = model.drawnWindows.find((item) => coversSpan(item.start, item.end, at, tolerance));
+  const window = exact ?? padded;
   if (!window) {
-    const idle = model.idle.find((span) => span.start <= at && span.end >= at);
-    if (idle) return describeIdle(idle, mode);
-    const gap = model.gaps.find((span) => span.start <= at && span.end >= at);
-    if (gap) return describeGap(gap);
+    const idleSpan = model.idle.find((span) => coversSpan(span.start, span.end, at));
+    if (idleSpan) return describeIdle(idleSpan, mode);
+    const gapSpan = model.gaps.find((span) => coversSpan(span.start, span.end, at));
+    if (gapSpan) return describeGap(gapSpan);
     return null;
   }
   let best = 0;
@@ -243,12 +249,12 @@ function describeBar(bar: ChartBar, mode: DisplayMode): Focus {
 
 function focusAt(model: ChartModel, at: number, mode: DisplayMode): Focus | null {
   if (model.tier === "line") return describeAt(model, at, mode);
-  const bar = model.bars.find((item) => item.start <= at && item.end >= at);
+  const bar = model.bars.find((item) => coversSpan(item.start, item.end, at));
   if (bar) return describeBar(bar, mode);
-  const idle = model.idle.find((span) => span.start <= at && span.end >= at);
-  if (idle) return describeIdle(idle, mode);
-  const gap = model.gaps.find((span) => span.start <= at && span.end >= at);
-  return gap ? describeGap(gap) : null;
+  const idleSpan = model.idle.find((span) => coversSpan(span.start, span.end, at));
+  if (idleSpan) return describeIdle(idleSpan, mode);
+  const gapSpan = model.gaps.find((span) => coversSpan(span.start, span.end, at));
+  return gapSpan ? describeGap(gapSpan) : null;
 }
 
 function keyboardStops(model: ChartModel, mode: DisplayMode): Focus[] {
@@ -301,6 +307,27 @@ function barGeometry(bar: ChartBar, model: ChartModel): { x: number; width: numb
   return { x: x1 + (slot - width) / 2, width, depth: Math.max(MIN_BAR_PX, raw) };
 }
 
+/** Idle dashes stop at a bar so a Left notch is never crossed by the gray line. */
+function idlePieces(span: ChartIdle, model: ChartModel): { start: number; end: number }[] {
+  if (model.tier === "line") return [{ start: span.start, end: span.end }];
+  const notches = model.bars
+    .map((bar) => barGeometry(bar, model))
+    .filter((shape): shape is { x: number; width: number; depth: number } => shape !== null)
+    .sort((left, right) => left.x - right.x);
+  const pieces: { start: number; end: number }[] = [];
+  let cursor = timeX(span.start, model.rangeStart, model.rangeEnd);
+  const end = timeX(span.end, model.rangeStart, model.rangeEnd);
+  const at = (x: number): number =>
+    model.rangeStart + ((x - PLOT_LEFT) / (PLOT_RIGHT - PLOT_LEFT)) * (model.rangeEnd - model.rangeStart);
+  for (const notch of notches) {
+    if (notch.x + notch.width <= cursor || notch.x >= end) continue;
+    if (notch.x > cursor) pieces.push({ start: at(cursor), end: at(notch.x) });
+    cursor = Math.max(cursor, notch.x + notch.width);
+  }
+  if (cursor < end) pieces.push({ start: at(cursor), end: at(end) });
+  return pieces;
+}
+
 function dateTicks(model: ChartModel): { at: number; label: string }[] {
   const hour = 60 * 60 * 1_000;
   const range = model.rangeEnd - model.rangeStart;
@@ -344,7 +371,7 @@ function currentReading(history: UsageHistoryObservation[], metricId: string, no
 } | undefined {
   const readings = history.flatMap((observation) =>
     observation.metrics
-      .filter((sample) => sample.type === "quota" && sample.metricId === metricId && observation.observedAt <= now)
+      .filter((sample) => sample.type === "quota" && sample.metricId === metricId && !(observation.observedAt > now))
       .map((sample) => ({ at: observation.observedAt, sample })),
   );
   const latest = readings.at(-1);
@@ -369,6 +396,7 @@ export function HistoryChart({
   const summaryId = useId();
   const infoId = useId();
   const chartRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const [plotWidth, setPlotWidth] = useState(360);
   const [hover, setHover] = useState<Focus | null>(null);
   const [pinned, setPinned] = useState<Focus | null>(null);
@@ -425,10 +453,9 @@ export function HistoryChart({
   if (!metric || !model) return null;
 
   const active = hover ?? pinned ?? (keyIndex !== null ? stops[keyIndex] ?? null : null);
-  const empty = model.readingsInRange === 0 && model.drawnWindows.length === 0;
 
   function atClientX(clientX: number): Focus | null {
-    const canvas = chartRef.current?.querySelector(".history-chart__canvas");
+    const canvas = canvasRef.current;
     if (!(canvas instanceof Element)) return null;
     const bounds = canvas.getBoundingClientRect();
     if (bounds.width <= 0) return null;
@@ -448,10 +475,15 @@ export function HistoryChart({
     });
   }
 
+  const rangeLabel = hours % 24 === 0 && hours >= 72
+    ? l10n.count("history.footnoteDays", hours / 24)
+    : l10n.count("history.footnoteHours", hours);
   const note = model.readingsInRange === 0
-    ? l10n.t("history.noteNone", { range: l10n.count("history.footnoteHours", hours) })
+    ? l10n.t("history.noteNone", { range: rangeLabel })
     : model.readingsInRange < 5
-      ? l10n.t("history.rangeSparse", { range: l10n.count("history.footnoteHours", hours), count: model.readingsInRange })
+      ? model.drawnWindows.length === 0
+        ? l10n.t("history.noteNoUsage", { count: model.readingsInRange, range: rangeLabel })
+        : l10n.t("history.noteReadings", { count: model.readingsInRange, range: rangeLabel })
       : null;
 
   const info = [
@@ -481,7 +513,7 @@ export function HistoryChart({
           aria-label={l10n.t("history.infoLabel", { label: metric.label })}
           onClick={() => setInfoOpen((open) => !open)}
         >
-          i
+          {l10n.t("history.infoMark")}
         </button>
       </div>
       <p className={pace.warn ? "history-chart__status is-warn" : "history-chart__status"}>
@@ -492,12 +524,10 @@ export function HistoryChart({
           {info.map((item) => <li key={item}>{item}</li>)}
         </ul>
       ) : null}
-      {empty ? (
-        <p className="history-chart__empty">{l10n.t("history.empty")}</p>
-      ) : (
-        <div className="history-chart__plot">
+      <div className="history-chart__plot">
           <div
             className="history-chart__canvas"
+            ref={canvasRef}
             role="group"
             tabIndex={0}
             aria-roledescription={l10n.t("history.chartRole")}
@@ -568,18 +598,30 @@ export function HistoryChart({
                   ].join(" ")}
                 />
               ) : null}
-              {model.idle.map((span) => (
+              {model.tier === "line" && mode === "left"
+                ? model.idle.map((span) => (
+                  <rect
+                    key={`idle-fill-${span.start}`}
+                    className="history-chart__area"
+                    x={timeX(span.start, rangeStart, rangeEnd)}
+                    y={valueY(0, mode)}
+                    width={Math.max(0, timeX(span.end, rangeStart, rangeEnd) - timeX(span.start, rangeStart, rangeEnd))}
+                    height={PLOT_BOTTOM - valueY(0, mode)}
+                  />
+                ))
+                : null}
+              {model.idle.flatMap((span) => idlePieces(span, model).map((piece) => (
                 <line
-                  key={`idle-${span.start}`}
+                  key={`idle-${span.start}-${piece.start}`}
                   className="history-chart__idle"
                   data-idle={span.reason}
-                  x1={timeX(span.start, rangeStart, rangeEnd)}
-                  x2={timeX(span.end, rangeStart, rangeEnd)}
+                  x1={timeX(piece.start, rangeStart, rangeEnd)}
+                  x2={timeX(piece.end, rangeStart, rangeEnd)}
                   y1={valueY(0, mode)}
                   y2={valueY(0, mode)}
                   strokeDasharray="2 3"
                 />
-              ))}
+              )))}
               {model.gaps.map((gap) => (
                 <line
                   key={`gap-${gap.start}`}
@@ -619,12 +661,11 @@ export function HistoryChart({
             {note && !active ? <p className="history-chart__note">{note}</p> : null}
             {active ? (
               <div className="history-chart__tooltip" role="tooltip" style={{ left: `${(tooltipLeft / VIEWBOX_WIDTH) * 100}%`, top: active.y !== undefined && active.y < 58 ? 62 : 2 }}>
-                {active.lines.map((line) => <p key={line}>{line}</p>)}
+                {active.lines.slice(0, 2).map((line) => <p key={line}>{line}</p>)}
               </div>
             ) : null}
           </div>
         </div>
-      )}
       <p className="visually-hidden" id={summaryId}>{l10n.t("history.summaryKeys")}</p>
     </div>
   );

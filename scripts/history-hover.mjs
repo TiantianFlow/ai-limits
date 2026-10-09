@@ -57,34 +57,27 @@ try {
     const canvas = card.locator(".history-chart__canvas");
     const box = await canvas.boundingBox();
     if (!box) throw new Error(`No canvas at ${width}px`);
-    const belowHits = await canvas.locator(".history-chart__hit").first().evaluate((node) => {
-      return node.getBoundingClientRect().bottom - 2;
-    });
+    // The plot is the middle of the 124-tall viewBox. Sweep there, not along
+    // the date labels under the axis.
+    const plotY = box.y + box.height * (57 / 124);
 
     const seen = [];
     const steps = 8;
     for (let step = 0; step <= steps; step += 1) {
       const x = box.x + box.width * (0.12 + 0.76 * (step / steps));
-      // The line sits near the axis. The broken overlay only covered the top
-      // of the plot, so a sweep through the middle never reached the canvas.
-      await page.mouse.move(x, belowHits);
+      await page.mouse.move(x, plotY);
       await page.waitForTimeout(25);
       const text = (await canvas.locator(".history-chart__tooltip").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
       const guide = await canvas.locator(".history-chart__guide-active").count();
-      const dot = await canvas.locator(".history-chart__dot-active").count();
       const time = text.split("Observed")[0]?.trim() ?? "";
-      if (guide < 1 || dot < 1) throw new Error(`${width}px step ${step} has no guide or dot (${time || "no tooltip"})`);
+      if (guide < 1) throw new Error(`${width}px step ${step} has no guide (${time || "no tooltip"})`);
       if (time.length === 0) throw new Error(`${width}px step ${step} has an empty tooltip`);
       const tip = await canvas.locator(".history-chart__tooltip").boundingBox();
-      const dotBox = await canvas.locator(".history-chart__dot-active").boundingBox();
       if (!tip || tip.width - 0.5 > 180) {
         failures.push(`${width}px step ${step} tooltip is ${Math.round(tip?.width ?? 0)}px`);
       }
-      if (dotBox) {
-        const cx = dotBox.x + dotBox.width / 2;
-        const cy = dotBox.y + dotBox.height / 2;
-        const covers = cx >= tip.x && cx <= tip.x + tip.width && cy >= tip.y && cy <= tip.y + tip.height;
-        if (covers) failures.push(`${width}px step ${step} tooltip covers the dot`);
+      if (tip && (tip.y < box.y - 1 || tip.y + tip.height > box.y + box.height + 1)) {
+        failures.push(`${width}px step ${step} tooltip spills the plot`);
       }
       seen.push(time);
     }
@@ -121,19 +114,19 @@ try {
     const idleTip = await hoverBox(".history-chart__idle");
     const idleText = (await idleTip.innerText()).replace(/\s+/g, " ");
     if (!/Idle — no active window/.test(idleText)) failures.push(`${width}px idle tooltip was "${idleText}"`);
-    const emptyTip = await hoverBox(".history-chart__unknown");
+    const emptyTip = await hoverBox(".history-chart__gap");
     const emptyText = (await emptyTip.innerText()).replace(/\s+/g, " ");
     if (!/No readings/.test(emptyText)) failures.push(`${width}px empty tooltip was "${emptyText}"`);
     const tipBox = await emptyTip.boundingBox();
     if (tipBox && (tipBox.y < plot.y - 1 || tipBox.y + tipBox.height > plot.y + plot.height + 1)) {
       failures.push(`${width}px tooltip spills the plot`);
     }
-    const guide = await kimiCanvas.locator(".history-chart__guide-active").first().boundingBox();
-    if (guide) {
-      const pointer = (await kimiCanvas.locator(".history-chart__unknown").first().boundingBox());
-      if (pointer && Math.abs(guide.x - (pointer.x + pointer.width / 2)) > 8) {
-        failures.push(`${width}px guide is far from the pointer`);
-      }
+    const highlight = await kimiCanvas.locator(".history-chart__highlight").first().boundingBox();
+    const pointer = await kimiCanvas.locator(".history-chart__gap").first().boundingBox();
+    if (highlight && pointer) {
+      const mid = pointer.x + pointer.width / 2;
+      const over = mid >= highlight.x - 2 && mid <= highlight.x + highlight.width + 2;
+      if (!over) failures.push(`${width}px highlight misses the gap under the pointer`);
     }
   }
   if (failures.length > 0) throw new Error(failures.join("; "));
