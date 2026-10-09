@@ -553,7 +553,6 @@ export function HistoryChart({
           >
             <svg className="history-chart__svg" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-hidden="true">
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_TOP} y2={PLOT_TOP} strokeDasharray="2 3" />
-              <text className="history-chart__tick" x={PLOT_RIGHT} y={12} textAnchor="end">100%</text>
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM} />
               {model.tier === "line"
                 ? model.runs.map((run) => {
@@ -576,6 +575,20 @@ export function HistoryChart({
                     );
                   })
                 : null}
+              {model.tier === "line" ? (() => {
+                const current = model.drawnWindows.find((window) => window.current);
+                const newest = current?.readings.at(-1);
+                const used = current?.values.at(-1);
+                if (!current || !newest || used === undefined || newest.observedAt > model.rangeEnd) return null;
+                return (
+                  <circle
+                    className="history-chart__now"
+                    cx={timeX(newest.observedAt, rangeStart, rangeEnd)}
+                    cy={valueY(used, mode)}
+                    r="3"
+                  />
+                );
+              })() : null}
               {model.tier !== "line" && mode === "used"
                 ? model.bars.map((bar) => {
                     const shape = barGeometry(bar, model);
@@ -661,7 +674,7 @@ export function HistoryChart({
             {note && !active ? <p className="history-chart__note">{note}</p> : null}
             {active ? (
               <div className="history-chart__tooltip" role="tooltip" style={{ left: `${(tooltipLeft / VIEWBOX_WIDTH) * 100}%`, top: active.y !== undefined && active.y < 58 ? 62 : 2 }}>
-                {active.lines.slice(0, 2).map((line) => <p key={line}>{line}</p>)}
+                {active.lines.map((line) => <p key={line}>{line}</p>)}
               </div>
             ) : null}
           </div>
@@ -684,6 +697,7 @@ export function paintedXSpans(container: ParentNode, plotWidth: number): { from:
     if (element.classList.contains("history-chart__axis")) return;
     if (element.classList.contains("history-chart__reset")) return;
     if (element.classList.contains("history-chart__guide-active")) return;
+    if (element.classList.contains("history-chart__now")) return;
     if (element.classList.contains("history-chart__highlight")) return;
     if (node.tagName.toLowerCase() === "path") {
       const numbers = [...(element.getAttribute("d") ?? "").matchAll(/-?\d+(?:\.\d+)?/g)].map((item) => Number(item[0]));
