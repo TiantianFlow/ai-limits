@@ -145,9 +145,9 @@ history:
   range48h: 48 hours
   range7d: 7 days
   range30d: 30 days
-  range48hShort: 48H
-  range7dShort: 7D
-  range30dShort: 30D
+  range48hShort: 48 h
+  range7dShort: 7 d
+  range30dShort: 30 d
   chart: Usage history chart
   scopeQuota: "{scope} quota"
   currentCycle: Current cycle
@@ -171,6 +171,7 @@ history:
     many: "{count} days ago"
     other: "{count} days ago"
   latestPercent: "{percent}% {mode}"
+  headlineIdle: No active window — idle
   chartRole: chart
   rangeCount: "{range} · {count}"
   rangeSparse: "{range}, only {count} readings"

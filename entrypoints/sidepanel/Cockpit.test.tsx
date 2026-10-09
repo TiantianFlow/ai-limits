@@ -1155,6 +1155,7 @@ describe("Cockpit", () => {
   });
 
   it("keeps Used/Left and the range radios in one compact filter group", () => {
+    localStorage.clear();
     renderCockpit();
 
     fireEvent.click(
@@ -1176,7 +1177,7 @@ describe("Cockpit", () => {
     ).toEqual(["Used", "Left"]);
     expect(
       within(groups[1]!).getAllByRole("radio").map((radio) => radio.textContent),
-    ).toEqual(["48H · 3", "7D · 3", "30D · 3"]);
+    ).toEqual(["48 h · 3", "7 d · 3", "30 d · 3"]);
     expect(
       within(groups[1]!).getByRole("radio", { name: /7 days/ }),
     ).toBeChecked();
