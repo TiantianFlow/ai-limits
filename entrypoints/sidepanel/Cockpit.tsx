@@ -17,8 +17,11 @@ import {
 } from "../../i18n/presentation";
 import {
   canCreateProviderInstance,
+  closedWindowReading,
   displayRatio,
   elapsedRatio,
+  fallbackPolicy,
+  meterPolicy,
   paceStatus,
   providerAvailability,
   providerKinds,
@@ -145,7 +148,8 @@ function formatReset(resetsAt: number): string {
   return l10n.t("quota.resets", { when: formatDateTime(resetsAt) });
 }
 
-function formatPace(status: PaceStatus | undefined): string {
+function formatPace(status: PaceStatus | undefined, closed: boolean): string {
+  if (closed) return l10n.t("pace.waiting");
   if (!status) {
     return l10n.t("pace.unavailable");
   }
@@ -165,27 +169,35 @@ function quotaView(
   metric: QuotaMetric,
   mode: DisplayMode,
   now: number,
-  fetchedAt?: number,
+  _fetchedAt?: number,
 ): QuotaView {
-  const resetsAt = metric.cycle?.resetsAt;
-  // A snapshot fetched after its own reset is stale. A snapshot fetched
-  // before the reset is the live reading, even when the panel's clock is later.
-  const expired = resetsAt !== undefined && resetsAt < now && (fetchedAt === undefined || fetchedAt >= resetsAt);
-  const usedRatio = expired ? 0 : metric.usedRatio;
-  const elapsed = metric.cycle ? elapsedRatio(metric.cycle, now) : undefined;
+  const policy = meterPolicy(providerKind, metric.id)?.policy
+    ?? (metric.cycle
+      ? fallbackPolicy(metric.cycle.cadence, metric.cycle.durationMs)
+      : undefined);
+  const reading = closedWindowReading({
+    usedRatio: metric.usedRatio,
+    resetsAt: metric.cycle?.resetsAt,
+    now,
+    policy,
+    durationMs: metric.cycle?.durationMs,
+  });
+  const usedRatio = reading.usedRatio;
+  const elapsed = !reading.closed && metric.cycle ? elapsedRatio(metric.cycle, now) : undefined;
   const pace = elapsed === undefined ? undefined : paceStatus(usedRatio, elapsed);
   const timeRatio = elapsed === undefined ? undefined : displayRatio(elapsed, mode);
   const timeNoun = mode === "used" ? "elapsed" : "remaining";
   const shownCount =
-    metric.used !== undefined && metric.limit !== undefined
-      ? mode === "used"
+    reading.closed || metric.used === undefined || metric.limit === undefined
+      ? undefined
+      : mode === "used"
         ? metric.used
-        : Math.max(0, metric.limit - metric.used)
-      : undefined;
+        : Math.max(0, metric.limit - metric.used);
   const valueLabel =
     shownCount === undefined || metric.limit === undefined
       ? undefined
       : localizeQuotaValue(shownCount, metric.limit);
+  const waitingWhen = reading.resetsAt === undefined ? "" : formatDateTime(reading.resetsAt);
 
   return {
     id: metric.id,
@@ -194,15 +206,25 @@ function quotaView(
     usedPercent: percent(usedRatio),
     valueLabel,
     timePercent: timeRatio === undefined ? undefined : percent(timeRatio),
-    timeLabel:
-      timeRatio === undefined
+    // A closed window is one sentence, shared with the History header.
+    // Leaving this empty would fall through to "No reset timing".
+    timeLabel: reading.closed
+      ? reading.resetsAt === undefined
+        ? l10n.t("quota.expiredEstimate")
+        : l10n.t("quota.expiredWaiting", { when: waitingWhen })
+      : timeRatio === undefined
         ? undefined
         : formatDuration(metric, timeRatio, timeNoun),
-    resetAt: metric.cycle?.resetsAt,
-    resetLabel:
-      metric.cycle?.resetsAt === undefined ? undefined : formatReset(metric.cycle.resetsAt),
-    paceKind: pace?.kind,
-    paceLabel: formatPace(pace),
+    resetAt: reading.closed ? reading.nextResetAt : reading.resetsAt,
+    resetLabel: reading.closed
+      ? reading.nextResetAt === undefined
+        ? undefined
+        : formatReset(reading.nextResetAt)
+      : reading.resetsAt === undefined
+        ? undefined
+        : formatReset(reading.resetsAt),
+    paceKind: reading.closed ? undefined : pace?.kind,
+    paceLabel: formatPace(pace, reading.closed),
     segments: metric.segments?.map((segment) => ({
       id: segment.id,
       label: localizeSegmentLabel(providerKind, segment),

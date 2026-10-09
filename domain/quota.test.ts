@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   clampRatio,
+  closedWindowReading,
   displayRatio,
   elapsedRatio,
   paceStatus,
@@ -61,6 +62,45 @@ describe("quota semantics", () => {
 
   test("clamps ratios below zero", () => {
     expect(clampRatio(-0.2)).toBe(0);
+  });
+
+  test("treats a past reset as a closed window at 0% used", () => {
+    const reading = closedWindowReading({
+      usedRatio: 0.3125,
+      resetsAt: now - 2 * hour,
+      now,
+      policy: "fixed",
+      durationMs: 7 * day,
+    });
+    expect(reading.closed).toBe(true);
+    expect(reading.usedRatio).toBe(0);
+    expect(reading.resetsAt).toBe(now - 2 * hour);
+    expect(reading.nextResetAt).toBe(now - 2 * hour + 7 * day);
+  });
+
+  test("does not roll a first-use meter forward", () => {
+    const reading = closedWindowReading({
+      usedRatio: 0.4,
+      resetsAt: now - hour,
+      now,
+      policy: "first-use",
+      durationMs: 5 * hour,
+    });
+    expect(reading.closed).toBe(true);
+    expect(reading.usedRatio).toBe(0);
+    expect(reading.nextResetAt).toBeUndefined();
+  });
+
+  test("leaves an open window at the stored used ratio", () => {
+    const reading = closedWindowReading({
+      usedRatio: 0.55,
+      resetsAt: now + 2 * hour,
+      now,
+      policy: "fixed",
+      durationMs: 5 * hour,
+    });
+    expect(reading.closed).toBe(false);
+    expect(reading.usedRatio).toBe(0.55);
   });
 
   test("keeps an exact five-point pace difference on pace", () => {

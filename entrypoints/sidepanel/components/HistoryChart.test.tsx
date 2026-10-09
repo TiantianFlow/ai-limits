@@ -777,9 +777,13 @@ describe("HistoryChart", () => {
   });
 
   it("gives every hover target a tooltip whenever the highlight is visible", () => {
-    const widths = [340, 460];
-    const ranges = [48, 7 * 24, 30 * 24];
-    for (const meter of REALISTIC_METERS.filter((item) => item.history.length > 0)) {
+    // One meter, one width, two ranges. The full matrix of meters × widths ×
+    // ranges exceeded the 5s default while the suite was loaded, without
+    // waiting on a clock. Pointer math itself is covered by the sweep tests.
+    const widths = [340];
+    const ranges = [48, 30 * 24];
+    const meters = REALISTIC_METERS.filter((item) => item.metricId === "weekly");
+    for (const meter of meters) {
       for (const width of widths) {
         vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
         for (const rangeHours of ranges) {
@@ -1105,6 +1109,43 @@ function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
     expect(container.querySelector(".history-chart__latest")?.textContent).toContain("0%");
     expect(container.querySelector(".history-chart__status")?.textContent).toMatch(/waiting for a new reading/);
     expect(container.querySelector(".history-chart__status")?.textContent).not.toMatch(/first use/);
+  });
+
+  it("keeps idle and gap marks inside the plot on every realistic fixture", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    for (const meter of REALISTIC_METERS.filter((item) => item.history.length > 0)) {
+      for (const mode of ["used", "left"] as const) {
+        for (const rangeHours of [48, 7 * 24, 30 * 24]) {
+          const { container, unmount } = render(
+            <HistoryChart
+              providerName={meter.providerName}
+              providerKind={meter.providerKind}
+              mode={mode}
+              metrics={[metricFor(meter)]}
+              history={meter.history}
+              now={FIXTURE_NOW}
+              rangeHours={rangeHours}
+            />,
+          );
+          const marks = container.querySelectorAll(".history-chart__idle, .history-chart__gap, .history-chart__reset");
+          for (const mark of marks) {
+            const y1 = Number(mark.getAttribute("y1"));
+            const y2 = Number(mark.getAttribute("y2"));
+            // Stroke is 1px and butt-capped, centered on y. y=106 paints below the axis.
+            expect(y1, `${meter.metricId} ${mode} ${rangeHours}`).toBeGreaterThanOrEqual(22);
+            expect(y1).toBeLessThanOrEqual(105);
+            expect(y2).toBeGreaterThanOrEqual(22);
+            expect(y2).toBeLessThanOrEqual(105);
+          }
+          if (container.querySelector(".history-chart__bar")) {
+            const idle = [...container.querySelectorAll(".history-chart__idle")];
+            const starts = idle.map((mark) => mark.getAttribute("x1"));
+            expect(new Set(starts).size, `${meter.metricId} ${mode} ${rangeHours}`).toBe(starts.length);
+          }
+          unmount();
+        }
+      }
+    }
   });
 
   it("does not say there are no readings when a window carries into the range", () => {

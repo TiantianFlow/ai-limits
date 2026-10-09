@@ -48,6 +48,53 @@ export function elapsedRatio(
   return undefined;
 }
 
+/**
+ * How every surface should read a quota once `resetsAt` is known relative to now.
+ * A past reset is one story: 0% used, labelled as an estimate, waiting for a
+ * new reading. Pace is not computed from that stale window.
+ */
+export interface ClosedWindowReading {
+  /** True when the latest known reset is already in the past. */
+  closed: boolean;
+  /** 0 when closed, otherwise the stored used ratio. */
+  usedRatio: number;
+  /** The reset to name. A past reset is never presented as a future "Resets". */
+  resetsAt: number | undefined;
+  /** Fixed grids may name the next grid reset. First-use meters never roll forward. */
+  nextResetAt: number | undefined;
+}
+
+export function closedWindowReading(input: {
+  usedRatio: number;
+  resetsAt: number | undefined;
+  now: number;
+  /** Fixed-grid meters may roll to the next reset. First-use meters must not. */
+  policy?: "fixed" | "first-use";
+  durationMs?: number;
+}): ClosedWindowReading {
+  const resetsAt = Number.isFinite(input.resetsAt) ? input.resetsAt : undefined;
+  const closed = resetsAt !== undefined && resetsAt < input.now;
+  let nextResetAt: number | undefined;
+  if (
+    closed
+    && input.policy === "fixed"
+    && isFiniteNumber(input.durationMs)
+    && input.durationMs > 0
+    && resetsAt !== undefined
+  ) {
+    const behind = input.now - resetsAt;
+    const steps = Math.floor(behind / input.durationMs) + 1;
+    const rolled = resetsAt + steps * input.durationMs;
+    if (rolled > input.now) nextResetAt = rolled;
+  }
+  return {
+    closed,
+    usedRatio: closed ? 0 : input.usedRatio,
+    resetsAt,
+    nextResetAt,
+  };
+}
+
 export function paceStatus(usedRatio: number, elapsed: number): PaceStatus {
   const deltaPoints = Math.round((clampRatio(usedRatio) - clampRatio(elapsed)) * 100);
 

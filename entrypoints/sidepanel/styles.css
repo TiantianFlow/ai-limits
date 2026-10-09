@@ -923,7 +923,8 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 
 .history-chart__gap {
   stroke: var(--text-muted);
-  stroke-width: 2;
+  stroke-width: 1;
+  stroke-linecap: butt;
 }
 
 .history-chart__band {
@@ -962,7 +963,8 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 .history-chart__idle {
   fill: none;
   stroke: var(--text-muted);
-  stroke-width: 1.5;
+  stroke-width: 1;
+  stroke-linecap: butt;
 }
 
 .history-chart__highlight {

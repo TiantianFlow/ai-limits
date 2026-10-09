@@ -431,6 +431,7 @@ freshness:
 
 pace:
   unavailable: 节奏不可用
+  waiting: 等待新的读数
   onPace: 节奏正常
   ahead: "超前 {points} 点"
   behind: "落后 {points} 点"
@@ -445,6 +446,8 @@ quota:
   meterTimeElapsed: "{label} 已用时间"
   meterTimeRemaining: "{label} 剩余时间"
   noResetTiming: 无重置时间
+  expiredWaiting: "已于 {when} 重置 · 等待新的读数"
+  expiredEstimate: 估计值 · 等待新的读数
   segmentPercent: "{label} {percent}%"
   resets: "{when} 重置"
   elapsedHours:

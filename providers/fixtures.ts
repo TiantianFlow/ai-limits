@@ -74,8 +74,10 @@ export function createFixtureState(
   const fiveHours = 5 * HOUR;
   const week = 7 * DAY;
   const fixtureDate = new Date(now);
-  const monthStart = Date.UTC(fixtureDate.getUTCFullYear(), fixtureDate.getUTCMonth(), 1);
-  const monthReset = Date.UTC(fixtureDate.getUTCFullYear(), fixtureDate.getUTCMonth() + 1, 1);
+  // The month containing `now`, even when `now` is a UTC timestamp built from
+  // local date parts. A reset in the past would be an expired window.
+  const monthStart = new Date(fixtureDate.getFullYear(), fixtureDate.getMonth(), 1).getTime();
+  const monthReset = new Date(fixtureDate.getFullYear(), fixtureDate.getMonth() + 1, 1).getTime();
   const rollingFiveHour = { cadence: "rolling" as const, resetsAt: now + 2 * HOUR, durationMs: fiveHours };
   const rollingWeek = { cadence: "rolling" as const, startedAt: now - 5 * DAY, resetsAt: now + 2 * DAY, durationMs: week };
   const calendarMonth = { cadence: "calendar" as const, startedAt: monthStart, resetsAt: monthReset, durationMs: monthReset - monthStart };

@@ -155,13 +155,17 @@ export function QuotaBars({
           </span>
           <PaceSignal kind={paceKind} label={paceLabel} />
         </div>
-        {resetAt !== undefined && resetLabel ? (
-          <time
-            className="quota-bars__reset"
-            dateTime={new Date(resetAt).toISOString()}
-          >
-            {resetLabel}
-          </time>
+        {resetLabel ? (
+          resetAt !== undefined ? (
+            <time
+              className="quota-bars__reset"
+              dateTime={new Date(resetAt).toISOString()}
+            >
+              {resetLabel}
+            </time>
+          ) : (
+            <span className="quota-bars__reset">{resetLabel}</span>
+          )
         ) : null}
       </div>
 

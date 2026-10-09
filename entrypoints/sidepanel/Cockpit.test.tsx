@@ -2789,6 +2789,71 @@ describe("Cockpit", () => {
     ).toBeVisible();
   });
 
+  it("shows a past reset as an estimate on the overview and the current cycle", () => {
+    const state = createFixtureState(NOW);
+    const closedAt = NOW - 2 * 60 * 60 * 1_000;
+    const kimi = state.instances.find((instance) => instance.providerKind === "kimi")!;
+    const claude = state.instances.find((instance) => instance.providerKind === "claude")!;
+    for (const instance of [kimi, claude]) {
+      instance.snapshot!.metrics = instance.snapshot!.metrics.map((metric) =>
+        metric.type === "quota"
+          ? { ...metric, usedRatio: 0.3125, cycle: { ...metric.cycle, resetsAt: closedAt } }
+          : metric,
+      );
+      instance.history = [];
+    }
+    const view = render(
+      <Cockpit
+        state={state}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+
+    const kimiCard = within(screen.getByRole("article", { name: "Kimi" }));
+    const weekly = within(kimiCard.getByRole("group", { name: "Weekly usage" }));
+    expect(weekly.getByText("0% used")).toBeVisible();
+    expect(weekly.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
+    expect(weekly.getByText("Waiting for a new reading")).toBeVisible();
+    expect(weekly.getByText(/^Resets /)).toBeVisible();
+    expect(weekly.queryByText("No reset timing")).not.toBeInTheDocument();
+    expect(weekly.queryByText("Pace unavailable")).not.toBeInTheDocument();
+    expect(weekly.queryByText("31.25% used")).not.toBeInTheDocument();
+
+    const fiveHour = within(kimiCard.getByRole("group", { name: "5-hour usage" }));
+    expect(fiveHour.getByText("0% used")).toBeVisible();
+    expect(fiveHour.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
+    expect(fiveHour.queryByText(/^Resets /)).not.toBeInTheDocument();
+    expect(fiveHour.queryByText("No reset timing")).not.toBeInTheDocument();
+
+    const claudeCard = within(screen.getByRole("article", { name: "Claude" }));
+    const claudeWeekly = within(claudeCard.getByRole("group", { name: /Weekly/ }));
+    expect(claudeWeekly.getByText("0% used")).toBeVisible();
+    expect(claudeWeekly.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
+    expect(claudeWeekly.getByText(/^Resets /)).toBeVisible();
+
+    fireEvent.click(kimiCard.getByRole("button", { name: "Open Kimi history for Weekly usage" }));
+    const cycle = within(screen.getByRole("region", { name: "Current cycle" }));
+    expect(cycle.getByText("0% used")).toBeVisible();
+    expect(cycle.getByText(/Reset .* · waiting for a new reading/)).toBeVisible();
+    expect(cycle.getByText("Waiting for a new reading")).toBeVisible();
+    expect(cycle.getByText(/^Resets /)).toBeVisible();
+    expect(cycle.queryByText("No reset timing")).not.toBeInTheDocument();
+
+    view.rerender(
+      <Cockpit
+        state={{ ...state, preferences: { ...state.preferences, displayMode: "left" } }}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+      />,
+    );
+    expect(within(screen.getByRole("region", { name: "Current cycle" })).getByText("100% left")).toBeVisible();
+  });
+
   it("does not offer history without both provider access and a current snapshot", () => {
     const disconnected = createFixtureState(NOW);
     disconnected.instances = [
