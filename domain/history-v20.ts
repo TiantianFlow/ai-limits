@@ -311,11 +311,19 @@ function windowBars(windows: readonly ChartWindow[], rangeStart: number, rangeEn
  * its value in from the left edge.
  */
 export function buildChartModel(input: ChartBuildInput): ChartModel {
+  // The series only needs history from the first stored reading. Starting at
+  // the epoch makes a fixed short window invent one empty frame per step.
+  const firstAt = input.history.reduce<number | undefined>(
+    (earliest, observation) => earliest === undefined
+      ? observation.observedAt
+      : Math.min(earliest, observation.observedAt),
+    undefined,
+  );
   const full: EnvelopeSeries = buildEnvelopeSeries(input.history, {
     ...(input.providerKind ? { providerKind: input.providerKind } : {}),
     metricId: input.metricId,
     now: input.now,
-    rangeStart: 0,
+    rangeStart: firstAt === undefined ? input.rangeStart : Math.min(firstAt, input.rangeStart),
     rangeEnd: input.rangeEnd,
     ...(input.omittedObservations ? { omittedObservations: input.omittedObservations } : {}),
   });
@@ -325,6 +333,38 @@ export function buildChartModel(input: ChartBuildInput): ChartModel {
   const windows = full.spans
     .map(toWindow)
     .filter((window): window is ChartWindow => window !== null && window.end > input.rangeStart);
+  // A window that started before the range is not in this series. The one
+  // reading just before the range still names a window that reaches into it,
+  // and that window is drawn, so the "no readings" note must not claim otherwise.
+  const carriedIn = input.history
+    .filter((observation) => observation.observedAt < input.rangeStart)
+    .flatMap((observation) => observation.metrics
+      .filter((sample) => sample.type === "quota" && sample.metricId === input.metricId)
+      .map((sample) => ({ at: observation.observedAt, sample })))
+    .sort((left, right) => left.at - right.at)
+    .at(-1);
+  const carriedWindow = carriedIn && carriedIn.sample.type === "quota" && carriedIn.sample.cycle?.resetsAt !== undefined
+    && carriedIn.sample.cycle.resetsAt > input.rangeStart
+    && carriedIn.sample.usedRatio > 0
+    ? {
+        id: `carried-${carriedIn.at}`,
+        start: Math.max(
+          input.rangeStart,
+          (carriedIn.sample.cycle.startedAt
+            ?? carriedIn.sample.cycle.resetsAt - (carriedIn.sample.cycle.durationMs ?? 0)),
+        ),
+        end: Math.min(input.rangeEnd, carriedIn.sample.cycle.resetsAt),
+        current: false,
+        readings: [],
+        values: [Math.min(100, carriedIn.sample.usedRatio * 100)],
+        peak: Math.min(100, carriedIn.sample.usedRatio * 100),
+        tailKnown: true,
+        windowMs: carriedIn.sample.cycle.durationMs ?? full.windowMs,
+      } satisfies ChartWindow
+    : null;
+  if (carriedWindow && carriedWindow.end > carriedWindow.start && !windows.some((window) => window.end > input.rangeStart && window.start < carriedWindow.end)) {
+    windows.unshift(carriedWindow);
+  }
   const drawnWindows = windows.filter((window) => window.peak > 0);
   const runs = buildRuns(drawnWindows, input.now, pxPerMs)
     .map((run) => clipRun(run, input.rangeStart))
@@ -368,10 +408,13 @@ export function buildChartModel(input: ChartBuildInput): ChartModel {
     : tier === "day-bars"
       ? dayBars(windows, input.rangeStart, input.rangeEnd, input.now)
       : [];
-  const readingsInRange = full.spans
+  // A window that started before the range and carries its value in is drawn,
+  // so it counts. Otherwise the chart says "no readings" over a visible bar.
+  const storedInRange = full.spans
     .flatMap((span) => span.readings)
     .filter((reading) => reading.observedAt >= input.rangeStart && reading.observedAt <= input.rangeEnd)
     .length;
+  const readingsInRange = storedInRange + (carriedWindow ? 1 : 0);
 
   return {
     tier,
@@ -410,6 +453,14 @@ export interface PaceInput {
   resetsAt: number | undefined;
   now: number;
   mode: DisplayMode;
+  /**
+   * The newest stored reading belongs to a window that has already reset,
+   * and nothing newer has arrived. The headline is then 0% used and the
+   * status names that reset instead of an active window.
+   */
+  expired?: boolean;
+  /** A fixed-grid meter never starts at first use. */
+  policy?: "fixed" | "first-use";
 }
 
 /**
@@ -417,11 +468,19 @@ export interface PaceInput {
  * the reset. After that it projects the average rate so far.
  */
 export function paceLine(input: PaceInput): { shown: number; detailKey: string; detail: Record<string, string | number>; warn: boolean } {
-  const used = input.currentUsed ?? 0;
+  const used = input.expired ? 0 : input.currentUsed ?? 0;
   const shown = input.mode === "used" ? used : 100 - used;
   const when = input.resetsAt;
+  if (input.expired && when !== undefined) {
+    return { shown, detailKey: "history.paceExpired", detail: { when: String(when) }, warn: false };
+  }
   if (when === undefined) {
-    return { shown, detailKey: "history.paceNoWindow", detail: {}, warn: false };
+    return {
+      shown,
+      detailKey: input.policy === "fixed" ? "history.paceNoReading" : "history.paceNoWindow",
+      detail: {},
+      warn: false,
+    };
   }
   const whenText = String(when);
   if (used >= 100) {

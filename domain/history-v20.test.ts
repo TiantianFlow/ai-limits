@@ -151,6 +151,23 @@ describe("history v20 drawing", () => {
     expect(model.gaps.filter(overlaps)).toEqual([]);
   });
 
+  it("counts a window that started before the range, because the bar is drawn", () => {
+    // The window opened before the range and resets inside it, so its bar
+    // is drawn at the left edge.
+    const history = [reading(NOW - 7 * 24 * HOUR - 2 * HOUR, 40, NOW - 7 * 24 * HOUR + 3 * HOUR)];
+    const model = buildChartModel({
+      history,
+      metricId: "five-hour",
+      providerKind: "claude",
+      now: NOW,
+      rangeStart: NOW - 7 * 24 * HOUR,
+      rangeEnd: NOW,
+      widthPx: 360,
+    });
+    expect(model.bars.length + model.runs.length).toBeGreaterThan(0);
+    expect(model.readingsInRange).toBeGreaterThan(0);
+  });
+
   it("keeps idle between the bars rather than one span across the chart", () => {
     const history = [
       reading(NOW - 40 * HOUR, 30, NOW - 36 * HOUR),
@@ -213,5 +230,44 @@ describe("history v20 pace", () => {
     expect(wholePercent(0.4)).toBe("<1");
     expect(wholePercent(26.4)).toBe("26");
     expect(wholePercent(99.6)).toBe(">99");
+  });
+
+  it("says a closed window reset and is waiting, at 0% used", () => {
+    const line = paceLine({
+      currentUsed: 31.25,
+      windowStart: NOW - 7 * 24 * HOUR,
+      resetsAt: NOW - 2 * HOUR,
+      now: NOW,
+      mode: "used",
+      expired: true,
+      policy: "fixed",
+    });
+    expect(line.shown).toBe(0);
+    expect(line.detailKey).toBe("history.paceExpired");
+    expect(line.detail.when).toBe(String(NOW - 2 * HOUR));
+  });
+
+  it("does not call a fixed grid a first-use window when nothing is stored", () => {
+    const line = paceLine({
+      currentUsed: undefined,
+      windowStart: undefined,
+      resetsAt: undefined,
+      now: NOW,
+      mode: "used",
+      policy: "fixed",
+    });
+    expect(line.detailKey).toBe("history.paceNoReading");
+  });
+
+  it("still says a first-use meter starts at first use", () => {
+    const line = paceLine({
+      currentUsed: undefined,
+      windowStart: undefined,
+      resetsAt: undefined,
+      now: NOW,
+      mode: "used",
+      policy: "first-use",
+    });
+    expect(line.detailKey).toBe("history.paceNoWindow");
   });
 });

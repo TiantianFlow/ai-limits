@@ -108,7 +108,7 @@ describe("HistoryChart", () => {
         rangeHours={48}
       />,
     );
-    expect(screen.getByText(/% left/)).toBeVisible();
+    expect(screen.getByText((_, element) => element?.classList.contains("history-chart__latest") === true && /% left/.test(element.textContent ?? ""))).toBeVisible();
   });
 
   it("draws one bar per window when each window is only a few pixels wide", () => {
@@ -863,7 +863,9 @@ describe("HistoryChart", () => {
       />,
     );
     expect(container.querySelector(".history-chart__latest")?.textContent).toContain("0% used");
-    expect(container.querySelector(".history-chart__status")?.textContent).toMatch(/No usage|No active window|Resets/);
+    // The fixture's last 5-hour window has already reset, so the headline
+    // agrees with the current cycle: nothing is open, a new reading is due.
+    expect(container.querySelector(".history-chart__status")?.textContent).toMatch(/No usage|No active window|Resets|waiting for a new reading/);
     rerender(
       <HistoryChart
         providerName={kimi.providerName}
@@ -1060,5 +1062,137 @@ function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
       />,
     );
     expect(container.querySelector(".history-chart__latest")?.textContent).toContain("26%");
+  });
+
+  it("says a closed window reset, for a fixed grid and for a first-use meter", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    const closed = [
+      observation("weekly-coding", FIXTURE_NOW - 2 * DAY, 0.3125, {
+        cycle: { cadence: "rolling", durationMs: 7 * DAY, resetsAt: FIXTURE_NOW - 6 * HOUR },
+      }),
+    ];
+    const { container, rerender } = render(
+      <HistoryChart
+        providerName="Kimi"
+        providerKind="kimi"
+        mode="used"
+        metrics={[metric("weekly-coding", 7 * DAY, "7-day usage")]}
+        history={closed}
+        now={FIXTURE_NOW}
+        rangeHours={30 * 24}
+      />,
+    );
+    expect(container.querySelector(".history-chart__latest")?.textContent).toContain("0%");
+    expect(container.querySelector(".history-chart__status")?.textContent).toMatch(/Reset .*waiting for a new reading/);
+    expect(container.querySelector(".history-chart__status")?.textContent).not.toMatch(/first use/);
+
+    const firstUse = [
+      observation("five-hour", FIXTURE_NOW - 2 * DAY, 0.4, {
+        cycle: { cadence: "rolling", durationMs: 5 * HOUR, resetsAt: FIXTURE_NOW - 2 * DAY + 5 * HOUR },
+      }),
+    ];
+    rerender(
+      <HistoryChart
+        providerName="Claude"
+        providerKind="claude"
+        mode="used"
+        metrics={[metric("five-hour", 5 * HOUR, "5-hour messages")]}
+        history={firstUse}
+        now={FIXTURE_NOW}
+        rangeHours={30 * 24}
+      />,
+    );
+    expect(container.querySelector(".history-chart__latest")?.textContent).toContain("0%");
+    expect(container.querySelector(".history-chart__status")?.textContent).toMatch(/waiting for a new reading/);
+    expect(container.querySelector(".history-chart__status")?.textContent).not.toMatch(/first use/);
+  });
+
+  it("does not say there are no readings when a window carries into the range", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    const history = [
+      observation("five-hour-coding", FIXTURE_NOW - 7 * DAY - 2 * HOUR, 0.3, {
+        cycle: { cadence: "rolling", durationMs: 5 * HOUR, resetsAt: FIXTURE_NOW - 7 * DAY + 3 * HOUR },
+      }),
+    ];
+    const { container } = render(
+      <HistoryChart
+        providerName="Kimi"
+        providerKind="kimi"
+        mode="used"
+        metrics={[metric("five-hour-coding", 5 * HOUR, "5-hour usage")]}
+        history={history}
+        now={FIXTURE_NOW}
+        rangeHours={7 * 24}
+      />,
+    );
+    const drawn = container.querySelector(".history-chart__bar, .history-chart__line");
+    expect(drawn).not.toBeNull();
+    expect(container.querySelector(".history-chart__note")?.textContent ?? "").not.toMatch(/No readings/);
+  });
+
+  it("keeps the selected meter when the range changes", () => {
+    localStorage.clear();
+    const meter = REALISTIC_METERS.find((item) => item.providerKind === "kimi" && item.metricId === "weekly-coding")!;
+    const metrics = [
+      metric("monthly-total", 30 * DAY, "Total usage"),
+      metric("weekly-coding", 7 * DAY, "7-day usage"),
+      metric("five-hour-coding", 5 * HOUR, "5-hour usage"),
+    ];
+    const snapshot: UsageSnapshot = {
+      providerKind: "kimi",
+      source: "fixture",
+      fetchedAt: FIXTURE_NOW,
+      metrics,
+    };
+    const instance: ProviderInstanceView = {
+      id: "kimi:default",
+      providerKind: "kimi",
+      access: "granted",
+      createdAt: FIXTURE_NOW - 30 * DAY,
+      history: meter.history,
+      snapshot,
+    };
+    const selected = { id: "five-hour-coding" };
+    const view = () => (
+      <HistoryView
+        instances={[instance]}
+        instanceId="kimi:default"
+        metricId={selected.id}
+        mode="used"
+        now={FIXTURE_NOW}
+        backLabel="Overview"
+        onBack={() => undefined}
+        onDisplayModeChange={() => undefined}
+        onSelectionChange={(id) => { selected.id = id; }}
+      />
+    );
+    const { rerender } = render(view());
+    expect(screen.getByRole("combobox", { name: "Window" })).toHaveTextContent("5-hour usage");
+    fireEvent.click(screen.getByRole("radio", { name: "30 days" }));
+    rerender(view());
+    expect(screen.getByRole("combobox", { name: "Window" })).toHaveTextContent("5-hour usage");
+    expect(screen.getByRole("heading", { level: 3, name: "5-hour usage" })).toBeVisible();
+  });
+
+  it("uses the singular when one reading is stored", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    const history = [
+      observation("weekly", FIXTURE_NOW - 2 * HOUR, 0.1, {
+        cycle: { cadence: "calendar", durationMs: 7 * DAY, resetsAt: FIXTURE_NOW + 5 * DAY },
+      }),
+    ];
+    render(
+      <HistoryChart
+        providerName="Claude"
+        providerKind="claude"
+        mode="used"
+        metrics={[metric("weekly", 7 * DAY, "Weekly messages")]}
+        history={history}
+        now={FIXTURE_NOW}
+        rangeHours={48}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /How to read/ }));
+    expect(screen.getByText("1 reading · stored only on this device.")).toBeVisible();
   });
 });

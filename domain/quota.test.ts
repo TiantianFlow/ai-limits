@@ -40,6 +40,10 @@ describe("quota semantics", () => {
     expect(elapsedRatio({ startedAt: now - day, durationMs: day }, now)).toBeUndefined();
   });
 
+  test("does not report a closed window as fully elapsed", () => {
+    expect(elapsedRatio({ durationMs: 7 * day, resetsAt: now - hour }, now)).toBeUndefined();
+  });
+
   test("identifies consumption materially ahead of elapsed time", () => {
     expect(paceStatus(0.72, 0.6)).toEqual({ kind: "ahead", deltaPoints: 12 });
   });

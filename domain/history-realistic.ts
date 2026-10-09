@@ -381,22 +381,13 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
     seed: 47,
     now,
   }).filter((_, index) => index % 7 === 0);
-  const kimiShort = [
-    ...sparseFirstUse({
-      metricId: "five-hour-coding",
-      count: 46,
-      spanDays: 27,
-      windowMs: 5 * HOUR,
-      seed: 53,
-      now,
-    }),
-    ...firstUseIdleGap({
-      metricId: "five-hour-coding",
-      windowMs: 5 * HOUR,
-      now,
-      short: true,
-    }),
-  ];
+  // Kimi's 5-hour meter is a fixed grid, the same shape as `idleGrid`.
+  const kimiShort = idleGrid({
+    metricId: "five-hour-coding",
+    windowMs: 5 * HOUR,
+    now,
+    anchor: now - 46 * HOUR,
+  });
   const kimiMonth = calendarReset({ metricId: "monthly-total", seed: 71, now });
   const chatgpt = rollingUntilUsed({ metricId: "30-day", seed: 83, now });
   const cursorMonth = monthlyDurationSwitch({ metricId: "other-models-monthly", seed: 97, now });

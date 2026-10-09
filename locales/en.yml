@@ -171,6 +171,7 @@ history:
     many: "{count} days ago"
     other: "{count} days ago"
   latestPercent: "{percent}% {mode}"
+  axisCap: 100%
   headlineIdle: idle
   chartRole: chart
   rangeCount: "{range} · {count}"
@@ -295,6 +296,8 @@ history:
   summaryKeys: Use left and right arrow keys to inspect windows.
   summaryKeysDays: Use left and right arrow keys to inspect days.
   paceNoWindow: No active window · starts at first use
+  paceNoReading: Waiting for a new reading
+  paceExpired: "Reset {when} · waiting for a new reading"
   paceResets: "Resets {when}"
   paceNone: "No usage this window · resets {when}"
   paceLimit: "Limit reached · resets {when}"
@@ -333,10 +336,28 @@ history:
   infoIdle: Gray dashed line — idle or no usage.
   infoGaps: Gray marks under the axis — no readings.
   infoResets: Ticks under the axis mark resets.
-  infoStored: "{count} readings · stored only on this device."
   noteNone: "No readings in {range}"
-  noteReadings: "{count} readings in {range}"
-  noteNoUsage: "{count} readings in {range} · no usage"
+  noteReadings:
+    zero: "{count} readings in {range}"
+    one: "{count} reading in {range}"
+    two: "{count} readings in {range}"
+    few: "{count} readings in {range}"
+    many: "{count} readings in {range}"
+    other: "{count} readings in {range}"
+  noteNoUsage:
+    zero: "{count} readings in {range} · no usage"
+    one: "{count} reading in {range} · no usage"
+    two: "{count} readings in {range} · no usage"
+    few: "{count} readings in {range} · no usage"
+    many: "{count} readings in {range} · no usage"
+    other: "{count} readings in {range} · no usage"
+  infoStored:
+    zero: "{count} readings · stored only on this device."
+    one: "{count} reading · stored only on this device."
+    two: "{count} readings · stored only on this device."
+    few: "{count} readings · stored only on this device."
+    many: "{count} readings · stored only on this device."
+    other: "{count} readings · stored only on this device."
   note: Only successful, normalized quota observations are plotted. A solid line is a reading and the shaded area is quota used; a dashed stretch has no reading in between. Narrow windows draw one bar each, and the narrowest draw one bar per day. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
 
 settings:

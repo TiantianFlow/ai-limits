@@ -65,7 +65,17 @@ export function QuotaBars({
   const tone = quotaTone(usedPercent);
 
   return (
-    <section className="quota-bars" role="group" aria-label={label}>
+    <section
+      className="quota-bars"
+      role="group"
+      aria-label={label}
+      onClick={onOpenHistory
+        ? (event) => {
+            if ((event.target as HTMLElement).closest(".quota-bars__history")) return;
+            onOpenHistory(id);
+          }
+        : undefined}
+    >
       <div className="quota-bars__heading">
         {onOpenHistory ? (
           <button

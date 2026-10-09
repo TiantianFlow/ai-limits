@@ -344,7 +344,8 @@ describe("migration, policy, and compaction", () => {
 
   test("uses the per-meter table and the generic fallback", () => {
     expect(meterPolicy("kimi", "monthly-total")?.policy).toBe("fixed");
-    expect(meterPolicy("kimi", "five-hour-coding")?.policy).toBe("first-use");
+    expect(meterPolicy("kimi", "weekly-coding")?.policy).toBe("fixed");
+    expect(meterPolicy("kimi", "five-hour-coding")?.policy).toBe("fixed");
     expect(meterPolicy("claude", "five-hour")?.policy).toBe("first-use");
     expect(fallbackPolicy("calendar", undefined)).toBe("fixed");
     expect(fallbackPolicy("rolling", 30 * DAY)).toBe("fixed");
@@ -450,9 +451,13 @@ describe("synthetic shapes", () => {
       rangeStart: NOW - 48 * HOUR,
       rangeEnd: NOW,
     });
+    // A fixed grid reports the empty windows themselves. First-use meters use
+    // idle spans for the same stretch; either way the range is not blank.
     const idle = series.idleSpans.filter((span) => span.kind === "idle");
-    expect(idle.length).toBeGreaterThan(0);
-    const idleMs = idle.reduce((sum, span) => sum + (span.end - span.start), 0);
+    const emptyWindows = series.spans.filter((window) =>
+      window.kind !== "observed" || window.readings.every((reading) => reading.usedRatio === 0));
+    expect(idle.length + emptyWindows.length).toBeGreaterThan(0);
+    const idleMs = [...idle, ...emptyWindows].reduce((sum, span) => sum + (span.end - span.start), 0);
     expect(idleMs).toBeGreaterThan(20 * HOUR);
     // The hole before the first non-zero reading stays "No readings".
     // Everything after the zeros is idle, with no blank strip.
@@ -485,9 +490,14 @@ describe("synthetic shapes", () => {
       rangeStart: NOW - 48 * HOUR,
       rangeEnd: NOW,
     });
-    expect(series.policy).toBe("first-use");
+    expect(series.policy).toBe("fixed");
     expect(series.spans.filter((window) => window.kind === "observed")).toHaveLength(4);
-    expect(series.idleSpans.some((span) => span.kind === "unknown")).toBe(true);
+    // The holes stay "No readings": a fixed grid does not call them idle.
+    const unknown = [
+      ...series.idleSpans.filter((span) => span.kind === "unknown"),
+      ...series.unknownRuns,
+    ];
+    expect(unknown.length).toBeGreaterThan(0);
   });
 
   test("keeps a jittered resetsAt inside the grid window that contains the reading", () => {

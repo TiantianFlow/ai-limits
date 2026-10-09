@@ -165,9 +165,15 @@ function quotaView(
   metric: QuotaMetric,
   mode: DisplayMode,
   now: number,
+  fetchedAt?: number,
 ): QuotaView {
+  const resetsAt = metric.cycle?.resetsAt;
+  // A snapshot fetched after its own reset is stale. A snapshot fetched
+  // before the reset is the live reading, even when the panel's clock is later.
+  const expired = resetsAt !== undefined && resetsAt < now && (fetchedAt === undefined || fetchedAt >= resetsAt);
+  const usedRatio = expired ? 0 : metric.usedRatio;
   const elapsed = metric.cycle ? elapsedRatio(metric.cycle, now) : undefined;
-  const pace = elapsed === undefined ? undefined : paceStatus(metric.usedRatio, elapsed);
+  const pace = elapsed === undefined ? undefined : paceStatus(usedRatio, elapsed);
   const timeRatio = elapsed === undefined ? undefined : displayRatio(elapsed, mode);
   const timeNoun = mode === "used" ? "elapsed" : "remaining";
   const shownCount =
@@ -184,8 +190,8 @@ function quotaView(
   return {
     id: metric.id,
     label: localizeMetricLabel(providerKind, metric),
-    quotaPercent: percent(displayRatio(metric.usedRatio, mode)),
-    usedPercent: percent(metric.usedRatio),
+    quotaPercent: percent(displayRatio(usedRatio, mode)),
+    usedPercent: percent(usedRatio),
     valueLabel,
     timePercent: timeRatio === undefined ? undefined : percent(timeRatio),
     timeLabel:
@@ -337,7 +343,7 @@ export function providerView(
   const quotas = snapshot?.metrics
     ? quotaMetrics(snapshot)
         .filter((metric) => !hiddenQuotaIds?.has(metric.id))
-        .map((metric) => quotaView(provider.providerKind, metric, mode, now))
+        .map((metric) => quotaView(provider.providerKind, metric, mode, now, snapshot.fetchedAt))
     : [];
   const values = snapshot?.metrics
     ? [

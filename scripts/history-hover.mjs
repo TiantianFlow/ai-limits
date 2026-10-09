@@ -79,6 +79,12 @@ try {
       if (tip && (tip.y < box.y - 1 || tip.y + tip.height > box.y + box.height + 1)) {
         failures.push(`${width}px step ${step} tooltip spills the plot`);
       }
+      // The plot grid starts 22/136 down the canvas. A tooltip above that
+      // covers the card header and the status line.
+      const plotTop = box.y + box.height * (22 / 136);
+      if (tip && tip.y < plotTop - 1) {
+        failures.push(`${width}px step ${step} tooltip covers the header`);
+      }
       seen.push(time);
     }
     const distinct = [...new Set(seen)];
@@ -113,13 +119,17 @@ try {
     };
     const idleTip = await hoverBox(".history-chart__idle");
     const idleText = (await idleTip.innerText()).replace(/\s+/g, " ");
-    if (!/Idle — no active window/.test(idleText)) failures.push(`${width}px idle tooltip was "${idleText}"`);
+    // Kimi 5-hour is a fixed grid, so a 0% window is "no usage", not "no active window".
+    if (!/No usage|Idle — no active window/.test(idleText)) failures.push(`${width}px idle tooltip was "${idleText}"`);
     const emptyTip = await hoverBox(".history-chart__gap");
     const emptyText = (await emptyTip.innerText()).replace(/\s+/g, " ");
     if (!/No readings/.test(emptyText)) failures.push(`${width}px empty tooltip was "${emptyText}"`);
     const tipBox = await emptyTip.boundingBox();
     if (tipBox && (tipBox.y < plot.y - 1 || tipBox.y + tipBox.height > plot.y + plot.height + 1)) {
       failures.push(`${width}px tooltip spills the plot`);
+    }
+    if (tipBox && tipBox.y < plot.y + plot.height * (22 / 136) - 1) {
+      failures.push(`${width}px tooltip covers the header`);
     }
     const highlight = await kimiCanvas.locator(".history-chart__highlight").first().boundingBox();
     const pointer = await kimiCanvas.locator(".history-chart__gap").first().boundingBox();
