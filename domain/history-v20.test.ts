@@ -149,8 +149,6 @@ describe("history v20 drawing", () => {
     const overlaps = (gap: { start: number; end: number }): boolean =>
       model.idle.some((span) => Math.min(gap.end, span.end) - Math.max(gap.start, span.start) > HOUR);
     expect(model.gaps.filter(overlaps)).toEqual([]);
-    // Ordinary holes between 5-hour windows are the dashed baseline, not a second row.
-    expect(model.gaps.every((gap) => gap.end - gap.start > 24 * HOUR)).toBe(true);
   });
 
   it("keeps idle between the bars rather than one span across the chart", () => {

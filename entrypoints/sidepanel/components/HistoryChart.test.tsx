@@ -488,6 +488,26 @@ describe("HistoryChart", () => {
     }
   });
 
+  it("does not draw an under-axis gap dash on the same stretch as the 5-hour idle baseline", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    const meter = REALISTIC_METERS.find((item) => item.providerKind === "claude" && item.metricId === "five-hour");
+    if (!meter) throw new Error("missing claude five-hour fixture");
+    const { container } = render(
+      <HistoryChart
+        providerName={meter.providerName}
+        providerKind={meter.providerKind}
+        mode="used"
+        metrics={[metricFor(meter)]}
+        history={meter.history}
+        now={FIXTURE_NOW}
+        rangeHours={7 * 24}
+      />,
+    );
+    const gaps = [...container.querySelectorAll(".history-chart__gap")];
+    expect(gaps).toEqual([]);
+    expect(container.querySelector(".history-chart__idle")).not.toBeNull();
+  });
+
   it("names the idle or empty stretch under the pointer instead of a distant reading", () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({

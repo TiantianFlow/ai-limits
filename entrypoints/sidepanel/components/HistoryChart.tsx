@@ -307,6 +307,18 @@ function barGeometry(bar: ChartBar, model: ChartModel): { x: number; width: numb
   return { x: x1 + (slot - width) / 2, width, depth: Math.max(MIN_BAR_PX, raw) };
 }
 
+/**
+ * An empty stretch gets one mark. The idle baseline is that mark, so a gap
+ * dash is not added on top of it. On a bar chart a hole under a day is the
+ * same kind of empty stretch. A wider hole with no stored reading keeps its
+ * single gap mark.
+ */
+function gapRepeatsIdle(gap: ChartGap, model: ChartModel): boolean {
+  const day = 24 * 60 * 60 * 1_000;
+  if (model.tier !== "line" && gap.end - gap.start < day) return true;
+  return model.idle.some((span) => span.start < gap.end - 60_000 && span.end > gap.start + 60_000);
+}
+
 /** Idle dashes stop at a bar so a Left notch is never crossed by the gray line. */
 function idlePieces(span: ChartIdle, model: ChartModel): { start: number; end: number }[] {
   if (model.tier === "line") return [{ start: span.start, end: span.end }];
@@ -560,14 +572,7 @@ export function HistoryChart({
             <svg className="history-chart__svg" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-hidden="true">
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_TOP} y2={PLOT_TOP} strokeDasharray="2 3" />
               <text className="history-chart__tick" x={PLOT_RIGHT - 2} y={PLOT_TOP - 2} textAnchor="end">100%</text>
-              <line
-                className={model.tier === "line" ? "history-chart__axis" : "history-chart__idle"}
-                x1={PLOT_LEFT}
-                x2={PLOT_RIGHT}
-                y1={PLOT_BOTTOM}
-                y2={PLOT_BOTTOM}
-                strokeDasharray={model.tier === "line" ? undefined : "2 3"}
-              />
+              <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM} />
               {model.tier === "line"
                 ? model.runs.map((run) => {
                     const drawn = runPath(run, model, mode);
@@ -650,6 +655,7 @@ export function HistoryChart({
                 />
               )))}
               {model.gaps.map((gap) => (
+                gapRepeatsIdle(gap, model) ? null : (
                 <line
                   key={`gap-${gap.start}`}
                   className="history-chart__gap"
@@ -659,6 +665,7 @@ export function HistoryChart({
                   y2={PLOT_BOTTOM + 3}
                   strokeDasharray="2 2"
                 />
+                )
               ))}
               {dateTicks(model).map((tick) => (
                 <text key={tick.at} className="history-chart__tick" x={timeX(tick.at, rangeStart, rangeEnd)} y={128} textAnchor="middle">

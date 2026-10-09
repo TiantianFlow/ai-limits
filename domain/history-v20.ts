@@ -25,11 +25,6 @@ export const ESTIMATE_MIN_POINTS = 2;
 export const DOT_ISOLATION_PX = 12;
 /** A gap shorter than this (px) is not marked under the axis. */
 export const NO_DATA_MIN_PX = 3;
-/**
- * On a bar chart the dashed baseline already shows the ordinary holes between
- * windows. Only a hole wider than this gets the second mark under the axis.
- */
-export const BAR_GAP_MIN_PX = 28;
 /** Reset ticks are drawn only for windows at least this long. */
 export const RESET_TICK_MIN_HOURS = 24;
 /** A window younger than this fraction of its length is not projected. */
@@ -387,14 +382,9 @@ export function buildChartModel(input: ChartBuildInput): ChartModel {
     runs,
     idle,
     gaps: gapsBesideIdle(
-      gapsOf(
-        covered,
-        input.rangeStart,
-        input.rangeEnd,
-        Math.max(60_000, (tier === "line" ? NO_DATA_MIN_PX : BAR_GAP_MIN_PX) / pxPerMs),
-      ),
+      gapsOf(covered, input.rangeStart, input.rangeEnd, Math.max(60_000, NO_DATA_MIN_PX / pxPerMs)),
       idle,
-      Math.max(60_000, (tier === "line" ? NO_DATA_MIN_PX : BAR_GAP_MIN_PX) / pxPerMs),
+      Math.max(60_000, NO_DATA_MIN_PX / pxPerMs),
     ),
     resets: [...new Set(resets)],
     bars,
