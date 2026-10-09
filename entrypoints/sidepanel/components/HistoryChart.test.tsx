@@ -275,7 +275,7 @@ describe("HistoryChart", () => {
   });
 
   function drawnOutsidePlot(container: HTMLElement): string[] {
-    const plot = { left: 8, right: 312, top: 14, bottom: 116 };
+    const plot = { left: 8, right: 312, top: 10, bottom: 128 };
     const epsilon = 0.6;
     const problems: string[] = [];
     const svg = container.querySelector("svg");

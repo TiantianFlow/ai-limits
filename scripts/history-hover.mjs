@@ -57,9 +57,9 @@ try {
     const canvas = card.locator(".history-chart__canvas");
     const box = await canvas.boundingBox();
     if (!box) throw new Error(`No canvas at ${width}px`);
-    // The plot is the middle of the 124-tall viewBox. Sweep there, not along
+    // The plot is the middle of the 136-tall viewBox. Sweep there, not along
     // the date labels under the axis.
-    const plotY = box.y + box.height * (57 / 124);
+    const plotY = box.y + box.height * (64 / 136);
 
     const seen = [];
     const steps = 8;
