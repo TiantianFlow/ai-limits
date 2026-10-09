@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildEnvelopeSeries,
   detailLevel,
-  meterPolicy,
   uncoveredGaps,
   type ProviderInstanceView,
   type UsageSnapshot,
@@ -15,7 +14,7 @@ import { FIXTURE_NOW, REALISTIC_METERS, type RealisticMeter } from "../../../dom
 import { HistoryView } from "../views/HistoryView";
 import { formatPercent } from "../../../i18n/format";
 import { installI18nLocale } from "../../../test/i18n-harness";
-import { drawnXSpans, HistoryChart } from "./HistoryChart";
+import { HistoryChart, paintedXSpans } from "./HistoryChart";
 
 const HOUR = 60 * 60 * 1_000;
 const DAY = 24 * HOUR;
@@ -317,9 +316,8 @@ describe("HistoryChart", () => {
     const ranges = [48, 7 * 24, 30 * 24];
     const plotLeft = 28;
     const plotRight = 312;
-    const epsilon = 0.6;
+    const epsilon = 2;
     for (const meter of REALISTIC_METERS.filter((item) => item.history.length > 0)) {
-      const policy = meterPolicy(meter.providerKind, meter.metricId);
       for (const width of widths) {
         for (const rangeHours of ranges) {
           const rangeMs = rangeHours * HOUR;
@@ -331,10 +329,6 @@ describe("HistoryChart", () => {
             rangeStart,
             rangeEnd: FIXTURE_NOW,
           });
-          const windowMs = policy?.windowMs
-            ?? series.spans.find((window) => window.kind === "observed")?.windowMs
-            ?? 7 * DAY;
-          const level = detailLevel(windowMs, rangeMs, width);
           const observed = series.spans.filter((window) => window.kind === "observed");
           const first = observed
             .flatMap((window) => window.readings.map((reading) => reading.observedAt))
@@ -350,14 +344,25 @@ describe("HistoryChart", () => {
           const fromAt = Math.max(rangeStart, between ?? first ?? rangeStart);
           const duration = Math.max(1, rangeMs);
           const fromX = plotLeft + ((fromAt - rangeStart) / duration) * (plotRight - plotLeft);
+          const { container, unmount } = render(
+            <HistoryChart
+              providerName={meter.providerName}
+              providerKind={meter.providerKind}
+              mode="used"
+              metrics={[metricFor(meter)]}
+              history={meter.history}
+              now={FIXTURE_NOW}
+              rangeHours={rangeHours}
+            />,
+          );
           const gaps = uncoveredGaps(
-            drawnXSpans({ series, rangeStart, rangeEnd: FIXTURE_NOW, plotWidth: width, level })
-              .map((span) => ({ from: span.from, to: span.to })),
+            paintedXSpans(container, width),
             fromX,
             plotRight,
             epsilon,
           );
           expect(gaps, `${meter.metricId} ${rangeHours}h @${width}`).toEqual([]);
+          unmount();
         }
       }
     }

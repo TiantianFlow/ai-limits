@@ -11,6 +11,7 @@
     "postinstall": "wxt prepare",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:history-hover": "node scripts/history-hover.mjs",
     "typecheck": "tsc --noEmit",
     "verify:tracked-files": "node scripts/verify-tracked-files.mjs",
     "verify:publication": "node scripts/verify-publication.mjs",
