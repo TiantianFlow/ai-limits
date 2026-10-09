@@ -4,7 +4,6 @@ import { l10n, type MessageKey } from "../../../i18n/index";
 import {
   localizeDisplayMode,
   localizeMetricLabel,
-  localizeMetricScope,
   localizeProviderName,
 } from "../../../i18n/presentation";
 import {
@@ -125,7 +124,6 @@ export function HistoryView({
 
   const providerName = localizeProviderName(instance.providerKind);
   const label = labelsByInstance.get(instance.id)!;
-  const selectedLabel = localizeMetricLabel(instance.providerKind, selectedMetric);
   const localizedMetrics = metrics.map((metric) => ({
     ...metric,
     label: localizeMetricLabel(instance.providerKind, metric),
@@ -189,21 +187,12 @@ export function HistoryView({
         </div>
 
         <section className="history-surface" aria-label={l10n.t("history.chart")}>
-          <div className="history-surface__heading">
-            <h2>{selectedLabel}</h2>
-            <span>
-              {l10n.t("history.scopeQuota", {
-                scope: localizeMetricScope(selectedMetric.scope),
-              })}
-            </span>
-          </div>
           <HistoryChart
             providerName={label}
             providerKind={instance.providerKind}
             mode={mode}
-            metrics={localizedMetrics.filter(
-              (metric) => metric.id === selectedMetric.id,
-            )}
+            metrics={localizedMetrics}
+            metricId={selectedMetric.id}
             history={instance.history}
             now={now}
             rangeHours={rangeHours}

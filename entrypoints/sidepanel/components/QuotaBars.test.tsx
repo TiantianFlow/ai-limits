@@ -170,4 +170,12 @@ describe("QuotaBars", () => {
     expect(onOpenHistory).toHaveBeenCalledOnce();
     expect(onOpenHistory).toHaveBeenCalledWith("monthly-total");
   });
+
+  it("opens history from a click on the bar, not only the label", () => {
+    const onOpenHistory = vi.fn();
+    render(<QuotaBars {...quota} onOpenHistory={onOpenHistory} />);
+    fireEvent.click(screen.getByRole("meter", { name: /Monthly total quota/ }));
+    expect(onOpenHistory).toHaveBeenCalledOnce();
+    expect(onOpenHistory).toHaveBeenCalledWith("monthly-total");
+  });
 });

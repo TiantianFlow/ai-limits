@@ -33,6 +33,10 @@ export function elapsedRatio(
     return undefined;
   }
 
+  // The window has already reset. Elapsed time of the closed window would
+  // read as "7 / 7 days" while the quota itself is back to empty.
+  if (cycle.resetsAt < now) return undefined;
+
   if (isFiniteNumber(cycle.startedAt) && cycle.resetsAt > cycle.startedAt) {
     return clampRatio((now - cycle.startedAt) / (cycle.resetsAt - cycle.startedAt));
   }

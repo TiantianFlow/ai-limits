@@ -171,6 +171,7 @@ history:
     many: "{count} 天前"
     other: "{count} 天前"
   latestPercent: "{percent}% {mode}"
+  axisCap: 100%
   headlineIdle: 空闲
   chartRole: 图表
   rangeCount: "{range} · {count}"
@@ -295,6 +296,8 @@ history:
   summaryKeys: 使用左右方向键查看各个窗口。
   summaryKeysDays: 使用左右方向键查看各天。
   paceNoWindow: 没有活动窗口 · 首次使用时开始
+  paceNoReading: 等待新的读数
+  paceExpired: "已于 {when} 重置 · 等待新的读数"
   paceResets: "{when} 重置"
   paceNone: "本窗口没有用量 · {when} 重置"
   paceLimit: "已达上限 · {when} 重置"
@@ -333,10 +336,28 @@ history:
   infoIdle: 灰色虚线表示空闲或没有用量。
   infoGaps: 坐标轴下的灰色标记表示没有读数。
   infoResets: 坐标轴下的刻度标记重置。
-  infoStored: "{count} 条读数 · 只保存在这台设备上。"
   noteNone: "{range}内没有读数"
-  noteReadings: "{range}内 {count} 条读数"
-  noteNoUsage: "{range}内 {count} 条读数 · 没有用量"
+  noteReadings:
+    zero: "{range}内 {count} 条读数"
+    one: "{range}内 {count} 条读数"
+    two: "{range}内 {count} 条读数"
+    few: "{range}内 {count} 条读数"
+    many: "{range}内 {count} 条读数"
+    other: "{range}内 {count} 条读数"
+  noteNoUsage:
+    zero: "{range}内 {count} 条读数 · 没有用量"
+    one: "{range}内 {count} 条读数 · 没有用量"
+    two: "{range}内 {count} 条读数 · 没有用量"
+    few: "{range}内 {count} 条读数 · 没有用量"
+    many: "{range}内 {count} 条读数 · 没有用量"
+    other: "{range}内 {count} 条读数 · 没有用量"
+  infoStored:
+    zero: "{count} 条读数 · 只保存在这台设备上。"
+    one: "{count} 条读数 · 只保存在这台设备上。"
+    two: "{count} 条读数 · 只保存在这台设备上。"
+    few: "{count} 条读数 · 只保存在这台设备上。"
+    many: "{count} 条读数 · 只保存在这台设备上。"
+    other: "{count} 条读数 · 只保存在这台设备上。"
   note: 仅绘制成功且已标准化的额度观察。实线是读数，阴影是已用额度；虚线表示中间没有读数。较窄的窗口每个窗口一条，最窄的则每天一条。最近 48 小时保持采集分辨率；更早的保留历史按小时压缩，并保留每个窗口的最后一条读数，在本设备保存最多 30 天。计数和余额观察会被存储，但不能作为图表示列。
 
 settings:

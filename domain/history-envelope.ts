@@ -50,7 +50,9 @@ export const METER_POLICIES: readonly MeterPolicy[] = [
   { providerKind: "claude", metricId: "five-hour", windowMs: 5 * HOUR_MS, policy: "first-use" },
   { providerKind: "chatgpt", metricId: "30-day", windowMs: 30 * DAY_MS, policy: "first-use" },
   { providerKind: "chatgpt", metricId: "five-hour", windowMs: 5 * HOUR_MS, policy: "first-use" },
-  { providerKind: "kimi", metricId: "five-hour-coding", windowMs: 5 * HOUR_MS, policy: "first-use" },
+  // Kimi reports this on a fixed 5-hour grid (resetTime stays on the grid
+  // even at 0%), not a window that starts at first use.
+  { providerKind: "kimi", metricId: "five-hour-coding", windowMs: 5 * HOUR_MS, policy: "fixed" },
   { providerKind: "kimi", metricId: "weekly-coding", windowMs: 7 * DAY_MS, policy: "fixed" },
   { providerKind: "kimi", metricId: "monthly-total", windowMs: CALENDAR_NOMINAL_MS, policy: "fixed" },
   { providerKind: "cursor", metricId: "cursor-models-monthly", windowMs: 30 * DAY_MS, policy: "fixed" },

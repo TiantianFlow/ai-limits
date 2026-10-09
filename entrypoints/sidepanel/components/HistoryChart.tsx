@@ -5,6 +5,7 @@ import { formatDateTime } from "../../../i18n/format";
 import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import {
   buildChartModel,
+  meterPolicy,
   paceLine,
   wholePercent,
   MIN_BAR_PX,
@@ -25,6 +26,8 @@ export interface HistoryChartProps {
   providerKind?: ProviderKind;
   mode: DisplayMode;
   metrics: QuotaMetric[];
+  /** Selected meter. Kept by the parent so a range change does not reset it. */
+  metricId?: string;
   history: UsageHistoryObservation[];
   now: number;
   rangeHours?: number;
@@ -63,6 +66,23 @@ function timeX(at: number, start: number, end: number): number {
 function valueY(used: number, mode: DisplayMode): number {
   const shown = mode === "used" ? used : 100 - used;
   return PLOT_BOTTOM - (Math.min(100, Math.max(0, shown)) / 100) * PLOT_HEIGHT;
+}
+
+const CAP_LABEL_PX = 8;
+
+function withinCapLabel(used: number, mode: DisplayMode, cap: number): boolean {
+  return Math.abs(valueY(used, mode) - cap) <= CAP_LABEL_PX;
+}
+
+/** The "100%" label sits on the top gridline. Hide it when a drawn value is within 8px. */
+function labelTouchesCap(model: ChartModel, mode: DisplayMode): boolean {
+  const cap = valueY(mode === "used" ? 100 : 0, mode);
+  // Left mode paints remaining quota along the top edge, so the label always sits on the fill.
+  if (mode === "left" && (model.tier === "line" || model.bars.length > 0)) return true;
+  if (model.tier === "line") {
+    return model.runs.some((run) => run.points.some((point) => withinCapLabel(point.used, mode, cap)));
+  }
+  return model.bars.some((bar) => withinCapLabel(bar.peak, mode, cap));
 }
 
 function percentText(used: number, mode: DisplayMode): string {
@@ -313,10 +333,14 @@ function barGeometry(bar: ChartBar, model: ChartModel): { x: number; width: numb
  * same kind of empty stretch. A wider hole with no stored reading keeps its
  * single gap mark.
  */
+function gapOverlapsIdle(gap: ChartGap, span: ChartIdle): boolean {
+  return span.start < gap.end - 60_000 && span.end > gap.start + 60_000;
+}
+
 function gapRepeatsIdle(gap: ChartGap, model: ChartModel): boolean {
   const day = 24 * 60 * 60 * 1_000;
   if (model.tier !== "line" && gap.end - gap.start < day) return true;
-  return model.idle.some((span) => span.start < gap.end - 60_000 && span.end > gap.start + 60_000);
+  return model.idle.some((span) => gapOverlapsIdle(gap, span));
 }
 
 /** Idle dashes stop at a bar so a Left notch is never crossed by the gray line. */
@@ -372,15 +396,25 @@ function translatePace(pace: ReturnType<typeof paceLine>): string {
     case "history.paceFor": return l10n.t("history.paceFor", { percent, when });
     case "history.paceLeft": return l10n.t("history.paceLeft", { percent, when });
     case "history.paceRunOut": return l10n.t("history.paceRunOut", { out, when });
+    case "history.paceExpired": return l10n.t("history.paceExpired", { when });
+    case "history.paceNoReading": return l10n.t("history.paceNoReading");
     default: return l10n.t("history.paceNoWindow");
   }
 }
 
-function currentReading(history: UsageHistoryObservation[], metricId: string, now: number): {
+function currentReading(
+  history: UsageHistoryObservation[],
+  metricId: string,
+  now: number,
+  providerKind: ProviderKind | undefined,
+): {
   used: number;
   start: number | undefined;
   resetsAt: number | undefined;
+  expired: boolean;
+  policy: "fixed" | "first-use";
 } | undefined {
+  const policy = meterPolicy(providerKind, metricId)?.policy ?? "first-use";
   const readings = history.flatMap((observation) =>
     observation.metrics
       .filter((sample) => sample.type === "quota" && sample.metricId === metricId && !(observation.observedAt > now))
@@ -392,14 +426,25 @@ function currentReading(history: UsageHistoryObservation[], metricId: string, no
     const resetsAt = item.sample.type === "quota" ? item.sample.cycle?.resetsAt : undefined;
     return resetsAt === undefined || resetsAt >= now;
   });
-  const latest = open ?? readings.at(-1);
-  if (!latest || latest.sample.type !== "quota") return undefined;
-  const resetsAt = latest.sample.cycle?.resetsAt;
-  const duration = latest.sample.cycle?.durationMs;
-  const startedAt = latest.sample.cycle?.startedAt;
-  if (resetsAt !== undefined && resetsAt < now) return undefined;
-  const start = startedAt ?? (resetsAt !== undefined && duration !== undefined ? resetsAt - duration : undefined);
-  return { used: latest.sample.usedRatio * 100, start, resetsAt };
+  const newest = readings.at(-1);
+  const chosen = open ?? newest;
+  if (!chosen || chosen.sample.type !== "quota") return undefined;
+  const resetsAt = chosen.sample.cycle?.resetsAt;
+  const duration = chosen.sample.cycle?.durationMs;
+  const startedAt = chosen.sample.cycle?.startedAt;
+  const expired = resetsAt !== undefined && resetsAt < now;
+  const start = expired
+    ? undefined
+    : startedAt ?? (resetsAt !== undefined && duration !== undefined ? resetsAt - duration : undefined);
+  // A closed window has reset. The headline is 0% used, and the status names
+  // the reset the current-cycle card also names — never "starts at first use".
+  return {
+    used: expired ? 0 : chosen.sample.usedRatio * 100,
+    start,
+    resetsAt,
+    expired,
+    policy,
+  };
 }
 
 export function HistoryChart({
@@ -407,6 +452,7 @@ export function HistoryChart({
   providerKind,
   mode,
   metrics,
+  metricId,
   history,
   now,
   rangeHours,
@@ -420,11 +466,17 @@ export function HistoryChart({
   const [pinned, setPinned] = useState<Focus | null>(null);
   const [keyIndex, setKeyIndex] = useState<number | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [selectedMetricId, setSelectedMetricId] = useState(() => metrics[0]?.id ?? "");
+  const [selectedMetricId, setSelectedMetricId] = useState(
+    () => metricId ?? metrics[0]?.id ?? "",
+  );
 
   useEffect(() => {
+    if (metricId && metrics.some((metric) => metric.id === metricId)) {
+      setSelectedMetricId(metricId);
+      return;
+    }
     if (!metrics.some((metric) => metric.id === selectedMetricId)) setSelectedMetricId(metrics[0]?.id ?? "");
-  }, [selectedMetricId, metrics]);
+  }, [metricId, selectedMetricId, metrics]);
 
   useEffect(() => {
     const element = chartRef.current;
@@ -459,13 +511,15 @@ export function HistoryChart({
   }, [history, metric, providerKind, now, rangeStart, rangeEnd, plotWidth]);
 
   const stops = useMemo(() => (model ? keyboardStops(model, mode) : []), [model, mode]);
-  const current = metric ? currentReading(history, metric.id, now) : undefined;
+  const current = metric ? currentReading(history, metric.id, now, providerKind) : undefined;
   const pace = paceLine({
     currentUsed: current?.used,
     windowStart: current?.start,
     resetsAt: current?.resetsAt,
     now,
     mode,
+    ...(current?.expired ? { expired: true } : {}),
+    ...(current ? { policy: current.policy } : {}),
   });
 
   if (!metric || !model) return null;
@@ -500,8 +554,8 @@ export function HistoryChart({
     ? l10n.t("history.noteNone", { range: rangeLabel })
     : model.readingsInRange < 5
       ? model.drawnWindows.length === 0
-        ? l10n.t("history.noteNoUsage", { count: model.readingsInRange, range: rangeLabel })
-        : l10n.t("history.noteReadings", { count: model.readingsInRange, range: rangeLabel })
+        ? l10n.count("history.noteNoUsage", model.readingsInRange, { range: rangeLabel })
+        : l10n.count("history.noteReadings", model.readingsInRange, { range: rangeLabel })
       : null;
 
   const info = [
@@ -510,7 +564,7 @@ export function HistoryChart({
     model.idle.length > 0 ? l10n.t("history.infoIdle") : "",
     model.gaps.length > 0 ? l10n.t("history.infoGaps") : "",
     model.resets.length > 0 ? l10n.t("history.infoResets") : "",
-    l10n.t("history.infoStored", { count: model.readingsInRange }),
+    l10n.count("history.infoStored", model.readingsInRange),
   ].filter((item) => item.length > 0);
 
   const tooltipLeft = active?.x !== undefined
@@ -520,19 +574,24 @@ export function HistoryChart({
   return (
     <div className="history-chart" ref={chartRef}>
       <div className="history-chart__head">
-        <p className={pace.warn ? "history-chart__latest is-warn" : "history-chart__latest"}>
-          {l10n.t("history.latestPercent", { percent: wholePercent(pace.shown), mode: localizeDisplayModeCompact(mode) })}
-        </p>
-        <button
-          type="button"
-          className="history-chart__info"
-          aria-expanded={infoOpen}
-          aria-controls={infoId}
-          aria-label={l10n.t("history.infoLabel", { label: metric.label })}
-          onClick={() => setInfoOpen((open) => !open)}
-        >
-          {l10n.t("history.infoMark")}
-        </button>
+        <h3 className="history-chart__title">{metric.label}</h3>
+        <div className="history-chart__value">
+          <p className={pace.warn ? "history-chart__latest is-warn" : "history-chart__latest"}>
+            {`${wholePercent(pace.shown)}%`}
+            {" "}
+            <span className="history-chart__latest-unit">{localizeDisplayModeCompact(mode)}</span>
+          </p>
+          <button
+            type="button"
+            className="history-chart__info"
+            aria-expanded={infoOpen}
+            aria-controls={infoId}
+            aria-label={l10n.t("history.infoLabel", { label: metric.label })}
+            onClick={() => setInfoOpen((open) => !open)}
+          >
+            {l10n.t("history.infoMark")}
+          </button>
+        </div>
       </div>
       <p className={pace.warn ? "history-chart__status is-warn" : "history-chart__status"}>
         {translatePace(pace)}
@@ -571,7 +630,6 @@ export function HistoryChart({
           >
             <svg className="history-chart__svg" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-hidden="true">
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_TOP} y2={PLOT_TOP} strokeDasharray="2 3" />
-              <text className="history-chart__tick" x={PLOT_RIGHT - 2} y={PLOT_TOP - 2} textAnchor="end">100%</text>
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM} />
               {model.tier === "line"
                 ? model.runs.map((run) => {
@@ -616,19 +674,37 @@ export function HistoryChart({
                   })
                 : null}
               {model.tier !== "line" && mode === "left" ? (
-                <path
-                  className="history-chart__area"
-                  d={[
-                    `M${PLOT_LEFT} ${PLOT_BOTTOM} L${PLOT_LEFT} ${valueY(0, mode)}`,
-                    ...model.bars.flatMap((bar) => {
-                      const shape = barGeometry(bar, model);
-                      if (!shape) return [];
-                      const bottom = Math.min(PLOT_BOTTOM, valueY(0, mode) + shape.depth);
-                      return [`L${shape.x} ${valueY(0, mode)} L${shape.x} ${bottom} L${shape.x + shape.width} ${bottom} L${shape.x + shape.width} ${valueY(0, mode)}`];
-                    }),
-                    `L${PLOT_RIGHT} ${valueY(0, mode)} L${PLOT_RIGHT} ${PLOT_BOTTOM}Z`,
-                  ].join(" ")}
-                />
+                <>
+                  <path
+                    className="history-chart__area"
+                    d={[
+                      `M${PLOT_LEFT} ${PLOT_BOTTOM} L${PLOT_LEFT} ${valueY(0, mode)}`,
+                      ...model.bars.flatMap((bar) => {
+                        const shape = barGeometry(bar, model);
+                        if (!shape) return [];
+                        const bottom = Math.min(PLOT_BOTTOM, valueY(0, mode) + shape.depth);
+                        return [`L${shape.x} ${valueY(0, mode)} L${shape.x} ${bottom} L${shape.x + shape.width} ${bottom} L${shape.x + shape.width} ${valueY(0, mode)}`];
+                      }),
+                      `L${PLOT_RIGHT} ${valueY(0, mode)} L${PLOT_RIGHT} ${PLOT_BOTTOM}Z`,
+                    ].join(" ")}
+                  />
+                  {model.bars.map((bar) => {
+                    const shape = barGeometry(bar, model);
+                    if (!shape) return null;
+                    const top = valueY(0, mode);
+                    return (
+                      <rect
+                        key={`used-${bar.id}`}
+                        className="history-chart__bar is-used"
+                        x={shape.x}
+                        y={top}
+                        width={shape.width}
+                        height={Math.min(shape.depth, PLOT_BOTTOM - top)}
+                        rx="1.5"
+                      />
+                    );
+                  })}
+                </>
               ) : null}
               {model.tier === "line" && mode === "left"
                 ? model.idle.map((span) => (
@@ -673,8 +749,11 @@ export function HistoryChart({
                 </text>
               ))}
               {model.resets.map((at) => (
-                <line key={`reset-${at}`} className="history-chart__reset" x1={timeX(at, rangeStart, rangeEnd)} x2={timeX(at, rangeStart, rangeEnd)} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM + 5} />
+                <line key={`reset-${at}`} className="history-chart__reset" x1={timeX(at, rangeStart, rangeEnd)} x2={timeX(at, rangeStart, rangeEnd)} y1={PLOT_BOTTOM - 6} y2={PLOT_BOTTOM} />
               ))}
+              {labelTouchesCap(model, mode) ? null : (
+                <text className="history-chart__tick" x={PLOT_RIGHT - 2} y={PLOT_TOP - 2} textAnchor="end">{l10n.t("history.axisCap")}</text>
+              )}
               <text className="history-chart__tick" x={PLOT_RIGHT} y={128} textAnchor="end">{l10n.t("common.now")}</text>
               {active?.x !== undefined ? (
                 <g>
@@ -694,7 +773,11 @@ export function HistoryChart({
             </svg>
             {note && !active ? <p className="history-chart__note">{note}</p> : null}
             {active ? (
-              <div className="history-chart__tooltip" role="tooltip" style={{ left: `${(tooltipLeft / VIEWBOX_WIDTH) * 100}%`, top: active.y !== undefined && active.y < 58 ? 62 : 2 }}>
+              <div
+                className="history-chart__tooltip"
+                role="tooltip"
+                style={{ left: `${(tooltipLeft / VIEWBOX_WIDTH) * 100}%` }}
+              >
                 {active.lines.map((line) => <p key={line}>{line}</p>)}
               </div>
             ) : null}

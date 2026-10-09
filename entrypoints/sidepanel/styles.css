@@ -762,14 +762,43 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 .history-chart__head {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
+}
+
+.history-chart__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-chart__value {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .history-chart__latest {
   margin: 0;
   font-size: 18px;
   font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The percent stays in the text node (tests match it). The word is a smaller overlay. */
+.history-chart__latest-unit {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 450;
 }
 
 .history-chart__latest.is-warn,
@@ -779,8 +808,12 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 
 .history-chart__status {
   margin: 2px 0 0;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-chart__info {
@@ -803,7 +836,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 
 .history-chart__note {
   position: absolute;
-  top: 46px;
+  top: calc(100% * 22 / 136);
   right: 0;
   left: 0;
   margin: 0;
@@ -941,6 +974,11 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   fill: color-mix(in srgb, var(--quota) 70%, transparent);
 }
 
+/* Left mode: the notch is "used this much", a lighter tint than the remaining fill. */
+.history-chart__bar.is-used {
+  fill: color-mix(in srgb, var(--quota) 32%, var(--surface));
+}
+
 .is-current .history-chart__bar {
   fill: color-mix(in srgb, var(--quota) 55%, var(--surface));
 }
@@ -1023,6 +1061,10 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   display: grid;
   gap: 1px;
   max-width: 180px;
+  max-height: calc(100% * 84 / 136);
+  overflow: hidden;
+  /* Never above the plot. The header and status sit outside the canvas. */
+  top: calc(100% * 22 / 136);
   padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1431,6 +1473,10 @@ section[aria-labelledby="overview-title"] .provider-list {
 
 .quota-bars {
   min-width: 0;
+}
+
+.quota-bars:has(.quota-bars__history) {
+  cursor: pointer;
 }
 
 .quota-bars__heading,
