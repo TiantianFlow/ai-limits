@@ -29,16 +29,59 @@ export type {
 } from "./model";
 export { DETAIL_TABLE_MAX_TABLES, DETAIL_TABLE_ROW_CAP } from "./model";
 export { sanitizedFailureMessage } from "./model";
-export { quotaHistorySegments, quotaHistorySeries } from "./history";
+export { quotaHistorySegments, quotaHistorySeries, cycleBoundaryChanged } from "./history";
 export type {
   HistoryBreakKind,
-  HistoryGap,
   MetricHistoryPoint,
   QuotaHistoryPoint,
   QuotaHistorySegment,
   QuotaHistorySeries,
-  TrendLine,
 } from "./history";
+export {
+  buildEnvelopeSeries,
+  buildWindowEnvelope,
+  dailyBuckets,
+  detailLevel,
+  expectedIntervalMs,
+  fallbackPolicy,
+  fixedGridFrames,
+  idleSpansBetween,
+  isIdleProofReading,
+  mergeUnknownWindows,
+  meterPolicy,
+  nominalDurationMs,
+  predictUsed,
+  tailToleranceMs,
+  windowBar,
+  windowTrend,
+  METER_POLICIES,
+  BAR_MIN_WINDOW_PX,
+  CALENDAR_NOMINAL_MS,
+  DOT_JOIN_PX,
+  ENVELOPE_MIN_WINDOW_PX,
+  OPEN_STUB_PX,
+  RAW_RETENTION_MS,
+  REBASE_MARKER_CAP,
+  ROUNDING_TOLERANCE,
+  TREND_MIN_SPAN_FRACTION,
+  TREND_MIN_WINDOWS,
+} from "./history-envelope";
+export type {
+  DayBucket,
+  DetailLevel,
+  EnvelopeBand,
+  EnvelopeReading,
+  EnvelopeSeries,
+  HistoryEventKind,
+  HistoryEventMarker,
+  IdleSpan,
+  MeterPolicy,
+  TrendFit,
+  TrendPoint,
+  WindowPolicy,
+  WindowSpan,
+  WindowTrend,
+} from "./history-envelope";
 export { displayRatio, elapsedRatio, paceStatus } from "./quota";
 export type { PaceKind, PaceStatus } from "./quota";
 import type {
