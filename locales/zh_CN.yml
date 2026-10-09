@@ -294,6 +294,46 @@ history:
   summaryTrend: 虚线是窗口结束时用量的估计，不是预测。
   summaryKeys: 使用左右方向键查看各个窗口。
   summaryKeysDays: 使用左右方向键查看各天。
+  paceNoWindow: 没有活动窗口 · 首次使用时开始
+  paceResets: "{when} 重置"
+  paceNone: "本窗口没有用量 · {when} 重置"
+  paceLimit: "已达上限 · {when} 重置"
+  paceFor: "按目前速度，重置时约 {percent}% · {when}"
+  paceLeft: "按目前速度，重置时约剩 {percent}% · {when}"
+  paceRunOut: "按目前速度，{out} 用完 · {when} 重置"
+  windowCurrent: "当前窗口 · {when} 重置"
+  windowSpan: "窗口 {start} – {end}"
+  readNow: "现在 {value}"
+  readEnded: "结束于 {value}"
+  readOpen: "重置时 {value} · 附近没有读数"
+  readPeak: "峰值 {value}"
+  readLowest: "最低 {value}"
+  readAtLeast: "至少 {value}"
+  readAtMost: "至多 {value}"
+  readBetween: "介于 {low} 和 {high} 之间"
+  readSinceReset: "重置后 {duration} 没有读数"
+  readNoSince: "{when} 之后没有读数"
+  readNoFor: "{duration} 没有读数"
+  idleNoUsage: 没有用量
+  idleLast: "最后一次读数为 {value} · {when}"
+  gapDuration: "{duration} · AI Limits 当时没有采集"
+  barBusiest: "最忙的窗口：{value}"
+  barWindows:
+    zero: "{count} 个窗口"
+    one: "{count} 个窗口"
+    two: "{count} 个窗口"
+    few: "{count} 个窗口"
+    many: "{count} 个窗口"
+    other: "{count} 个窗口"
+  infoLabel: "如何阅读{label}"
+  infoLine: 实线是读数。阴影是已用额度；每一次下跌都是一次重置。
+  infoBars: 每条柱是该段时间里最忙的窗口。
+  infoDashed: 虚线表示中间没有读数。
+  infoIdle: 灰色虚线表示空闲或没有用量。
+  infoGaps: 坐标轴下的灰色标记表示没有读数。
+  infoResets: 坐标轴下的刻度标记重置。
+  infoStored: "{count} 条读数 · 只保存在这台设备上。"
+  noteNone: "{range}内没有读数"
   note: 仅绘制成功且已标准化的额度观察。读数之间的阴影是可能范围，剩余额度在窗口重置前只降不升。重置附近没有读数的窗口以一段短虚线结束，而不是填到零。较宽的窗口绘制这条阶梯；更窄的窗口每个窗口一条；最窄的亚日窗口则每天一条。虚线趋势只在六个完整窗口覆盖足够范围后出现，而且只是估计。最近 48 小时保持采集分辨率；更早的保留历史按小时压缩，并保留每个窗口的最后一条读数，在本设备保存最多 30 天。计数和余额观察会被存储，但不能作为图表示列。
 
 settings:

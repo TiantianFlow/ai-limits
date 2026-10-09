@@ -1,27 +1,22 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { l10n } from "../../../i18n/index";
-import { formatDateTime, formatPercent as formatPercentNumber } from "../../../i18n/format";
+import { formatDateTime } from "../../../i18n/format";
 import { localizeDisplayModeCompact } from "../../../i18n/presentation";
 import {
-  buildEnvelopeSeries,
-  dailyBuckets,
-  detailLevel,
-  meterPolicy,
-  predictUsed,
-  windowBar,
-  DOT_JOIN_PX,
-  expectedIntervalMs,
-  OPEN_STUB_PX,
-  type DayBucket,
-  type DetailLevel,
+  buildChartModel,
+  paceLine,
+  wholePercent,
+  MIN_BAR_PX,
+  type ChartBar,
+  type ChartGap,
+  type ChartIdle,
+  type ChartModel,
+  type ChartRun,
+  type ChartWindow,
   type DisplayMode,
-  type EnvelopeBand,
-  type EnvelopeSeries,
-  type IdleSpan,
   type QuotaMetric,
   type UsageHistoryObservation,
-  type WindowSpan,
   type ProviderKind,
 } from "../../../domain/public-protocol";
 
@@ -36,226 +31,330 @@ export interface HistoryChartProps {
 }
 
 const VIEWBOX_WIDTH = 320;
-const VIEWBOX_HEIGHT = 112;
-const PLOT_LEFT = 28;
+const VIEWBOX_HEIGHT = 124;
+const PLOT_LEFT = 8;
 const PLOT_RIGHT = 312;
-const PLOT_TOP = 8;
-const PLOT_BOTTOM = 92;
-const TOOLTIP_MAX = 180;
-/** Screen pixels of the idle baseline. ViewBox units shrink with the panel. */
-const IDLE_BASELINE_PX = 8;
+const PLOT_TOP = 16;
+const PLOT_BOTTOM = 98;
+const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
 
-type InspectItem =
-  | { kind: "window"; id: string }
-  | { kind: "span"; id: string }
-  | { kind: "day"; id: string };
-
-/** One x scale for every mark: range start..end maps to the plot's left..right. */
-function timeX(at: number, rangeStart: number, rangeEnd: number): number {
-  const duration = Math.max(1, rangeEnd - rangeStart);
-  const clamped = Math.min(rangeEnd, Math.max(rangeStart, at));
-  return PLOT_LEFT + ((clamped - rangeStart) / duration) * (PLOT_RIGHT - PLOT_LEFT);
+interface Focus {
+  id: string;
+  title: string;
+  lines: string[];
+  /** Guide x, when the readout is a moment rather than a whole span. */
+  x?: number;
+  y?: number;
+  from: number;
+  to: number;
 }
 
-function clampInterval(
-  from: number,
-  to: number,
-  rangeStart: number,
-  rangeEnd: number,
-): { from: number; to: number } | null {
-  const start = Math.max(rangeStart, Math.min(from, to));
-  const end = Math.min(rangeEnd, Math.max(from, to));
-  if (end - start < 0) return null;
-  return { from: start, to: end };
+function timeX(at: number, start: number, end: number): number {
+  const span = Math.max(1, end - start);
+  const clamped = Math.min(end, Math.max(start, at));
+  return PLOT_LEFT + ((clamped - start) / span) * (PLOT_RIGHT - PLOT_LEFT);
 }
 
-function leftY(leftPercent: number): number {
-  const clamped = Math.min(100, Math.max(0, leftPercent));
-  const y = PLOT_BOTTOM - (clamped / 100) * (PLOT_BOTTOM - PLOT_TOP);
-  // A value of exactly 0% or 100% lands on the plot edge, where the stroke
-  // is clipped in half. Keep the line one unit inside.
-  return Math.min(PLOT_BOTTOM - 1, Math.max(PLOT_TOP + 1, y));
+function valueY(used: number, mode: DisplayMode): number {
+  const shown = mode === "used" ? used : 100 - used;
+  return PLOT_BOTTOM - (Math.min(100, Math.max(0, shown)) / 100) * PLOT_HEIGHT;
 }
 
-function shownY(leftPercent: number, mode: DisplayMode): number {
-  return mode === "left" ? leftY(leftPercent) : leftY(100 - leftPercent);
+function percentText(used: number, mode: DisplayMode): string {
+  const shown = mode === "used" ? used : 100 - used;
+  return `${wholePercent(shown)}%`;
 }
 
-function percent(value: number): number {
-  return Math.round(value);
+function durationText(ms: number): string {
+  const hour = 60 * 60 * 1_000;
+  const day = 24 * hour;
+  if (ms < hour) return l10n.count("history.durationMinutes", Math.max(1, Math.round(ms / 60_000)));
+  if (ms < 2 * day) return l10n.count("history.durationHours", Math.round(ms / hour));
+  const days = ms / day;
+  const count = days < 10 ? Math.round(days * 10) / 10 : Math.round(days);
+  return l10n.count("history.durationDays", count);
 }
 
-function bandPath(band: EnvelopeBand, mode: DisplayMode, rangeStart: number, rangeEnd: number): string | null {
-  const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
-  if (!span) return null;
-  const x1 = timeX(span.from, rangeStart, rangeEnd);
-  const x2 = timeX(span.to, rangeStart, rangeEnd);
-  const yUpper = shownY(band.upper, mode);
-  const yLower = shownY(band.lower, mode);
-  const top = Math.min(yUpper, yLower);
-  const bottom = Math.max(yUpper, yLower);
-  return `M ${x1.toFixed(2)} ${top.toFixed(2)} L ${x2.toFixed(2)} ${top.toFixed(2)} L ${x2.toFixed(2)} ${bottom.toFixed(2)} L ${x1.toFixed(2)} ${bottom.toFixed(2)} Z`;
+function windowTitle(window: ChartWindow): string {
+  if (window.current) return l10n.t("history.windowCurrent", { when: formatDateTime(window.end) });
+  return l10n.t("history.windowSpan", { start: formatDateTime(window.start), end: formatDateTime(window.end) });
 }
 
-function formatSpan(start: number, end: number, current: boolean): string {
-  const sameDay = new Date(start).toDateString() === new Date(end).toDateString();
-  if (current) {
-    return l10n.t("history.windowNow", {
-      start: formatDateTime(start),
-      end: formatDateTime(end),
-    });
+function describeWindow(window: ChartWindow, mode: DisplayMode): Focus {
+  const last = window.values.at(-1) ?? 0;
+  const end = window.current
+    ? l10n.t("history.readNow", { value: percentText(last, mode) })
+    : window.tailKnown
+      ? l10n.t("history.readEnded", { value: percentText(last, mode) })
+      : l10n.t("history.readOpen", { value: percentText(last, mode) });
+  return {
+    id: window.id,
+    title: windowTitle(window),
+    lines: [
+      windowTitle(window),
+      l10n.t(mode === "used" ? "history.readPeak" : "history.readLowest", { value: percentText(window.peak, mode) }),
+      l10n.count("history.readingsInWindow", window.readings.length),
+      end,
+    ],
+    from: window.start,
+    to: window.end,
+  };
+}
+
+/** What the line says at `at`: a reading, a hold, or the gap between two readings. */
+function describeAt(model: ChartModel, at: number, mode: DisplayMode): Focus | null {
+  const hour = 60 * 60 * 1_000;
+  const tolerance = (8 / Math.max(0.001, model.pxPerHour)) * hour;
+  const window = model.drawnWindows.find((item) => item.start <= at && item.end >= at)
+    ?? model.drawnWindows.find((item) => item.start - tolerance <= at && item.end + tolerance >= at);
+  if (!window) {
+    const idle = model.idle.find((span) => span.start <= at && span.end >= at);
+    if (idle) return describeIdle(idle, mode);
+    const gap = model.gaps.find((span) => span.start <= at && span.end >= at);
+    if (gap) return describeGap(gap);
+    return null;
   }
-  if (sameDay) {
-    return l10n.t("history.windowSameDay", {
-      start: formatDateTime(start),
-      end: formatClock(end),
-    });
-  }
-  return l10n.t("history.windowAcrossDays", {
-    start: formatDateTime(start),
-    end: formatDateTime(end),
+  let best = 0;
+  window.readings.forEach((reading, index) => {
+    if (Math.abs(reading.observedAt - at) < Math.abs(window.readings[best]!.observedAt - at)) best = index;
   });
-}
-
-function formatClock(value: number): string {
-  return new Intl.DateTimeFormat(l10n.localeTag(), {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatDay(value: number): string {
-  return new Intl.DateTimeFormat(l10n.localeTag(), {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
-}
-
-function formatDuration(ms: number): string {
-  const minutes = Math.max(1, Math.round(ms / 60_000));
-  if (minutes < 60) return l10n.count("history.durationMinutes", minutes);
-  const hours = Math.round(ms / 3_600_000);
-  if (hours < 48) return l10n.count("history.durationHours", Math.max(1, hours));
-  return l10n.count("history.durationDays", Math.max(1, Math.round(hours / 24)));
-}
-
-function isNamedHourWindow(hours: number): boolean {
-  return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].includes(hours);
-}
-
-function windowNoun(windowMs: number): string {
-  const hours = Math.round(windowMs / 3_600_000);
-  if (isNamedHourWindow(hours)) {
-    return l10n.t("history.nounHours", { hours: String(hours) });
+  const nearest = window.readings[best]!;
+  if (Math.abs(nearest.observedAt - at) <= tolerance) {
+    return {
+      id: `${window.id}-reading-${best}`,
+      title: formatDateTime(nearest.observedAt),
+      lines: [formatDateTime(nearest.observedAt), percentText(window.values[best]!, mode), windowTitle(window)],
+      x: timeX(nearest.observedAt, model.rangeStart, model.rangeEnd),
+      y: valueY(window.values[best]!, mode),
+      from: nearest.observedAt,
+      to: nearest.observedAt,
+    };
   }
-  if (hours === 168) return l10n.t("history.nounWeek");
-  return l10n.t("history.nounWindow");
-}
-
-function observedRange(values: number[], mode: DisplayMode): string {
-  const shown = values.map((left) => (mode === "left" ? left : 100 - left));
-  const low = Math.min(...shown);
-  const high = Math.max(...shown);
-  const modeLabel = localizeDisplayModeCompact(mode);
-  if (Math.abs(high - low) < 0.5) {
-    return l10n.t("history.observedSingle", {
-      value: percent(shown[0] ?? 0),
-      mode: modeLabel,
-    });
+  const first = window.readings[0]!;
+  const last = window.readings[window.readings.length - 1]!;
+  const lastUsed = window.values[window.values.length - 1]!;
+  if (at < first.observedAt) {
+    return {
+      id: `${window.id}-head`,
+      title: formatDateTime(at),
+      lines: [
+        formatDateTime(at),
+        l10n.t("history.readBetween", { low: percentText(0, mode), high: percentText(window.values[0]!, mode) }),
+        l10n.t("history.readSinceReset", { duration: durationText(first.observedAt - window.start) }),
+        windowTitle(window),
+      ],
+      x: timeX(at, model.rangeStart, model.rangeEnd),
+      y: valueY(window.values[0]! * ((at - window.start) / Math.max(1, first.observedAt - window.start)), mode),
+      from: at,
+      to: at,
+    };
   }
-  return l10n.t("history.observedRange", {
-    low: percent(Math.min(low, high)),
-    high: percent(Math.max(low, high)),
-    mode: modeLabel,
-  });
-}
-
-function windowTooltip(
-  window: WindowSpan,
-  mode: DisplayMode,
-  now: number,
-  readingAt?: number,
-): string[] {
-  // A reading on the line is one time and one value. The window span, the
-  // reading count, and the open-end note made the box cover half the plot.
-  if (readingAt !== undefined) {
-    const index = window.readings.findIndex((reading) => reading.observedAt === readingAt);
-    const left = window.values[index];
-    const lines = [formatDateTime(readingAt)];
-    if (left !== undefined) lines.push(observedRange([left], mode));
-    const last = window.readings.at(-1);
-    if (!window.current && !window.tailTrusted && last && last.observedAt === readingAt) {
-      lines.push(l10n.t("history.tooltipOpenEnd"));
-    }
-    return lines;
+  if (at > last.observedAt) {
+    return {
+      id: `${window.id}-hold`,
+      title: formatDateTime(at),
+      lines: window.tailKnown
+        ? [formatDateTime(at), percentText(lastUsed, mode), windowTitle(window)]
+        : [
+            formatDateTime(at),
+            l10n.t(mode === "used" ? "history.readAtLeast" : "history.readAtMost", { value: percentText(lastUsed, mode) }),
+            l10n.t("history.readNoSince", { when: formatDateTime(last.observedAt) }),
+            windowTitle(window),
+          ],
+      x: timeX(at, model.rangeStart, model.rangeEnd),
+      y: valueY(lastUsed, mode),
+      from: at,
+      to: at,
+    };
   }
-  const lines = [formatSpan(window.start, window.end, window.current)];
-  if (window.kind === "unknown") {
-    lines.push(l10n.t("history.tooltipNoReadings"));
-    return lines;
-  }
-  if (window.values.length > 0) lines.push(observedRange(window.values, mode));
-  const last = window.readings.at(-1);
-  const endValue = window.values.at(-1);
-  // The current window's end is its reset, which can be days ahead of now.
-  // "No reading in the last …" is the gap since the last reading, not the
-  // time left until that reset.
-  const sinceLast = last ? Math.max(0, now - last.observedAt) : 0;
-  if (window.current && window.tailTrusted) {
-    lines.push(l10n.t("history.tooltipLatestCurrent"));
-  } else if (window.current && last && sinceLast > 0) {
-    lines.push(l10n.t("history.tooltipCurrentOpen", {
-      duration: formatDuration(sinceLast),
-    }));
-  } else if (window.tailTrusted && endValue !== undefined) {
-    lines.push(l10n.t("history.tooltipEnded", {
-      value: percent(mode === "left" ? endValue : 100 - endValue),
-      mode: localizeDisplayModeCompact(mode),
-    }));
-  } else if (last) {
-    lines.push(l10n.t("history.tooltipOpenEnd"));
-  }
-  return lines;
-}
-
-function dayTooltip(bucket: DayBucket, mode: DisplayMode, policy: EnvelopeSeries["policy"]): string[] {
-  const title = bucket.today
-    ? l10n.t("history.dayToday", { day: formatDay(bucket.start) })
-    : formatDay(bucket.start);
-  if (!bucket.window) {
-    return [title, l10n.t(policy === "first-use" ? "history.dayIdle" : "history.dayNone")];
-  }
-  const bar = windowBar(bucket.window);
+  const index = Math.max(1, window.readings.findIndex((reading) => reading.observedAt > at));
+  const left = window.readings[index - 1]!;
+  const right = window.readings[index]!;
+  const leftUsed = window.values[index - 1]!;
+  const rightUsed = window.values[index]!;
+  const gap = right.observedAt - left.observedAt;
   const lines = [
-    title,
-    l10n.t("history.dayBusiest", {
-      noun: windowNoun(bucket.window.windowMs),
-      span: formatSpan(bucket.window.start, bucket.window.end, false),
-    }),
+    formatDateTime(at),
+    leftUsed === rightUsed
+      ? percentText(leftUsed, mode)
+      : l10n.t("history.readBetween", { low: percentText(leftUsed, mode), high: percentText(rightUsed, mode) }),
   ];
-  if (bucket.window.values.length > 0) {
-    const observed = observedRange(bucket.window.values, mode);
-    lines.push(bucket.window.tailTrusted
-      ? observed
-      : l10n.t("history.dayOpen", { observed }));
-  }
-  return lines;
+  if (gap > 2 * hour) lines.push(l10n.t("history.readNoFor", { duration: durationText(gap) }));
+  lines.push(windowTitle(window));
+  const fraction = gap > 0 ? (at - left.observedAt) / gap : 0;
+  return {
+    id: `${window.id}-span-${index}`,
+    title: formatDateTime(at),
+    lines,
+    x: timeX(at, model.rangeStart, model.rangeEnd),
+    y: valueY(leftUsed + (rightUsed - leftUsed) * fraction, mode),
+    from: at,
+    to: at,
+  };
 }
 
-function spanTooltip(span: IdleSpan, _mode: DisplayMode): string[] {
-  if (span.kind === "unknown") {
-    return [`${l10n.t("history.spanUnknownTitle")} · ${formatSpan(span.start, span.end, false)}`];
+function describeIdle(span: ChartIdle, mode: DisplayMode): Focus {
+  const title = span.reason === "no-usage"
+    ? l10n.t("history.idleNoUsage")
+    : l10n.t("history.spanIdle");
+  const lines = [title, `${formatDateTime(span.start)} – ${formatDateTime(span.end)}`];
+  if (span.reason === "no-usage" && span.lastReadingAt !== undefined) {
+    lines.push(l10n.t("history.idleLast", { value: percentText(0, mode), when: formatDateTime(span.lastReadingAt) }));
   }
-  return [l10n.t("history.spanIdle")];
+  return { id: `idle-${span.start}`, title, lines, from: span.start, to: span.end };
 }
 
-function defaultRangeHours(metrics: QuotaMetric[], metricId: string, providerKind?: ProviderKind): number {
-  const metric = metrics.find((candidate) => candidate.id === metricId);
-  const listed = meterPolicy(providerKind, metricId);
-  const windowMs = listed?.windowMs ?? metric?.cycle?.durationMs ?? 0;
-  const dayMs = 24 * 60 * 60 * 1_000;
-  const shortWindow = windowMs > 0 && !(windowMs > dayMs);
-  return shortWindow ? 7 * 24 : 30 * 24;
+function describeGap(gap: ChartGap): Focus {
+  return {
+    id: `gap-${gap.start}`,
+    title: l10n.t("history.spanUnknownTitle"),
+    lines: [
+      l10n.t("history.spanUnknownTitle"),
+      `${formatDateTime(gap.start)} – ${formatDateTime(gap.end)}`,
+      l10n.t("history.gapDuration", { duration: durationText(gap.end - gap.start) }),
+    ],
+    from: gap.start,
+    to: gap.end,
+  };
+}
+
+function describeBar(bar: ChartBar, mode: DisplayMode): Focus {
+  const peak = percentText(bar.peak, mode);
+  if (bar.perDay && bar.busiest) {
+    return {
+      id: bar.id,
+      title: formatDateTime((bar.start + bar.end) / 2),
+      lines: [
+        formatDateTime((bar.start + bar.end) / 2),
+        l10n.t("history.barBusiest", { value: peak }),
+        l10n.count("history.barWindows", bar.drawnWindows),
+      ],
+      from: bar.start,
+      to: bar.end,
+    };
+  }
+  const lines = [
+    bar.busiest ? windowTitle(bar.busiest) : formatDateTime(bar.start),
+    l10n.t(mode === "used" ? "history.readPeak" : "history.readLowest", { value: peak }),
+  ];
+  if (!bar.tailKnown) lines.push(l10n.t("history.tooltipOpenEnd"));
+  return { id: bar.id, title: lines[0]!, lines, from: bar.start, to: bar.end };
+}
+
+function focusAt(model: ChartModel, at: number, mode: DisplayMode): Focus | null {
+  if (model.tier === "line") return describeAt(model, at, mode);
+  const bar = model.bars.find((item) => item.start <= at && item.end >= at);
+  if (bar) return describeBar(bar, mode);
+  const idle = model.idle.find((span) => span.start <= at && span.end >= at);
+  if (idle) return describeIdle(idle, mode);
+  const gap = model.gaps.find((span) => span.start <= at && span.end >= at);
+  return gap ? describeGap(gap) : null;
+}
+
+function keyboardStops(model: ChartModel, mode: DisplayMode): Focus[] {
+  if (model.tier !== "line") return model.bars.map((bar) => describeBar(bar, mode));
+  const readings = model.drawnWindows.flatMap((window, windowIndex) =>
+    window.readings.map((reading, index) => ({
+      id: `${window.id}-${windowIndex}-reading-${index}`,
+      title: formatDateTime(reading.observedAt),
+      lines: [
+        formatDateTime(reading.observedAt),
+        percentText(window.values[index]!, mode),
+        windowTitle(window),
+      ],
+      x: timeX(reading.observedAt, model.rangeStart, model.rangeEnd),
+      y: valueY(window.values[index]!, mode),
+      from: reading.observedAt,
+      to: reading.observedAt,
+    })),
+  );
+  return [...readings, ...model.idle.map((span) => describeIdle(span, mode))]
+    .sort((left, right) => left.from - right.from);
+}
+
+function runPath(run: ChartRun, model: ChartModel, mode: DisplayMode): { fill: string; groups: { style: string; d: string }[] } {
+  const points = run.points.map((point) => ({
+    x: timeX(point.at, model.rangeStart, model.rangeEnd),
+    y: valueY(point.used, mode),
+  }));
+  const fill = `M${points[0]!.x} ${PLOT_BOTTOM} ${points.map((point) => `L${point.x} ${point.y}`).join(" ")} L${points.at(-1)!.x} ${PLOT_BOTTOM}Z`;
+  const groups: { style: string; d: string }[] = [];
+  run.styles.forEach((style, index) => {
+    const from = points[index];
+    const to = points[index + 1];
+    if (!from || !to) return;
+    const last = groups.at(-1);
+    const piece = `L${to.x} ${to.y}`;
+    if (last && last.style === style) last.d += ` ${piece}`;
+    else groups.push({ style, d: `M${from.x} ${from.y} ${piece}` });
+  });
+  return { fill, groups };
+}
+
+function barGeometry(bar: ChartBar, model: ChartModel): { x: number; width: number; depth: number } | null {
+  const x1 = timeX(bar.start, model.rangeStart, model.rangeEnd);
+  const slot = timeX(bar.end, model.rangeStart, model.rangeEnd) - x1;
+  if (slot <= 0 || bar.peak <= 0) return null;
+  const gap = slot >= 8 ? 2 : 1;
+  const width = Math.max(1.5, slot - gap);
+  const raw = (bar.peak / 100) * PLOT_HEIGHT;
+  return { x: x1 + (slot - width) / 2, width, depth: Math.max(MIN_BAR_PX, raw) };
+}
+
+function dateTicks(model: ChartModel): { at: number; label: string }[] {
+  const hour = 60 * 60 * 1_000;
+  const range = model.rangeEnd - model.rangeStart;
+  const stepDays = range <= 48 * hour ? 1 : range <= 7 * 24 * hour ? 2 : 7;
+  const ticks: { at: number; label: string }[] = [];
+  const first = new Date(model.rangeStart);
+  let at = new Date(first.getFullYear(), first.getMonth(), first.getDate()).getTime();
+  if (at < model.rangeStart) at += 24 * hour;
+  let index = 0;
+  for (; at < model.rangeEnd; at += 24 * hour, index += 1) {
+    if (index % stepDays !== 0) continue;
+    const x = timeX(at, model.rangeStart, model.rangeEnd);
+    if (x < PLOT_LEFT + 22 || x > PLOT_RIGHT - 36) continue;
+    ticks.push({
+      at,
+      label: new Intl.DateTimeFormat(l10n.localeTag(), { month: "short", day: "numeric" }).format(new Date(at)),
+    });
+  }
+  return ticks;
+}
+
+function translatePace(pace: ReturnType<typeof paceLine>): string {
+  const when = pace.detail.when === undefined ? "" : formatDateTime(Number(pace.detail.when));
+  const out = pace.detail.out === undefined ? "" : formatDateTime(Number(pace.detail.out));
+  const percent = pace.detail.percent ?? 0;
+  switch (pace.detailKey) {
+    case "history.paceResets": return l10n.t("history.paceResets", { when });
+    case "history.paceNone": return l10n.t("history.paceNone", { when });
+    case "history.paceLimit": return l10n.t("history.paceLimit", { when });
+    case "history.paceFor": return l10n.t("history.paceFor", { percent, when });
+    case "history.paceLeft": return l10n.t("history.paceLeft", { percent, when });
+    case "history.paceRunOut": return l10n.t("history.paceRunOut", { out, when });
+    default: return l10n.t("history.paceNoWindow");
+  }
+}
+
+function currentReading(history: UsageHistoryObservation[], metricId: string, now: number): {
+  used: number;
+  start: number | undefined;
+  resetsAt: number | undefined;
+} | undefined {
+  const readings = history.flatMap((observation) =>
+    observation.metrics
+      .filter((sample) => sample.type === "quota" && sample.metricId === metricId && observation.observedAt <= now)
+      .map((sample) => ({ at: observation.observedAt, sample })),
+  );
+  const latest = readings.at(-1);
+  if (!latest || latest.sample.type !== "quota") return undefined;
+  const resetsAt = latest.sample.cycle?.resetsAt;
+  const duration = latest.sample.cycle?.durationMs;
+  const startedAt = latest.sample.cycle?.startedAt;
+  if (resetsAt !== undefined && resetsAt < now) return undefined;
+  const start = startedAt ?? (resetsAt !== undefined && duration !== undefined ? resetsAt - duration : undefined);
+  return { used: latest.sample.usedRatio * 100, start, resetsAt };
 }
 
 export function HistoryChart({
@@ -268,210 +367,131 @@ export function HistoryChart({
   rangeHours,
 }: HistoryChartProps) {
   const summaryId = useId();
-  const clipId = useId();
+  const infoId = useId();
   const chartRef = useRef<HTMLDivElement>(null);
-  const focusedBeforePress = useRef(false);
   const [plotWidth, setPlotWidth] = useState(360);
-  const [active, setActive] = useState<InspectItem | null>(null);
-  const [pinned, setPinned] = useState(false);
-  const [hoverX, setHoverX] = useState<number | undefined>(undefined);
+  const [hover, setHover] = useState<Focus | null>(null);
+  const [pinned, setPinned] = useState<Focus | null>(null);
+  const [keyIndex, setKeyIndex] = useState<number | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [selectedMetricId, setSelectedMetricId] = useState(() => metrics[0]?.id ?? "");
 
   useEffect(() => {
-    if (!metrics.some((metric) => metric.id === selectedMetricId)) {
-      setSelectedMetricId(metrics[0]?.id ?? "");
-    }
+    if (!metrics.some((metric) => metric.id === selectedMetricId)) setSelectedMetricId(metrics[0]?.id ?? "");
   }, [selectedMetricId, metrics]);
 
   useEffect(() => {
     const element = chartRef.current;
-    if (!element) return undefined;
-    const update = (): void => {
-      const plot = element.querySelector(".history-chart__plot");
-      setPlotWidth((plot ?? element).clientWidth || 360);
-    };
+    if (!element || typeof ResizeObserver === "undefined") return undefined;
+    const update = (): void => setPlotWidth(element.clientWidth || 360);
     update();
-    if (typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    const plot = element.querySelector(".history-chart__plot");
-    if (plot) observer.observe(plot);
     return () => observer.disconnect();
   }, []);
 
-  const selectedMetric = metrics.find((metric) => metric.id === selectedMetricId) ?? metrics[0];
-  const resolvedRange = rangeHours ?? (selectedMetric
-    ? defaultRangeHours(metrics, selectedMetric.id, providerKind)
-    : 30 * 24);
+  const metric = metrics.find((item) => item.id === selectedMetricId) ?? metrics[0];
+  const hours = rangeHours ?? 30 * 24;
   const rangeEnd = now;
-  const rangeStart = now - resolvedRange * 60 * 60 * 1_000;
+  const rangeStart = now - hours * 60 * 60 * 1_000;
 
-  const series = useMemo(() => {
-    if (!selectedMetric) return undefined;
+  const model = useMemo(() => {
+    if (!metric) return undefined;
     const omitted = history.filter((observation) =>
-      !observation.metrics.some(
-        (sample) => sample.type === "quota" && sample.metricId === selectedMetric.id,
-      ),
+      !observation.metrics.some((sample) => sample.type === "quota" && sample.metricId === metric.id),
     );
-    return buildEnvelopeSeries(history, {
+    return buildChartModel({
+      history,
+      metricId: metric.id,
       ...(providerKind ? { providerKind } : {}),
-      metricId: selectedMetric.id,
       now,
       rangeStart,
       rangeEnd,
+      widthPx: Math.max(1, plotWidth),
       omittedObservations: omitted,
     });
-  }, [history, selectedMetric, providerKind, now, rangeStart, rangeEnd]);
+  }, [history, metric, providerKind, now, rangeStart, rangeEnd, plotWidth]);
 
-  const level: DetailLevel = series
-    ? detailLevel(series.windowMs || 60 * 60 * 1_000, rangeEnd - rangeStart, Math.max(1, plotWidth))
-    : "bars";
-  const days = useMemo(
-    () => (series && level === "daily"
-      ? dailyBuckets(series.spans, rangeStart, rangeEnd, now)
-      : []),
-    [series, level, rangeStart, rangeEnd, now],
-  );
-
-  if (!selectedMetric || !series) return null;
-
-  const items = inspectItems(series, days, level, mode, now, rangeStart, rangeEnd, Math.max(plotWidth, 1));
-  const activeItem = items.find((item) => item.id === active?.id) ?? null;
-  const readings = series.readingsInRange;
-  const withReadings = series.spans.filter((window) => window.kind === "observed").length;
-  const withoutReadings = series.spans.filter((window) => window.kind === "unknown").length;
-  const openEnds = series.spans.filter((window) => window.kind === "observed" && !window.tailTrusted).length;
-  const summary = chartSummary({
-    meter: selectedMetric.label,
-    range: formatRangeStart(resolvedRange),
+  const stops = useMemo(() => (model ? keyboardStops(model, mode) : []), [model, mode]);
+  const current = metric ? currentReading(history, metric.id, now) : undefined;
+  const pace = paceLine({
+    currentUsed: current?.used,
+    windowStart: current?.start,
+    resetsAt: current?.resetsAt,
+    now,
     mode,
-    readings,
-    withReadings,
-    withoutReadings,
-    openEnds,
-    level,
-    noun: windowNoun(series.windowMs),
-    idle: series.idleSpans.some((span) => span.kind === "idle"),
-    events: series.events.length,
-    trend: series.trend,
   });
 
-  function move(step: number): void {
-    if (items.length === 0) return;
-    const index = items.findIndex((item) => item.id === active?.id);
-    if (index < 0) {
-      const item = step > 0 ? items[0] : items.at(-1);
-      if (item) setActive({ kind: item.kind, id: item.id });
-      return;
-    }
-    const here = items[index]?.guide?.x;
-    const hereAt = items[index]?.from ?? 0;
-    let next = index;
-    const forward = step > 0;
-    let cursor = index + step;
-    const limit = items.length;
-    while (forward ? cursor < limit : cursor >= 0) {
-      next = cursor;
-      const guide = items[cursor]?.guide?.x;
-      const sameX = here !== undefined && guide !== undefined && Math.abs(guide - here) <= 0.5;
-      const sameTime = (items[cursor]?.from ?? 0) === hereAt;
-      if (!sameX && !sameTime) break;
-      cursor += step;
-    }
-    const item = items[next];
-    if (!item) return;
-    setActive({ kind: item.kind, id: item.id });
-  }
+  if (!metric || !model) return null;
 
-  function itemAtClientX(clientX: number): Inspectable | undefined {
+  const active = hover ?? pinned ?? (keyIndex !== null ? stops[keyIndex] ?? null : null);
+  const empty = model.readingsInRange === 0 && model.drawnWindows.length === 0;
+
+  function atClientX(clientX: number): Focus | null {
     const canvas = chartRef.current?.querySelector(".history-chart__canvas");
-    if (!(canvas instanceof Element)) return undefined;
+    if (!(canvas instanceof Element)) return null;
     const bounds = canvas.getBoundingClientRect();
-    if (bounds.width <= 0) return undefined;
+    if (bounds.width <= 0) return null;
     const viewX = ((clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
-    if (viewX < PLOT_LEFT || viewX > PLOT_RIGHT) return undefined;
-    const hits = items.filter((item) => {
-      const box = item.hit;
-      if (!box) return false;
-      const starts = viewX >= box.x;
-      const ends = viewX <= box.x + box.width;
-      return starts && ends;
+    if (viewX < PLOT_LEFT || viewX > PLOT_RIGHT) return null;
+    const at = rangeStart + ((viewX - PLOT_LEFT) / (PLOT_RIGHT - PLOT_LEFT)) * (rangeEnd - rangeStart);
+    return focusAt(model!, at, mode);
+  }
+
+  function move(step: number): void {
+    if (stops.length === 0) return;
+    setHover(null);
+    setPinned(null);
+    setKeyIndex((index) => {
+      const base = index ?? (step > 0 ? -1 : stops.length);
+      return Math.max(0, Math.min(stops.length - 1, base + step));
     });
-    if (hits.length === 0) return undefined;
-    // Snap to a reading only when the pointer is within a few px of it.
-    // Farther away, the idle or empty stretch under the pointer wins.
-    const pxPerUnit = bounds.width / VIEWBOX_WIDTH;
-    const snapPx = 6;
-    const readings = hits.filter((item) =>
-      item.guide !== undefined && Math.abs(item.guide.x - viewX) * pxPerUnit <= snapPx,
-    );
-    const stretches = hits.filter((item) => item.kind === "span");
-    const pool = readings.length > 0 ? readings : stretches.length > 0 ? stretches : hits;
-    return pool.sort((left, right) => {
-      const leftAt = left.guide?.x ?? left.hit!.x + left.hit!.width / 2;
-      const rightAt = right.guide?.x ?? right.hit!.x + right.hit!.width / 2;
-      return Math.abs(leftAt - viewX) - Math.abs(rightAt - viewX);
-    })[0];
   }
 
-  function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
-    if (pinned || event.pointerType === "touch") return;
-    const canvas = chartRef.current?.querySelector(".history-chart__canvas");
-    if (canvas instanceof Element) {
-      const bounds = canvas.getBoundingClientRect();
-      if (bounds.width > 0) setHoverX(((event.clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH);
-    }
-    const item = itemAtClientX(event.clientX);
-    setActive(item ? { kind: item.kind, id: item.id } : null);
-  }
+  const note = model.readingsInRange === 0
+    ? l10n.t("history.noteNone", { range: l10n.count("history.footnoteHours", hours) })
+    : model.readingsInRange < 5
+      ? l10n.t("history.rangeSparse", { range: l10n.count("history.footnoteHours", hours), count: model.readingsInRange })
+      : null;
 
-  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      move(1);
-    } else if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      move(-1);
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      const first = items[0];
-      if (first) setActive({ kind: first.kind, id: first.id });
-    } else if (event.key === "End") {
-      event.preventDefault();
-      const last = items.at(-1);
-      if (last) setActive({ kind: last.kind, id: last.id });
-    } else if (event.key === "Escape") {
-      setActive(null);
-      setPinned(false);
-    }
-  }
+  const info = [
+    model.tier === "line" ? l10n.t("history.infoLine") : l10n.t("history.infoBars"),
+    model.hasEstimated ? l10n.t("history.infoDashed") : "",
+    model.idle.length > 0 ? l10n.t("history.infoIdle") : "",
+    model.gaps.length > 0 ? l10n.t("history.infoGaps") : "",
+    model.resets.length > 0 ? l10n.t("history.infoResets") : "",
+    l10n.t("history.infoStored", { count: model.readingsInRange }),
+  ].filter((item) => item.length > 0);
 
-  const empty = readings === 0;
-  const tooltip = activeItem?.lines ?? null;
-  const tooltipAnchor = activeItem
-    ? tooltipPosition(activeItem, rangeStart, rangeEnd, plotWidth)
-    : null;
+  const tooltipLeft = active?.x !== undefined
+    ? Math.max(0, Math.min(VIEWBOX_WIDTH - 150, active.x - 75))
+    : Math.max(0, Math.min(VIEWBOX_WIDTH - 150, (timeX(active?.from ?? rangeStart, rangeStart, rangeEnd) + timeX(active?.to ?? rangeEnd, rangeStart, rangeEnd)) / 2 - 75));
 
   return (
     <div className="history-chart" ref={chartRef}>
-      {empty ? null : (
-        <strong className="history-chart__latest">
-          {(() => {
-            const headline = currentWindowHeadline(series, mode);
-            // Idle still reports the same percent the Current cycle card shows.
-            if (headline.idle) {
-              return `${l10n.t("history.latestPercent", {
-                percent: headline.label,
-                mode: localizeDisplayModeCompact(mode),
-              })} · ${l10n.t("history.headlineIdle")}`;
-            }
-            return l10n.t("history.latestPercent", {
-              percent: headline.label,
-              mode: localizeDisplayModeCompact(mode),
-            });
-          })()}
-        </strong>
-      )}
+      <div className="history-chart__head">
+        <p className={pace.warn ? "history-chart__latest is-warn" : "history-chart__latest"}>
+          {l10n.t("history.latestPercent", { percent: wholePercent(pace.shown), mode: localizeDisplayModeCompact(mode) })}
+        </p>
+        <button
+          type="button"
+          className="history-chart__info"
+          aria-expanded={infoOpen}
+          aria-controls={infoId}
+          aria-label={l10n.t("history.infoLabel", { label: metric.label })}
+          onClick={() => setInfoOpen((open) => !open)}
+        >
+          i
+        </button>
+      </div>
+      <p className={pace.warn ? "history-chart__status is-warn" : "history-chart__status"}>
+        {translatePace(pace)}
+      </p>
+      {infoOpen ? (
+        <ul id={infoId} className="history-chart__info-list">
+          {info.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : null}
       {empty ? (
         <p className="history-chart__empty">{l10n.t("history.empty")}</p>
       ) : (
@@ -481,496 +501,151 @@ export function HistoryChart({
             role="group"
             tabIndex={0}
             aria-roledescription={l10n.t("history.chartRole")}
-            aria-label={l10n.t("history.chartName", {
-              provider: providerName,
-              label: selectedMetric.label,
-            })}
-            aria-describedby={empty ? undefined : summaryId}
-            onKeyDown={onKeyDown}
-            onPointerMove={onPointerMove}
-            onPointerLeave={() => {
-              if (!pinned) setActive(null);
+            aria-label={l10n.t("history.chartName", { provider: providerName, label: metric.label })}
+            aria-describedby={summaryId}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight") { event.preventDefault(); move(1); }
+              else if (event.key === "ArrowLeft") { event.preventDefault(); move(-1); }
+              else if (event.key === "Home") { event.preventDefault(); setKeyIndex(0); }
+              else if (event.key === "End") { event.preventDefault(); setKeyIndex(stops.length - 1); }
+              else if (event.key === "Escape") { setHover(null); setPinned(null); setKeyIndex(null); }
             }}
-            onBlur={(event) => {
-              const next = event.relatedTarget;
-              if (next instanceof Node && event.currentTarget.contains(next)) return;
-              if (!pinned) setActive(null);
+            onPointerMove={(event) => {
+              if (event.pointerType === "touch") return;
+              setHover(atClientX(event.clientX));
+            }}
+            onPointerLeave={() => setHover(null)}
+            onClick={(event) => {
+              const next = atClientX(event.clientX);
+              setPinned((current) => (current && next && current.id === next.id ? null : next));
+              setKeyIndex(null);
             }}
           >
-            <svg
-              className="history-chart__svg"
-              viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
-              aria-hidden="true"
-            >
-              <defs>
-                <clipPath id={clipId}>
-                  {/* The 100% line sits on the top edge. Inset by half the
-                      stroke so the line is not clipped in half. */}
-                  <rect
-                    x={PLOT_LEFT}
-                    y={PLOT_TOP - 1.5}
-                    width={PLOT_RIGHT - PLOT_LEFT}
-                    height={PLOT_BOTTOM - PLOT_TOP + 3}
-                  />
-                </clipPath>
-              </defs>
-              {[100, 50, 0].map((guide) => {
-                const y = leftY(guide);
-                return (
-                  <g key={guide} className="history-chart__guide">
-                    <line x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={y} y2={y} />
-                    <text x="0" y={y + 3}>{String(guide)}</text>
-                  </g>
-                );
-              })}
-              <g clipPath={`url(#${clipId})`}>
-                {level === "envelope" ? (
-                  <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} now={now} />
-                ) : null}
-                {level === "bars" ? (
-                  <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} />
-                ) : null}
-                {level === "daily" ? (
-                  <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} />
-                ) : null}
-                <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-                {activeItem ? (
-                  <Highlight
-                    item={activeItem}
-                    mode={mode}
-                    rangeStart={rangeStart}
-                    rangeEnd={rangeEnd}
-                    pinned={pinned}
-                    pointerX={hoverX}
-                  />
-                ) : null}
-              </g>
+            <svg className="history-chart__svg" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-hidden="true">
+              <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_TOP} y2={PLOT_TOP} strokeDasharray="2 3" />
+              <text className="history-chart__tick" x={PLOT_RIGHT} y={12} textAnchor="end">100%</text>
+              <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM} />
+              {model.tier === "line"
+                ? model.runs.map((run) => {
+                    const drawn = runPath(run, model, mode);
+                    return (
+                      <g key={run.id}>
+                        <path className="history-chart__area" d={drawn.fill} />
+                        {drawn.groups.map((group, index) => (
+                          <path
+                            key={index}
+                            className={group.style === "known" ? "history-chart__line" : "history-chart__line is-dashed"}
+                            d={group.d}
+                            strokeDasharray={group.style === "known" ? undefined : "3 3"}
+                          />
+                        ))}
+                        {run.points.map((point, index) => point.dot ? (
+                          <circle key={index} className="history-chart__dot" cx={timeX(point.at, rangeStart, rangeEnd)} cy={valueY(point.used, mode)} r="2" />
+                        ) : null)}
+                      </g>
+                    );
+                  })
+                : null}
+              {model.tier !== "line" && mode === "used"
+                ? model.bars.map((bar) => {
+                    const shape = barGeometry(bar, model);
+                    if (!shape) return null;
+                    return <rect key={bar.id} className="history-chart__bar" x={shape.x} y={PLOT_BOTTOM - shape.depth} width={shape.width} height={shape.depth} rx="1.5" />;
+                  })
+                : null}
+              {model.tier !== "line" && mode === "left" ? (
+                <path
+                  className="history-chart__area"
+                  d={[
+                    `M${PLOT_LEFT} ${PLOT_BOTTOM} L${PLOT_LEFT} ${valueY(0, mode)}`,
+                    ...model.bars.flatMap((bar) => {
+                      const shape = barGeometry(bar, model);
+                      if (!shape) return [];
+                      const bottom = Math.min(PLOT_BOTTOM, valueY(0, mode) + shape.depth);
+                      return [`L${shape.x} ${valueY(0, mode)} L${shape.x} ${bottom} L${shape.x + shape.width} ${bottom} L${shape.x + shape.width} ${valueY(0, mode)}`];
+                    }),
+                    `L${PLOT_RIGHT} ${valueY(0, mode)} L${PLOT_RIGHT} ${PLOT_BOTTOM}Z`,
+                  ].join(" ")}
+                />
+              ) : null}
+              {model.idle.map((span) => (
+                <line
+                  key={`idle-${span.start}`}
+                  className="history-chart__idle"
+                  data-idle={span.reason}
+                  x1={timeX(span.start, rangeStart, rangeEnd)}
+                  x2={timeX(span.end, rangeStart, rangeEnd)}
+                  y1={valueY(0, mode)}
+                  y2={valueY(0, mode)}
+                  strokeDasharray="2 3"
+                />
+              ))}
+              {model.gaps.map((gap) => (
+                <line
+                  key={`gap-${gap.start}`}
+                  className="history-chart__gap"
+                  x1={timeX(gap.start, rangeStart, rangeEnd)}
+                  x2={timeX(gap.end, rangeStart, rangeEnd)}
+                  y1={PLOT_BOTTOM + 3}
+                  y2={PLOT_BOTTOM + 3}
+                  strokeDasharray="2 2"
+                />
+              ))}
+              {dateTicks(model).map((tick) => (
+                <text key={tick.at} className="history-chart__tick" x={timeX(tick.at, rangeStart, rangeEnd)} y={116} textAnchor="middle">
+                  {tick.label}
+                </text>
+              ))}
+              {model.resets.map((at) => (
+                <line key={`reset-${at}`} className="history-chart__reset" x1={timeX(at, rangeStart, rangeEnd)} x2={timeX(at, rangeStart, rangeEnd)} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM + 5} />
+              ))}
+              <text className="history-chart__tick" x={PLOT_RIGHT} y={116} textAnchor="end">{l10n.t("common.now")}</text>
+              {active?.x !== undefined ? (
+                <g>
+                  <line className="history-chart__guide-active" x1={active.x} x2={active.x} y1={PLOT_TOP} y2={PLOT_BOTTOM} />
+                  {active.y !== undefined ? <circle className="history-chart__dot-active" cx={active.x} cy={active.y} r="3.5" /> : null}
+                </g>
+              ) : null}
+              {active && active.x === undefined ? (
+                <rect
+                  className="history-chart__highlight"
+                  x={timeX(active.from, rangeStart, rangeEnd)}
+                  y={PLOT_TOP}
+                  width={Math.max(1, timeX(active.to, rangeStart, rangeEnd) - timeX(active.from, rangeStart, rangeEnd))}
+                  height={PLOT_HEIGHT}
+                />
+              ) : null}
             </svg>
-            <div className="history-chart__hits">
-              {items.map((item) => {
-                if (!item.hit) return null;
-                const pinnedHere = pinned && active?.id === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={pinnedHere ? "history-chart__hit is-pinned" : "history-chart__hit"}
-                    tabIndex={-1}
-                    aria-label={item.lines[0]}
-                    aria-pressed={pinnedHere}
-                    style={{
-                      left: `${(item.hit.x / VIEWBOX_WIDTH) * 100}%`,
-                      width: `${(item.hit.width / VIEWBOX_WIDTH) * 100}%`,
-                    }}
-                    onPointerDown={(event) => {
-                      if (event.pointerType === "mouse" && event.button !== 0) return;
-                      const canvas = chartRef.current?.querySelector<HTMLElement>(".history-chart__canvas");
-                      // The press that first focuses the chart must not also pin.
-                      focusedBeforePress.current = document.activeElement === canvas;
-                      canvas?.focus();
-                    }}
-                    onMouseDown={(event) => {
-                      // The hit is the top element, so a click would focus the
-                      // button. Keep focus on the chart, where the arrow keys are.
-                      event.preventDefault();
-                    }}
-                    onClick={() => {
-                      // A press that only just focused the chart does not pin
-                      // or select. The next click on the focused chart does.
-                      if (!focusedBeforePress.current) return;
-                      const same = pinned && active?.id === item.id;
-                      setPinned(!same);
-                      setActive(same ? null : { kind: item.kind, id: item.id });
-                    }}
-                  />
-                );
-              })}
-            </div>
-            {tooltip && tooltipAnchor ? (
-              <div
-                className="history-chart__tooltip"
-                role="tooltip"
-                ref={(node) => {
-                  if (!node) return;
-                  requestAnimationFrame(() => {
-                    const plot = node.closest(".history-chart__canvas");
-                    if (!(plot instanceof HTMLElement) || !node.isConnected) return;
-                    const room = plot.clientHeight - node.offsetTop - node.offsetHeight;
-                    if (room < 0) node.style.top = `${Math.max(0, node.offsetTop + room)}px`;
-                  });
-                }}
-                style={{
-                  left: tooltipAnchor.left,
-                  top: tooltipAnchor.top,
-                  maxWidth: tooltipAnchor.maxWidth,
-                }}
-              >
-                {tooltip.map((line) => <p key={line}>{line}</p>)}
+            {note && !active ? <p className="history-chart__note">{note}</p> : null}
+            {active ? (
+              <div className="history-chart__tooltip" role="tooltip" style={{ left: `${(tooltipLeft / VIEWBOX_WIDTH) * 100}%`, top: active.y !== undefined && active.y < 58 ? 62 : 2 }}>
+                {active.lines.map((line) => <p key={line}>{line}</p>)}
               </div>
             ) : null}
           </div>
-          <p className="visually-hidden" aria-live="polite">
-            {activeItem ? activeItem.lines.join(" ") : ""}
-          </p>
         </div>
       )}
-      {empty ? null : (
-        <>
-          <p
-            className="history-chart__range"
-            aria-label={l10n.t("history.rangeAccessible", { start: formatRangeStart(resolvedRange) })}
-          >
-            <span>{formatRangeStart(resolvedRange)}</span>
-            <span>{l10n.t("common.now")}</span>
-          </p>
-          <Legend series={series} level={level} mode={mode} />
-          <p className="history-chart__footnote">{footnote(series, level, resolvedRange)}</p>
-        </>
-      )}
-      {empty ? null : <p className="visually-hidden" id={summaryId}>{summary}</p>}
+      <p className="visually-hidden" id={summaryId}>{l10n.t("history.summaryKeys")}</p>
     </div>
   );
 }
 
 /**
- * Headline for the chart. The current window's latest reading, matching the
- * Current cycle card. Idle (no window contains now) reports a full quota.
- */
-export function currentWindowHeadline(
-  series: EnvelopeSeries,
-  mode: DisplayMode,
-): { label: string; idle: boolean } {
-  const current = series.spans.find(
-    (window) => window.current && window.kind === "observed" && window.values.length > 0,
-  );
-  if (!current) {
-    return { label: formatPercentNumber(mode === "left" ? 100 : 0), idle: true };
-  }
-  const left = current.values.at(-1) ?? 100;
-  const shown = mode === "left" ? left : 100 - left;
-  // Same rounding the Current cycle card uses, so 0.03% does not become 0%.
-  return { label: formatPercentNumber(Number(shown.toFixed(4))), idle: false };
-}
-
-function formatRangeStart(rangeHours: number): string {
-  if (rangeHours >= 72 && rangeHours % 24 === 0) {
-    return l10n.count("history.daysAgo", rangeHours / 24);
-  }
-  return l10n.count("history.hoursAgo", rangeHours);
-}
-
-interface Inspectable {
-  kind: InspectItem["kind"];
-  id: string;
-  from: number;
-  to: number;
-  lines: string[];
-  /** Screen box of this target. Missing when the target paints nothing. */
-  hit?: { x: number; width: number };
-  /** A reading on a line: guide and dot, not a shaded window. */
-  guide?: { x: number; y: number };
-}
-
-function hitBox(
-  from: number,
-  to: number,
-  rangeStart: number,
-  rangeEnd: number,
-): { x: number; width: number } | undefined {
-  const box = spanRect(from, to, rangeStart, rangeEnd);
-  if (!box || box.width < 0.4) return undefined;
-  return box;
-}
-
-/**
- * Targets are what the chart paints. A window drawn as a line is one target
- * per reading (a guide and a dot). A bar, an outline, or an idle stretch stays
- * one target. A region with no mark is not a target.
- */
-function inspectItems(
-  series: EnvelopeSeries,
-  days: DayBucket[],
-  level: DetailLevel,
-  mode: DisplayMode,
-  now: number,
-  rangeStart: number,
-  rangeEnd: number,
-  plotWidth: number,
-): Inspectable[] {
-  if (level === "daily") {
-    return days.flatMap((bucket) => {
-      const hit = hitBox(bucket.start, bucket.end, rangeStart, rangeEnd);
-      if (!hit) return [];
-      return [{
-        kind: "day" as const,
-        id: `day-${bucket.start}`,
-        from: bucket.start,
-        to: bucket.end,
-        lines: dayTooltip(bucket, mode, series.policy),
-        hit,
-      }];
-    });
-  }
-  const lineWindows = level === "envelope";
-  // Idle and empty stretches own their own hover. A reading's hit stops at
-  // the stretch instead of claiming the paper out to the plot edge.
-  const stretchEdges = [...series.idleSpans, ...series.unknownRuns].flatMap((span) => [
-    timeX(Math.min(span.start, span.end), rangeStart, rangeEnd),
-    timeX(Math.max(span.start, span.end), rangeStart, rangeEnd),
-  ]);
-  const windowItems = series.spans.flatMap((window) => {
-    if (lineWindows && window.kind === "observed" && window.readings.length > 0) {
-      return readingTargets(window, mode, now, rangeStart, rangeEnd, plotWidth, stretchEdges);
-    }
-    const hit = hitBox(window.start, window.end, rangeStart, rangeEnd);
-    if (!hit) return [];
-    return [{
-      kind: "window" as const,
-      id: window.id,
-      from: window.start,
-      to: window.end,
-      lines: windowTooltip(window, mode, now),
-      hit,
-    }];
-  });
-  const gaps = [...series.idleSpans, ...series.unknownRuns].flatMap((span, index) => {
-    const from = Math.min(span.start, span.end);
-    const to = Math.max(span.start, span.end);
-    const hit = hitBox(from, to, rangeStart, rangeEnd);
-    if (!hit) return [];
-    return [{
-      kind: "span" as const,
-      id: `span-${span.start}-${span.end}-${index}`,
-      from,
-      to,
-      lines: spanTooltip(span, mode),
-      hit,
-    }];
-  });
-  return [...windowItems, ...gaps].sort((left, right) => left.from - right.from || left.to - right.to);
-}
-
-/** One keyboard/hover step per reading of a window drawn as a line. */
-function readingTargets(
-  window: WindowSpan,
-  mode: DisplayMode,
-  now: number,
-  rangeStart: number,
-  rangeEnd: number,
-  plotWidth: number,
-  stretchEdges: readonly number[] = [],
-): Inspectable[] {
-  // About 8 px between steps. The guide snaps to the last reading of a
-  // closer run, and the last reading of the window is always its own step.
-  const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
-  const minGap = 8 / Math.max(pxPerUnit, 0.01);
-  const visible = window.readings.filter((reading) => {
-    const afterStart = reading.observedAt >= rangeStart;
-    const beforeEnd = reading.observedAt <= rangeEnd;
-    return afterStart && beforeEnd;
-  });
-  const kept: { at: number; x: number; y: number }[] = [];
-  visible.forEach((reading, index) => {
-    const x = timeX(reading.observedAt, rangeStart, rangeEnd);
-    const y = shownY(window.values[window.readings.indexOf(reading)] ?? reading.left, mode);
-    const previous = kept.at(-1);
-    if (previous && x - previous.x < minGap) return;
-    kept.push({ at: reading.observedAt, x, y });
-  });
-  return kept.map((point, index) => {
-    const before = kept[index - 1]?.x ?? point.x;
-    const after = kept[index + 1]?.x ?? point.x;
-    // The first reading owns the empty paper to its left, so a hover there
-    // still names a reading. The guide itself stays on the reading.
-    const edgeLeft = stretchEdges.filter((edge) => edge <= point.x).reduce(
-      (nearest, edge) => Math.max(nearest, edge),
-      index === 0 ? PLOT_LEFT : (before + point.x) / 2,
-    );
-    const edgeRight = stretchEdges.filter((edge) => edge >= point.x).reduce(
-      (nearest, edge) => Math.min(nearest, edge),
-      index === kept.length - 1 ? PLOT_RIGHT : (point.x + after) / 2,
-    );
-    const rawLeft = index === 0 ? edgeLeft : Math.max(edgeLeft, (before + point.x) / 2);
-    const rawRight = index === kept.length - 1 ? edgeRight : Math.min(edgeRight, (point.x + after) / 2);
-    const left = Math.max(PLOT_LEFT, Math.min(rawLeft, PLOT_RIGHT - 0.8));
-    const right = Math.min(PLOT_RIGHT, Math.max(rawRight, left + 0.8));
-    return {
-      kind: "window" as const,
-      id: `${window.id}-reading-${point.at}`,
-      from: point.at,
-      to: point.at,
-      lines: windowTooltip(window, mode, now, point.at),
-      hit: { x: left, width: Math.max(0.4, right - left) },
-      guide: { x: point.x, y: point.y },
-    };
-  });
-}
-
-function Highlight({
-  item,
-  mode,
-  rangeStart,
-  rangeEnd,
-  pinned,
-  pointerX,
-}: {
-  item: Inspectable;
-  mode: DisplayMode;
-  rangeStart: number;
-  rangeEnd: number;
-  pinned: boolean;
-  pointerX?: number;
-}) {
-  if (item.kind === "span" && pointerX !== undefined) {
-    return (
-      <line
-        className="history-chart__guide-active"
-        x1={pointerX}
-        x2={pointerX}
-        y1={PLOT_TOP}
-        y2={PLOT_BOTTOM}
-      />
-    );
-  }
-  if (item.guide) {
-    const y = shownY(0, mode);
-    return (
-      <g className={pinned ? "is-pinned" : undefined}>
-        <line
-          className="history-chart__guide-active"
-          x1={item.guide.x}
-          x2={item.guide.x}
-          y1={PLOT_TOP}
-          y2={PLOT_BOTTOM}
-        />
-        <circle className="history-chart__dot-active" cx={item.guide.x} cy={item.guide.y} r="3.2" />
-      </g>
-    );
-  }
-  const span = clampInterval(item.from, item.to, rangeStart, rangeEnd);
-  if (!span) return null;
-  const left = timeX(span.from, rangeStart, rangeEnd);
-  const right = timeX(span.to, rangeStart, rangeEnd);
-  return (
-    <rect
-      className={pinned ? "history-chart__highlight is-pinned" : "history-chart__highlight"}
-      x={left}
-      y={PLOT_TOP}
-      width={Math.max(1, right - left)}
-      height={PLOT_BOTTOM - PLOT_TOP}
-    />
-  );
-}
-
-function tooltipPosition(
-  item: Inspectable,
-  rangeStart: number,
-  rangeEnd: number,
-  plotWidth: number,
-): { left: number; top: number; maxWidth: number } {
-  // Sit on the opposite side of the dot so the box does not cover it. A span
-  // has no dot; its midpoint is the pointer the span names.
-  const anchorX = item.guide?.x ?? (() => {
-    const span = clampInterval(item.from, item.to, rangeStart, rangeEnd) ?? { from: item.from, to: item.to };
-    return (timeX(span.from, rangeStart, rangeEnd) + timeX(span.to, rangeStart, rangeEnd)) / 2;
-  })();
-  const anchorPx = (anchorX / VIEWBOX_WIDTH) * plotWidth;
-  const gap = 12;
-  const onRight = anchorPx > plotWidth / 2;
-  const available = onRight ? anchorPx : plotWidth - anchorPx;
-  const maxWidth = Math.min(TOOLTIP_MAX, Math.max(48, available - gap));
-  const left = onRight ? anchorPx - gap - maxWidth : anchorPx + gap;
-  const top = item.guide
-    ? Math.max(4, (item.guide.y / VIEWBOX_HEIGHT) * ((plotWidth * VIEWBOX_HEIGHT) / VIEWBOX_WIDTH) - 28)
-    : 4;
-  return { left: Math.max(0, left), top, maxWidth };
-}
-
-function chartSummary(input: {
-  meter: string;
-  range: string;
-  mode: DisplayMode;
-  readings: number;
-  withReadings: number;
-  withoutReadings: number;
-  openEnds: number;
-  level: DetailLevel;
-  noun: string;
-  idle: boolean;
-  events: number;
-  trend: EnvelopeSeries["trend"];
-}): string {
-  const windows = input.withoutReadings > 0
-    ? l10n.t("history.summaryWindowsSome", {
-        readings: input.readings,
-        withReadings: input.withReadings,
-        without: input.withoutReadings,
-      })
-    : l10n.t("history.summaryWindows", {
-        readings: input.readings,
-        withReadings: input.withReadings,
-      });
-  const parts = [
-    l10n.t("history.summaryLead", {
-      meter: input.meter,
-      range: input.range,
-      mode: localizeDisplayModeCompact(input.mode),
-    }),
-    windows,
-  ];
-  if (input.openEnds > 0) {
-    parts.push(l10n.count("history.summaryOpen", input.openEnds));
-  }
-  parts.push(input.level === "envelope"
-    ? l10n.t("history.summaryEnvelope")
-    : l10n.t(
-        input.level === "daily" ? "history.summaryDaily" : "history.summaryBars",
-        { noun: input.noun },
-      ));
-  if (input.idle) parts.push(l10n.t("history.summaryIdle"));
-  if (input.events > 0) parts.push(l10n.count("history.summaryEvents", input.events));
-  if (input.trend.fit) parts.push(l10n.t("history.summaryTrend"));
-  else if (input.trend.reason === "count") {
-    parts.push(l10n.t("history.trendNeedsCount", { count: input.trend.points.length }));
-  } else if (input.trend.reason === "span") {
-    parts.push(l10n.t("history.trendNeedsSpan", { count: input.trend.points.length }));
-  }
-  parts.push(l10n.t(input.level === "daily" ? "history.summaryKeysDays" : "history.summaryKeys"));
-  return parts.join(" ");
-}
-
-function footnote(series: EnvelopeSeries, level: DetailLevel, rangeHours: number): string {
-  const noun = windowNoun(series.windowMs);
-  const lead = level === "daily"
-    ? l10n.t("history.footnoteDaily", { noun })
-    : level === "bars"
-      ? l10n.t("history.footnoteBars")
-      : l10n.t("history.footnoteEnvelope");
-  const range = rangeHours >= 72 && rangeHours % 24 === 0
-    ? l10n.count("history.footnoteDays", rangeHours / 24)
-    : l10n.count("history.footnoteHours", rangeHours);
-  return `${lead} · ${l10n.t("history.footnoteCount", { count: series.readingsInRange, range })}`;
-}
-
-/**
- * Viewbox x intervals that a mark actually paints. An untrusted tail, open
- * or closed, is the short dotted stub plus the possible-range band through
- * the reset. A trusted tail is the band that holds the last value. Window
- * bounds are not coverage.
- */
-/**
- * ViewBox x intervals of marks the chart paints. A rect shorter than two
- * screen pixels is a hairline, not a baseline, so it does not count. Paths
- * count from their own coordinates. The span's time interval does not.
+ * x spans of the painted data, in viewBox units. Marks shorter than 2 screen
+ * px are dropped so a hairline tick is not treated as coverage.
  */
 export function paintedXSpans(container: ParentNode, plotWidth: number): { from: number; to: number }[] {
   const pxPerUnit = Math.max(plotWidth, 1) / VIEWBOX_WIDTH;
   const minScreenPx = 2;
   const spans: { from: number; to: number }[] = [];
-  container.querySelectorAll("svg rect, svg path").forEach((node) => {
-    if (node.parentElement?.tagName === "clipPath") return;
-    if (node.tagName === "path") {
-      const numbers = [...(node.getAttribute("d") ?? "").matchAll(/-?\d+(?:\.\d+)?/g)].map((item) => Number(item[0]));
+  container.querySelectorAll("svg path, svg rect, svg line").forEach((node) => {
+    const element = node as SVGElement;
+    if (element.classList.contains("history-chart__axis")) return;
+    if (element.classList.contains("history-chart__reset")) return;
+    if (element.classList.contains("history-chart__guide-active")) return;
+    if (element.classList.contains("history-chart__highlight")) return;
+    if (node.tagName.toLowerCase() === "path") {
+      const numbers = [...(element.getAttribute("d") ?? "").matchAll(/-?\d+(?:\.\d+)?/g)].map((item) => Number(item[0]));
       let minX = Infinity;
       let maxX = -Infinity;
       let minY = Infinity;
@@ -982,594 +657,22 @@ export function paintedXSpans(container: ParentNode, plotWidth: number): { from:
         maxY = Math.max(maxY, numbers[index + 1]!);
       }
       if (!Number.isFinite(minX)) return;
-      const tall = (maxY - minY) * pxPerUnit >= minScreenPx;
-      const wide = (maxX - minX) * pxPerUnit >= minScreenPx;
-      if (!tall && !wide) return;
+      if ((maxY - minY) * pxPerUnit < minScreenPx && (maxX - minX) * pxPerUnit < minScreenPx) return;
       if (maxX - minX > 0.2) spans.push({ from: minX, to: maxX });
       return;
     }
-    const height = Number(node.getAttribute("height"));
-    const width = Number(node.getAttribute("width"));
+    if (node.tagName.toLowerCase() === "line") {
+      const x1 = Number(element.getAttribute("x1"));
+      const x2 = Number(element.getAttribute("x2"));
+      if (Math.abs(x2 - x1) * pxPerUnit < minScreenPx) return;
+      spans.push({ from: Math.min(x1, x2), to: Math.max(x1, x2) });
+      return;
+    }
+    const height = Number(element.getAttribute("height"));
+    const width = Number(element.getAttribute("width"));
     if (height * pxPerUnit < minScreenPx || width * pxPerUnit < minScreenPx) return;
-    const x = Number(node.getAttribute("x"));
+    const x = Number(element.getAttribute("x"));
     spans.push({ from: x, to: x + width });
   });
   return spans;
-}
-
-export function drawnXSpans(options: {
-  series: EnvelopeSeries;
-  rangeStart: number;
-  rangeEnd: number;
-  plotWidth: number;
-  level: DetailLevel;
-}): { from: number; to: number }[] {
-  const { series, rangeStart, rangeEnd, plotWidth, level } = options;
-  const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
-  const spans: { from: number; to: number }[] = [];
-  const pushBox = (start: number, end: number): void => {
-    const box = spanRect(start, end, rangeStart, rangeEnd);
-    if (box) spans.push({ from: box.x, to: box.x + box.width });
-  };
-  for (const run of series.unknownRuns) pushBox(run.start, run.end);
-  // Only spans that paint a mark. An idle span paints the baseline band
-  // (or the dashed column when it is long and unproven).
-  for (const span of series.idleSpans) {
-    if (span.kind === "unknown") {
-      pushBox(span.start, span.end);
-      continue;
-    }
-    const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
-    if (!box || box.width < 0.4) continue;
-    spans.push({ from: box.x, to: box.x + box.width });
-  }
-  if (level === "envelope") {
-    for (const window of series.spans) {
-      if (window.kind !== "observed") continue;
-      for (const band of window.bands) {
-        if (band.open) {
-          const drawn = openStubSpan(band, rangeStart, rangeEnd, pxPerUnit);
-          if (drawn) spans.push(drawn);
-          const rest = openTailBox(band, rangeStart, rangeEnd, pxPerUnit);
-          if (rest) spans.push(rest);
-        } else {
-          const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
-          if (!span) continue;
-          spans.push({
-            from: timeX(span.from, rangeStart, rangeEnd),
-            to: timeX(span.to, rangeStart, rangeEnd),
-          });
-        }
-      }
-      for (const reading of window.readings) {
-        if (reading.observedAt < rangeStart || reading.observedAt > rangeEnd) continue;
-        const x = timeX(reading.observedAt, rangeStart, rangeEnd);
-        spans.push({ from: x - 2.4, to: x + 2.4 });
-      }
-    }
-    return spans;
-  }
-  for (const window of series.spans) {
-    if (window.kind === "observed") pushBox(window.start, window.end);
-  }
-  return spans;
-}
-
-/** Idle baseline tall enough to see. ViewBox units would shrink to a hairline. */
-function IdleBaseline({
-  box,
-  plotWidth,
-}: {
-  box: { x: number; width: number };
-  plotWidth: number;
-}) {
-  const pxPerUnit = Math.max(plotWidth, 1) / VIEWBOX_WIDTH;
-  const height = IDLE_BASELINE_PX / pxPerUnit;
-  return (
-    <rect
-      className="history-chart__idle"
-      x={box.x}
-      y={Math.max(PLOT_TOP, PLOT_BOTTOM - height)}
-      width={box.width}
-      height={Math.min(height, PLOT_BOTTOM - PLOT_TOP)}
-    />
-  );
-}
-
-function spanRect(
-  start: number,
-  end: number,
-  rangeStart: number,
-  rangeEnd: number,
-): { x: number; width: number } | null {
-  const span = clampInterval(start, end, rangeStart, rangeEnd);
-  if (!span) return null;
-  const x = timeX(span.from, rangeStart, rangeEnd);
-  const width = timeX(span.to, rangeStart, rangeEnd) - x;
-  if (width <= 0) return null;
-  return { x, width };
-}
-
-function EnvelopeLayer({
-  series,
-  mode,
-  rangeStart,
-  rangeEnd,
-  plotWidth,
-  now,
-}: {
-  series: EnvelopeSeries;
-  mode: DisplayMode;
-  rangeStart: number;
-  rangeEnd: number;
-  plotWidth: number;
-  now: number;
-}) {
-  const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
-  return (
-    <g>
-      {series.unknownRuns.map((run) => {
-        const box = spanRect(run.start, run.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        return (
-          <rect
-            key={`unknown-${run.start}`}
-            className="history-chart__unknown"
-            x={box.x}
-            y={PLOT_TOP}
-            width={box.width}
-            height={PLOT_BOTTOM - PLOT_TOP}
-          />
-        );
-      })}
-      {series.idleSpans.filter((span) => span.kind === "unknown").map((span) => {
-        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        return (
-          <rect
-            key={`idle-unknown-${span.start}`}
-            className="history-chart__unknown"
-            x={box.x}
-            y={PLOT_TOP}
-            width={box.width}
-            height={PLOT_BOTTOM - PLOT_TOP}
-          />
-        );
-      })}
-      {series.idleSpans.filter((span) => span.kind === "idle").map((span) => {
-        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        // Every idle span is the neutral baseline, including a gap shorter
-        // than one window. A long first-use stretch with no proof is the
-        // dashed "no readings" column instead.
-        if (!(span.end - span.start < series.windowMs) && span.proofReadings === 0) {
-          return (
-            <rect
-              key={`idle-${span.start}`}
-              className="history-chart__unknown"
-              x={box.x}
-              y={PLOT_TOP}
-              width={box.width}
-              height={PLOT_BOTTOM - PLOT_TOP}
-            />
-          );
-        }
-        return (
-          <IdleBaseline key={`idle-${span.start}`} box={box} plotWidth={plotWidth} />
-        );
-      })}
-      {series.spans.map((window, index) => {
-        const previous = series.spans[index - 1];
-        const reset = previous && previous.kind === "observed" && previous.tailTrusted && window.kind === "observed";
-        return (
-          <g key={window.id}>
-            {reset ? (
-              <line
-                className="history-chart__reset"
-                x1={timeX(window.start, rangeStart, rangeEnd)}
-                x2={timeX(window.start, rangeStart, rangeEnd)}
-                y1={shownY(previous.values.at(-1) ?? 0, mode)}
-                y2={shownY(100, mode)}
-              />
-            ) : null}
-            {window.bands.map((band, bandIndex) => {
-              const d = band.open
-                ? openStub(band, mode, rangeStart, rangeEnd, pxPerUnit)
-                : bandPath(band, mode, rangeStart, rangeEnd);
-              // The dotted stub is at most 10 px. The rest of an open tail,
-              // including a closed window's, is the possible-range band.
-              // Gating that band on the current window left a blank column
-              // between the stub and the reset circle.
-              const rest = band.open
-                ? openTailBand(band, mode, rangeStart, rangeEnd, pxPerUnit)
-                : null;
-              if (!d && !rest) return null;
-              return (
-                <g key={`${window.id}-band-${bandIndex}`}>
-                  {rest ? <path className="history-chart__band" d={rest} /> : null}
-                  {d ? (
-                    <path
-                      className={band.event ? "history-chart__event" : band.open ? "history-chart__open" : "history-chart__band"}
-                      d={d}
-                    />
-                  ) : null}
-                </g>
-              );
-            })}
-            <ReadingMarks window={window} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} pxPerUnit={pxPerUnit} now={now} />
-          </g>
-        );
-      })}
-      {series.events.map((event) => (
-        <line
-          key={`event-${event.at}`}
-          className="history-chart__limit"
-          x1={timeX(event.at, rangeStart, rangeEnd)}
-          x2={timeX(event.at, rangeStart, rangeEnd)}
-          y1={PLOT_TOP}
-          y2={PLOT_BOTTOM}
-        />
-      ))}
-      {series.trend.fit ? null : series.trend.points.map((point) => (
-        <circle
-          key={`end-${point.at}`}
-          className="history-chart__end"
-          cx={timeX(point.at, rangeStart, rangeEnd)}
-          cy={shownY(100 - point.used, mode)}
-          r="3.5"
-        />
-      ))}
-    </g>
-  );
-}
-
-function openStub(
-  band: EnvelopeBand,
-  mode: DisplayMode,
-  rangeStart: number,
-  rangeEnd: number,
-  pxPerUnit: number,
-): string | null {
-  const drawn = openStubSpan(band, rangeStart, rangeEnd, pxPerUnit);
-  if (!drawn) return null;
-  const y = shownY(band.upper, mode);
-  return `M ${drawn.from.toFixed(2)} ${y.toFixed(2)} L ${drawn.to.toFixed(2)} ${y.toFixed(2)}`;
-}
-
-/** The dotted stub, at most OPEN_STUB_PX of screen, in viewbox units. */
-function openStubSpan(
-  band: EnvelopeBand,
-  rangeStart: number,
-  rangeEnd: number,
-  pxPerUnit: number,
-): { from: number; to: number } | null {
-  const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
-  if (!span) return null;
-  const x1 = timeX(span.from, rangeStart, rangeEnd);
-  const x2 = timeX(span.to, rangeStart, rangeEnd);
-  const maxUnits = OPEN_STUB_PX / Math.max(pxPerUnit, 0.01);
-  const end = x1 + Math.min(Math.abs(x2 - x1), maxUnits) * Math.sign(x2 - x1 || 1);
-  if (Math.abs(end - x1) <= 0.05) return null;
-  return { from: Math.min(x1, end), to: Math.max(x1, end) };
-}
-
-/**
- * The open tail past the stub, as a possible-range band. The stub stays the
- * dotted mark; the band fills the column the stub does not cover.
- */
-function openTailBand(
-  band: EnvelopeBand,
-  mode: DisplayMode,
-  rangeStart: number,
-  rangeEnd: number,
-  pxPerUnit: number,
-): string | null {
-  const box = openTailBox(band, rangeStart, rangeEnd, pxPerUnit);
-  if (!box) return null;
-  const yUpper = shownY(band.upper, mode);
-  const yLower = shownY(band.lower, mode);
-  const top = Math.min(yUpper, yLower);
-  const bottom = Math.max(yUpper, yLower);
-  return `M ${box.from.toFixed(2)} ${top.toFixed(2)} L ${box.to.toFixed(2)} ${top.toFixed(2)} L ${box.to.toFixed(2)} ${bottom.toFixed(2)} L ${box.from.toFixed(2)} ${bottom.toFixed(2)} Z`;
-}
-
-/** Viewbox x of the whole open tail. The stub is drawn over its first 10 px. */
-function openTailBox(
-  band: EnvelopeBand,
-  rangeStart: number,
-  rangeEnd: number,
-  _pxPerUnit: number,
-): { from: number; to: number } | null {
-  const span = clampInterval(band.from, band.to, rangeStart, rangeEnd);
-  if (!span) return null;
-  const from = timeX(span.from, rangeStart, rangeEnd);
-  const to = timeX(span.to, rangeStart, rangeEnd);
-  if (Math.abs(to - from) <= 0.4) return null;
-  return { from: Math.min(from, to), to: Math.max(from, to) };
-}
-
-function ReadingMarks({
-  window,
-  mode,
-  rangeStart,
-  rangeEnd,
-  pxPerUnit,
-  now,
-}: {
-  window: WindowSpan;
-  mode: DisplayMode;
-  rangeStart: number;
-  rangeEnd: number;
-  pxPerUnit: number;
-  now: number;
-}) {
-  const marks: React.ReactNode[] = [];
-  let run: { x: number; y: number }[] = [];
-  const flush = (): void => {
-    if (run.length >= 2) {
-      const d = run.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
-      marks.push(<path key={`run-${run[0]!.x}`} className="history-chart__line" d={d} />);
-    }
-    run = [];
-  };
-  window.readings.forEach((reading, index) => {
-    if (reading.observedAt < rangeStart || reading.observedAt > rangeEnd) return;
-    const x = timeX(reading.observedAt, rangeStart, rangeEnd);
-    const y = shownY(window.values[index] ?? reading.left, mode);
-    const previous = run.at(-1);
-    const previousReading = window.readings[index - 1];
-    const interval = expectedIntervalMs(now, reading.observedAt);
-    const timeGap = previousReading !== undefined && reading.observedAt - previousReading.observedAt > interval * 2;
-    const apart = previous !== undefined && (Math.abs(x - previous.x) * pxPerUnit > DOT_JOIN_PX || timeGap);
-    if (apart) {
-      if (run.length === 1) {
-        marks.push(
-          <circle key={`dot-${run[0]!.x}`} className="history-chart__marker" cx={run[0]!.x} cy={run[0]!.y} r="2.4" />,
-        );
-      }
-      flush();
-    }
-    run.push({ x, y });
-  });
-  if (run.length === 1) {
-    marks.push(
-      <circle key={`dot-${run[0]!.x}`} className="history-chart__marker" cx={run[0]!.x} cy={run[0]!.y} r="2.4" />,
-    );
-  }
-  flush();
-  return <g>{marks}</g>;
-}
-
-function BarsLayer({
-  series,
-  mode,
-  rangeStart,
-  rangeEnd,
-  plotWidth,
-}: {
-  series: EnvelopeSeries;
-  mode: DisplayMode;
-  rangeStart: number;
-  rangeEnd: number;
-  plotWidth: number;
-}) {
-  return (
-    <g>
-      {series.unknownRuns.map((run) => {
-        const box = spanRect(run.start, run.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        return (
-          <rect
-            key={`unknown-${run.start}`}
-            className="history-chart__unknown"
-            x={box.x}
-            y={PLOT_TOP}
-            width={box.width}
-            height={PLOT_BOTTOM - PLOT_TOP}
-          />
-        );
-      })}
-      {series.idleSpans.filter((span) => span.kind === "unknown").map((span) => {
-        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        return (
-          <rect
-            key={`idle-unknown-${span.start}`}
-            className="history-chart__unknown"
-            x={box.x}
-            y={PLOT_TOP}
-            width={box.width}
-            height={PLOT_BOTTOM - PLOT_TOP}
-          />
-        );
-      })}
-      {series.spans.map((window) => {
-        const bar = windowBar(window);
-        if (!bar) return null;
-        const box = spanRect(window.start, window.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        const { x, width } = box;
-        const certainLeft = 100 - bar.certainUsed;
-        const yCertain = mode === "used" ? shownY(certainLeft, mode) : shownY(100, mode);
-        const height = Math.max(1, Math.abs(shownY(certainLeft, mode) - shownY(mode === "used" ? 100 : certainLeft, mode)));
-        const hollow = bar.open ? Math.min(6, height) : 0;
-        return (
-          <g key={window.id} className={window.current ? "is-current" : undefined}>
-            <rect
-              className="history-chart__bar"
-              x={x}
-              y={mode === "used" ? yCertain : leftY(certainLeft)}
-              width={width}
-              height={height}
-            />
-            {hollow > 0 ? (
-              <rect
-                className="history-chart__hollow"
-                x={x}
-                y={mode === "used" ? yCertain - hollow : leftY(certainLeft)}
-                width={width}
-                height={hollow}
-              />
-            ) : null}
-          </g>
-        );
-      })}
-      {series.idleSpans.filter((span) => span.kind === "idle").map((span) => {
-        const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        return (
-          <IdleBaseline key={`idle-${span.start}`} box={box} plotWidth={plotWidth} />
-        );
-      })}
-    </g>
-  );
-}
-
-function DailyLayer({
-  days,
-  mode,
-  rangeStart,
-  rangeEnd,
-  plotWidth,
-}: {
-  days: DayBucket[];
-  mode: DisplayMode;
-  rangeStart: number;
-  rangeEnd: number;
-  plotWidth: number;
-}) {
-  return (
-    <g>
-      {days.map((bucket) => {
-        const box = spanRect(bucket.start, bucket.end, rangeStart, rangeEnd);
-        if (!box) return null;
-        const { x, width } = box;
-        const bar = bucket.window ? windowBar(bucket.window) : null;
-        if (!bar) {
-          return (
-            <IdleBaseline key={bucket.start} box={{ x, width }} plotWidth={plotWidth} />
-          );
-        }
-        const certainLeft = 100 - bar.certainUsed;
-        const y = mode === "used" ? shownY(certainLeft, mode) : leftY(100);
-        const height = Math.abs(shownY(certainLeft, mode) - shownY(mode === "used" ? 100 : certainLeft, mode));
-        return (
-          <g key={bucket.start}>
-            <rect
-              className="history-chart__bar"
-              x={x}
-              y={mode === "used" ? y : leftY(certainLeft)}
-              width={width}
-              height={Math.max(1, height)}
-            />
-            {bar.open ? (
-              <rect
-                className="history-chart__hollow"
-                x={x}
-                y={mode === "used" ? y - Math.min(6, height) : leftY(certainLeft)}
-                width={width}
-                height={Math.min(6, Math.max(1, height))}
-              />
-            ) : null}
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-function TrendLayer({
-  series,
-  mode,
-  rangeStart,
-  rangeEnd,
-}: {
-  series: EnvelopeSeries;
-  mode: DisplayMode;
-  rangeStart: number;
-  rangeEnd: number;
-}) {
-  const fit = series.trend.fit;
-  if (!fit || series.trend.points.length < 2) return null;
-  const first = series.trend.points[0]!;
-  const last = series.trend.points.at(-1)!;
-  const y1 = shownY(100 - predictUsed(fit, first.at), mode);
-  const y2 = shownY(100 - predictUsed(fit, last.at), mode);
-  return (
-    <line
-      className="history-chart__trend"
-      x1={timeX(first.at, rangeStart, rangeEnd)}
-      x2={timeX(last.at, rangeStart, rangeEnd)}
-      y1={y1}
-      y2={y2}
-    />
-  );
-}
-
-function Legend({
-  series,
-  level,
-  mode,
-}: {
-  series: EnvelopeSeries;
-  level: DetailLevel;
-  mode: DisplayMode;
-}) {
-  const noun = windowNoun(series.windowMs);
-  const open = series.spans.some((window) => window.kind === "observed" && !window.tailTrusted);
-  const unknown = level !== "daily" && (
-    series.unknownRuns.length > 0 || series.idleSpans.some((span) => span.kind === "unknown")
-  );
-  const idle = series.idleSpans.some((span) => span.kind === "idle");
-  const reset = series.spans.some((window, index) => {
-    const previous = series.spans[index - 1];
-    return previous?.kind === "observed" && previous.tailTrusted && window.kind === "observed";
-  });
-  const limit = series.events.some((event) => event.kind === "limit-change");
-  const rebase = series.events.some((event) => event.kind === "rebase") || series.rebaseCapped;
-  return (
-    <ul className="history-chart__legend">
-      {level === "envelope" ? (
-        <>
-          <li><span className="history-chart__legend-line" aria-hidden="true" />{l10n.t("history.legendReadings")}</li>
-          <li><span className="history-chart__legend-band" aria-hidden="true" />{l10n.t("history.legendBand")}</li>
-          {open ? <li><span className="history-chart__legend-open" aria-hidden="true" />{l10n.t("history.legendOpen")}</li> : null}
-        </>
-      ) : (
-        <li>
-          <span className="history-chart__legend-bar" aria-hidden="true" />
-          {level === "daily"
-            ? l10n.t("history.legendDaily", { noun })
-            : l10n.t(mode === "used" ? "history.legendBarUsed" : "history.legendBarLeft", { noun })}
-        </li>
-      )}
-      {open && level !== "envelope" ? (
-        <li>{l10n.t(mode === "used" ? "history.legendHollowUsed" : "history.legendHollowLeft")}</li>
-      ) : null}
-      {unknown ? <li><span className="history-chart__legend-unknown" aria-hidden="true" />{l10n.t("history.legendUnknown")}</li> : null}
-      {idle ? <li><span className="history-chart__legend-idle" aria-hidden="true" />{l10n.t("history.legendIdle")}</li> : null}
-      {reset && level === "envelope" ? <li><span className="history-chart__legend-reset" aria-hidden="true" />{l10n.t("history.legendReset")}</li> : null}
-      {limit ? <li><span className="history-chart__legend-limit" aria-hidden="true" />{l10n.t("history.legendLimit")}</li> : null}
-      {rebase ? <li><span className="history-chart__legend-limit" aria-hidden="true" />{l10n.t(series.rebaseCapped ? "history.legendRebaseCapped" : "history.legendRebase")}</li> : null}
-      {series.trend.fit ? (
-        <li><span className="history-chart__legend-trend" aria-hidden="true" />{l10n.t("history.legendTrend")}</li>
-      ) : level === "envelope" ? (
-        <li>
-          <span className="history-chart__legend-end" aria-hidden="true" />
-          {l10n.t("history.legendEnds")}
-          <span className="history-chart__legend-note">
-            {series.trend.reason === "span"
-              ? l10n.t("history.trendNeedsSpan", { count: series.trend.points.length })
-              : l10n.t("history.trendNeedsCount", { count: series.trend.points.length })}
-          </span>
-        </li>
-      ) : (
-        <li className="history-chart__legend-note">
-          {series.trend.reason === "span"
-            ? l10n.t("history.trendNeedsSpan", { count: series.trend.points.length })
-            : l10n.t("history.trendNeedsCount", { count: series.trend.points.length })}
-        </li>
-      )}
-    </ul>
-  );
 }

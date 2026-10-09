@@ -173,36 +173,18 @@ export function HistoryView({
             role="radiogroup"
             aria-label={l10n.t("history.range")}
           >
-            {RANGE_OPTIONS.map((option) => {
-              const count = readingsInRange(instance.history, selectedMetric.id, now, option.hours);
-              const hasReadings = count > 0;
-              const underFive = count < 5;
-              const sparse = hasReadings && underFive;
-              return (
-                <button
-                  key={option.hours}
-                  role="radio"
-                  type="button"
-                  aria-label={sparse
-                    ? l10n.t("history.rangeSparse", {
-                        range: l10n.t(option.labelKey as MessageKey),
-                        count,
-                      })
-                    : l10n.t(option.labelKey as MessageKey)}
-                  aria-checked={rangeHours === option.hours}
-                  onClick={() => setRangeHours(option.hours)}
-                >
-                  <span>
-                    {sparse
-                      ? l10n.t("history.rangeCount", {
-                          range: l10n.t(option.shortKey as MessageKey),
-                          count,
-                        })
-                      : l10n.t(option.shortKey as MessageKey)}
-                  </span>
-                </button>
-              );
-            })}
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.hours}
+                role="radio"
+                type="button"
+                aria-label={l10n.t(option.labelKey as MessageKey)}
+                aria-checked={rangeHours === option.hours}
+                onClick={() => setRangeHours(option.hours)}
+              >
+                <span>{l10n.t(option.shortKey as MessageKey)}</span>
+              </button>
+            ))}
           </div>
         </div>
 

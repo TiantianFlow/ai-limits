@@ -759,11 +759,58 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   outline-offset: 2px;
 }
 
+.history-chart__head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .history-chart__latest {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
+  margin: 0;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
+}
+
+.history-chart__latest.is-warn,
+.history-chart__status.is-warn {
+  color: var(--warm);
+}
+
+.history-chart__status {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.history-chart__info {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+.history-chart__info-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.history-chart__note {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  left: 0;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
 }
 
 .history-chart__plot {
@@ -809,6 +856,34 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   stroke: var(--quota);
   stroke-linecap: round;
   stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.history-chart__line.is-dashed {
+  stroke-linecap: butt;
+}
+
+.history-chart__area {
+  fill: color-mix(in srgb, var(--quota) 12%, transparent);
+  stroke: none;
+}
+
+.history-chart__dot {
+  fill: var(--quota);
+}
+
+.history-chart__axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.history-chart__tick {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+
+.history-chart__gap {
+  stroke: var(--text-muted);
   stroke-width: 2;
 }
 
@@ -846,7 +921,9 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 }
 
 .history-chart__idle {
-  fill: var(--text-muted);
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
 }
 
 .history-chart__highlight {
@@ -855,7 +932,7 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 }
 
 .history-chart__bar {
-  fill: var(--quota);
+  fill: color-mix(in srgb, var(--quota) 70%, transparent);
 }
 
 .is-current .history-chart__bar {
