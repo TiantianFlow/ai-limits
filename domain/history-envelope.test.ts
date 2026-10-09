@@ -199,14 +199,17 @@ describe("detail, bars, and days", () => {
     const width = 280;
     const px = (windowMs: number) => (windowMs / range) * width;
     expect(px(7 * DAY)).toBeGreaterThanOrEqual(ENVELOPE_MIN_WINDOW_PX);
-    expect(detailLevel(7 * DAY, range, width)).toBe("bars");
+    expect(detailLevel(7 * DAY, range, width)).toBe("envelope");
+    expect(detailLevel(7 * DAY, 30 * DAY, 340)).toBe("envelope");
+    expect(detailLevel(30 * DAY, 30 * DAY, 340)).toBe("envelope");
+    expect(detailLevel(DAY, 30 * DAY, 340)).toBe("bars");
     expect(detailLevel(5 * HOUR, 2 * DAY, width)).toBe("envelope");
     const barWindow = (range * 23.9) / width;
     expect(detailLevel(barWindow, range, width)).toBe("bars");
     expect(detailLevel((range * 24) / width, range, width)).toBe("envelope");
     expect(detailLevel((range * 4) / width, range, width)).toBe("bars");
     expect(detailLevel((range * 3.9) / width, range, width)).toBe("daily");
-    expect(detailLevel(DAY, range, width)).toBe("bars");
+    expect(detailLevel(DAY, 90 * DAY, width)).toBe("bars");
     expect(BAR_MIN_WINDOW_PX).toBe(4);
   });
 

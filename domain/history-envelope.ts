@@ -220,9 +220,9 @@ export function detailLevel(
   plotWidthPx: number,
 ): DetailLevel {
   const px = rangeMs <= 0 ? plotWidthPx : (windowMs / rangeMs) * plotWidthPx;
-  if (windowMs < DAY_MS && px >= ENVELOPE_MIN_WINDOW_PX) return "envelope";
-  // A window of at least 24 h is one bar per window, never a daily bucket,
-  // and never the per-reading staircase.
+  // Wide enough for the staircase at any window length, including weekly
+  // and monthly. A window of at least 24 h never drops to the per-day tier.
+  if (px >= ENVELOPE_MIN_WINDOW_PX) return "envelope";
   if (px >= BAR_MIN_WINDOW_PX || windowMs >= DAY_MS) return "bars";
   return "daily";
 }
