@@ -171,71 +171,128 @@ history:
     many: "{count} days ago"
     other: "{count} days ago"
   latestPercent: "{percent}% {mode}"
-  legendObserved: "Observed quota {mode}"
-  legendTrend: Trend (fitted)
-  legendGap: Long gap
-  legendReset: Quota reset
-  legendLimit: Plan limit changed
-  limitMarker: Plan limit changed · series restarts
-  gapLabel: "No observations · {duration}"
-  gapHours:
-    zero: "{count} hours"
-    one: "{count} hour"
-    two: "{count} hours"
-    few: "{count} hours"
-    many: "{count} hours"
-    other: "{count} hours"
-  gapDays:
+  chartRole: chart
+  rangeCount: "{range} · {count}"
+  rangeSparse: "{range}, only {count} readings"
+  windowSameDay: "{start} – {end}"
+  windowAcrossDays: "{start} – {end}"
+  windowNow: "{start} – now · resets {end}"
+  tooltipNoReadings: No readings in this window
+  tooltipPossibleRange: "Possible range: 0–100%"
+  readingsInWindow:
+    zero: "{count} readings in window"
+    one: "{count} reading in window"
+    two: "{count} readings in window"
+    few: "{count} readings in window"
+    many: "{count} readings in window"
+    other: "{count} readings in window"
+  observedSingle: "Observed {value}% {mode}"
+  observedRange: "Observed {low}–{high}% {mode}"
+  tooltipLatestCurrent: Latest reading is current
+  tooltipCurrentOpen: "No reading in the last {duration} — usage since is unknown"
+  tooltipEnded: "Ended at {value}% {mode}"
+  tooltipOpenEnd: "No reading near reset — last one {duration} before"
+  tooltipEvent: Plan limit changed or quota rose during this window
+  dayToday: "{day} · today"
+  dayIdle: No windows with readings — likely idle
+  dayNone: No readings this day
+  dayBusiest: "Busiest {noun}: {span}"
+  dayOpen: "{observed} · no reading near reset"
+  spanIdle: "Idle — no active window (0% {mode})"
+  spanConfirmed:
+    zero: "Confirmed by {count} readings"
+    one: "Confirmed by {count} reading"
+    two: "Confirmed by {count} readings"
+    few: "Confirmed by {count} readings"
+    many: "Confirmed by {count} readings"
+    other: "Confirmed by {count} readings"
+  spanShort: Too short to hide an unobserved window
+  spanUnknownTitle: No readings
+  spanUnknownBody: Idle, or a window that was never observed
+  durationMinutes:
+    zero: "{count} min"
+    one: "{count} min"
+    two: "{count} min"
+    few: "{count} min"
+    many: "{count} min"
+    other: "{count} min"
+  durationHours:
+    zero: "{count} h"
+    one: "{count} h"
+    two: "{count} h"
+    few: "{count} h"
+    many: "{count} h"
+    other: "{count} h"
+  durationDays:
     zero: "{count} days"
     one: "{count} day"
     two: "{count} days"
     few: "{count} days"
     many: "{count} days"
     other: "{count} days"
-  bridgedReads:
-    zero: "{count} short missed reads are bridged."
-    one: "{count} short missed read is bridged."
-    two: "{count} short missed reads are bridged."
-    few: "{count} short missed reads are bridged."
-    many: "{count} short missed reads are bridged."
-    other: "{count} short missed reads are bridged."
-  longGaps:
-    zero: "{count} long gaps shaded: {labels}."
-    one: "{count} long gap shaded: {labels}."
-    two: "{count} long gaps shaded: {labels}."
-    few: "{count} long gaps shaded: {labels}."
-    many: "{count} long gaps shaded: {labels}."
-    other: "{count} long gaps shaded: {labels}."
-  noLongGaps: No long gaps.
-  resetsBreak: The line breaks at quota resets.
-  limitChangesBreak: The line breaks where the plan limit changed.
-  trendEstimate: A dashed fitted trend line is an estimate, not observed data.
-  bridgedFootnote:
-    zero: "{count} short missed reads bridged in this range"
-    one: "{count} short missed read bridged in this range"
-    two: "{count} short missed reads bridged in this range"
-    few: "{count} short missed reads bridged in this range"
-    many: "{count} short missed reads bridged in this range"
-    other: "{count} short missed reads bridged in this range"
-  noMissedReads: No missed reads in this range
-  longGapsOnly: Long gaps in this range are shaded, not bridged
-  gapFootnote: " · only gaps over {hours} h are shaded"
-  summary: "{observations} across {segments}. Latest value is {percent}% {mode}."
-  observations:
-    zero: "{count} observations"
-    one: "{count} observation"
-    two: "{count} observations"
-    few: "{count} observations"
-    many: "{count} observations"
-    other: "{count} observations"
-  segments:
-    zero: "{count} chart segments"
-    one: "{count} chart segment"
-    two: "{count} chart segments"
-    few: "{count} chart segments"
-    many: "{count} chart segments"
-    other: "{count} chart segments"
-  note: Only successful, normalized quota observations are plotted. Missed reads are normal. Short ones are bridged by the observed line, and only long gaps are lightly shaded, never shown as zero usage. The line still breaks at quota resets and plan-limit changes. The dashed trend is a fitted estimate of the observed points, not a forecast guarantee. The newest 48 hours stay at collection resolution; older retained history is compacted hourly and kept for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
+  nounHours: "{hours}-hour window"
+  nounWeek: week
+  nounWindow: window
+  legendReadings: Readings
+  legendBand: Possible range between readings
+  legendOpen: No reading near reset
+  legendBarUsed: "Used in one {noun}"
+  legendBarLeft: "Lowest left seen in one {noun}"
+  legendDaily: "Busiest {noun} per day"
+  legendHollowUsed: "Hollow cap = no reading near reset, could be higher"
+  legendHollowLeft: "Hollow top = no reading near reset, could be lower"
+  legendUnknown: No readings
+  legendIdle: Idle · no active window
+  legendLimit: Plan limit changed
+  legendRebase: Quota rose mid-window
+  legendRebaseCapped: Quota rises in this range were clamped
+  legendTrend: End-of-window usage trend (estimate)
+  legendEnds: End-of-window usage
+  trendNeedsCount: "Trend needs 6 complete windows · {count} so far"
+  trendNeedsSpan: "No trend: the {count} complete windows cover too little of the range"
+  footnoteEnvelope: Shaded = possible range between readings · dotted end = no reading near reset
+  footnoteBars: Bars show certain usage only · hollow cap = no reading near reset
+  footnoteDaily: "Each bar = busiest {noun} that day · hollow cap = no reading near reset"
+  footnoteCount: "{count} readings in {range}"
+  footnoteHours:
+    zero: "{count} hours"
+    one: "{count} hour"
+    two: "{count} hours"
+    few: "{count} hours"
+    many: "{count} hours"
+    other: "{count} hours"
+  footnoteDays:
+    zero: "{count} days"
+    one: "{count} day"
+    two: "{count} days"
+    few: "{count} days"
+    many: "{count} days"
+    other: "{count} days"
+  summaryLead: "{meter} history, last {range}, showing quota {mode}."
+  summaryWindows: "{readings} readings; {withReadings} windows have readings."
+  summaryWindowsSome: "{readings} readings; {withReadings} windows have readings, {without} have none."
+  summaryOpen:
+    zero: "{count} end without a reading near reset."
+    one: "{count} ends without a reading near reset."
+    two: "{count} end without a reading near reset."
+    few: "{count} end without a reading near reset."
+    many: "{count} end without a reading near reset."
+    other: "{count} end without a reading near reset."
+  summaryEnvelope: "Each window is a staircase of readings, with the possible range shaded between them."
+  summaryBars: "Each bar is certain usage in one {noun}."
+  summaryDaily: "Each bar is the busiest {noun} that day."
+  summaryIdle: Idle stretches between windows are shown as neutral.
+  summaryEvents:
+    zero: "{count} plan-limit or quota changes marked."
+    one: "{count} plan-limit or quota change marked."
+    two: "{count} plan-limit or quota changes marked."
+    few: "{count} plan-limit or quota changes marked."
+    many: "{count} plan-limit or quota changes marked."
+    other: "{count} plan-limit or quota changes marked."
+  summaryTrend: The dashed line is an estimate of end-of-window usage, not a forecast.
+  summaryKeys: Use left and right arrow keys to inspect windows.
+  summaryKeysDays: Use left and right arrow keys to inspect days.
+  note: Only successful, normalized quota observations are plotted. Between readings the shaded band is the possible range, and quota left only falls until the window resets. A window with no reading near its reset ends in a short dotted stub instead of a fill to the floor. Wide windows draw that staircase; narrower ones draw one bar per window, and the narrowest sub-day windows draw one bar per day. A dashed trend appears only after six complete windows spread across the range, and it is an estimate. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
 
 settings:
   screen: Provider settings
