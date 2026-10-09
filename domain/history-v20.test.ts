@@ -129,6 +129,30 @@ describe("history v20 drawing", () => {
     }
   });
 
+  it("does not mark a gap under the axis where the idle line already covers the stretch", () => {
+    const history: UsageHistoryObservation[] = [];
+    for (let index = 0; index < 20; index += 1) {
+      const end = NOW - index * 6 * HOUR;
+      history.push(reading(end - 4 * HOUR, index % 3 === 0 ? 0 : 8, end));
+    }
+    const model = buildChartModel({
+      history,
+      metricId: "five-hour",
+      providerKind: "claude",
+      now: NOW,
+      rangeStart: NOW - 7 * 24 * HOUR,
+      rangeEnd: NOW,
+      widthPx: 360,
+    });
+    expect(model.tier).not.toBe("line");
+    expect(model.idle.length).toBeGreaterThan(0);
+    const overlaps = (gap: { start: number; end: number }): boolean =>
+      model.idle.some((span) => Math.min(gap.end, span.end) - Math.max(gap.start, span.start) > HOUR);
+    expect(model.gaps.filter(overlaps)).toEqual([]);
+    // Ordinary holes between 5-hour windows are the dashed baseline, not a second row.
+    expect(model.gaps.every((gap) => gap.end - gap.start > 24 * HOUR)).toBe(true);
+  });
+
   it("keeps idle between the bars rather than one span across the chart", () => {
     const history = [
       reading(NOW - 40 * HOUR, 30, NOW - 36 * HOUR),

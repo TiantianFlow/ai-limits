@@ -560,7 +560,14 @@ export function HistoryChart({
             <svg className="history-chart__svg" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-hidden="true">
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_TOP} y2={PLOT_TOP} strokeDasharray="2 3" />
               <text className="history-chart__tick" x={PLOT_RIGHT - 2} y={PLOT_TOP - 2} textAnchor="end">100%</text>
-              <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM} />
+              <line
+                className={model.tier === "line" ? "history-chart__axis" : "history-chart__idle"}
+                x1={PLOT_LEFT}
+                x2={PLOT_RIGHT}
+                y1={PLOT_BOTTOM}
+                y2={PLOT_BOTTOM}
+                strokeDasharray={model.tier === "line" ? undefined : "2 3"}
+              />
               {model.tier === "line"
                 ? model.runs.map((run) => {
                     const drawn = runPath(run, model, mode);
