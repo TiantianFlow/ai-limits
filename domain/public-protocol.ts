@@ -40,6 +40,9 @@ export type {
 export {
   buildEnvelopeSeries,
   buildWindowEnvelope,
+  coverageSpans,
+  sameResetKey,
+  uncoveredGaps,
   dailyBuckets,
   detailLevel,
   expectedIntervalMs,

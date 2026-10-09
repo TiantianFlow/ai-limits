@@ -54,6 +54,7 @@ export const METER_POLICIES: readonly MeterPolicy[] = [
   { providerKind: "kimi", metricId: "weekly-coding", windowMs: 7 * DAY_MS, policy: "fixed" },
   { providerKind: "kimi", metricId: "monthly-total", windowMs: CALENDAR_NOMINAL_MS, policy: "fixed" },
   { providerKind: "cursor", metricId: "cursor-models-monthly", windowMs: 30 * DAY_MS, policy: "fixed" },
+  { providerKind: "cursor", metricId: "other-models-monthly", windowMs: 30 * DAY_MS, policy: "fixed" },
   { providerKind: "cursor", metricId: "grok-bot-weekly", windowMs: 7 * DAY_MS, policy: "fixed" },
   { providerKind: "grok", metricId: "weekly-pool", windowMs: 7 * DAY_MS, policy: "fixed" },
   { providerKind: "grok", metricId: "2-hour-fast-queries", windowMs: 2 * HOUR_MS, policy: "first-use" },
@@ -374,9 +375,34 @@ function limitChanged(previous: number | undefined, current: number | undefined)
 }
 
 /**
+ * Same window when both readings name one reset. A resetsAt jump past the
+ * jitter tolerance, or a durationMs change, is a new window — never a
+ * mid-window rise. A reading that omits resetsAt stays with its neighbor.
+ */
+export function sameResetKey(previous: EnvelopeReading, next: EnvelopeReading): boolean {
+  if (previous.resetsAt === undefined || next.resetsAt === undefined) return true;
+  const jump = Math.abs(next.resetsAt - previous.resetsAt);
+  const tolerance = Math.max(
+    5_000,
+    0.02 * (previous.durationMs ?? next.durationMs ?? 0),
+  );
+  if (jump > tolerance) return false;
+  if (
+    previous.durationMs !== undefined &&
+    next.durationMs !== undefined &&
+    previous.durationMs !== next.durationMs &&
+    jump > 60_000
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * One monotone staircase. Left only falls inside a run; a rise above 1 pt or a
  * plan-limit change restarts it behind an amber marker. `clampRises` folds
  * every rise into the band instead, used once a window exceeds the marker cap.
+ * A rise whose reset key changed is a window boundary, not a marker.
  */
 export function buildWindowEnvelope(
   frame: WindowFrame,
@@ -421,8 +447,10 @@ export function buildWindowEnvelope(
   for (let index = 1; index < ordered.length; index += 1) {
     const previous = ordered[index - 1]!;
     const reading = ordered[index]!;
-    const rose = !clampRises && reading.left > prevValue + ROUNDING_TOLERANCE * 100;
-    const changed = limitChanged(previous.limit, reading.limit);
+    const rose = !clampRises
+      && sameResetKey(previous, reading)
+      && reading.left > prevValue + ROUNDING_TOLERANCE * 100;
+    const changed = limitChanged(previous.limit, reading.limit) && sameResetKey(previous, reading);
     if (changed || rose) {
       hasEvent = true;
       events.push({
@@ -530,6 +558,49 @@ export function idleSpansBetween(
  * Windows that only touch at an edge, or overlap because a reading's own
  * duration differs from the grid step, still join one run.
  */
+/**
+ * X spans that cover the plot: every window, and every idle or unknown run.
+ * Clipped to the range. Used to prove nothing between the first reading and
+ * now is left blank.
+ */
+export function coverageSpans(
+  series: EnvelopeSeries,
+  rangeStart: number,
+  rangeEnd: number,
+): { from: number; to: number }[] {
+  const raw = [
+    ...series.spans.map((window) => ({ from: window.start, to: window.end })),
+    ...series.unknownRuns.map((run) => ({ from: run.start, to: run.end })),
+    ...series.idleSpans.map((span) => ({ from: span.start, to: span.end })),
+  ];
+  return raw.flatMap((span) => {
+    const from = Math.max(rangeStart, Math.min(span.from, span.to));
+    const to = Math.min(rangeEnd, Math.max(span.from, span.to));
+    return to - from > 1 ? [{ from, to }] : [];
+  });
+}
+
+/** Gaps wider than `epsilonMs` inside `[from, to]` that no span covers. */
+export function uncoveredGaps(
+  spans: readonly { from: number; to: number }[],
+  from: number,
+  to: number,
+  epsilonMs: number,
+): { from: number; to: number }[] {
+  const ordered = [...spans]
+    .filter((span) => span.to > from && span.from < to)
+    .sort((left, right) => left.from - right.from);
+  const gaps: { from: number; to: number }[] = [];
+  let cursor = from;
+  for (const span of ordered) {
+    const start = Math.max(from, span.from);
+    if (start - cursor > epsilonMs) gaps.push({ from: cursor, to: start });
+    cursor = Math.max(cursor, Math.min(to, span.to));
+  }
+  if (to - cursor > epsilonMs) gaps.push({ from: cursor, to });
+  return gaps;
+}
+
 export function mergeUnknownWindows(windows: readonly WindowSpan[]): IdleSpan[] {
   const unknown = windows
     .filter((window) => window.kind === "unknown")
@@ -695,6 +766,9 @@ function resolvePolicy(
  * On a fixed grid, membership is the window that contains `observedAt`
  * (jittered `resetsAt` is only a hint). First-use readings cluster when
  * their `resetsAt` values sit within half a window of each other.
+ * A fixed reading whose own `resetsAt` sits on a different grid (a 31-day
+ * month against a 30-day step) keeps that window instead of being folded
+ * into the nominal grid.
  */
 function groupReadings(
   readings: readonly EnvelopeReading[],
@@ -712,7 +786,28 @@ function groupReadings(
     if (reading.resetsAt === undefined) continue;
     if (policy === "fixed" && anchor !== undefined && windowMs > 0) {
       const frame = gridFrameContaining(anchor, windowMs, reading.observedAt);
-      if (reading.observedAt >= frame.start && reading.observedAt < frame.end) {
+      const ownLength = reading.durationMs && reading.durationMs > 0 ? reading.durationMs : windowMs;
+      const ownStart = reading.resetsAt - ownLength;
+      const namesOwnWindow = Math.abs(reading.resetsAt - frame.end) > 60_000
+        && reading.observedAt >= ownStart
+        && reading.observedAt < reading.resetsAt;
+      if (!namesOwnWindow && reading.observedAt >= frame.start && reading.observedAt < frame.end) {
+        put(frame.end, reading);
+      } else if (namesOwnWindow) {
+        let matched: number | undefined;
+        for (const end of groups.keys()) {
+          if (Math.abs(end - reading.resetsAt) < 60_000 || sameWindowReset(end, reading.resetsAt, ownLength)) {
+            matched = end;
+            break;
+          }
+        }
+        // Key by the snapped grid boundary when this reset is only jitter away
+        // from it, so the reading lands in the frame built for that boundary.
+        const snapped = matched !== undefined && Math.abs(matched - reading.resetsAt) < 60_000
+          ? matched
+          : reading.resetsAt;
+        put(snapped, reading);
+      } else if (reading.observedAt >= frame.start && reading.observedAt < frame.end) {
         put(frame.end, reading);
       }
       continue;
@@ -731,6 +826,39 @@ function groupReadings(
     put(matched ?? reading.resetsAt, reading);
   }
   return groups;
+}
+
+/**
+ * Fixed grid plus any window a reading names with its own resetsAt.
+ * A duration change (31 days, then 30) or a reset that is not a multiple of
+ * the nominal step still gets a frame, so the range is not left blank.
+ */
+function framesForFixed(
+  anchor: number,
+  windowMs: number,
+  rangeStart: number,
+  rangeEnd: number,
+  readings: readonly EnvelopeReading[],
+): WindowFrame[] {
+  const frames = fixedGridFrames(anchor, windowMs, rangeStart, rangeEnd);
+  for (const reading of readings) {
+    const resetsAt = reading.resetsAt;
+    if (resetsAt === undefined) continue;
+    const length = reading.durationMs && reading.durationMs > 0 ? reading.durationMs : windowMs;
+    if (!(length > 0)) continue;
+    const gridEnds = frames.flatMap((frame) => [frame.end, frame.start]);
+    const gridEnd = gridEnds.find((at) => Math.abs(at - resetsAt) < 60_000);
+    const end = gridEnd ?? resetsAt;
+    const start = end - length;
+    if (end <= rangeStart || start >= rangeEnd) continue;
+    if (frames.some((frame) => sameWindowReset(frame.end, end, length))) continue;
+    // A named reset a few seconds off the grid is the grid window, not a
+    // second frame. Anything farther (a 31-day month on a 30-day step) is new.
+    const nearGrid = frames.some((frame) => Math.abs(frame.end - end) < 60_000);
+    if (nearGrid) continue;
+    frames.push({ start, end, windowMs: length });
+  }
+  return frames;
 }
 
 /**
@@ -773,6 +901,82 @@ function migrateUnanchored(
   return { assigned, synthetic, proofs };
 }
 
+/** Split a frame where consecutive readings name different resets. */
+function splitFrameByReset(
+  frame: WindowFrame,
+  readings: readonly EnvelopeReading[],
+): { frame: WindowFrame; readings: EnvelopeReading[] }[] {
+  const ordered = [...readings].sort((left, right) => left.observedAt - right.observedAt);
+  if (ordered.length === 0) return [{ frame, readings: [] }];
+  const pieces: EnvelopeReading[][] = [[ordered[0]!]];
+  for (let index = 1; index < ordered.length; index += 1) {
+    const reading = ordered[index]!;
+    const previous = pieces.at(-1)!.at(-1)!;
+    if (sameResetKey(previous, reading)) pieces.at(-1)!.push(reading);
+    else pieces.push([reading]);
+  }
+  if (pieces.length === 1) return [{ frame, readings: ordered }];
+  const split = pieces.flatMap((piece, index) => {
+    const first = piece[0]!;
+    const last = piece.at(-1)!;
+    const next = pieces[index + 1]?.[0];
+    const length = first.durationMs && first.durationMs > 0 ? first.durationMs : frame.windowMs;
+    const namedEnd = last.resetsAt;
+    const start = index === 0
+      ? frame.start
+      : namedEnd !== undefined ? Math.max(frame.start, namedEnd - length) : first.observedAt;
+    const end = next
+      ? next.observedAt
+      : namedEnd !== undefined && namedEnd > last.observedAt ? Math.min(frame.end, namedEnd) : frame.end;
+    const clampedStart = Math.max(frame.start, start);
+    const clampedEnd = Math.max(last.observedAt + 1, Math.min(frame.end, end));
+    // Jitter can leave a sliver of the parent frame. Those readings stay on
+    // the parent rather than becoming a window a few milliseconds wide.
+    if (clampedEnd - clampedStart < 60_000) return [];
+    return [{
+      frame: { start: clampedStart, end: clampedEnd, windowMs: length },
+      readings: piece,
+    }];
+  });
+  if (split.length === pieces.length) return split;
+  const kept = new Set(split.flatMap((piece) => piece.readings));
+  const returned = ordered.filter((reading) => !kept.has(reading));
+  if (returned.length === 0) return split;
+  return [{ frame, readings: returned }, ...split];
+}
+
+/**
+ * Anything from the first in-range reading to now that no window covers
+ * becomes an unknown outline. A fixed window that was never emitted (its
+ * reset was missing, or it sat between two differently keyed windows) must
+ * not render as empty paper.
+ */
+function fillUncovered(
+  frames: readonly WindowFrame[],
+  rangeStart: number,
+  rangeEnd: number,
+  firstReadingAt: number | undefined,
+): WindowFrame[] {
+  const extra: WindowFrame[] = [];
+  const coverFrom = firstReadingAt === undefined
+    ? rangeStart
+    : Math.max(rangeStart, firstReadingAt);
+  const ordered = [...frames]
+    .filter((frame) => frame.end > coverFrom && frame.start < rangeEnd)
+    .sort((left, right) => left.start - right.start);
+  let cursor = coverFrom;
+  const push = (start: number, end: number): void => {
+    if (end - start <= 1) return;
+    extra.push({ start, end, windowMs: end - start });
+  };
+  for (const frame of ordered) {
+    if (frame.start > cursor) push(cursor, Math.min(frame.start, rangeEnd));
+    cursor = Math.max(cursor, frame.end);
+  }
+  if (cursor < rangeEnd) push(cursor, rangeEnd);
+  return extra;
+}
+
 function latestAnchor(readings: readonly EnvelopeReading[]): number | undefined {
   let anchor: number | undefined;
   for (const reading of readings) {
@@ -795,6 +999,21 @@ export function buildEnvelopeSeries(
   const visible = all.filter(inRange);
   const anchor = latestAnchor(all.filter((reading) => reading.observedAt <= rangeEnd));
   const migrated = migrateUnanchored(visible, policy, windowMs, anchor);
+
+  // Jitter gives every reading its own resetsAt. Cluster ones within a minute
+  // onto the earliest of the cluster so they name one window.
+  const resetKeys = [...new Set(visible.flatMap((reading) => reading.resetsAt === undefined ? [] : [reading.resetsAt]))].sort((left, right) => left - right);
+  const canonical = new Map<number, number>();
+  let cluster = resetKeys[0];
+  for (const key of resetKeys) {
+    if (cluster === undefined || key - cluster > 60_000) cluster = key;
+    canonical.set(key, cluster ?? key);
+  }
+  for (const reading of visible) {
+    if (reading.resetsAt === undefined) continue;
+    const snapped = canonical.get(reading.resetsAt);
+    if (snapped !== undefined) reading.resetsAt = snapped;
+  }
 
   const members = visible.filter((reading) => {
     if (reading.resetsAt === undefined) return false;
@@ -821,9 +1040,19 @@ export function buildEnvelopeSeries(
   const frames: WindowFrame[] = [];
   const fixedGrid = policy === "fixed" && windowMs > 0 && anchor !== undefined;
   if (fixedGrid && anchor !== undefined) {
-    frames.push(...fixedGridFrames(anchor, windowMs, rangeStart, rangeEnd));
+    frames.push(...framesForFixed(anchor, windowMs, rangeStart, rangeEnd, members));
   }
   const grouped = groupReadings(members, policy, windowMs, anchor);
+  if (fixedGrid) {
+    const boundaries = frames.flatMap((frame) => [frame.start, frame.end]);
+    for (const key of [...grouped.keys()]) {
+      const snapped = boundaries.find((at) => at !== key && Math.abs(at - key) < 60_000);
+      if (snapped === undefined) continue;
+      const moving = grouped.get(key) ?? [];
+      grouped.delete(key);
+      grouped.set(snapped, [...(grouped.get(snapped) ?? []), ...moving]);
+    }
+  }
   if (!fixedGrid) {
     for (const [end, group] of grouped) {
       const known = group.find((reading) => reading.durationMs && reading.durationMs > 0);
@@ -854,18 +1083,76 @@ export function buildEnvelopeSeries(
     if (reading) grouped.set(frame.end, [...group, reading]);
   }
 
-  const unique = [...new Map(frames.map((frame) => [frameKey(frame.start, frame.end), frame])).values()]
-    .filter((frame) => frame.end > rangeStart && frame.start < rangeEnd)
-    .sort((left, right) => left.start - right.start);
+  const deduped = [...new Map(frames.map((frame) => [frameKey(frame.start, frame.end), frame])).values()]
+    .filter((frame) => frame.end > rangeStart && frame.start < rangeEnd);
+  // A named window (31 days) replaces the nominal grid frame it covers,
+  // including a grid frame that shares its end but starts later.
+  const named = deduped.filter((frame) => frame.windowMs !== windowMs);
+  const unique = deduped
+    .filter((frame) => !named.some((other) =>
+      other !== frame &&
+      frame.start >= other.start - 120_000 &&
+      frame.end <= other.end + 120_000,
+    ))
+    .sort((left, right) => left.start - right.start || right.end - left.end);
+
+  // A reading's own window can overlap the nominal grid. The window that
+  // actually names the reading wins; the grid frame keeps the rest.
+  const claimed = new Set<EnvelopeReading>();
+  const assignedToFrame = new Map<string, EnvelopeReading[]>();
+  const claimOrder = [...unique].sort((left, right) => {
+    const names = (frame: WindowFrame) =>
+      (grouped.get(frame.end) ?? []).some((reading) => reading.resetsAt === frame.end);
+    if (names(left) !== names(right)) return names(left) ? -1 : 1;
+    return left.start - right.start;
+  });
+  for (const frame of claimOrder) {
+    const kept = (grouped.get(frame.end) ?? []).filter((reading) => {
+      if (claimed.has(reading)) return false;
+      if (reading.observedAt < frame.start - 60_000 || reading.observedAt >= frame.end + 60_000) return false;
+      claimed.add(reading);
+      return true;
+    });
+    assignedToFrame.set(frameKey(frame.start, frame.end), kept);
+  }
+  // A grid frame a named window already covers can be left with nothing, or
+  // with a single reading the jitter pushed across the boundary. Drop it.
+  for (const frame of [...unique]) {
+    const own = assignedToFrame.get(frameKey(frame.start, frame.end)) ?? [];
+    const covered = named.some((other) =>
+      other !== frame &&
+      frame.start >= other.start - 120_000 &&
+      frame.end <= other.end + 120_000,
+    );
+    if (covered && own.length <= 1) {
+      const index = unique.indexOf(frame);
+      if (index >= 0) unique.splice(index, 1);
+    }
+  }
 
   const events: HistoryEventMarker[] = [];
   let rebaseCapped = false;
-  const windows = unique.map((frame) => {
-    const readings = (grouped.get(frame.end) ?? [])
-      .filter((reading) => reading.observedAt >= frame.start && reading.observedAt < frame.end)
+  const pieces = unique.flatMap((frame) => {
+    const readings = (assignedToFrame.get(frameKey(frame.start, frame.end)) ?? [])
+      .filter((reading) => reading.observedAt < frame.end + 60_000)
       .map((reading) => clampReadingToFrame(reading, frame));
+    return splitFrameByReset(frame, readings);
+  });
+  const firstReadingAt = visible.reduce<number | undefined>(
+    (earliest, reading) => earliest === undefined
+      ? reading.observedAt
+      : Math.min(earliest, reading.observedAt),
+    undefined,
+  );
+  const covered = pieces.map((piece) => piece.frame);
+  const fillers = policy === "fixed"
+    ? fillUncovered(covered, rangeStart, rangeEnd, firstReadingAt)
+    : [];
+  for (const frame of fillers) pieces.push({ frame, readings: [] });
+
+  const windows = pieces.map((piece) => {
     const draft: HistoryEventMarker[] = [];
-    const built = buildWindowEnvelope(frame, readings, options.now, draft);
+    const built = buildWindowEnvelope(piece.frame, piece.readings, options.now, draft);
     const capped = capRebaseMarkers(built, draft);
     if (capped.capped) rebaseCapped = true;
     events.push(...capped.events);
