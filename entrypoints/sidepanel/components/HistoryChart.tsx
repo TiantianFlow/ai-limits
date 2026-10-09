@@ -41,7 +41,7 @@ const PLOT_LEFT = 28;
 const PLOT_RIGHT = 312;
 const PLOT_TOP = 8;
 const PLOT_BOTTOM = 92;
-const TOOLTIP_MAX = 204;
+const TOOLTIP_MAX = 180;
 
 type InspectItem =
   | { kind: "window"; id: string }
@@ -171,14 +171,26 @@ function windowTooltip(
   now: number,
   readingAt?: number,
 ): string[] {
-  const lines = [formatSpan(window.start, window.end, window.current)];
-  if (readingAt !== undefined) lines.push(formatDateTime(readingAt));
-  if (window.kind === "unknown") {
-    lines.push(l10n.t("history.tooltipNoReadings"));
-    lines.push(l10n.t("history.tooltipPossibleRange"));
+  // A reading on the line is one time and one value. The window span, the
+  // reading count, and the open-end note made the box cover half the plot.
+  if (readingAt !== undefined) {
+    const index = window.readings.findIndex((reading) => reading.observedAt === readingAt);
+    const left = window.values[index];
+    const lines = [formatDateTime(readingAt)];
+    if (left !== undefined) lines.push(observedRange([left], mode));
+    const last = window.readings.at(-1);
+    if (!window.current && !window.tailTrusted && last && last.observedAt === readingAt) {
+      lines.push(l10n.t("history.tooltipOpenEnd", {
+        duration: formatDuration(Math.max(0, window.end - last.observedAt)),
+      }));
+    }
     return lines;
   }
-  lines.push(l10n.count("history.readingsInWindow", window.readings.length));
+  const lines = [formatSpan(window.start, window.end, window.current)];
+  if (window.kind === "unknown") {
+    lines.push(l10n.t("history.tooltipNoReadings"));
+    return lines;
+  }
   if (window.values.length > 0) lines.push(observedRange(window.values, mode));
   const last = window.readings.at(-1);
   const endValue = window.values.at(-1);
@@ -202,7 +214,6 @@ function windowTooltip(
       duration: formatDuration(Math.max(0, window.end - last.observedAt)),
     }));
   }
-  if (window.hasEvent) lines.push(l10n.t("history.tooltipEvent"));
   return lines;
 }
 
@@ -230,15 +241,9 @@ function dayTooltip(bucket: DayBucket, mode: DisplayMode, policy: EnvelopeSeries
   return lines;
 }
 
-function spanTooltip(span: IdleSpan, mode: DisplayMode): string[] {
-  if (span.kind === "unknown") {
-    return [l10n.t("history.spanUnknownTitle"), l10n.t("history.spanUnknownBody")];
-  }
-  const lines = [l10n.t("history.spanIdle", { mode: localizeDisplayModeCompact(mode) })];
-  lines.push(span.proofReadings > 0
-    ? l10n.count("history.spanConfirmed", span.proofReadings)
-    : l10n.t("history.spanShort"));
-  return lines;
+function spanTooltip(span: IdleSpan, _mode: DisplayMode): string[] {
+  if (span.kind === "unknown") return [l10n.t("history.spanUnknownTitle")];
+  return [l10n.t("history.spanIdle")];
 }
 
 function defaultRangeHours(metrics: QuotaMetric[], metricId: string, providerKind?: ProviderKind): number {
@@ -264,7 +269,6 @@ export function HistoryChart({
   const chartRef = useRef<HTMLDivElement>(null);
   const focusedBeforePress = useRef(false);
   const [plotWidth, setPlotWidth] = useState(360);
-  const [cardWidth, setCardWidth] = useState(360);
   const [active, setActive] = useState<InspectItem | null>(null);
   const [pinned, setPinned] = useState(false);
   const [selectedMetricId, setSelectedMetricId] = useState(() => metrics[0]?.id ?? "");
@@ -277,14 +281,13 @@ export function HistoryChart({
 
   useEffect(() => {
     const element = chartRef.current;
-    if (!element || typeof ResizeObserver === "undefined") return undefined;
+    if (!element) return undefined;
     const update = (): void => {
       const plot = element.querySelector(".history-chart__plot");
       setPlotWidth((plot ?? element).clientWidth || 360);
-      const card = element.closest(".history-surface");
-      setCardWidth((card instanceof HTMLElement ? card.clientWidth : element.clientWidth) || 360);
     };
     update();
+    if (typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver(update);
     observer.observe(element);
     const plot = element.querySelector(".history-chart__plot");
@@ -375,21 +378,28 @@ export function HistoryChart({
 
   function itemAtClientX(clientX: number): Inspectable | undefined {
     const canvas = chartRef.current?.querySelector(".history-chart__canvas");
-    if (!canvas) return undefined;
+    if (!(canvas instanceof Element)) return undefined;
     const bounds = canvas.getBoundingClientRect();
     if (bounds.width <= 0) return undefined;
     const viewX = ((clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
+    if (viewX < PLOT_LEFT || viewX > PLOT_RIGHT) return undefined;
     const hits = items.filter((item) => {
       const box = item.hit;
       if (!box) return false;
-      const end = box.x + box.width;
-      const afterStart = viewX >= box.x;
-      const beforeEnd = viewX <= end;
-      return afterStart && beforeEnd;
+      const starts = viewX >= box.x;
+      const ends = viewX <= box.x + box.width;
+      return starts && ends;
     });
-    // Overlapping targets (a window and the outline merged across it) would
-    // otherwise highlight a span whose tooltip belongs to a different item.
-    return hits.sort((left, right) => (left.to - left.from) - (right.to - right.from))[0];
+    if (hits.length === 0) return undefined;
+    // A line target owns the paper out to the midpoint of its neighbors, so
+    // the nearest reading wins. A span only wins where no reading covers it.
+    const readings = hits.filter((item) => item.guide);
+    const pool = readings.length > 0 ? readings : hits;
+    return pool.sort((left, right) => {
+      const leftAt = left.guide?.x ?? left.hit!.x + left.hit!.width / 2;
+      const rightAt = right.guide?.x ?? right.hit!.x + right.hit!.width / 2;
+      return Math.abs(leftAt - viewX) - Math.abs(rightAt - viewX);
+    })[0];
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
@@ -422,7 +432,7 @@ export function HistoryChart({
   const empty = readings === 0;
   const tooltip = activeItem?.lines ?? null;
   const tooltipAnchor = activeItem
-    ? tooltipPosition(activeItem.from, activeItem.to, rangeStart, rangeEnd, plotWidth, cardWidth)
+    ? tooltipPosition(activeItem, rangeStart, rangeEnd, plotWidth)
     : null;
 
   return (
@@ -560,7 +570,11 @@ export function HistoryChart({
               <div
                 className="history-chart__tooltip"
                 role="tooltip"
-                style={{ left: tooltipAnchor.left, top: 4, width: tooltipAnchor.width }}
+                style={{
+                  left: tooltipAnchor.left,
+                  top: tooltipAnchor.top,
+                  maxWidth: tooltipAnchor.maxWidth,
+                }}
               >
                 {tooltip.map((line) => <p key={line}>{line}</p>)}
               </div>
@@ -792,19 +806,27 @@ function Highlight({
 }
 
 function tooltipPosition(
-  from: number,
-  to: number,
+  item: Inspectable,
   rangeStart: number,
   rangeEnd: number,
   plotWidth: number,
-  cardWidth: number,
-): { left: number; width: number } {
-  const span = clampInterval(from, to, rangeStart, rangeEnd) ?? { from, to };
-  const mid = (timeX(span.from, rangeStart, rangeEnd) + timeX(span.to, rangeStart, rangeEnd)) / 2;
-  const center = (mid / VIEWBOX_WIDTH) * plotWidth;
-  const width = Math.min(TOOLTIP_MAX, Math.max(80, cardWidth - 8), Math.max(80, plotWidth));
-  const left = Math.min(Math.max(0, center - width / 2), Math.max(0, plotWidth - width));
-  return { left, width };
+): { left: number; top: number; maxWidth: number } {
+  // Sit on the opposite side of the dot so the box does not cover it. A span
+  // has no dot; its midpoint is the pointer the span names.
+  const anchorX = item.guide?.x ?? (() => {
+    const span = clampInterval(item.from, item.to, rangeStart, rangeEnd) ?? { from: item.from, to: item.to };
+    return (timeX(span.from, rangeStart, rangeEnd) + timeX(span.to, rangeStart, rangeEnd)) / 2;
+  })();
+  const anchorPx = (anchorX / VIEWBOX_WIDTH) * plotWidth;
+  const gap = 12;
+  const onRight = anchorPx > plotWidth / 2;
+  const available = onRight ? anchorPx : plotWidth - anchorPx;
+  const maxWidth = Math.min(TOOLTIP_MAX, Math.max(48, available - gap));
+  const left = onRight ? anchorPx - gap - maxWidth : anchorPx + gap;
+  const top = item.guide
+    ? Math.max(4, (item.guide.y / VIEWBOX_HEIGHT) * ((plotWidth * VIEWBOX_HEIGHT) / VIEWBOX_WIDTH) - 28)
+    : 4;
+  return { left: Math.max(0, left), top, maxWidth };
 }
 
 function chartSummary(input: {
@@ -894,7 +916,17 @@ export function drawnXSpans(options: {
     if (box) spans.push({ from: box.x, to: box.x + box.width });
   };
   for (const run of series.unknownRuns) pushBox(run.start, run.end);
-  for (const span of series.idleSpans) pushBox(span.start, span.end);
+  // Only spans that paint a mark. An idle span paints the baseline band
+  // (or the dashed column when it is long and unproven).
+  for (const span of series.idleSpans) {
+    if (span.kind === "unknown") {
+      pushBox(span.start, span.end);
+      continue;
+    }
+    const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
+    if (!box || box.width < 0.4) continue;
+    spans.push({ from: box.x, to: box.x + box.width });
+  }
   if (level === "envelope") {
     for (const window of series.spans) {
       if (window.kind !== "observed") continue;
@@ -990,10 +1022,10 @@ function EnvelopeLayer({
       {series.idleSpans.filter((span) => span.kind === "idle").map((span) => {
         const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
         if (!box) return null;
-        // A baseline only covers the bottom edge. A stretch at least a window
-        // wide is the dashed "no readings" column, or the paper between that
-        // outline and the next circle stays blank.
-        if (!(span.end - span.start < series.windowMs)) {
+        // Every idle span is the neutral baseline, including a gap shorter
+        // than one window. A long first-use stretch with no proof is the
+        // dashed "no readings" column instead.
+        if (!(span.end - span.start < series.windowMs) && span.proofReadings === 0) {
           return (
             <rect
               key={`idle-${span.start}`}
@@ -1006,13 +1038,13 @@ function EnvelopeLayer({
           );
         }
         return (
-          <line
+          <rect
             key={`idle-${span.start}`}
             className="history-chart__idle"
-            x1={box.x}
-            x2={box.x + box.width}
-            y1={shownY(100, mode)}
-            y2={shownY(100, mode)}
+            x={box.x}
+            y={PLOT_BOTTOM - 2.5}
+            width={box.width}
+            height={2.5}
           />
         );
       })}
@@ -1274,13 +1306,13 @@ function BarsLayer({
         const box = spanRect(span.start, span.end, rangeStart, rangeEnd);
         if (!box) return null;
         return (
-          <line
+          <rect
             key={`idle-${span.start}`}
             className="history-chart__idle"
-            x1={box.x}
-            x2={box.x + box.width}
-            y1={shownY(100, mode)}
-            y2={shownY(100, mode)}
+            x={box.x}
+            y={PLOT_BOTTOM - 2.5}
+            width={box.width}
+            height={2.5}
           />
         );
       })}
@@ -1308,13 +1340,13 @@ function DailyLayer({
         const bar = bucket.window ? windowBar(bucket.window) : null;
         if (!bar) {
           return (
-            <line
+            <rect
               key={bucket.start}
               className="history-chart__idle"
-              x1={x}
-              x2={x + width}
-              y1={shownY(100, mode)}
-              y2={shownY(100, mode)}
+              x={x}
+              y={PLOT_BOTTOM - 2.5}
+              width={width}
+              height={2.5}
             />
           );
         }

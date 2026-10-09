@@ -335,13 +335,19 @@ describe("HistoryChart", () => {
             ?? series.spans.find((window) => window.kind === "observed")?.windowMs
             ?? 7 * DAY;
           const level = detailLevel(windowMs, rangeMs, width);
-          const first = series.spans
+          const observed = series.spans.filter((window) => window.kind === "observed");
+          const first = observed
             .flatMap((window) => window.readings.map((reading) => reading.observedAt))
             .reduce<number | undefined>(
               (earliest, at) => earliest === undefined ? at : Math.min(earliest, at),
               undefined,
             );
-          const fromAt = Math.max(rangeStart, first ?? rangeStart);
+          // A first-use gap shorter than one window sits between windows. Start
+          // at the earliest window end so that gap is inside the measured range.
+          const between = observed.length >= 2
+            ? Math.min(...observed.map((window) => window.end))
+            : first;
+          const fromAt = Math.max(rangeStart, between ?? first ?? rangeStart);
           const duration = Math.max(1, rangeMs);
           const fromX = plotLeft + ((fromAt - rangeStart) / duration) * (plotRight - plotLeft);
           const gaps = uncoveredGaps(
@@ -441,7 +447,7 @@ describe("HistoryChart", () => {
     chartBounds(chart);
     fireEvent.pointerMove(chart, { clientX: clientXForView(300), clientY: 40, pointerType: "mouse" });
     const tooltip = screen.getByRole("tooltip").textContent ?? "";
-    expect(tooltip).toMatch(/readings in window/);
+    expect(tooltip).toMatch(/Observed/);
     expect(tooltip).not.toMatch(/No reading in the last/);
     expect(tooltip).not.toMatch(/No reading near reset/);
 
@@ -482,8 +488,56 @@ describe("HistoryChart", () => {
       return screen.getByRole("tooltip").textContent ?? "";
     });
     expect(texts.some((text) => /No reading near reset/.test(text))).toBe(true);
-    expect(texts.some((text) => /readings in window/.test(text))).toBe(true);
+    expect(texts.some((text) => /Observed/.test(text))).toBe(true);
     expect(document.querySelector(".history-chart__highlight")).not.toBeNull();
+  });
+
+  it("tracks the pointer across a weekly 30-day plot at three widths", () => {
+    const meter = REALISTIC_METERS.find((item) => item.metricId === "weekly")!;
+    for (const width of [340, 400, 460]) {
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
+      const { container, unmount } = render(
+        <HistoryChart
+          providerName={meter.providerName}
+          providerKind="claude"
+          mode="used"
+          metrics={[metricFor(meter)]}
+          history={meter.history}
+          now={FIXTURE_NOW}
+          rangeHours={30 * 24}
+        />,
+      );
+      const chart = screen.getByRole("group", { name: /usage history/ });
+      const bounds = { left: 0, width, top: 0, height: width * (112 / 320), right: width, bottom: width * (112 / 320), x: 0, y: 0, toJSON() { return this; } };
+      vi.spyOn(chart, "getBoundingClientRect").mockReturnValue(bounds as DOMRect);
+      const times: number[] = [];
+      for (let step = 0; step <= 8; step += 1) {
+        const viewX = 28 + (step / 8) * (312 - 28);
+        fireEvent.pointerMove(chart, { clientX: (viewX / 320) * width, clientY: 40, pointerType: "mouse" });
+        const guide = container.querySelector(".history-chart__guide-active");
+        const dot = container.querySelector(".history-chart__dot-active");
+        expect(guide, `width ${width} step ${step}`).not.toBeNull();
+        expect(dot, `width ${width} step ${step}`).not.toBeNull();
+        times.push(Number(guide?.getAttribute("x1")));
+        const tooltip = container.querySelector(".history-chart__tooltip") as HTMLElement;
+        expect(tooltip.textContent?.trim().length).toBeGreaterThan(0);
+        const maxWidth = Number.parseFloat(tooltip.style.maxWidth);
+        expect(maxWidth).toBeLessThanOrEqual(180);
+        const tipLeft = Number.parseFloat(tooltip.style.left);
+        const dotX = (Number(dot?.getAttribute("cx")) / 320) * width;
+        // The box stays on the opposite side of the dot, with a gap.
+        const placedRight = tipLeft + maxWidth;
+        const gap = 8;
+        if (dotX <= width / 2) expect(tipLeft).toBeGreaterThanOrEqual(dotX + gap - 1);
+        else expect(placedRight).toBeLessThanOrEqual(dotX - gap + 1);
+      }
+      const distinct = new Set(times.map((value) => value.toFixed(1)));
+      expect(distinct.size, `width ${width}`).toBeGreaterThanOrEqual(4);
+      for (let index = 1; index < times.length; index += 1) {
+        expect(times[index]).toBeGreaterThanOrEqual(times[index - 1]!);
+      }
+      unmount();
+    }
   });
 
   it("gives every pointer position a visible tooltip or no highlight", () => {
@@ -526,9 +580,9 @@ describe("HistoryChart", () => {
             expect(text.length, `${label} at ${clientX}`).toBeGreaterThan(0);
             const box = tooltip as HTMLElement;
             const left = Number.parseFloat(box.style.left);
-            const tipWidth = Number.parseFloat(box.style.width);
+            const tipWidth = Number.parseFloat(box.style.maxWidth);
             expect(left, label).toBeGreaterThanOrEqual(0);
-            expect(left + tipWidth, label).toBeLessThanOrEqual(Math.max(width, 360, tipWidth) + 1);
+            expect(left + tipWidth, label).toBeLessThanOrEqual(Math.max(width, 360) + 1);
       }
       unmount();
     }
