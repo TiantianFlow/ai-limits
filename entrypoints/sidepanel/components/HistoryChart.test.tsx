@@ -10,7 +10,7 @@ import {
   type UsageSnapshot,
 } from "../../../domain/public-protocol";
 import type { QuotaMetric, UsageHistoryObservation } from "../../../domain/model";
-import { FIXTURE_NOW, REALISTIC_METERS, type RealisticMeter } from "../../../domain/history-realistic";
+import { FIXTURE_NOW, REALISTIC_METERS, idleGrid, type RealisticMeter } from "../../../domain/history-realistic";
 import { HistoryView } from "../views/HistoryView";
 import { formatPercent } from "../../../i18n/format";
 import { installI18nLocale } from "../../../test/i18n-harness";
@@ -145,6 +145,42 @@ describe("HistoryChart", () => {
     expect(container.querySelectorAll(".history-chart__highlight")).toHaveLength(1);
     fireEvent.keyDown(chart, { key: "Escape" });
     expect(container.querySelector(".history-chart__highlight")).toBeNull();
+  });
+
+  it("advances the keyboard time on every Right press", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    const history: UsageHistoryObservation[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      const at = NOW - (40 - index * 4) * HOUR;
+      history.push(observation("five-hour", at, 0.1 + index * 0.05, {
+        cycle: { cadence: "rolling", durationMs: 5 * HOUR, resetsAt: at + 4 * HOUR },
+      }));
+      // A second reading a minute later thins to the same x at 48 h.
+      history.push(observation("five-hour", at + 60_000, 0.12 + index * 0.05, {
+        cycle: { cadence: "rolling", durationMs: 5 * HOUR, resetsAt: at + 4 * HOUR },
+      }));
+    }
+    render(
+      <HistoryChart
+        providerName="Claude"
+        providerKind="claude"
+        mode="used"
+        metrics={[metric("five-hour", 5 * HOUR, "5-hour messages")]}
+        history={history}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+    const chart = screen.getByRole("group", { name: /usage history/ });
+    const seen: string[] = [];
+    for (let press = 0; press < 6; press += 1) {
+      fireEvent.keyDown(chart, { key: "ArrowRight" });
+      seen.push(screen.getByRole("tooltip").textContent ?? "");
+    }
+    const times = seen.map((text) => text.split("Observed")[0] ?? text);
+    for (let index = 1; index < times.length; index += 1) {
+      expect(times[index]).not.toBe(times[index - 1]);
+    }
   });
 
   it("draws one bar per day for a short window squeezed under 4 px", () => {
@@ -311,6 +347,57 @@ describe("HistoryChart", () => {
     expect(drawn, "the column between the two windows needs a band at least half the plot tall").toBe(true);
   });
 
+  it("paints a calendar month that has no durationMs across the 30-day plot", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    const cycleStart = NOW - 26 * DAY;
+    const cycleEnd = cycleStart + 30 * DAY;
+    const nextEnd = cycleEnd + 31 * DAY;
+    const history: UsageHistoryObservation[] = [];
+    for (let index = 0; index < 44; index += 1) {
+      const at = cycleStart + ((index + 0.5) / 44) * (cycleEnd - cycleStart);
+      history.push(observation("monthly-total", at, 0.02 + (index / 43) * 0.97, {
+        cycle: { cadence: "calendar", startedAt: cycleStart, resetsAt: cycleEnd },
+      }));
+    }
+    history.push(
+      observation("monthly-total", cycleEnd + 6 * HOUR, 0.01, {
+        cycle: { cadence: "calendar", startedAt: cycleEnd, resetsAt: nextEnd },
+      }),
+      observation("monthly-total", cycleEnd + 20 * HOUR, 0.04, {
+        cycle: { cadence: "calendar", startedAt: cycleEnd, resetsAt: nextEnd },
+      }),
+    );
+    const now = cycleEnd + 2 * DAY;
+    const rangeStart = now - 30 * DAY;
+    const { container } = render(
+      <HistoryChart
+        providerName="Kimi"
+        providerKind="kimi"
+        mode="used"
+        metrics={[metric("monthly-total", 30 * DAY, "Total usage")]}
+        history={history}
+        now={now}
+        rangeHours={30 * 24}
+      />,
+    );
+    const plotLeft = 28;
+    const plotRight = 312;
+    const firstX = plotLeft + ((history[0]!.observedAt - rangeStart) / (30 * DAY)) * (plotRight - plotLeft);
+    const lastX = plotLeft + ((history.at(-1)!.observedAt - rangeStart) / (30 * DAY)) * (plotRight - plotLeft);
+    const painted = paintedXSpans(container, 460);
+    const gaps = uncoveredGaps(painted, Math.max(plotLeft, firstX), lastX, 2);
+    expect(gaps).toEqual([]);
+    const unknownOverReading = [...container.querySelectorAll(".history-chart__unknown")].filter((box) => {
+      const x = Number(box.getAttribute("x"));
+      const width = Number(box.getAttribute("width"));
+      return history.some((item) => {
+        const at = plotLeft + ((item.observedAt - rangeStart) / (30 * DAY)) * (plotRight - plotLeft);
+        return at >= x && at <= x + width;
+      });
+    });
+    expect(unknownOverReading).toEqual([]);
+  });
+
   it("covers the drawn chart from the first reading to now, stub included", () => {
     const widths = [340, 460];
     const ranges = [48, 7 * 24, 30 * 24];
@@ -408,6 +495,48 @@ describe("HistoryChart", () => {
     }
   });
 
+  it("names the idle or empty stretch under the pointer instead of a distant reading", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 460, bottom: 200, width: 460, height: 200, toJSON() { return {}; },
+    });
+    const anchor = NOW - 46 * HOUR;
+    const history = idleGrid({ metricId: "five-hour-coding", windowMs: 5 * HOUR, now: NOW, anchor });
+    const { container } = render(
+      <HistoryChart
+        providerName="Kimi"
+        providerKind="kimi"
+        mode="used"
+        metrics={[metric("five-hour-coding", 5 * HOUR, "5-hour usage")]}
+        history={history}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+    const chart = container.querySelector(".history-chart__canvas") as HTMLElement;
+    const bands = [...container.querySelectorAll(".history-chart__idle")].map((box) =>
+      `${box.getAttribute("x")},${box.getAttribute("width")}`,
+    );
+    if (bands.length === 0) throw new Error(`no idle band; unknown=${container.querySelectorAll(".history-chart__unknown").length}`);
+    const idle = [...container.querySelectorAll(".history-chart__idle")][0] as SVGRectElement;
+    const empty = [...container.querySelectorAll(".history-chart__unknown")][0] as SVGRectElement;
+    const hover = (box: SVGRectElement): void => {
+      const x = Number(box.getAttribute("x")) + Number(box.getAttribute("width")) / 2;
+      fireEvent.pointerMove(chart, { clientX: (x / 320) * 460, pointerType: "mouse" });
+    };
+    hover(idle);
+    const tip = (): string => container.querySelector(".history-chart__tooltip")?.textContent ?? "";
+    expect(tip()).toContain("Idle — no active window");
+    const idleGuide = Number(container.querySelector(".history-chart__guide-active")?.getAttribute("x1"));
+    const idleMid = Number(idle.getAttribute("x")) + Number(idle.getAttribute("width")) / 2;
+    expect(Math.abs(idleGuide - idleMid)).toBeLessThan(4);
+    hover(empty);
+    expect(tip()).toMatch(/No readings ·/);
+    const emptyGuide = Number(container.querySelector(".history-chart__guide-active")?.getAttribute("x1"));
+    const emptyMid = Number(empty.getAttribute("x")) + Number(empty.getAttribute("width")) / 2;
+    expect(Math.abs(emptyGuide - emptyMid)).toBeLessThan(4);
+  });
+
   function metricFor(meter: RealisticMeter): QuotaMetric {
     const duration = meter.metricId.includes("five-hour")
       ? 5 * HOUR
@@ -493,6 +622,7 @@ describe("HistoryChart", () => {
       return screen.getByRole("tooltip").textContent ?? "";
     });
     expect(texts.some((text) => /No reading near reset/.test(text))).toBe(true);
+    expect(texts.some((text) => /last one/.test(text))).toBe(false);
     expect(texts.some((text) => /Observed/.test(text))).toBe(true);
     expect(document.querySelector(".history-chart__highlight")).not.toBeNull();
   });

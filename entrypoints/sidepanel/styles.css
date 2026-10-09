@@ -869,8 +869,13 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
 }
 
 .history-chart__reset {
-  stroke: var(--quota);
+  stroke: var(--text-muted);
   stroke-width: 1;
+}
+
+.history-chart__legend-reset {
+  border-left: 1px solid var(--text-muted);
+  height: 10px;
 }
 
 .history-chart__limit {

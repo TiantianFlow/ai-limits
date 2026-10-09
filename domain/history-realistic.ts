@@ -138,6 +138,38 @@ export function firstUseIdleGap(options: {
   return history;
 }
 
+/**
+ * Fixed 5-hour grid that keeps reporting 0% while idle. Every resetsAt is
+ * anchor + k·5h. Most readings are 0%, and long runs of windows have none.
+ */
+export function idleGrid(options: {
+  metricId: string;
+  windowMs: number;
+  now: number;
+  anchor: number;
+}): UsageHistoryObservation[] {
+  const history: UsageHistoryObservation[] = [];
+  const push = (observedAt: number, usedRatio: number, resetsAt: number): void => {
+    history.push(quota(options.metricId, observedAt, usedRatio, {
+      cadence: "rolling",
+      durationMs: options.windowMs,
+      resetsAt,
+    }));
+  };
+  const grid = (at: number): number => {
+    const steps = Math.ceil((at - options.anchor) / options.windowMs);
+    return options.anchor + steps * options.windowMs;
+  };
+  // A burst of use, then a long empty run, then zeros on the same grid.
+  push(options.now - 40 * HOUR, 0.4, grid(options.now - 40 * HOUR));
+  push(options.now - 39 * HOUR, 0.1, grid(options.now - 39 * HOUR));
+  for (let ago = 20; ago >= 1; ago -= 5) {
+    const at = options.now - ago * HOUR;
+    push(at, 0, grid(at));
+  }
+  return history;
+}
+
 /** Sparse first-use windows: hour-quantized starts, reported even at 0% used. */
 function sparseFirstUse(options: {
   metricId: string;

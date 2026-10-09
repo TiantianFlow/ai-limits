@@ -192,7 +192,7 @@ history:
   tooltipLatestCurrent: 最新读数即为当前值
   tooltipCurrentOpen: "最近 {duration} 内没有读数 — 此后的用量未知"
   tooltipEnded: "结束时为 {value}% {mode}"
-  tooltipOpenEnd: "重置附近没有读数 — 上一条在 {duration} 之前"
+  tooltipOpenEnd: "重置附近没有读数"
   tooltipEvent: 此窗口内计划限额已变更或额度上升
   dayToday: "{day} · 今天"
   dayIdle: 没有含读数的窗口 — 可能处于空闲
@@ -245,6 +245,7 @@ history:
   legendUnknown: 没有读数
   legendIdle: 空闲 · 没有活动窗口
   legendLimit: 计划限额已变更
+  legendReset: 窗口重置
   legendRebase: 窗口中途额度上升
   legendRebaseCapped: 此范围内的额度上升已被钳制
   legendTrend: 窗口结束时用量趋势（估计）

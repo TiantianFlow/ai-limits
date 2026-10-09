@@ -192,7 +192,7 @@ history:
   tooltipLatestCurrent: Latest reading is current
   tooltipCurrentOpen: "No reading in the last {duration} — usage since is unknown"
   tooltipEnded: "Ended at {value}% {mode}"
-  tooltipOpenEnd: "No reading near reset — last one {duration} before"
+  tooltipOpenEnd: "No reading near reset"
   tooltipEvent: Plan limit changed or quota rose during this window
   dayToday: "{day} · today"
   dayIdle: No windows with readings — likely idle
@@ -245,6 +245,7 @@ history:
   legendUnknown: No readings
   legendIdle: Idle · no active window
   legendLimit: Plan limit changed
+  legendReset: Window reset
   legendRebase: Quota rose mid-window
   legendRebaseCapped: Quota rises in this range were clamped
   legendTrend: End-of-window usage trend (estimate)
