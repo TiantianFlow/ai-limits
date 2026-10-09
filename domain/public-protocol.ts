@@ -85,6 +85,30 @@ export type {
   WindowSpan,
   WindowTrend,
 } from "./history-envelope";
+export {
+  buildChartModel,
+  buildRuns,
+  chartTier,
+  paceLine,
+  segmentStyle,
+  wholePercent,
+  BAR_MIN_WINDOW_PX as V20_BAR_MIN_WINDOW_PX,
+  ESTIMATE_MIN_PX,
+  LINE_MIN_WINDOW_PX,
+  MIN_BAR_PX,
+  PACE_MIN_ELAPSED,
+} from "./history-v20";
+export type {
+  ChartBar,
+  ChartGap,
+  ChartIdle,
+  ChartModel,
+  ChartRun,
+  ChartTier,
+  ChartWindow,
+  PaceInput,
+  SegmentStyle,
+} from "./history-v20";
 export { displayRatio, elapsedRatio, paceStatus } from "./quota";
 export type { PaceKind, PaceStatus } from "./quota";
 import type {

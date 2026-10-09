@@ -294,6 +294,46 @@ history:
   summaryTrend: The dashed line is an estimate of end-of-window usage, not a forecast.
   summaryKeys: Use left and right arrow keys to inspect windows.
   summaryKeysDays: Use left and right arrow keys to inspect days.
+  paceNoWindow: No active window · starts at first use
+  paceResets: "Resets {when}"
+  paceNone: "No usage this window · resets {when}"
+  paceLimit: "Limit reached · resets {when}"
+  paceFor: "On pace for ~{percent}% by reset · {when}"
+  paceLeft: "On pace for ~{percent}% left at reset · {when}"
+  paceRunOut: "On pace to run out {out} · resets {when}"
+  windowCurrent: "Current window · resets {when}"
+  windowSpan: "Window {start} – {end}"
+  readNow: "Now {value}"
+  readEnded: "Ended at {value}"
+  readOpen: "{value} at reset · no reading near it"
+  readPeak: "Peak {value}"
+  readLowest: "Lowest {value}"
+  readAtLeast: "At least {value}"
+  readAtMost: "At most {value}"
+  readBetween: "Between {low} and {high}"
+  readSinceReset: "No readings for {duration} after the reset"
+  readNoSince: "No reading since {when}"
+  readNoFor: "No readings for {duration}"
+  idleNoUsage: No usage
+  idleLast: "{value} at last reading · {when}"
+  gapDuration: "{duration} · AI Limits wasn’t collecting"
+  barBusiest: "Busiest window: {value}"
+  barWindows:
+    zero: "{count} windows"
+    one: "{count} window"
+    two: "{count} windows"
+    few: "{count} windows"
+    many: "{count} windows"
+    other: "{count} windows"
+  infoLabel: "How to read {label}"
+  infoLine: Solid line — readings. The shaded area is quota used; each drop is a reset.
+  infoBars: Each bar is the busiest window in that stretch.
+  infoDashed: Dashed — no readings in between.
+  infoIdle: Gray dashed line — idle or no usage.
+  infoGaps: Gray marks under the axis — no readings.
+  infoResets: Ticks under the axis mark resets.
+  infoStored: "{count} readings · stored only on this device."
+  noteNone: "No readings in {range}"
   note: Only successful, normalized quota observations are plotted. Between readings the shaded band is the possible range, and quota left only falls until the window resets. A window with no reading near its reset ends in a short dotted stub instead of a fill to the floor. Wide windows draw that staircase; narrower ones draw one bar per window, and the narrowest sub-day windows draw one bar per day. A dashed trend appears only after six complete windows spread across the range, and it is an estimate. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
 
 settings:
