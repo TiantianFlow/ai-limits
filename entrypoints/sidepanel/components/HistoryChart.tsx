@@ -31,11 +31,11 @@ export interface HistoryChartProps {
 }
 
 const VIEWBOX_WIDTH = 320;
-const VIEWBOX_HEIGHT = 124;
+const VIEWBOX_HEIGHT = 136;
 const PLOT_LEFT = 8;
 const PLOT_RIGHT = 312;
-const PLOT_TOP = 16;
-const PLOT_BOTTOM = 98;
+const PLOT_TOP = 22;
+const PLOT_BOTTOM = 106;
 const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
 
 interface Focus {
@@ -374,7 +374,13 @@ function currentReading(history: UsageHistoryObservation[], metricId: string, no
       .filter((sample) => sample.type === "quota" && sample.metricId === metricId && !(observation.observedAt > now))
       .map((sample) => ({ at: observation.observedAt, sample })),
   );
-  const latest = readings.at(-1);
+  // The window that contains now, not merely the newest sample. A meter can
+  // store an older closed window after the one that is still open.
+  const open = [...readings].reverse().find((item) => {
+    const resetsAt = item.sample.type === "quota" ? item.sample.cycle?.resetsAt : undefined;
+    return resetsAt === undefined || resetsAt >= now;
+  });
+  const latest = open ?? readings.at(-1);
   if (!latest || latest.sample.type !== "quota") return undefined;
   const resetsAt = latest.sample.cycle?.resetsAt;
   const duration = latest.sample.cycle?.durationMs;
@@ -553,6 +559,7 @@ export function HistoryChart({
           >
             <svg className="history-chart__svg" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-hidden="true">
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_TOP} y2={PLOT_TOP} strokeDasharray="2 3" />
+              <text className="history-chart__tick" x={PLOT_RIGHT - 2} y={PLOT_TOP - 2} textAnchor="end">100%</text>
               <line className="history-chart__axis" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM} />
               {model.tier === "line"
                 ? model.runs.map((run) => {
@@ -647,14 +654,14 @@ export function HistoryChart({
                 />
               ))}
               {dateTicks(model).map((tick) => (
-                <text key={tick.at} className="history-chart__tick" x={timeX(tick.at, rangeStart, rangeEnd)} y={116} textAnchor="middle">
+                <text key={tick.at} className="history-chart__tick" x={timeX(tick.at, rangeStart, rangeEnd)} y={128} textAnchor="middle">
                   {tick.label}
                 </text>
               ))}
               {model.resets.map((at) => (
                 <line key={`reset-${at}`} className="history-chart__reset" x1={timeX(at, rangeStart, rangeEnd)} x2={timeX(at, rangeStart, rangeEnd)} y1={PLOT_BOTTOM} y2={PLOT_BOTTOM + 5} />
               ))}
-              <text className="history-chart__tick" x={PLOT_RIGHT} y={116} textAnchor="end">{l10n.t("common.now")}</text>
+              <text className="history-chart__tick" x={PLOT_RIGHT} y={128} textAnchor="end">{l10n.t("common.now")}</text>
               {active?.x !== undefined ? (
                 <g>
                   <line className="history-chart__guide-active" x1={active.x} x2={active.x} y1={PLOT_TOP} y2={PLOT_BOTTOM} />

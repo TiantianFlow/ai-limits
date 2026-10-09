@@ -36,6 +36,7 @@ if (!base) throw new Error("Vite did not report a local URL");
 
 const fs = require("node:fs");
 fs.mkdirSync(outDir, { recursive: true });
+const only = process.env.HISTORY_V20_ONLY;
 
 try {
   for (const theme of ["light", "dark"]) {
@@ -48,13 +49,16 @@ try {
     await page.waitForSelector("[data-ready='1']", { timeout: 20_000 });
     const shots = page.locator("[data-shot]");
     const count = await shots.count();
+    let written = 0;
     for (let index = 0; index < count; index += 1) {
       const card = shots.nth(index);
       const name = await card.getAttribute("data-shot");
+      if (only && !`${theme}-${name}`.includes(only)) continue;
       await card.scrollIntoViewIfNeeded();
       await card.screenshot({ path: path.join(outDir, `${theme}-${name}.png`) });
+      written += 1;
     }
-    console.log(`${theme}: ${count} cards`);
+    console.log(`${theme}: ${written} cards`);
     await page.close();
   }
 } finally {
