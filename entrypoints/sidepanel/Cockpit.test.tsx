@@ -1177,7 +1177,7 @@ describe("Cockpit", () => {
     ).toEqual(["Used", "Left"]);
     expect(
       within(groups[1]!).getAllByRole("radio").map((radio) => radio.textContent),
-    ).toEqual(["48 h · 3", "7 d · 3", "30 d · 3"]);
+    ).toEqual(["48 h", "7 d", "30 d"]);
     expect(
       within(groups[1]!).getByRole("radio", { name: /7 days/ }),
     ).toBeChecked();

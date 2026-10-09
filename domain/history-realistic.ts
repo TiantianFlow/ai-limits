@@ -306,6 +306,33 @@ export function monthlyDurationSwitch(options: {
   return history;
 }
 
+/**
+ * A handful of readings across the range, for the low-data note. Values stay
+ * under 1 so the chart is a quiet line rather than a staircase.
+ */
+function lowData(options: {
+  metricId: string;
+  windowMs: number;
+  count: number;
+  seed: number;
+  now: number;
+}): UsageHistoryObservation[] {
+  const random = mulberry32(options.seed);
+  const history: UsageHistoryObservation[] = [];
+  const anchor = options.now + options.windowMs;
+  for (let index = 0; index < options.count; index += 1) {
+    const at = options.now - (index + 1) * 9 * DAY;
+    const steps = Math.ceil((anchor - at) / options.windowMs);
+    const end = anchor - (steps - 1) * options.windowMs;
+    history.push(quota(options.metricId, at, 0.01 + random() * 0.02, {
+      cadence: "rolling",
+      durationMs: options.windowMs,
+      resetsAt: end,
+    }));
+  }
+  return history.sort((left, right) => left.observedAt - right.observedAt);
+}
+
 function currentUsed(history: UsageHistoryObservation[], metricId: string, now: number): number | undefined {
   const readings = history
     .map((observation) => ({
@@ -373,6 +400,21 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
   const kimiMonth = calendarReset({ metricId: "monthly-total", seed: 71, now });
   const chatgpt = rollingUntilUsed({ metricId: "30-day", seed: 83, now });
   const cursorMonth = monthlyDurationSwitch({ metricId: "other-models-monthly", seed: 97, now });
+  const claudeShort = sparseFirstUse({
+    metricId: "five-hour",
+    count: 40,
+    spanDays: 28,
+    windowMs: 5 * HOUR,
+    seed: 101,
+    now,
+  });
+  const kimiLow = lowData({
+    metricId: "weekly-coding",
+    windowMs: 7 * DAY,
+    count: 4,
+    seed: 113,
+    now,
+  });
   return [
     {
       providerKind: "claude",
@@ -421,6 +463,22 @@ export function realisticMeters(now = FIXTURE_NOW): RealisticMeter[] {
       label: "Other models",
       history: cursorMonth,
       currentUsedRatio: currentUsed(cursorMonth, "other-models-monthly", now),
+    },
+    {
+      providerKind: "claude",
+      providerName: "Sample 5-hour",
+      metricId: "five-hour",
+      label: "5-hour messages",
+      history: claudeShort,
+      currentUsedRatio: currentUsed(claudeShort, "five-hour", now),
+    },
+    {
+      providerKind: "kimi",
+      providerName: "Sample Low",
+      metricId: "weekly-coding",
+      label: "Weekly usage",
+      history: kimiLow,
+      currentUsedRatio: currentUsed(kimiLow, "weekly-coding", now),
     },
   ];
 }

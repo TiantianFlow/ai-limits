@@ -325,6 +325,7 @@ history:
     few: "{count} windows"
     many: "{count} windows"
     other: "{count} windows"
+  infoMark: i
   infoLabel: "How to read {label}"
   infoLine: Solid line — readings. The shaded area is quota used; each drop is a reset.
   infoBars: Each bar is the busiest window in that stretch.
@@ -334,7 +335,9 @@ history:
   infoResets: Ticks under the axis mark resets.
   infoStored: "{count} readings · stored only on this device."
   noteNone: "No readings in {range}"
-  note: Only successful, normalized quota observations are plotted. Between readings the shaded band is the possible range, and quota left only falls until the window resets. A window with no reading near its reset ends in a short dotted stub instead of a fill to the floor. Wide windows draw that staircase; narrower ones draw one bar per window, and the narrowest sub-day windows draw one bar per day. A dashed trend appears only after six complete windows spread across the range, and it is an estimate. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
+  noteReadings: "{count} readings in {range}"
+  noteNoUsage: "{count} readings in {range} · no usage"
+  note: Only successful, normalized quota observations are plotted. A solid line is a reading and the shaded area is quota used; a dashed stretch has no reading in between. Narrow windows draw one bar each, and the narrowest draw one bar per day. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
 
 settings:
   screen: Provider settings

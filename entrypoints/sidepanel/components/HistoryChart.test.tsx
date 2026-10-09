@@ -960,8 +960,8 @@ function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
     expect(screen.getByRole("radio", { name: "48 hours" })).toBeChecked();
 
     rerender(view("cursor:default"));
-    expect(screen.getByText("History starts after another successful refresh.")).toBeVisible();
-    expect(screen.queryByRole("group")).not.toBeInTheDocument();
+    expect(screen.getByText(/No readings in/i)).toBeVisible();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expect(screen.queryByText(/· 0/)).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "48 hours" })).toBeChecked();
   });
@@ -978,7 +978,67 @@ function instanceFor(meter: RealisticMeter, id: string): ProviderInstanceView {
         rangeHours={30 * 24}
       />,
     );
-    expect(screen.getByText("History starts after another successful refresh.")).toBeVisible();
-    expect(screen.queryByRole("group")).not.toBeInTheDocument();
+    expect(screen.getByText(/No readings in 30 days/i)).toBeVisible();
+    expect(screen.queryByText(/Possible range/)).not.toBeInTheDocument();
+  });
+
+  it("describes a hold as at least the last reading and a gap as between the two", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(460);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 460, bottom: 200, width: 460, height: 200, toJSON() { return {}; },
+    });
+    const history = [
+      observation("five-hour", NOW - 30 * HOUR, 0.26, {
+        cycle: { cadence: "rolling", durationMs: 24 * HOUR, resetsAt: NOW - 20 * HOUR },
+      }),
+      observation("five-hour", NOW - 14 * HOUR, 0.07, {
+        cycle: { cadence: "rolling", durationMs: 24 * HOUR, resetsAt: NOW + 4 * HOUR },
+      }),
+      observation("five-hour", NOW - 6 * HOUR, 0.4, {
+        cycle: { cadence: "rolling", durationMs: 24 * HOUR, resetsAt: NOW + 4 * HOUR },
+      }),
+    ];
+    const { container } = render(
+      <HistoryChart
+        providerName="Claude"
+        providerKind="claude"
+        mode="used"
+        metrics={[metric("five-hour", 5 * HOUR, "5-hour messages")]}
+        history={history}
+        now={NOW}
+        rangeHours={48}
+      />,
+    );
+    const chart = container.querySelector(".history-chart__canvas") as HTMLElement;
+    const hoverAt = (hoursAgo: number): string => {
+      const viewX = 8 + ((48 - hoursAgo) / 48) * (312 - 8);
+      fireEvent.pointerMove(chart, { clientX: (viewX / 320) * 460, pointerType: "mouse" });
+      return container.querySelector(".history-chart__tooltip")?.textContent ?? "";
+    };
+    const held = hoverAt(2);
+    expect(held, held).toMatch(/At least 40%/);
+    expect(hoverAt(2)).toMatch(/No reading since/);
+    expect(hoverAt(10)).toMatch(/Between 7% and 40%/);
+  });
+
+  it("shows the same whole number as the current cycle value", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    const history = [
+      observation("weekly", NOW - 3 * DAY, 0.262, {
+        cycle: { cadence: "calendar", durationMs: 7 * DAY, resetsAt: NOW + 4 * DAY },
+      }),
+    ];
+    const { container } = render(
+      <HistoryChart
+        providerName="Claude"
+        providerKind="claude"
+        mode="used"
+        metrics={[metric("weekly", 7 * DAY, "Weekly messages")]}
+        history={history}
+        now={NOW}
+        rangeHours={7 * 24}
+      />,
+    );
+    expect(container.querySelector(".history-chart__latest")?.textContent).toContain("26%");
   });
 });

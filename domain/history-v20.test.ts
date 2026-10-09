@@ -40,7 +40,48 @@ describe("history v20 drawing", () => {
     const run = model.runs[0];
     expect(run).toBeDefined();
     expect(run!.styles.at(-1)).toBe("estimated");
+    expect(run!.points.at(-1)?.at).toBe(NOW);
     expect(run!.points.at(-1)?.used).toBeCloseTo(20, 5);
+  });
+
+  it("drops to zero at a reset that has already happened", () => {
+    const end = NOW - 2 * HOUR;
+    const history = [reading(end - 3 * HOUR, 40, end)];
+    const model = buildChartModel({
+      history,
+      metricId: "five-hour",
+      providerKind: "claude",
+      now: NOW,
+      rangeStart: NOW - 48 * HOUR,
+      rangeEnd: NOW,
+      widthPx: 360,
+    });
+    const run = model.runs[0];
+    expect(run!.points.at(-1)?.used).toBe(0);
+    expect(run!.points.at(-1)?.at).toBe(end);
+    expect(run!.styles.at(-1)).toBe("known");
+    expect(run!.styles.at(-2)).toBe("estimated");
+  });
+
+  it("carries a window that started before the range in from the left edge", () => {
+    const end = NOW + 2 * HOUR;
+    const history = [
+      reading(NOW - 60 * HOUR, 10, end, 72 * HOUR),
+      reading(NOW - 2 * HOUR, 50, end, 72 * HOUR),
+    ];
+    const model = buildChartModel({
+      history,
+      metricId: "five-hour",
+      providerKind: "claude",
+      now: NOW,
+      rangeStart: NOW - 48 * HOUR,
+      rangeEnd: NOW,
+      widthPx: 360,
+    });
+    const run = model.runs[0];
+    expect(run!.points[0]?.at).toBe(NOW - 48 * HOUR);
+    expect(run!.points[0]?.used).toBeGreaterThan(10);
+    expect(run!.points[0]?.used).toBeLessThan(50);
   });
 
   it("draws a window that stays at 0% as idle, not as a usage run", () => {
