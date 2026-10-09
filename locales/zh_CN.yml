@@ -171,7 +171,7 @@ history:
     many: "{count} 天前"
     other: "{count} 天前"
   latestPercent: "{percent}% {mode}"
-  headlineIdle: 没有活动窗口 — 空闲
+  headlineIdle: 空闲
   chartRole: 图表
   rangeCount: "{range} · {count}"
   rangeSparse: "{range}，只有 {count} 条读数"
