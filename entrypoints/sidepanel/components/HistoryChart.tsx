@@ -404,15 +404,23 @@ export function HistoryChart({
                 );
               })}
               {level === "envelope"
-                ? <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} activeId={active?.id} />
+                ? <EnvelopeLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} plotWidth={plotWidth} />
                 : null}
               {level === "bars"
-                ? <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} activeId={active?.id} />
+                ? <BarsLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
                 : null}
               {level === "daily"
-                ? <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} activeId={active?.id} />
+                ? <DailyLayer days={days} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
                 : null}
               <TrendLayer series={series} mode={mode} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+              {active ? (
+                <Highlight
+                  from={items.find((item) => item.id === active.id)?.from ?? rangeStart}
+                  to={items.find((item) => item.id === active.id)?.to ?? rangeEnd}
+                  rangeStart={rangeStart}
+                  rangeEnd={rangeEnd}
+                />
+              ) : null}
             </svg>
             <div className="history-chart__hits">
               {items.map((item) => {
@@ -526,6 +534,30 @@ function inspectItems(
   return [...quotaSpans, ...gaps].sort((left, right) => left.from - right.from);
 }
 
+function Highlight({
+  from,
+  to,
+  rangeStart,
+  rangeEnd,
+}: {
+  from: number;
+  to: number;
+  rangeStart: number;
+  rangeEnd: number;
+}) {
+  const left = timeX(Math.min(from, to), rangeStart, rangeEnd);
+  const right = timeX(Math.max(from, to), rangeStart, rangeEnd);
+  return (
+    <rect
+      className="history-chart__highlight"
+      x={left}
+      y={PLOT_TOP}
+      width={Math.max(1, right - left)}
+      height={PLOT_BOTTOM - PLOT_TOP}
+    />
+  );
+}
+
 function tooltipPosition(
   from: number,
   to: number,
@@ -611,14 +643,12 @@ function EnvelopeLayer({
   rangeStart,
   rangeEnd,
   plotWidth,
-  activeId,
 }: {
   series: EnvelopeSeries;
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
   plotWidth: number;
-  activeId?: string;
 }) {
   const pxPerUnit = plotWidth / VIEWBOX_WIDTH;
   return (
@@ -657,7 +687,7 @@ function EnvelopeLayer({
         const previous = series.spans[index - 1];
         const reset = previous && previous.kind === "observed" && previous.tailTrusted && window.kind === "observed";
         return (
-          <g key={window.id} className={activeId === window.id ? "is-active" : undefined}>
+          <g key={window.id}>
             {reset ? (
               <line
                 className="history-chart__reset"
@@ -758,13 +788,11 @@ function BarsLayer({
   mode,
   rangeStart,
   rangeEnd,
-  activeId,
 }: {
   series: EnvelopeSeries;
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
-  activeId?: string;
 }) {
   return (
     <g>
@@ -790,7 +818,7 @@ function BarsLayer({
         return (
           <g key={window.id} className={window.current ? "is-current" : undefined}>
             <rect
-              className={`history-chart__bar${activeId === window.id ? " is-active" : ""}`}
+              className="history-chart__bar"
               x={x}
               y={mode === "used" ? yCertain : leftY(certainLeft)}
               width={width}
@@ -827,13 +855,11 @@ function DailyLayer({
   mode,
   rangeStart,
   rangeEnd,
-  activeId,
 }: {
   days: DayBucket[];
   mode: DisplayMode;
   rangeStart: number;
   rangeEnd: number;
-  activeId?: string;
 }) {
   return (
     <g>
@@ -859,7 +885,7 @@ function DailyLayer({
         return (
           <g key={bucket.start}>
             <rect
-              className={`history-chart__bar${activeId === `day-${bucket.start}` ? " is-active" : ""}`}
+              className="history-chart__bar"
               x={x}
               y={mode === "used" ? y : leftY(certainLeft)}
               width={width}

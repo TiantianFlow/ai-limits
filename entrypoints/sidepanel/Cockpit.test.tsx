@@ -1306,6 +1306,25 @@ describe("Cockpit", () => {
     expect(sevenDays).toBeChecked();
   });
 
+  it("keeps a non-default range when switching quota windows", () => {
+    renderCockpit();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open ChatGPT history for 5-hour messages",
+      }),
+    );
+    const ranges = screen.getByRole("radiogroup", { name: "History range" });
+    const thirtyDays = within(ranges).getByRole("radio", { name: /30 days/ });
+    fireEvent.click(thirtyDays);
+    expect(thirtyDays).toBeChecked();
+
+    chooseWindow("Weekly messages");
+    expectWindow("Weekly messages");
+    expect(within(ranges).getByRole("radio", { name: /30 days/ })).toBeChecked();
+    expect(within(ranges).getByRole("radio", { name: /7 days/ })).not.toBeChecked();
+  });
+
   it("lets an explicit Overview window override the routed provider's saved selection", () => {
     renderCockpit();
 
