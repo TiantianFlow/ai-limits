@@ -872,6 +872,12 @@ section[aria-labelledby="first-run-title"] > div:first-child > p:last-child {
   fill: var(--quota);
 }
 
+.history-chart__now {
+  fill: var(--quota);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
 .history-chart__axis {
   stroke: var(--border);
   stroke-width: 1;
