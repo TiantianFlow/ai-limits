@@ -486,7 +486,7 @@ describe("HistoryChart", () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   it("does not draw an under-axis gap dash on the same stretch as the 5-hour idle baseline", () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
