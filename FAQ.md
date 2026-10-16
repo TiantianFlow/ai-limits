@@ -93,8 +93,10 @@ or Refresh may briefly open an inactive Kimi tab in the background to recover
 the session.
 
 Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may
-open at most one inactive temporary Kimi tab, waits up to 10 seconds for
-recovery, and closes only the tab it created. It can use the legacy Kimi cookie
+open at most one inactive temporary Kimi tab, waits up to 30 seconds for
+recovery, and closes only the tab it created. Recovery waits until Kimi finishes
+loading the page before accepting a session token, and it leaves the tab open
+long enough for Kimi to replace an expired token. It can use the legacy Kimi cookie
 or read an `access_token` from an already-open Kimi page. If neither is
 available, automatic refresh defers until a later refresh, preserves the last
 good data, and adds no history observation.
@@ -181,8 +183,9 @@ legacy credit grants when organization scope is unavailable.
 ## Does automatic refresh open provider tabs?
 
 No. Scheduled refresh is non-interactive and never creates provider tabs. Only
-an interactive Kimi **Connect** or **Refresh** may briefly create an inactive
-Kimi tab for session recovery. An interactive Cursor **Connect** or **Refresh**
+an interactive Kimi **Connect** or **Refresh** may create an inactive
+Kimi tab for session recovery and wait up to 30 seconds for the page to finish
+loading. An interactive Cursor **Connect** or **Refresh**
 may briefly create one inactive spending tab when no `cursor.com` tab is already
 open, waits up to 10 seconds, and closes only the tab it created. ElevenLabs
 opens its normal API-keys page only when you explicitly start setup or choose

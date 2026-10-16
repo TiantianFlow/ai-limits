@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { readKimiAccessTokenAtExpectedOrigin } from "./page-session";
 import {
   KIMI_RECOVERY_LEASE_KEY,
+  KIMI_RECOVERY_TIMEOUT_MS,
+  KIMI_TOKEN_STABLE_MS,
   cleanupAbandonedKimiRecoveryTab,
   createKimiRecoveryAfterStartupCleanup,
   findKimiPageAccessToken,
@@ -140,7 +143,7 @@ describe("Kimi page session", () => {
     const readAccessToken = vi
       .fn()
       .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(" fresh-token ");
+      .mockResolvedValue(" fresh-token ");
     const harness = recoveryHarness({ readAccessToken });
 
     const result = refreshKimiAccessTokenInTemporaryTab({
@@ -160,9 +163,13 @@ describe("Kimi page session", () => {
       listener(42, { status: "complete" }, { id: 42, status: "complete" });
     }
     await vi.advanceTimersByTimeAsync(250);
+    expect(readAccessToken).toHaveBeenCalledTimes(2);
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
 
     await expect(result).resolves.toBe("fresh-token");
-    expect(readAccessToken).toHaveBeenCalledTimes(2);
+    expect(readAccessToken.mock.calls.length).toBeGreaterThan(2);
     const writtenLease = harness.session.set.mock.calls[0]?.[0] ?? {};
     expect(Object.keys(writtenLease)).toEqual([
       expect.stringMatching(/^kimiRecoveryTabLease:/),
@@ -179,7 +186,8 @@ describe("Kimi page session", () => {
     expect(harness.removedListeners).toHaveLength(0);
   });
 
-  test("starts token polling immediately when the created tab is already complete", async () => {
+  test("holds an unchanged token until it has stayed the same after the page can refresh", async () => {
+    vi.useFakeTimers();
     const harness = recoveryHarness({
       getTab: vi.fn().mockResolvedValue({
         id: 42,
@@ -190,10 +198,39 @@ describe("Kimi page session", () => {
       readAccessToken: vi.fn().mockResolvedValue("new-token"),
     });
 
-    await expect(
-      refreshKimiAccessTokenInTemporaryTab(harness.dependencies),
-    ).resolves.toBe("new-token");
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS - 1);
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toBe("new-token");
     expect(harness.removeTab).toHaveBeenCalledWith(42);
+  });
+
+  test("returns a replacement token without waiting out the rest of the stability window", async () => {
+    vi.useFakeTimers();
+    const readAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce("stale-token")
+      .mockResolvedValueOnce("stale-token")
+      .mockResolvedValue("fresh-token");
+    const harness = recoveryHarness({
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "complete",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+      readAccessToken,
+    });
+
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(250);
+    await expect(result).resolves.toBe("fresh-token");
+    expect(readAccessToken).toHaveBeenCalledTimes(3);
   });
 
   test("stops when the owned tab is removed while readiness is pending", async () => {
@@ -210,12 +247,12 @@ describe("Kimi page session", () => {
     );
   });
 
-  test("times out the combined readiness and token wait after ten seconds", async () => {
+  test("times out the combined readiness and token wait at the recovery deadline", async () => {
     vi.useFakeTimers();
     const harness = recoveryHarness();
     const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
 
-    await vi.advanceTimersByTimeAsync(9_999);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS - 1);
     expect(harness.removeTab).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
@@ -223,7 +260,7 @@ describe("Kimi page session", () => {
     expect(harness.removeTab).toHaveBeenCalledWith(42);
   });
 
-  test("returns at ten seconds when tab creation never settles", async () => {
+  test("returns at the recovery deadline when tab creation never settles", async () => {
     vi.useFakeTimers();
     const completion = vi.fn();
     const harness = recoveryHarness({
@@ -233,7 +270,7 @@ describe("Kimi page session", () => {
     void refreshKimiAccessTokenInTemporaryTab(harness.dependencies).then(
       completion,
     );
-    await vi.advanceTimersByTimeAsync(9_999);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS - 1);
     expect(completion).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
@@ -241,7 +278,7 @@ describe("Kimi page session", () => {
     expect(harness.removeTab).not.toHaveBeenCalled();
   });
 
-  test("returns at ten seconds and cleans up a tab that is created late", async () => {
+  test("returns at the recovery deadline and cleans up a tab that is created late", async () => {
     vi.useFakeTimers();
     const lateTab = deferred<Tab>();
     const completion = vi.fn();
@@ -252,7 +289,7 @@ describe("Kimi page session", () => {
     void refreshKimiAccessTokenInTemporaryTab(harness.dependencies).then(
       completion,
     );
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS);
     expect(completion).toHaveBeenCalledWith(undefined);
 
     lateTab.resolve({
@@ -266,7 +303,7 @@ describe("Kimi page session", () => {
     expect(harness.session.remove).not.toHaveBeenCalled();
   });
 
-  test("returns at ten seconds when the lease write never settles", async () => {
+  test("returns at the recovery deadline when the lease write never settles", async () => {
     vi.useFakeTimers();
     const completion = vi.fn();
     const harness = recoveryHarness();
@@ -277,7 +314,7 @@ describe("Kimi page session", () => {
     void refreshKimiAccessTokenInTemporaryTab(harness.dependencies).then(
       completion,
     );
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS);
 
     expect(completion).toHaveBeenCalledWith(undefined);
     expect(harness.removeTab).toHaveBeenCalledWith(42);
@@ -299,7 +336,7 @@ describe("Kimi page session", () => {
     void refreshKimiAccessTokenInTemporaryTab(harness.dependencies).then(
       completion,
     );
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS);
     expect(completion).toHaveBeenCalledWith(undefined);
     expect(Object.keys(harness.session.values)).toHaveLength(0);
 
@@ -347,7 +384,7 @@ describe("Kimi page session", () => {
       ...harness.dependencies,
       createLeaseId: () => "recovery-a",
     }).then(completionA);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS);
     expect(completionA).toHaveBeenCalledWith(undefined);
 
     const resultB = refreshKimiAccessTokenInTemporaryTab({
@@ -394,10 +431,13 @@ describe("Kimi page session", () => {
     const result = Promise.race([
       refreshKimiAccessTokenInTemporaryTab(harness.dependencies),
       new Promise<string>((resolve) =>
-        globalThis.setTimeout(() => resolve("still-pending"), 1),
+        globalThis.setTimeout(
+          () => resolve("still-pending"),
+          KIMI_TOKEN_STABLE_MS + 1_000,
+        ),
       ),
     ]);
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
 
     await expect(result).resolves.toBe("fresh-token");
   });
@@ -420,7 +460,34 @@ describe("Kimi page session", () => {
     expect(harness.removeTab).toHaveBeenCalledWith(42);
   });
 
-  test("treats token injection failure as terminal and closes only the owned tab", async () => {
+  test("retries a token injection failure instead of closing the owned tab", async () => {
+    vi.useFakeTimers();
+    const readAccessToken = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("frame removed during refresh"))
+      .mockResolvedValue("fresh-token");
+    const harness = recoveryHarness({
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "complete",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+      readAccessToken,
+    });
+
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
+    await expect(result).resolves.toBe("fresh-token");
+    expect(harness.removeTab).toHaveBeenCalledTimes(1);
+    expect(harness.removeTab).toHaveBeenCalledWith(42);
+  });
+
+  test("keeps the owned tab through repeated injection failures until the deadline", async () => {
+    vi.useFakeTimers();
     const harness = recoveryHarness({
       getTab: vi.fn().mockResolvedValue({
         id: 42,
@@ -433,14 +500,18 @@ describe("Kimi page session", () => {
         .mockRejectedValue(new Error("script injection failed")),
     });
 
-    await expect(
-      refreshKimiAccessTokenInTemporaryTab(harness.dependencies),
-    ).resolves.toBeUndefined();
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS - 1);
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toBeUndefined();
     expect(harness.removeTab).toHaveBeenCalledTimes(1);
     expect(harness.removeTab).toHaveBeenCalledWith(42);
   });
 
   test("does not lose a recovered token when final tab removal fails", async () => {
+    vi.useFakeTimers();
     const harness = recoveryHarness({
       getTab: vi.fn().mockResolvedValue({
         id: 42,
@@ -452,23 +523,24 @@ describe("Kimi page session", () => {
       removeTab: vi.fn().mockRejectedValue(new Error("tab already closed")),
     });
 
-    await expect(
-      refreshKimiAccessTokenInTemporaryTab({
-        ...harness.dependencies,
-        rejectedToken: "stale-token",
-      }),
-    ).resolves.toBe("fresh-token");
+    const result = refreshKimiAccessTokenInTemporaryTab({
+      ...harness.dependencies,
+      rejectedToken: "stale-token",
+    });
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
+
+    await expect(result).resolves.toBe("fresh-token");
     expect(harness.session.remove).toHaveBeenCalledWith(
       expect.stringMatching(/^kimiRecoveryTabLease:/),
     );
   });
 
-  test("ignores an unchanged rejected token until a changed token appears", async () => {
+  test("ignores an unchanged rejected token until a changed token stays available", async () => {
     vi.useFakeTimers();
     const readAccessToken = vi
       .fn()
       .mockResolvedValueOnce("stale-token")
-      .mockResolvedValueOnce("new-token");
+      .mockResolvedValue("new-token");
     const harness = recoveryHarness({
       getTab: vi.fn().mockResolvedValue({
         id: 42,
@@ -484,8 +556,115 @@ describe("Kimi page session", () => {
       rejectedToken: "stale-token",
     });
     await vi.advanceTimersByTimeAsync(250);
+    expect(harness.removeTab).not.toHaveBeenCalled();
 
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
     await expect(result).resolves.toBe("new-token");
+  });
+
+  test("does not accept a stored token until Kimi reports the client app mounted", async () => {
+    vi.useFakeTimers();
+    let mounted = false;
+    const storage = { getItem: vi.fn(() => "stored-token") };
+    const harness = recoveryHarness({
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "complete",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+      readAccessToken: vi.fn(async () =>
+        readKimiAccessTokenAtExpectedOrigin(
+          "https://www.kimi.com",
+          storage,
+          "https://www.kimi.com",
+          mounted,
+        ),
+      ),
+    });
+
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
+    expect(storage.getItem).not.toHaveBeenCalled();
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    mounted = true;
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS + 1_000);
+    await expect(result).resolves.toBe("stored-token");
+    expect(storage.getItem).toHaveBeenCalledWith("access_token");
+  });
+
+  test("drops a candidate when injection fails before the token has settled", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const harness = recoveryHarness({
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "complete",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+      readAccessToken: vi.fn(async () => {
+        calls += 1;
+        if (calls === 2) throw new Error("frame removed");
+        return "fresh-token";
+      }),
+    });
+
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
+    expect(harness.removeTab).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(KIMI_TOKEN_STABLE_MS);
+    await expect(result).resolves.toBe("fresh-token");
+  });
+
+  test("keeps a token that appears with less time left than the stability window", async () => {
+    vi.useFakeTimers();
+    const startedAt = Date.now();
+    const harness = recoveryHarness({
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "complete",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+      readAccessToken: vi.fn(async () =>
+        Date.now() < startedAt + KIMI_RECOVERY_TIMEOUT_MS - 500
+          ? undefined
+          : "late-token",
+      ),
+    });
+
+    const result = refreshKimiAccessTokenInTemporaryTab(harness.dependencies);
+    await vi.advanceTimersByTimeAsync(KIMI_RECOVERY_TIMEOUT_MS);
+
+    await expect(result).resolves.toBe("late-token");
+    expect(harness.removeTab).toHaveBeenCalledWith(42);
+  });
+
+  test("does not return a token seen before an abort", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const harness = recoveryHarness({
+      getTab: vi.fn().mockResolvedValue({
+        id: 42,
+        status: "complete",
+        active: false,
+        url: "https://www.kimi.com/",
+      }),
+      readAccessToken: vi.fn().mockResolvedValue("fresh-token"),
+    });
+
+    const result = refreshKimiAccessTokenInTemporaryTab({
+      ...harness.dependencies,
+      signal: controller.signal,
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    controller.abort();
+
+    await expect(result).resolves.toBeUndefined();
+    expect(harness.removeTab).toHaveBeenCalledWith(42);
   });
 });
 

@@ -59,8 +59,9 @@ AI Limits 是 TiantianFlow 开发的独立项目，与任何受支持的服务�
   运行一次。你可以在“Settings”中关闭它。
 
 Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动
-的临时 Kimi 标签页，最多等待 10 秒完成恢复，并且只关闭它自己创建的标签页。
-扩展会先检查旧版 Kimi Cookie，再读取已打开 Kimi 页面中名称完全匹配的
+的临时 Kimi 标签页，最多等待 30 秒完成恢复，并且只关闭它自己创建的标签页。
+恢复会等到 Kimi 页面加载完成，并让标签页继续打开一段时间，以便 Kimi 替换过期
+的会话令牌。扩展会先检查旧版 Kimi Cookie，再读取已打开 Kimi 页面中名称完全匹配的
 `access_token` 项；浏览器关闭或 API 错误可能延迟或阻止尽力清理。
 
 Cursor Connect 或手动 Refresh 会优先使用一个已经打开的 `cursor.com` 标签页。
