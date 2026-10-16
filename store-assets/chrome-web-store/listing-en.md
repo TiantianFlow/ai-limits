@@ -155,8 +155,9 @@ These origins are requested one provider at a time after the user clicks
   the exact `access_token` browser-storage entry from an already-open or
   recovery-created matching Kimi page. If a credential is missing or rejected,
   interactive recovery may create one inactive Kimi homepage tab. Recovery
-  stops waiting for a credential after 10 seconds and attempts best-effort
-  cleanup of only its owned tab; shutdown or browser API errors can delay or
+  waits until Kimi's client app has mounted, stops waiting for a credential
+  after 30 seconds, and attempts best-effort cleanup of only its owned tab;
+  shutdown or browser API errors can delay or
   prevent cleanup. For Cursor, Connect or manual Refresh can run a bundled
   exact-origin function in one already-open `cursor.com` page. If none is open,
   that interactive path may create one inactive
@@ -276,8 +277,9 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 4. **Kimi:** sign in at `www.kimi.com`, click **Connect** on Kimi, approve the
    Kimi origin plus `cookies` and `scripting`, and confirm available usage and
    subscription data appears. If session recovery is required during an
-   interactive refresh, an inactive Kimi tab may appear. Confirm recovery stops
-   waiting for a credential after 10 seconds and attempts best-effort cleanup;
+   interactive refresh, an inactive Kimi tab may appear. Confirm recovery waits
+   for the Kimi page to finish loading, stops waiting for a credential after
+   30 seconds, and attempts best-effort cleanup;
    do not treat delayed cleanup during shutdown or browser API errors as a
    guarantee violation.
 5. **Cursor:** sign in at `cursor.com`. You do **not** need to leave a Cursor

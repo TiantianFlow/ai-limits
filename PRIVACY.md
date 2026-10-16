@@ -67,11 +67,14 @@ For Kimi, AI Limits checks the exact legacy `kimi-auth` cookie first, then the
 exact `access_token` entry from an already-open matching Kimi page. It does not
 read other Kimi browser-storage entries. During an interactive Connect or
 Refresh, either a missing credential or a credential rejected by Kimi may
-cause AI Limits to create one inactive Kimi homepage tab. Recovery has a
-10-second deadline for obtaining a credential. When recovery finishes or times
-out, the extension attempts best-effort cleanup of only the tab and lease it
-owns; browser shutdown or API errors can delay or prevent cleanup. Scheduled
-refresh never creates a Kimi tab.
+cause AI Limits to create one inactive Kimi homepage tab. Recovery reads
+`access_token` only after that page sets `window.__kimiAppMounted`, the flag
+Kimi sets when its client app mounts. It then keeps the owned tab open so Kimi
+can replace an expired token. Recovery has a 30-second deadline for obtaining
+a credential. When recovery finishes or times out, the extension attempts
+best-effort cleanup of only the tab and lease it owns; browser shutdown or API
+errors can delay or prevent cleanup. Scheduled refresh never creates a Kimi
+tab.
 
 While that recovery is active, the extension stores only a generated lease
 identifier with the temporary tab ID and creation timestamp in

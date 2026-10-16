@@ -78,7 +78,7 @@ Chrome 会把已登录的 Grok Cookie 附加到这些同源请求。
 Kimi 自动刷新属于尽力而为，并不保证每次都能成功；手动 Connect 或 Refresh
 可能会在后台短暂打开一个非活动 Kimi 标签页以恢复会话。
 
-Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 10 秒完成恢复，并且只关闭它自己创建的标签页。
+Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 30 秒完成恢复，并且只关闭它自己创建的标签页。恢复会等到 Kimi 页面加载完成后再接受会话令牌，并让标签页继续打开一段时间，以便 Kimi 替换过期令牌。
 它可以使用旧版 Kimi Cookie，或读取已经打开的 Kimi 页面中的 `access_token`。
 如果两者都不可用，本次自动刷新会延后到之后的刷新，保留最后一次成功数据，
 并且不会新增历史观测。
@@ -154,8 +154,8 @@ ChatGPT 使用 chatgpt.com 上已登录的浏览器会话。OpenAI 使用用户�
 ## 自动刷新会打开服务商标签页吗？
 
 不会。定时刷新是非交互式的，绝不会创建服务商标签页。只有交互式的 Kimi
-**Connect** 或 **Refresh** 才可能为了恢复会话而短暂创建一个非活动 Kimi
-标签页。交互式的 Cursor **Connect** 或 **Refresh** 在当前没有打开的
+**Connect** 或 **Refresh** 才可能为了恢复会话创建一个非活动 Kimi
+标签页，并最多等待 30 秒直到页面加载完成。交互式的 Cursor **Connect** 或 **Refresh** 在当前没有打开的
 `cursor.com` 标签页时，可能会短暂创建一个非活动用量页，最多等待 10 秒，
 并且只关闭它自己创建的标签页。ElevenLabs 只会在你主动开始设置或选择
 **Open API keys page** 时打开普通 API 密钥页面。包括 New API 在内的其他

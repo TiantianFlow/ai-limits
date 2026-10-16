@@ -14,9 +14,44 @@ describe("Kimi page credential isolation", () => {
         "https://www.kimi.com",
         storage,
         "https://www.kimi.com",
+        true,
       ),
     ).toBe("kimi-token");
     expect(storage.getItem).toHaveBeenCalledWith("access_token");
+  });
+
+  test("does not read storage until Kimi's client app has mounted", () => {
+    const storage = { getItem: vi.fn(() => "stale-token") };
+
+    expect(
+      readKimiAccessTokenAtExpectedOrigin(
+        "https://www.kimi.com",
+        storage,
+        "https://www.kimi.com",
+        false,
+      ),
+    ).toBeUndefined();
+    expect(storage.getItem).not.toHaveBeenCalled();
+  });
+
+  test("uses the page mount flag when the caller does not pass one", () => {
+    const storage = { getItem: vi.fn(() => "kimi-token") };
+    const host = globalThis as { __kimiAppMounted?: unknown };
+    const previous = host.__kimiAppMounted;
+    host.__kimiAppMounted = true;
+
+    try {
+      expect(
+        readKimiAccessTokenAtExpectedOrigin(
+          "https://www.kimi.com",
+          storage,
+          "https://www.kimi.com",
+        ),
+      ).toBe("kimi-token");
+    } finally {
+      if (previous === undefined) delete host.__kimiAppMounted;
+      else host.__kimiAppMounted = previous;
+    }
   });
 
   test("does not touch storage after a selected tab navigates to another origin", () => {
@@ -27,6 +62,7 @@ describe("Kimi page credential isolation", () => {
         "https://www.kimi.com",
         storage,
         "https://chatgpt.com",
+        true,
       ),
     ).toBeUndefined();
     expect(storage.getItem).not.toHaveBeenCalled();
