@@ -12,7 +12,7 @@
 Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。
 GitHub Releases 会保留对应的源代码和已验证上传包。
 
-AI Limits 支持二十个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud 和 OpenRouter。
+AI Limits 支持二十一个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud、OpenRouter 和 Droid。
 它是一款 Chrome 侧边栏扩展，可在一个紧凑的界面中查看这些服务的当前订阅用量
 及本地配额历史图表。它会将不同服务商的用量统一为“已用”或“剩余”视图；当
 服务商提供完整的重置周期信息时，还会将配额消耗与已过时间比较，显示用量节奏。
@@ -38,8 +38,8 @@ AI Limits 是 TiantianFlow 开发的独立项目，与任何受支持的服务�
   一个已经打开的 `cursor.com` 页面中运行扩展自带的只读代码；如果当前没有打开
   的标签页，可能会短暂打开一个非活动用量页，以请求 Grok Bot、额外 Credits
   和按模型包含用量 JSON。
-- ElevenLabs、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud
-  和 OpenRouter 使用用户创建的 API 密钥访问各自固定的服务商 API。OpenAI
+- ElevenLabs、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud、
+  OpenRouter 和 Droid 使用用户创建的 API 密钥访问各自固定的服务商 API。OpenAI
   读取的是平台组织/开发者账单（组织支出、补全用量或旧版额度），不是
   ChatGPT 的消费者登录会话。New API、
   LiteLLM、ClawRouter、sub2api 和 LLM Proxy 支持在用户选择的来源上配置多个

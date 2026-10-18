@@ -622,6 +622,7 @@ metrics:
     usagePool: 用量池
     rateLimits: 对话速率限制
     credits: 额度
+    droidCore: Droid Core
   grokPoolUnavailable: 用量池详情不可用
   detail:
     includedUsage: 包含的用量
@@ -752,6 +753,15 @@ metrics:
   openrouter:
     balance: 余额
     keyBudget: API 密钥预算
+  factory:
+    fiveHour: 5 小时
+    weekly: 每周
+    monthly: 每月
+    coreFiveHour: Core 5 小时
+    coreWeekly: Core 每周
+    coreMonthly: Core 每月
+    premium: Premium
+    extraUsage: 额外用量
   grok:
     weeklyPool: 每周用量池
     monthlyPool: 每月用量池
@@ -929,6 +939,17 @@ providers:
     capabilities:
       balance: 余额
       keyBudget: API 密钥预算
+  factory:
+    name: Droid
+    connect: 连接 Droid
+    connectionDisclosure: 使用你为 Droid 创建的 Factory API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    capabilities:
+      rateLimits: 速率限制
+      extraUsage: 额外用量
+    plans:
+      pro: Pro
+      plus: Plus
+      max: Max
 
 accessibility:
   refreshProvider: "刷新 {provider}"

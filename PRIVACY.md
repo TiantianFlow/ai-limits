@@ -175,17 +175,24 @@ origin for the read-only `/key/info`, `/v1/usage`,
 the selected provider. Each configured instance keeps independent
 credentials, nonsecret configuration, normalized usage, and History.
 
-DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter use
-user-created API keys at fixed provider API origins. OpenAI here is the
-Platform organization and developer billing API, not the ChatGPT consumer
-session. AI Limits sends those keys
+DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and
+Droid use user-created API keys at fixed provider API origins. OpenAI here is
+the Platform organization and developer billing API, not the ChatGPT consumer
+session. Droid is Factory's coding product, not an organization-admin credits
+API. AI Limits sends those keys
 only to
 `api.deepseek.com/user/balance`, `api.moonshot.ai/v1/users/me/balance`,
 DeepInfra's `api.deepinfra.com/payment/checklist` and `/payment/usage`
 endpoints, Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
 `/billing/summary` endpoint, OpenAI's organization cost and completion-usage
 endpoints or legacy credit-grants fallback, GroqCloud's Prometheus query
-endpoint, or OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints. These
+endpoint, OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints, or
+Droid's `api.factory.ai/api/billing/limits` request. When that Droid response
+is not a token-rate-limits payload, AI Limits instead reads
+`api.factory.ai/api/organization/subscription/usage`. It may also read
+`api.factory.ai/api/app/auth/me` for a plan label and does not store the
+account identifier from that response. The Droid key is sent as an
+Authorization bearer token with `x-factory-client: web-app`. These
 read-only responses are normalized into balance, quota, counter, or spend
 metrics; raw provider responses are not persisted.
 

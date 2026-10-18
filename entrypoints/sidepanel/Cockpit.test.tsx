@@ -1017,7 +1017,7 @@ describe("Cockpit", () => {
       screen.getByRole("heading", { level: 1, name: "AI Limits" }),
     ).toBeVisible();
     expect(screen.getByText(/One panel for every AI subscription quota/)).toBeVisible();
-    expect(screen.getByText("Supported providers · 20")).toBeVisible();
+    expect(screen.getByText("Supported providers · 21")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Refresh usage" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
   });
@@ -1682,7 +1682,7 @@ describe("Cockpit", () => {
     expect(screen.getByRole("button", { name: "Connect Claude" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Kimi" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeVisible();
-    expect(screen.getAllByText(/^Can show:/)).toHaveLength(19);
+    expect(screen.getAllByText(/^Can show:/)).toHaveLength(20);
     expect(screen.getByText(/Connect asks for permission for that provider only/)).toBeVisible();
   });
 
@@ -1691,7 +1691,7 @@ describe("Cockpit", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
-    expect(screen.getByText("Available · 14")).toBeVisible();
+    expect(screen.getByText("Available · 15")).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect New API" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect LiteLLM" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect ClawRouter" })).toBeVisible();

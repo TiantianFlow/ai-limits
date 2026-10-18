@@ -24,6 +24,7 @@ export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://api.openai.com/*",
   "https://api.groq.com/*",
   "https://openrouter.ai/*",
+  "https://api.factory.ai/*",
   "https://admin.mistral.ai/*",
   "https://console.mistral.ai/*",
   "https://www.perplexity.ai/*",

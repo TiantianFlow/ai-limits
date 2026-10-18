@@ -172,4 +172,11 @@ export const providerDefinitions = {
     optionalOrigins: ["https://openrouter.ai/*"],
     optionalPermissions: [],
   },
+  factory: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.factory.ai/*"],
+    optionalPermissions: [],
+  },
 } as const satisfies { [Kind in ProviderKind]: ProviderDefinition };

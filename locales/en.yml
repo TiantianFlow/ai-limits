@@ -622,6 +622,7 @@ metrics:
     usagePool: Usage pool
     rateLimits: Chat rate limits
     credits: Credits
+    droidCore: Droid Core
   grokPoolUnavailable: Usage-pool details are unavailable
   detail:
     includedUsage: Included usage
@@ -752,6 +753,15 @@ metrics:
   openrouter:
     balance: Balance
     keyBudget: API key budget
+  factory:
+    fiveHour: 5-hour
+    weekly: Weekly
+    monthly: Monthly
+    coreFiveHour: Core 5-hour
+    coreWeekly: Core weekly
+    coreMonthly: Core monthly
+    premium: Premium
+    extraUsage: Extra usage
   grok:
     weeklyPool: Weekly usage pool
     monthlyPool: Monthly usage pool
@@ -929,6 +939,17 @@ providers:
     capabilities:
       balance: Balance
       keyBudget: API key budget
+  factory:
+    name: Droid
+    connect: Connect Droid
+    connectionDisclosure: Uses a Factory API key you create for Droid, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      rateLimits: Rate limits
+      extraUsage: Extra usage
+    plans:
+      pro: Pro
+      plus: Plus
+      max: Max
 
 accessibility:
   refreshProvider: "Refresh {provider}"

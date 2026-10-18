@@ -222,6 +222,18 @@ are used only to identify the corresponding provider beside its visible name.
   `a934c40991c686d3f8060471978c9ee9133c957f6e36a307efe3d261d74a08f5`.
 - Ownership: DeepInfra; used only as a secondary provider identifier.
 
+## `factory.svg`
+
+- Upstream source: Factory's official app homepage-declared
+  [`favicon.ico`](https://app.factory.ai/favicon.ico), which is a PNG.
+- Retrieved: 2026-10-18; upstream SHA-256
+  `2329167fece964f6bf5d5ee993935df4847a47258c84f350b0495355a1d14a05`.
+- Modified: the 900 px PNG was box-downsampled to 90 px for provider-mark
+  size and embedded in a local SVG container. Bundled SHA-256
+  `503e911cb4ecf887b4f798ae3a33c9eeb2d58c49f87d0d1f3e858b92791d5c72`.
+- Ownership: Factory; used only as a secondary identifier beside Droid.
+  Factory's brand terms do not grant a general logo license.
+
 ## `moonshot.svg`
 
 - Source: original AI Limits mark for the Moonshot API provider, authored so it
