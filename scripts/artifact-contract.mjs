@@ -114,8 +114,8 @@ export function validateBuildManifest(manifest, packageVersion) {
   if (manifest.manifest_version !== 3) {
     errors.push("Expected manifest_version to be 3.");
   }
-  if (manifest.version !== packageVersion || manifest.version !== "0.5.1") {
-    errors.push("Expected manifest version 0.5.1 derived from package.json.");
+  if (manifest.version !== packageVersion || manifest.version !== "0.5.2") {
+    errors.push("Expected manifest version 0.5.2 derived from package.json.");
   }
   if (manifest.default_locale !== "en") {
     errors.push('Expected manifest default_locale to be "en".');
