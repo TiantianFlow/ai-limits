@@ -2,7 +2,7 @@
 
 [English](SUPPORTED_PROVIDERS.md) | 简体中文
 
-AI Limits 目前支持二十种服务连接。每个服务都需要用户主动启用；标准化用量和
+AI Limits 目前支持二十一种服务连接。每个服务都需要用户主动启用；标准化用量和
 History 只保存在当前 Chrome 配置文件中。
 
 来源等级描述的是响应结构证据，而不是当前可用性：**OBSERVED** 表示字段有开发期间
@@ -13,8 +13,8 @@ History 只保存在当前 Chrome 配置文件中。
 
 - **余额为主** — Mistral、sub2api、DeepSeek、Moonshot、DeepInfra、OpenAI 和
   OpenRouter。服务报告的零余额仍会显示。
-- **套餐/用量池为主** — ChatGPT、Claude、Cursor、Grok、Perplexity 和
-  ElevenLabs。为零的辅助或额外额度会隐藏，因为套餐或用量池才是主要信号。
+- **套餐/用量池为主** — ChatGPT、Claude、Cursor、Grok、Perplexity、
+  ElevenLabs 和 Droid。为零的辅助或额外额度会隐藏，因为套餐或用量池才是主要信号。
 - **当前无余额指标** — Kimi、New API、LiteLLM、ClawRouter、LLM Proxy、
   Fireworks 和 GroqCloud；当前契约报告配额或计数。
 
@@ -40,6 +40,7 @@ History 只保存在当前 Chrome 配置文件中。
 | OpenAI | 用户创建的 API 密钥 | 组织支出、补全请求/令牌总量，或旧版可用额度 | **INFERRED** | 这是平台组织/开发者账单接口，不是 ChatGPT 消费者会话。优先读取组织用量；未设置项目范围时，组织请求失败会回退到旧版额度接口。可能需要组织或管理员范围。 |
 | GroqCloud | 用户创建的 API 密钥 | 五分钟 Prometheus 请求、令牌和缓存命中速率 | **INFERRED** | 标准 Groq 密钥在 Prometheus 接口上返回 404，并会显示为需要更高凭据范围。 |
 | OpenRouter | 用户创建的 API 密钥 | 额度余额和可选 API 密钥预算 | **INFERRED** | 读取 `/credits` 和 `/key`；只有服务报告可用上限时才显示密钥预算。 |
+| Droid | 用户创建的 Factory API 密钥 | Standard 的 5 小时、每周和每月速率限制；Droid Core 用量池在使用中时的窗口；账户可以花费或持有额外用量时的余额 | **INFERRED** | 读取 `api.factory.ai` 上 Factory Droid 客户端。令牌速率限制账户使用 `/api/billing/limits`，其他账户回退到 `/api/organization/subscription/usage`。套餐标签可能来自 `/api/app/auth/me`，该请求失败时省略；响应中的账户标识不会保存。密钥仅作为 bearer token 发送，并附带 `x-factory-client: web-app`。额外用量的美元单位根据分字段和 Factory 已公布的预付额外用量定价推断。这不是组织管理用的额度上限接口。 |
 
 ## New API 连接模式
 

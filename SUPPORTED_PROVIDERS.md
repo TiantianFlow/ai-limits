@@ -2,7 +2,7 @@
 
 English | [简体中文](SUPPORTED_PROVIDERS.zh-CN.md)
 
-AI Limits supports twenty provider connections. Each provider is opt-in, and the
+AI Limits supports twenty-one provider connections. Each provider is opt-in, and the
 extension keeps normalized usage and History in the local Chrome profile.
 
 The provenance tier describes schema evidence, not current availability:
@@ -14,7 +14,8 @@ Balance presentation is explicit by provider:
 
 - **Balance-primary** — Mistral, sub2api, DeepSeek, Moonshot, DeepInfra, OpenAI,
   and OpenRouter. A reported zero balance remains visible.
-- **Pool-primary** — ChatGPT, Claude, Cursor, Grok, Perplexity, and ElevenLabs.
+- **Pool-primary** — ChatGPT, Claude, Cursor, Grok, Perplexity, ElevenLabs, and
+  Droid.
   A zero auxiliary/extra-credit balance is hidden because the plan or pool is
   the primary signal.
 - **No balance metric** — Kimi, New API, LiteLLM, ClawRouter, LLM Proxy,
@@ -42,6 +43,7 @@ Balance presentation is explicit by provider:
 | OpenAI | User-created API key | Organization costs, completion request/token totals, or legacy available credits | **INFERRED** | This is the Platform organization and developer billing API, not the ChatGPT consumer session. Organization usage is tried first. Without a project scope, a failed organization request falls back to legacy credit grants; organization/admin scope may be required. |
 | GroqCloud | User-created API key | Five-minute Prometheus request, token, and cache-hit rates | **INFERRED** | Standard Groq keys return 404 on the Prometheus surface and are reported as requiring broader credential scope. |
 | OpenRouter | User-created API key | Credit balance and optional API-key budget | **INFERRED** | Reads `/credits` and `/key`; key-budget enrichment appears only when the service reports a usable limit. |
+| Droid | User-created Factory API key | Standard 5-hour, weekly, and monthly rate limits, Droid Core windows when that pool is in use, and extra-usage balance when the account may spend it or holds some | **INFERRED** | Reads Factory's Droid client at `api.factory.ai`. Token-rate-limit accounts use `/api/billing/limits`. Other accounts fall back to `/api/organization/subscription/usage`. A plan label may come from `/api/app/auth/me` and is omitted when that request fails; the account identifier from that response is not stored. The key is sent only as a bearer token with `x-factory-client: web-app`. Extra-usage USD is inferred from the cents field and Factory's published prepaid extra-usage pricing. This is not the organization admin credits-limit API. |
 
 ## New API connection modes
 

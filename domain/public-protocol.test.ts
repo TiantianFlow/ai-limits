@@ -23,6 +23,7 @@ const providers = [
   { providerKind: "openai", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
   { providerKind: "groqcloud", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
   { providerKind: "openrouter", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
+  { providerKind: "factory", cardinality: "single", credentialKind: "api-key", configKind: "fixed" },
 ] as const;
 
 describe("public side-panel protocol", () => {

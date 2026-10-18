@@ -1,6 +1,6 @@
 # Chrome Web Store listing
 
-This document describes AI Limits version 0.5.1. It is the complete
+This document describes AI Limits version 0.5.2. It is the complete
 Chrome Web Store submission pack, including the paste-ready listing copy
 and the reviewer reference material. It is not a claim that any provider
 has approved the extension.
@@ -41,7 +41,7 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs across twenty supported services. Browser-session services use an account
+graphs across twenty-one supported services. Browser-session services use an account
 already signed in within the user's browser profile; API-key services use a key
 the user connects through guided setup.
 
@@ -64,7 +64,7 @@ compares quota consumed with elapsed time.
 Every quota window can open its own local History screen, so you can see how
 your usage has trended over time, right on your device.
 
-AI Limits supports 20 AI services. Connect only the services you use: every
+AI Limits supports 21 AI services. Connect only the services you use: every
 connection is opt-in. Browser-session services use the account already signed
 in to Chrome, while API services use a key you provide.
 
@@ -135,8 +135,8 @@ These origins are requested one provider at a time after the user clicks
   without extension host access.
 - `https://api.deepseek.com/*`, `https://api.moonshot.ai/*`,
   `https://api.deepinfra.com/*`, `https://api.fireworks.ai/*`,
-  `https://api.openai.com/*`, `https://api.groq.com/*`, and
-  `https://openrouter.ai/*`: send the selected provider's saved key only to its
+  `https://api.openai.com/*`, `https://api.groq.com/*`,
+  `https://openrouter.ai/*`, and `https://api.factory.ai/*`: send the selected provider's saved key only to its
   fixed read-only balance, usage, metrics, or billing endpoints.
 - `https://*/*`: optional dynamic host capability for New API, LiteLLM,
   ClawRouter, sub2api, and LLM Proxy instances. The extension never requests
@@ -251,7 +251,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.5.1-chrome.zip` upload artifact.
+- The validated `ai-limits-0.5.2-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
   provider sites in the same Chrome profile, plus temporary reviewer-created
   keys for each API-key provider under test. ElevenLabs should use
@@ -263,11 +263,11 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Twenty-provider test flow
+## Twenty-one-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm First Run opens with twenty opt-in provider rows and no prefilled usage.
+   confirm First Run opens with twenty-one opt-in provider rows and no prefilled usage.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -369,7 +369,11 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 21. **OpenRouter:** connect a temporary key, approve only
     `https://openrouter.ai/*`, and confirm credit balance plus key budget when
     reported.
-22. Use the header refresh and confirm connected providers retain their previous
+22. **Droid:** connect a temporary Factory API key, approve only
+    `https://api.factory.ai/*`, and confirm the 5-hour, weekly, and monthly
+    Standard limits. When the account reports them, confirm Droid Core windows
+    and extra-usage balance. No Factory tab should open.
+23. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history while counter/spend and balance samples remain ungraphed. From a

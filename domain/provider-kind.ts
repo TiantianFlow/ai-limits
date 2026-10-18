@@ -19,6 +19,7 @@ export const providerKinds = [
   "openai",
   "groqcloud",
   "openrouter",
+  "factory",
 ] as const;
 
 export type ProviderKind = (typeof providerKinds)[number];
@@ -44,6 +45,7 @@ export const apiKeyProviderKinds = [
   "openai",
   "groqcloud",
   "openrouter",
+  "factory",
 ] as const;
 export type ApiKeyProviderKind = (typeof apiKeyProviderKinds)[number];
 

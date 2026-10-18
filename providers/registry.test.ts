@@ -10,6 +10,7 @@ import { providerDefinitions } from "./definitions";
 import { deepInfraAdapter } from "./deepinfra/adapter";
 import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
+import { factoryAdapter } from "./factory/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { groqCloudAdapter } from "./groqcloud/adapter";
@@ -135,6 +136,7 @@ describe("provider registry", () => {
       "openai",
       "groqcloud",
       "openrouter",
+      "factory",
     ]);
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
 
@@ -364,6 +366,15 @@ describe("provider registry", () => {
         rejected: undefined,
         permissions: { origins: ["https://openrouter.ai/*"] },
       },
+      {
+        kind: "factory",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.factory.ai/*"] },
+      },
     ]);
 
     expect(providerRegistry.newapi.normalizeConfig({
@@ -538,6 +549,13 @@ describe("provider registry", () => {
         optionalOrigins: ["https://openrouter.ai/*"],
         optionalPermissions: [],
       },
+      factory: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.factory.ai/*"],
+        optionalPermissions: [],
+      },
     });
   });
 
@@ -562,6 +580,7 @@ describe("provider registry", () => {
       openai: openAiAdapter,
       groqcloud: groqCloudAdapter,
       openrouter: openRouterAdapter,
+      factory: factoryAdapter,
     };
     const adapterSpies = Object.fromEntries(
       Object.entries(adapters).map(([kind, adapter]) => [

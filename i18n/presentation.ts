@@ -120,6 +120,16 @@ const KNOWN_METRIC_KEYS: Partial<
     balance: "metrics.openrouter.balance",
     "key-budget": "metrics.openrouter.keyBudget",
   },
+  factory: {
+    "standard-five-hour": "metrics.factory.fiveHour",
+    "standard-weekly": "metrics.factory.weekly",
+    "standard-monthly": "metrics.factory.monthly",
+    "core-five-hour": "metrics.factory.coreFiveHour",
+    "core-weekly": "metrics.factory.coreWeekly",
+    "core-monthly": "metrics.factory.coreMonthly",
+    "premium-monthly": "metrics.factory.premium",
+    "extra-usage": "metrics.factory.extraUsage",
+  },
 };
 
 const KNOWN_GROUP_KEYS: Record<string, string> = {
@@ -127,6 +137,7 @@ const KNOWN_GROUP_KEYS: Record<string, string> = {
   "usage-pool": "metrics.groups.usagePool",
   "rate-limits": "metrics.groups.rateLimits",
   credits: "metrics.groups.credits",
+  "droid-core": "metrics.groups.droidCore",
 };
 
 const KNOWN_SEGMENT_KEYS: Partial<
@@ -156,6 +167,11 @@ const PLAN_KEYS: Partial<Record<ProviderKind, Record<string, string>>> = {
   perplexity: {
     pro: "providers.perplexity.plans.pro",
     max: "providers.perplexity.plans.max",
+  },
+  factory: {
+    pro: "providers.factory.plans.pro",
+    plus: "providers.factory.plans.plus",
+    max: "providers.factory.plans.max",
   },
 };
 
@@ -195,6 +211,7 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   openai: ["last30DaysSpend", "last30DaysRequests"],
   groqcloud: ["requestsPerMinute", "tokensPerMinute"],
   openrouter: ["balance", "keyBudget"],
+  factory: ["rateLimits", "extraUsage"],
 };
 
 const DURATION_METRIC = /^(\d+(?:\.\d+)?)-(day|hour)$/;
