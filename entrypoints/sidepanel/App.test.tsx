@@ -1791,4 +1791,62 @@ describe("side-panel App", () => {
     );
     expect(document.body).not.toHaveTextContent("secret worker detail");
   });
+
+  test("keeps an unsaved move when a storage reload returns an older order", async () => {
+    const state = createFixtureState(NOW);
+    let stored = toPublicState(state);
+    let finishSecondMove: ((value: unknown) => void) | undefined;
+    let moves = 0;
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        const command = message as { type?: string; instanceIds?: string[] };
+        if (command.type === "REORDER_INSTANCES") {
+          moves += 1;
+          if (moves === 2) {
+            return new Promise((resolve) => {
+              finishSecondMove = resolve;
+            }) as never;
+          }
+          const rank = new Map(command.instanceIds!.map((id, index) => [id, index]));
+          stored = {
+            ...stored,
+            instances: [...stored.instances].sort(
+              (left, right) => rank.get(left.id)! - rank.get(right.id)!,
+            ),
+          };
+          return toPublicState(stored) as never;
+        }
+        return toPublicState(stored) as never;
+      },
+    );
+    const handleNames = () =>
+      screen
+        .getAllByRole("button", { name: /^Move / })
+        .map((button) => button.getAttribute("aria-label"));
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Arrange providers" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Move ChatGPT" }), {
+      key: "ArrowDown",
+    });
+    await waitFor(() => expect(moves).toBe(1));
+    await act(async () => undefined);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Move ChatGPT" }), {
+      key: "ArrowDown",
+    });
+    await waitFor(() => expect(moves).toBe(2));
+    expect(handleNames().indexOf("Move ChatGPT")).toBe(2);
+
+    // The first move's storage write reloads state that predates the second.
+    await act(async () => browser.storage.local.set({ testReload: NOW + 3 }));
+    await act(async () => undefined);
+    expect(handleNames().indexOf("Move ChatGPT")).toBe(2);
+
+    const saved = toPublicState(stored);
+    const [first, second, ...rest] = saved.instances;
+    saved.instances = [first!, rest[0]!, second!, ...rest.slice(1)];
+    await act(async () => finishSecondMove?.(saved));
+    expect(handleNames().indexOf("Move ChatGPT")).toBe(2);
+  });
 });

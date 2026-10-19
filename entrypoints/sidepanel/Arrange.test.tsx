@@ -7,7 +7,7 @@ import type {
   ProviderInstanceView,
 } from "../../domain/public-protocol";
 import { createEmptyFixtureState } from "../../providers/fixtures";
-import { withInstanceOrder } from "./arrangement";
+import { withInstanceHidden, withInstanceOrder } from "./arrangement";
 import { Cockpit } from "./Cockpit";
 
 const NOW = Date.UTC(2026, 7, 7, 16);
@@ -208,8 +208,8 @@ describe("provider arrangement", () => {
     expect(screen.getByRole("button", { name: "Move ChatGPT up" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move Grok down" })).toBeDisabled();
     expect(
-      screen.queryByRole("switch", { name: "Show Grok on Overview" }),
-    ).toBeNull();
+      screen.getByRole("switch", { name: "Show Grok on Overview" }),
+    ).toBeChecked();
     expect(
       screen.getByRole("switch", { name: "Show Claude on Overview" }),
     ).not.toBeChecked();
@@ -267,5 +267,34 @@ describe("provider arrangement", () => {
         .getAllByRole("listitem")
         .map((row) => row.textContent),
     ).toEqual(["Claude", "Kimi", "ChatGPT"]);
+  });
+
+  it("moves focus to a provider's card after showing it", () => {
+    function Stateful() {
+      const [state, setState] = useState(() =>
+        arrangedState([
+          instance("chatgpt:default"),
+          instance("claude:default", { hidden: true }),
+        ]),
+      );
+      return (
+        <Cockpit
+          state={state}
+          now={NOW}
+          onDisplayModeChange={vi.fn()}
+          onRefresh={vi.fn()}
+          onConnectProvider={vi.fn()}
+          onSetInstanceHidden={(id, hidden) =>
+            setState((current) => withInstanceHidden(current, id, hidden))
+          }
+        />
+      );
+    }
+    render(<Stateful />);
+    fireEvent.click(screen.getByRole("button", { name: "Show Claude" }));
+    expect(document.activeElement).toHaveAttribute(
+      "data-focus-key",
+      "overview-provider-claude:default",
+    );
   });
 });

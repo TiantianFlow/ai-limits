@@ -34,8 +34,9 @@ interface DragState {
   pointerId: number;
   original: ProviderInstanceId[];
   order: ProviderInstanceId[];
-  // Row midpoints measured when the drag starts. Measuring once keeps the
-  // drop slot stable while rows shift underneath the pointer.
+  // Row midpoints in page coordinates, measured when the drag starts.
+  // Measuring once keeps the drop slot stable while rows shift underneath the
+  // pointer, and page coordinates keep it right if the panel scrolls.
   midpoints: Map<ProviderInstanceId, number>;
 }
 
@@ -124,7 +125,7 @@ export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps)
       const others = current.original.filter((id) => id !== current.instanceId);
       const slot = others.filter((id) => {
         const midpoint = current.midpoints.get(id);
-        return midpoint !== undefined && event.clientY > midpoint;
+        return midpoint !== undefined && event.clientY + window.scrollY > midpoint;
       }).length;
       const next = [...others];
       next.splice(slot, 0, current.instanceId);
@@ -157,7 +158,7 @@ export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps)
     const midpoints = new Map<ProviderInstanceId, number>();
     for (const id of ids) {
       const rect = rowRefs.current.get(id)?.getBoundingClientRect();
-      if (rect) midpoints.set(id, rect.top + rect.height / 2);
+      if (rect) midpoints.set(id, rect.top + window.scrollY + rect.height / 2);
     }
     setDrag({
       instanceId,

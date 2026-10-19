@@ -139,6 +139,9 @@ export function App() {
   const appliedStateRequestSequence = useRef(0);
   const displayMutationSequence = useRef(0);
   const arrangementMutationSequence = useRef(0);
+  const pendingArrangements = useRef(
+    new Map<number, (state: AppViewState) => AppViewState>(),
+  );
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -172,13 +175,21 @@ export function App() {
     };
   };
 
+  // A reload can carry state read before an in-flight arrangement was saved,
+  // so unconfirmed moves and visibility changes are re-applied on top of it.
+  const withPendingArrangements = (state: AppViewState): AppViewState =>
+    [...pendingArrangements.current.values()].reduce(
+      (current, project) => project(current),
+      state,
+    );
+
   const applyRequestedViewState = (
     requested: RequestedViewState,
     project: (state: AppViewState) => AppViewState = (state) => state,
   ): boolean => {
     if (requested.sequence <= appliedStateRequestSequence.current) return false;
     appliedStateRequestSequence.current = requested.sequence;
-    commitViewState(project(requested.state));
+    commitViewState(withPendingArrangements(project(requested.state)));
     return true;
   };
 
@@ -346,8 +357,8 @@ export function App() {
   };
 
   // Order and visibility apply optimistically, like the display mode. Only the
-  // latest arrangement response may replace the view, so quick successive
-  // moves never snap back to an older order.
+  // latest arrangement response may replace the view, and unconfirmed changes
+  // stay applied over any reload, so quick successive moves never snap back.
   const mutateArrangement = async (
     project: (state: AppViewState) => AppViewState,
     command: RuntimeCommand,
@@ -356,17 +367,19 @@ export function App() {
     const prior = viewStateRef.current;
     if (!prior) return;
     const mutation = ++arrangementMutationSequence.current;
+    pendingArrangements.current.set(mutation, project);
     clearAnnouncement();
     commitViewState(project(prior));
     try {
       const next = parseAppViewState(await browser.runtime.sendMessage(command));
-      if (mutation === arrangementMutationSequence.current) commitViewState(next);
+      pendingArrangements.current.delete(mutation);
+      if (mutation === arrangementMutationSequence.current) {
+        commitViewState(withPendingArrangements(next));
+      }
     } catch {
+      pendingArrangements.current.delete(mutation);
       try {
-        const requested = await requestViewState();
-        if (mutation === arrangementMutationSequence.current) {
-          applyRequestedViewState(requested);
-        }
+        applyRequestedViewState(await requestViewState());
       } catch {
         // The optimistic view stays until the next storage change reloads it.
       }

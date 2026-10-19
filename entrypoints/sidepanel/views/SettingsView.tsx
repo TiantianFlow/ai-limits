@@ -522,32 +522,30 @@ export function SettingsView({
                         </div>
                       ) : null}
                       <div className="settings-provider-arrange">
-                        {instance.access === "granted" ? (
-                          <label className="settings-provider-arrange__visibility">
-                            <span aria-hidden="true">
-                              {l10n.t("settings.showOnOverview")}
+                        <label className="settings-provider-arrange__visibility">
+                          <span aria-hidden="true">
+                            {l10n.t("settings.showOnOverview")}
+                          </span>
+                          <span className="settings-toggle__control">
+                            <input
+                              type="checkbox"
+                              role="switch"
+                              aria-label={l10n.t("settings.showOnOverviewNamed", {
+                                label,
+                              })}
+                              checked={!instance.hidden}
+                              onChange={(event) =>
+                                onSetInstanceHidden(
+                                  instance.id,
+                                  !event.currentTarget.checked,
+                                )
+                              }
+                            />
+                            <span className="settings-toggle__track" aria-hidden="true">
+                              <span />
                             </span>
-                            <span className="settings-toggle__control">
-                              <input
-                                type="checkbox"
-                                role="switch"
-                                aria-label={l10n.t("settings.showOnOverviewNamed", {
-                                  label,
-                                })}
-                                checked={!instance.hidden}
-                                onChange={(event) =>
-                                  onSetInstanceHidden(
-                                    instance.id,
-                                    !event.currentTarget.checked,
-                                  )
-                                }
-                              />
-                              <span className="settings-toggle__track" aria-hidden="true">
-                                <span />
-                              </span>
-                            </span>
-                          </label>
-                        ) : null}
+                          </span>
+                        </label>
                         <div className="settings-provider-arrange__move">
                           <button
                             type="button"

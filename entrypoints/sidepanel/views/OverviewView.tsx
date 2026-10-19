@@ -57,6 +57,8 @@ export function OverviewView({
   const arrangeButtonRef = useRef<HTMLButtonElement>(null);
   const doneButtonRef = useRef<HTMLButtonElement>(null);
   const focusOnModeChange = useRef(false);
+  const overviewRef = useRef<HTMLElement>(null);
+  const focusShownProvider = useRef<ProviderInstanceId | undefined>(undefined);
   const visibleProviders = providers.filter(({ hidden }) => !hidden);
   const hiddenProviders = providers.filter(({ hidden }) => hidden);
 
@@ -65,6 +67,24 @@ export function OverviewView({
     focusOnModeChange.current = false;
     (arranging ? doneButtonRef : arrangeButtonRef).current?.focus();
   }, [arranging]);
+
+  // Showing a provider removes the button that was pressed, so focus moves
+  // to that provider's card once it is back on the Overview.
+  useEffect(() => {
+    const instanceId = focusShownProvider.current;
+    if (!instanceId) return;
+    const card = overviewRef.current?.querySelector<HTMLElement>(
+      `[data-focus-key="overview-provider-${instanceId}"]`,
+    );
+    if (!card) return;
+    focusShownProvider.current = undefined;
+    card.focus();
+  }, [providers]);
+
+  const showProvider = (instanceId: ProviderInstanceId) => {
+    focusShownProvider.current = instanceId;
+    onSetProviderHidden(instanceId, false);
+  };
 
   const setArrangingWithFocus = (next: boolean) => {
     focusOnModeChange.current = true;
@@ -103,7 +123,7 @@ export function OverviewView({
   }
 
   return (
-    <section aria-labelledby="overview-title">
+    <section aria-labelledby="overview-title" ref={overviewRef}>
       <h2 className="visually-hidden" id="overview-title">
         {l10n.t("overview.screen")}
       </h2>
@@ -115,8 +135,10 @@ export function OverviewView({
             className="button button--secondary"
             type="button"
             onClick={() =>
-              hiddenProviders.forEach(({ instanceId }) =>
-                onSetProviderHidden(instanceId, false),
+              hiddenProviders.forEach(({ instanceId }, index) =>
+                index === 0
+                  ? showProvider(instanceId)
+                  : onSetProviderHidden(instanceId, false),
               )
             }
           >
@@ -187,7 +209,7 @@ export function OverviewView({
                   aria-label={l10n.t("overview.showNamed", {
                     label: card.instanceLabel,
                   })}
-                  onClick={() => onSetProviderHidden(instanceId, false)}
+                  onClick={() => showProvider(instanceId)}
                 >
                   <span aria-hidden="true">{l10n.t("overview.show")}</span>
                 </button>
