@@ -41,13 +41,13 @@ const elevenLabsPublicationStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports twenty providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter.",
+      "AI Limits supports twenty-one providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and Droid.",
     error: "README is missing the rendered twenty-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持二十个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud 和 OpenRouter。",
+      "AI Limits 支持二十一个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud、OpenRouter 和 Droid。",
     error:
       "Simplified Chinese README is missing the rendered twenty-provider statement.",
   },
@@ -173,7 +173,7 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "confirm First Run opens with twenty opt-in provider rows and no prefilled usage.",
+      "confirm First Run opens with twenty-one opt-in provider rows and no prefilled usage.",
     error:
       "Store listing reviewer flow must expect twenty First Run provider rows.",
   },
@@ -222,13 +222,13 @@ const v030PublicationStatements = [
   {
     key: "faq",
     statement:
-      "Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may open at most one inactive temporary Kimi tab, waits up to 10 seconds for recovery, and closes only the tab it created.",
+      "Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may open at most one inactive temporary Kimi tab, waits up to 30 seconds for recovery, and closes only the tab it created.",
     error: "English FAQ is missing the exact bounded Kimi tab policy.",
   },
   {
     key: "faqZh",
     statement:
-      "Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 10 秒完成恢复，并且只关闭它自己创建的标签页。",
+      "Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 30 秒完成恢复，并且只关闭它自己创建的标签页。",
     error: "Simplified Chinese FAQ is missing the exact bounded Kimi tab policy.",
   },
   {

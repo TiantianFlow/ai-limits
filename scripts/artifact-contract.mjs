@@ -24,6 +24,7 @@ export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://api.openai.com/*",
   "https://api.groq.com/*",
   "https://openrouter.ai/*",
+  "https://api.factory.ai/*",
   "https://admin.mistral.ai/*",
   "https://console.mistral.ai/*",
   "https://www.perplexity.ai/*",
@@ -113,8 +114,8 @@ export function validateBuildManifest(manifest, packageVersion) {
   if (manifest.manifest_version !== 3) {
     errors.push("Expected manifest_version to be 3.");
   }
-  if (manifest.version !== packageVersion || manifest.version !== "0.5.0") {
-    errors.push("Expected manifest version 0.5.0 derived from package.json.");
+  if (manifest.version !== packageVersion || manifest.version !== "0.5.2") {
+    errors.push("Expected manifest version 0.5.2 derived from package.json.");
   }
   if (manifest.default_locale !== "en") {
     errors.push('Expected manifest default_locale to be "en".');

@@ -2,7 +2,7 @@
 
 English | [简体中文](SUPPORTED_PROVIDERS.zh-CN.md)
 
-AI Limits supports twenty provider connections. Each provider is opt-in, and the
+AI Limits supports twenty-one provider connections. Each provider is opt-in, and the
 extension keeps normalized usage and History in the local Chrome profile.
 
 The provenance tier describes schema evidence, not current availability:
@@ -14,7 +14,8 @@ Balance presentation is explicit by provider:
 
 - **Balance-primary** — Mistral, sub2api, DeepSeek, Moonshot, DeepInfra, OpenAI,
   and OpenRouter. A reported zero balance remains visible.
-- **Pool-primary** — ChatGPT, Claude, Cursor, Grok, Perplexity, and ElevenLabs.
+- **Pool-primary** — ChatGPT, Claude, Cursor, Grok, Perplexity, ElevenLabs, and
+  Droid.
   A zero auxiliary/extra-credit balance is hidden because the plan or pool is
   the primary signal.
 - **No balance metric** — Kimi, New API, LiteLLM, ClawRouter, LLM Proxy,
@@ -24,7 +25,7 @@ Balance presentation is explicit by provider:
 | --- | --- | --- | --- | --- |
 | ChatGPT | Signed-in browser session | Reported message windows and credits | **OBSERVED** | Uses private web-session usage interfaces. The browser may attach ChatGPT cookies; request-local account identifiers are not persisted. |
 | Claude | Signed-in browser session | General and model-specific limits plus extra usage when reported | **OBSERVED** | Uses private web-session interfaces. Organization selection is request-local; a provider-supplied display label may be retained. |
-| Kimi | Browser session with targeted credential recovery | Subscription total and Kimi Code limits | **OBSERVED** | May read the exact legacy `kimi-auth` cookie or `localStorage.access_token`. Manual Connect or Refresh may briefly open one inactive Kimi tab so Kimi can refresh its own session. Automatic refresh never opens a tab and may defer when no usable session is available. |
+| Kimi | Browser session with targeted credential recovery | Subscription total and Kimi Code limits | **OBSERVED** | May read the exact legacy `kimi-auth` cookie or `localStorage.access_token`. Manual Connect or Refresh may open one inactive Kimi tab until Kimi finishes loading and can refresh its own session, for up to 30 seconds. Automatic refresh never opens a tab and may defer when no usable session is available. |
 | Cursor | Signed-in browser session plus manual page enrichment | Cursor-model and other-model monthly limits, Grok Bot weekly usage, and on-demand/extra-credit data when reported | **OBSERVED** | Base usage refreshes in the background. Connect or manual Refresh can request Grok Bot and extra-credit JSON through one already-open `cursor.com` tab, or by briefly opening one inactive spending tab when none is open. Chrome attaches signed-in Cursor cookies to those fixed same-origin requests, but AI Limits does not inspect cookie values directly. It never activates a Cursor tab and closes only the tab it created. Automatic refresh never opens or injects. Last-good page values stay visible until Grok Bot's weekly reset, and the card explains when they could not be refreshed. |
 | Grok | Signed-in browser session plus page-origin reads | Weekly or monthly usage pool as the subscription limit, with Grok Build and Chat composition when those buckets account for the whole pool, plus the SuperGrok-family plan label | **OBSERVED** | grok.com rejects extension-background session and usage requests, so AI Limits reads them from an already-open grok.com tab. Connect or manual Refresh may briefly open one inactive grok.com tab when none is open. Chrome attaches signed-in Grok cookies to those same-origin requests, but AI Limits does not inspect cookie values directly. It never activates a Grok tab and closes only the tab it created. Scheduled refresh may inject into an already-open grok.com tab and never opens a new one. Short-window per-mode rate-limit responses are not rendered for SuperGrok pool accounts. This is consumer Grok, not Cursor's Grok Bot. |
 | Mistral | Signed-in browser session | Month-to-date spend, token totals, and available credits | **INFERRED** | Chrome attaches same-origin cookies, but cannot expose the CSRF cookie value needed to construct `X-CSRFTOKEN`; live testing must confirm the service accepts the request without that header. |
@@ -42,6 +43,7 @@ Balance presentation is explicit by provider:
 | OpenAI | User-created API key | Organization costs, completion request/token totals, or legacy available credits | **INFERRED** | This is the Platform organization and developer billing API, not the ChatGPT consumer session. Organization usage is tried first. Without a project scope, a failed organization request falls back to legacy credit grants; organization/admin scope may be required. |
 | GroqCloud | User-created API key | Five-minute Prometheus request, token, and cache-hit rates | **INFERRED** | Standard Groq keys return 404 on the Prometheus surface and are reported as requiring broader credential scope. |
 | OpenRouter | User-created API key | Credit balance and optional API-key budget | **INFERRED** | Reads `/credits` and `/key`; key-budget enrichment appears only when the service reports a usable limit. |
+| Droid | User-created Factory API key | Standard 5-hour, weekly, and monthly rate limits, Droid Core windows when that pool is in use, and extra-usage balance when the account may spend it or holds some | **INFERRED** | Reads Factory's Droid client at `api.factory.ai`. Token-rate-limit accounts use `/api/billing/limits`. Other accounts fall back to `/api/organization/subscription/usage`. A plan label may come from `/api/app/auth/me` and is omitted when that request fails; the account identifier from that response is not stored. The key is sent only as a bearer token with `x-factory-client: web-app`. Extra-usage USD is inferred from the cents field and Factory's published prepaid extra-usage pricing. This is not the organization admin credits-limit API. |
 
 ## New API connection modes
 

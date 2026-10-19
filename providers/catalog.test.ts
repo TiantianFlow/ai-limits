@@ -39,6 +39,7 @@ describe("provider catalog", () => {
       "openai",
       "groqcloud",
       "openrouter",
+      "factory",
     ];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
@@ -169,6 +170,11 @@ describe("provider catalog", () => {
         darkMarkPath: "/provider-marks/openrouter-dark.svg",
         apiKeySetupUrl: "https://openrouter.ai/settings/keys",
       },
+      {
+        providerId: "factory",
+        markPath: "/provider-marks/factory.svg",
+        apiKeySetupUrl: "https://app.factory.ai/settings/api-keys",
+      },
     ]);
   });
 
@@ -254,6 +260,7 @@ describe("provider catalog", () => {
     expect(isApiKeyProviderKind("openai")).toBe(true);
     expect(isApiKeyProviderKind("groqcloud")).toBe(true);
     expect(isApiKeyProviderKind("openrouter")).toBe(true);
+    expect(isApiKeyProviderKind("factory")).toBe(true);
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);

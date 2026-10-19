@@ -15,7 +15,12 @@ import {
 export const KIMI_RECOVERY_LEASE_KEY = "kimiRecoveryTabLease";
 
 const KIMI_URL = "https://www.kimi.com/";
-const KIMI_RECOVERY_TIMEOUT_MS = 10_000;
+// Kimi's own boot watchdog is 30s. Document-complete is earlier than client
+// mount, and an expired session is replaced only after that mount.
+export const KIMI_RECOVERY_TIMEOUT_MS = 30_000;
+// Hold the first acceptable token so a pre-refresh value cannot close the tab.
+// A later different token is the completed refresh and is returned immediately.
+export const KIMI_TOKEN_STABLE_MS = 10_000;
 const KIMI_RECOVERY_POLL_INTERVAL_MS = 250;
 const KIMI_ABANDONED_LEASE_MAX_AGE_MS = 60_000;
 
@@ -133,6 +138,10 @@ export async function refreshKimiAccessTokenInTemporaryTab({
   });
   if (!owned) return undefined;
 
+  let candidate: string | undefined;
+  let candidateSince = 0;
+  let failed = false;
+
   try {
     while (!signal?.aborted && now() < deadline) {
       const readResult = await settleBeforeBoundary(
@@ -141,32 +150,43 @@ export async function refreshKimiAccessTokenInTemporaryTab({
         signal,
         now,
       );
-      if (readResult === OWNED_TAB_STOPPED || readResult.status === "rejected") {
-        return undefined;
-      }
+      if (readResult === OWNED_TAB_STOPPED) break;
 
       const token =
+        readResult.status === "resolved" &&
         typeof readResult.value === "string"
           ? readResult.value.trim()
-          : undefined;
-      if (token && (rejectedToken === undefined || token !== rejectedToken)) {
+          : "";
+      const acceptable =
+        token.length > 0 &&
+        (rejectedToken === undefined || token !== rejectedToken);
+      if (!acceptable) {
+        // A navigation or a still-rejected token means the page has not
+        // finished refreshing. Drop the candidate so the tab stays open.
+        candidate = undefined;
+      } else if (candidate !== undefined && token !== candidate) {
+        return token;
+      } else if (candidate !== token) {
+        candidate = token;
+        candidateSince = now();
+      } else if (now() - candidateSince >= KIMI_TOKEN_STABLE_MS) {
         return token;
       }
 
       const remainingMs = deadline - now();
-      if (remainingMs <= 0) return undefined;
+      if (remainingMs <= 0) break;
       const waitResult = await settleBeforeBoundary(
         wait(Math.min(KIMI_RECOVERY_POLL_INTERVAL_MS, remainingMs)),
         deadline,
         signal,
         now,
       );
-      if (waitResult === OWNED_TAB_STOPPED || waitResult.status === "rejected") {
-        return undefined;
-      }
+      if (waitResult === OWNED_TAB_STOPPED) break;
+      if (waitResult.status === "rejected") return undefined;
     }
   } catch {
     // Recovery is bounded best-effort work and never exposes browser errors.
+    failed = true;
   } finally {
     releaseOwnedBackgroundTab({
       tabId: owned.tabId,
@@ -176,7 +196,8 @@ export async function refreshKimiAccessTokenInTemporaryTab({
     });
   }
 
-  return undefined;
+  if (failed || signal?.aborted) return undefined;
+  return candidate;
 }
 
 export async function cleanupAbandonedKimiRecoveryTab({

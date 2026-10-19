@@ -13,7 +13,7 @@ Chrome Web Store releases can lag while review or publishing is pending; the
 Store badge shows the currently published version. GitHub Releases preserve
 the corresponding source and validated upload archive.
 
-AI Limits supports twenty providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter.
+AI Limits supports twenty-one providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and Droid.
 It is a Chrome side-panel extension that shows their current
 subscription usage and local quota-history graphs in one compact view. It
 normalizes provider-specific reporting into one **Used** or **Left** display
@@ -45,8 +45,8 @@ its affiliates.
   additionally run bundled read-only code in one already-open `cursor.com`
   page, or briefly open one inactive spending tab if none is open, to request
   Grok Bot, extra-credit, and per-model included-usage JSON.
-- ElevenLabs, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and
-  OpenRouter use user-created API keys against their fixed provider APIs. OpenAI
+- ElevenLabs, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud,
+  OpenRouter, and Droid use user-created API keys against their fixed provider APIs. OpenAI
   is the Platform organization and developer billing surface (organization
   costs, completion usage, or legacy credit grants), not the ChatGPT consumer
   session. New
@@ -78,8 +78,10 @@ its affiliates.
   Settings.
 
 Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh
-may open at most one inactive temporary Kimi tab, waits up to 10 seconds for
-recovery, and closes only the tab it created. The extension checks the legacy
+may open at most one inactive temporary Kimi tab, waits up to 30 seconds for
+recovery, and closes only the tab it created. Recovery waits until Kimi finishes
+loading the page, then keeps the tab open long enough for Kimi to replace an
+expired session token. The extension checks the legacy
 Kimi cookie first, then the exact `access_token` entry in an already-open Kimi
 page. Browser shutdown or API errors can delay or prevent best-effort cleanup.
 
@@ -174,7 +176,7 @@ pnpm verify:zip
 ```
 
 The command rebuilds the extension, creates
-`.output/ai-limits-0.5.0-chrome.zip`, opens the archive, and verifies its
+`.output/ai-limits-0.5.2-chrome.zip`, opens the archive, and verifies its
 manifest, entrypoints, permissions, and forbidden-file rules.
 
 ## Provider compatibility

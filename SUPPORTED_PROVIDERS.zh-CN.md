@@ -2,7 +2,7 @@
 
 [English](SUPPORTED_PROVIDERS.md) | 简体中文
 
-AI Limits 目前支持二十种服务连接。每个服务都需要用户主动启用；标准化用量和
+AI Limits 目前支持二十一种服务连接。每个服务都需要用户主动启用；标准化用量和
 History 只保存在当前 Chrome 配置文件中。
 
 来源等级描述的是响应结构证据，而不是当前可用性：**OBSERVED** 表示字段有开发期间
@@ -13,8 +13,8 @@ History 只保存在当前 Chrome 配置文件中。
 
 - **余额为主** — Mistral、sub2api、DeepSeek、Moonshot、DeepInfra、OpenAI 和
   OpenRouter。服务报告的零余额仍会显示。
-- **套餐/用量池为主** — ChatGPT、Claude、Cursor、Grok、Perplexity 和
-  ElevenLabs。为零的辅助或额外额度会隐藏，因为套餐或用量池才是主要信号。
+- **套餐/用量池为主** — ChatGPT、Claude、Cursor、Grok、Perplexity、
+  ElevenLabs 和 Droid。为零的辅助或额外额度会隐藏，因为套餐或用量池才是主要信号。
 - **当前无余额指标** — Kimi、New API、LiteLLM、ClawRouter、LLM Proxy、
   Fireworks 和 GroqCloud；当前契约报告配额或计数。
 
@@ -22,7 +22,7 @@ History 只保存在当前 Chrome 配置文件中。
 | --- | --- | --- | --- | --- |
 | ChatGPT | 浏览器登录会话 | 服务商报告的消息窗口和 Credits | **OBSERVED** | 使用未公开的网站会话接口。浏览器可能附带 ChatGPT Cookie；请求期间使用的账号标识不会持久化。 |
 | Claude | 浏览器登录会话 | 通用及模型专属限制，以及服务商报告的 Extra usage | **OBSERVED** | 使用未公开的网站会话接口。组织选择只在请求期间使用；服务商提供的显示标签可能被保留。 |
-| Kimi | 浏览器会话及定向凭据恢复 | 订阅总用量和 Kimi Code 限制 | **OBSERVED** | 可能读取名称完全匹配的旧版 `kimi-auth` Cookie 或 `localStorage.access_token`。手动 Connect 或 Refresh 可能短暂打开一个非活动 Kimi 标签页，让 Kimi 自己刷新会话。自动刷新绝不会打开标签页；没有可用会话时可能延后。 |
+| Kimi | 浏览器会话及定向凭据恢复 | 订阅总用量和 Kimi Code 限制 | **OBSERVED** | 可能读取名称完全匹配的旧版 `kimi-auth` Cookie 或 `localStorage.access_token`。手动 Connect 或 Refresh 可能打开一个非活动 Kimi 标签页，直到 Kimi 完成页面加载并刷新自己的会话，最多 30 秒。自动刷新绝不会打开标签页；没有可用会话时可能延后。 |
 | Cursor | 浏览器登录会话及手动页面增强 | Cursor 模型和其他模型的独立月度限制、Grok Bot 每周用量，以及服务商报告的按量支出/额外 Credits 数据 | **OBSERVED** | 基础用量在后台刷新。Connect 或手动 Refresh 可通过一个已经打开的 `cursor.com` 标签页请求 Grok Bot 和额外 Credits JSON；如果当前没有打开的标签页，可能会短暂打开一个非活动的用量页。Chrome 会把已登录的 Cursor Cookie 附加到这些固定的同源请求，但 AI Limits 不会直接检查 Cookie 值。扩展不会激活 Cursor 标签页，并且只关闭它自己创建的标签页。自动刷新绝不会打开标签页或注入代码。上次有效的页面数值会保留到 Grok Bot 的每周重置，卡片会说明为何未能刷新。 |
 | Grok | 浏览器登录会话及页面来源读取 | 以每周或每月用量池为订阅限额，并在 Grok Build 与 Chat 桶合计等于整池时显示构成，以及 SuperGrok 系列套餐标签 | **OBSERVED** | grok.com 会拒绝扩展后台的会话和用量请求，因此 AI Limits 从已经打开的 grok.com 标签页读取。Connect 或手动 Refresh 在没有打开的标签页时可能会短暂打开一个非活动 grok.com 标签页。Chrome 会把已登录的 Grok Cookie 附加到这些同源请求，但 AI Limits 不会直接检查 Cookie 值。扩展不会激活 Grok 标签页，并且只关闭它自己创建的标签页。定时刷新可能向已经打开的 grok.com 标签页注入代码，但绝不会新建标签页。SuperGrok 用量池账号不会显示按聊天模式返回的短窗速率限制。这是面向消费者的 Grok，不是 Cursor 的 Grok Bot。 |
 | Mistral | 浏览器登录会话 | 本月至今支出、令牌总量和可用额度 | **INFERRED** | Chrome 会附加同源 Cookie，但无法暴露构造 `X-CSRFTOKEN` 所需的 CSRF Cookie 值；需要实时测试确认服务能接受缺少该请求头的请求。 |
@@ -40,6 +40,7 @@ History 只保存在当前 Chrome 配置文件中。
 | OpenAI | 用户创建的 API 密钥 | 组织支出、补全请求/令牌总量，或旧版可用额度 | **INFERRED** | 这是平台组织/开发者账单接口，不是 ChatGPT 消费者会话。优先读取组织用量；未设置项目范围时，组织请求失败会回退到旧版额度接口。可能需要组织或管理员范围。 |
 | GroqCloud | 用户创建的 API 密钥 | 五分钟 Prometheus 请求、令牌和缓存命中速率 | **INFERRED** | 标准 Groq 密钥在 Prometheus 接口上返回 404，并会显示为需要更高凭据范围。 |
 | OpenRouter | 用户创建的 API 密钥 | 额度余额和可选 API 密钥预算 | **INFERRED** | 读取 `/credits` 和 `/key`；只有服务报告可用上限时才显示密钥预算。 |
+| Droid | 用户创建的 Factory API 密钥 | Standard 的 5 小时、每周和每月速率限制；Droid Core 用量池在使用中时的窗口；账户可以花费或持有额外用量时的余额 | **INFERRED** | 读取 `api.factory.ai` 上 Factory Droid 客户端。令牌速率限制账户使用 `/api/billing/limits`，其他账户回退到 `/api/organization/subscription/usage`。套餐标签可能来自 `/api/app/auth/me`，该请求失败时省略；响应中的账户标识不会保存。密钥仅作为 bearer token 发送，并附带 `x-factory-client: web-app`。额外用量的美元单位根据分字段和 Factory 已公布的预付额外用量定价推断。这不是组织管理用的额度上限接口。 |
 
 ## New API 连接模式
 

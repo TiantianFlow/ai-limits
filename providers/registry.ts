@@ -5,6 +5,7 @@ import { cursorPackage } from "./cursor/package";
 import { deepInfraAdapter } from "./deepinfra/adapter";
 import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
+import { factoryAdapter } from "./factory/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokPackage } from "./grok/package";
 import { groqCloudAdapter } from "./groqcloud/adapter";
@@ -215,6 +216,17 @@ export const providerRegistry = {
     requiredPermissions: fixedPermissions(
       providerDefinitions.openrouter.optionalOrigins,
       providerDefinitions.openrouter.optionalPermissions,
+    ),
+  }),
+  factory: createApiKeyPackage({
+    kind: "factory",
+    adapter: factoryAdapter,
+    cardinality: providerDefinitions.factory.cardinality,
+    configKind: providerDefinitions.factory.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.factory.optionalOrigins,
+      providerDefinitions.factory.optionalPermissions,
     ),
   }),
 } satisfies { [Kind in ProviderKind]: ProviderPackage };

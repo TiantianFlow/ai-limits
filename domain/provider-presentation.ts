@@ -151,6 +151,13 @@ export const providerCatalog = {
       apiKeySetupUrl: "https://openrouter.ai/settings/keys",
     },
   },
+  factory: {
+    displayName: "Droid",
+    presentation: {
+      markPath: "/provider-marks/factory.svg",
+      apiKeySetupUrl: "https://app.factory.ai/settings/api-keys",
+    },
+  },
 } as const;
 
 export type ProviderBalanceCategory =
@@ -179,6 +186,7 @@ export const providerBalanceCategories = {
   openai: "balance-primary",
   groqcloud: "none",
   openrouter: "balance-primary",
+  factory: "pool-primary",
 } as const satisfies Record<ProviderKind, ProviderBalanceCategory>;
 
 export const providerNames = Object.fromEntries(
@@ -199,6 +207,11 @@ const knownPlanLabels: Partial<
   },
   elevenlabs: {
     free: "Free",
+  },
+  factory: {
+    pro: "Pro",
+    plus: "Plus",
+    max: "Max",
   },
 };
 

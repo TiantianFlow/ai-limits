@@ -1,9 +1,9 @@
 # Privacy Policy
 
-Last updated: October 9, 2026
+Last updated: October 16, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
-describes version 0.5.0.
+describes version 0.5.2.
 
 AI Limits is an independent project. It is not affiliated with, endorsed by,
 or authorized by any supported provider, its parent company, or its affiliates.
@@ -67,11 +67,14 @@ For Kimi, AI Limits checks the exact legacy `kimi-auth` cookie first, then the
 exact `access_token` entry from an already-open matching Kimi page. It does not
 read other Kimi browser-storage entries. During an interactive Connect or
 Refresh, either a missing credential or a credential rejected by Kimi may
-cause AI Limits to create one inactive Kimi homepage tab. Recovery has a
-10-second deadline for obtaining a credential. When recovery finishes or times
-out, the extension attempts best-effort cleanup of only the tab and lease it
-owns; browser shutdown or API errors can delay or prevent cleanup. Scheduled
-refresh never creates a Kimi tab.
+cause AI Limits to create one inactive Kimi homepage tab. Recovery reads
+`access_token` only after that page sets `window.__kimiAppMounted`, the flag
+Kimi sets when its client app mounts. It then keeps the owned tab open so Kimi
+can replace an expired token. Recovery has a 30-second deadline for obtaining
+a credential. When recovery finishes or times out, the extension attempts
+best-effort cleanup of only the tab and lease it owns; browser shutdown or API
+errors can delay or prevent cleanup. Scheduled refresh never creates a Kimi
+tab.
 
 While that recovery is active, the extension stores only a generated lease
 identifier with the temporary tab ID and creation timestamp in
@@ -172,17 +175,24 @@ origin for the read-only `/key/info`, `/v1/usage`,
 the selected provider. Each configured instance keeps independent
 credentials, nonsecret configuration, normalized usage, and History.
 
-DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, and OpenRouter use
-user-created API keys at fixed provider API origins. OpenAI here is the
-Platform organization and developer billing API, not the ChatGPT consumer
-session. AI Limits sends those keys
+DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and
+Droid use user-created API keys at fixed provider API origins. OpenAI here is
+the Platform organization and developer billing API, not the ChatGPT consumer
+session. Droid is Factory's coding product, not an organization-admin credits
+API. AI Limits sends those keys
 only to
 `api.deepseek.com/user/balance`, `api.moonshot.ai/v1/users/me/balance`,
 DeepInfra's `api.deepinfra.com/payment/checklist` and `/payment/usage`
 endpoints, Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
 `/billing/summary` endpoint, OpenAI's organization cost and completion-usage
 endpoints or legacy credit-grants fallback, GroqCloud's Prometheus query
-endpoint, or OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints. These
+endpoint, OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints, or
+Droid's `api.factory.ai/api/billing/limits` request. When that Droid response
+is not a token-rate-limits payload, AI Limits instead reads
+`api.factory.ai/api/organization/subscription/usage`. It may also read
+`api.factory.ai/api/app/auth/me` for a plan label and does not store the
+account identifier from that response. The Droid key is sent as an
+Authorization bearer token with `x-factory-client: web-app`. These
 read-only responses are normalized into balance, quota, counter, or spend
 metrics; raw provider responses are not persisted.
 
