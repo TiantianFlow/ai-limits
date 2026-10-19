@@ -67,7 +67,7 @@ import {
 } from "./views/ApiKeyConnectView";
 import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
-import { balanceMetrics, counterMetrics, quotaMetrics } from "./metrics";
+import { balanceMetrics, counterMetrics, historyMetrics, quotaMetrics } from "./metrics";
 import { instanceLabels } from "./instance-label";
 
 export interface ApiKeySubmission {
@@ -389,6 +389,9 @@ export function providerView(
     plan,
     mode,
     values,
+    ...(snapshot === undefined
+      ? {}
+      : { historyMetricId: historyMetrics(snapshot, provider.providerKind)[0]?.id }),
     usageGroups:
       snapshot === undefined
         ? []
@@ -693,8 +696,10 @@ export function Cockpit({
     focusKey: string,
     requestedMetricId?: string,
   ) => {
-    const snapshot = state.instances.find((instance) => instance.id === instanceId)?.snapshot;
-    const providerMetrics = snapshot ? quotaMetrics(snapshot) : [];
+    const record = state.instances.find((instance) => instance.id === instanceId);
+    const providerMetrics = record?.snapshot
+      ? historyMetrics(record.snapshot, record.providerKind)
+      : [];
     const explicitMetricId = providerMetrics.some(
       (metric) => metric.id === requestedMetricId,
     )
@@ -865,7 +870,10 @@ export function Cockpit({
             openHistory(
               instanceId,
               focusKey ?? `provider-history-${instanceId}`,
-              metricId ?? (detailRecord?.snapshot ? quotaMetrics(detailRecord.snapshot)[0]?.id : undefined),
+              metricId ??
+                (detailRecord?.snapshot
+                  ? historyMetrics(detailRecord.snapshot, detailRecord.providerKind)[0]?.id
+                  : undefined),
             )
           }
           onOpenSettings={() =>

@@ -4,7 +4,7 @@ English | [简体中文](FAQ.zh-CN.md)
 
 ## Does History update after manual refresh, automatic refresh, or both?
 
-Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.
+Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics and the balance of balance-first providers; counter or spend observations and other balances remain stored but are not graphed.
 
 Failed, deferred, skipped, superseded, or malformed refreshes do not add a
 history observation. They also do not insert a zero or copy the last value
@@ -197,8 +197,8 @@ provider tabs for setup or refresh.
 History stores successful normalized quota, counter or spend, and balance
 observations per instance. Currency-denominated spend counters and balances are
 normalized usage data, not raw payment transaction history. History
-graphs quota metrics only; counter/spend and balance observations remain stored
-but are not graphed. History never stores credentials, raw provider responses,
+graphs quota metrics and the balance of balance-first providers; counter/spend
+observations and other balances remain stored but are not graphed. History never stores credentials, raw provider responses,
 or reconstructed provider history. Failed, deferred, skipped, or malformed
 refreshes do not add History observations; AI Limits separately stores only the
 latest sanitized refresh status.

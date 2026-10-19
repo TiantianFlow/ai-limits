@@ -30,6 +30,8 @@ export type {
 export { DETAIL_TABLE_MAX_TABLES, DETAIL_TABLE_ROW_CAP } from "./model";
 export { sanitizedFailureMessage } from "./model";
 export { quotaHistorySegments, quotaHistorySeries, cycleBoundaryChanged } from "./history";
+export { balanceAxisMax, balanceHistorySeries, BALANCE_GAP_MS } from "./balance-history";
+export type { BalanceHistoryPoint, BalanceHistorySeries } from "./balance-history";
 export type {
   HistoryBreakKind,
   MetricHistoryPoint,

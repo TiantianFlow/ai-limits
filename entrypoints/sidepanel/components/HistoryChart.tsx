@@ -35,21 +35,21 @@ export interface HistoryChartProps {
   rangeHours?: number;
 }
 
-const VIEWBOX_WIDTH = 320;
-const VIEWBOX_HEIGHT = 136;
-const PLOT_LEFT = 8;
-const PLOT_RIGHT = 312;
-const PLOT_TOP = 22;
-const PLOT_BOTTOM = 106;
+export const VIEWBOX_WIDTH = 320;
+export const VIEWBOX_HEIGHT = 136;
+export const PLOT_LEFT = 8;
+export const PLOT_RIGHT = 312;
+export const PLOT_TOP = 22;
+export const PLOT_BOTTOM = 106;
 /**
  * Empty-stretch marks sit on this y. A 1px stroke centered on the baseline
  * (y = PLOT_BOTTOM) hangs half a pixel below the axis and, once the viewBox
  * scales up in the side panel, reads as about 4px under the plot.
  */
-const MARK_Y = PLOT_BOTTOM - 1.5;
-const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
+export const MARK_Y = PLOT_BOTTOM - 1.5;
+export const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
 
-interface Focus {
+export interface Focus {
   id: string;
   title: string;
   lines: string[];
@@ -65,7 +65,7 @@ function coversSpan(start: number, end: number, at: number, pad = 0): boolean {
   return Math.min(at, end + pad) === at && Math.max(at, start - pad) === at;
 }
 
-function timeX(at: number, start: number, end: number): number {
+export function timeX(at: number, start: number, end: number): number {
   const span = Math.max(1, end - start);
   const clamped = Math.min(end, Math.max(start, at));
   return PLOT_LEFT + ((clamped - start) / span) * (PLOT_RIGHT - PLOT_LEFT);
@@ -98,7 +98,7 @@ function percentText(used: number, mode: DisplayMode): string {
   return `${wholePercent(shown)}%`;
 }
 
-function durationText(ms: number): string {
+export function durationText(ms: number): string {
   const hour = 60 * 60 * 1_000;
   const day = 24 * hour;
   if (ms < hour) return l10n.count("history.durationMinutes", Math.max(1, Math.round(ms / 60_000)));
@@ -372,18 +372,18 @@ function idlePieces(span: ChartIdle, model: ChartModel): { start: number; end: n
   return pieces;
 }
 
-function dateTicks(model: ChartModel): { at: number; label: string }[] {
+export function dateTicks(rangeStart: number, rangeEnd: number): { at: number; label: string }[] {
   const hour = 60 * 60 * 1_000;
-  const range = model.rangeEnd - model.rangeStart;
+  const range = rangeEnd - rangeStart;
   const stepDays = range <= 48 * hour ? 1 : range <= 7 * 24 * hour ? 2 : 7;
   const ticks: { at: number; label: string }[] = [];
-  const first = new Date(model.rangeStart);
+  const first = new Date(rangeStart);
   let at = new Date(first.getFullYear(), first.getMonth(), first.getDate()).getTime();
-  if (at < model.rangeStart) at += 24 * hour;
+  if (at < rangeStart) at += 24 * hour;
   let index = 0;
-  for (; at < model.rangeEnd; at += 24 * hour, index += 1) {
+  for (; at < rangeEnd; at += 24 * hour, index += 1) {
     if (index % stepDays !== 0) continue;
-    const x = timeX(at, model.rangeStart, model.rangeEnd);
+    const x = timeX(at, rangeStart, rangeEnd);
     if (x < PLOT_LEFT + 22 || x > PLOT_RIGHT - 36) continue;
     ticks.push({
       at,
@@ -777,7 +777,7 @@ export function HistoryChart({
                 />
                 )
               ))}
-              {dateTicks(model).map((tick) => (
+              {dateTicks(model.rangeStart, model.rangeEnd).map((tick) => (
                 <text key={tick.at} className="history-chart__tick" x={timeX(tick.at, rangeStart, rangeEnd)} y={128} textAnchor="middle">
                   {tick.label}
                 </text>

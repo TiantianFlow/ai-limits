@@ -57,6 +57,8 @@ export interface ProviderCardProps {
   mode: DisplayMode;
   values: MetricValueView[];
   usageGroups: UsageGroupView[];
+  /** First meter History can chart, a quota or a primary balance. */
+  historyMetricId?: string;
   freshness?: string;
   stale: boolean;
   access: ProviderInstanceView["access"];

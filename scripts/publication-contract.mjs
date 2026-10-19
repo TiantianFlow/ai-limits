@@ -196,16 +196,16 @@ const requiredVisibleV030Statements = [
   {
     key: "faq",
     statement:
-      "Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
+      "Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics and the balance of balance-first providers; counter or spend observations and other balances remain stored but are not graphed.",
     error:
-      "English FAQ introduction is missing typed History and quota-only graph behavior.",
+      "English FAQ introduction is missing typed History and History graph scope behavior.",
   },
   {
     key: "faqZh",
     statement:
-      "两者都会。成功的 Connect、单个服务 Refresh、顶部刷新按钮或定时自动刷新，都会新增一条标准化类型化 History 观测，其中包含该服务本次返回的配额、计数或支出以及余额指标。History 只绘制配额指标；计数或支出和余额观测仍会保存，但不会绘图。",
+      "两者都会。成功的 Connect、单个服务 Refresh、顶部刷新按钮或定时自动刷新，都会新增一条标准化类型化 History 观测，其中包含该服务本次返回的配额、计数或支出以及余额指标。History 绘制配额指标以及以余额为主的服务商的余额；计数或支出观测和其他余额仍会保存，但不会绘图。",
     error:
-      "Simplified Chinese FAQ introduction is missing typed History and quota-only graph behavior.",
+      "Simplified Chinese FAQ introduction is missing typed History and History graph scope behavior.",
   },
   {
     key: "readme",
@@ -286,8 +286,8 @@ const requiredVisibleV030Statements = [
   {
     key: "privacy",
     statement:
-      "History graphs plot quota metrics only; counter or spend and balance observations remain stored but are not graphed.",
-    error: "Privacy policy is missing the quota-only graph disclosure.",
+      "History graphs plot quota metrics and the balance of balance-first providers; counter or spend observations and other balances remain stored but are not graphed.",
+    error: "Privacy policy is missing the History graph scope disclosure.",
   },
   {
     key: "privacy",
@@ -315,8 +315,8 @@ const requiredVisibleV030Statements = [
   {
     key: "listing",
     statement:
-      "Successful normalized quota, counter or spend, and balance observations are retained per instance; History graphs quota metrics, while counter or spend and balance observations remain stored but ungraphed.",
-    error: "Store listing is missing typed history and quota-only graph behavior.",
+      "Successful normalized quota, counter or spend, and balance observations are retained per instance; History graphs quota metrics and the balance of balance-first providers, while counter or spend observations and other balances remain stored but ungraphed.",
+    error: "Store listing is missing typed history and History graph scope behavior.",
   },
 ];
 

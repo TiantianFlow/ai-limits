@@ -359,7 +359,18 @@ history:
     few: "{count} readings · stored only on this device."
     many: "{count} readings · stored only on this device."
     other: "{count} readings · stored only on this device."
-  note: Only successful, normalized quota observations are plotted. A solid line is a reading and the shaded area is quota used; a dashed stretch has no reading in between. Narrow windows draw one bar each, and the narrowest draw one bar per day. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter and balance observations are stored but are not available as graph series.
+  note: Only successful, normalized quota observations are plotted. A solid line is a reading and the shaded area is quota used; a dashed stretch has no reading in between. Narrow windows draw one bar each, and the narrowest draw one bar per day. The newest 48 hours stay at collection resolution; older retained history is compacted hourly, keeping the last reading of each window, for up to 30 days on this device. Counter observations are stored but are not graphed; balance-first providers chart their balance separately.
+  balance:
+    subtitle: "{provider} · Local balance observations · 30-day retention on this device"
+    chartName: "{provider} {label} balance history"
+    statusNoChange: "No change in {range}"
+    statusChange: "{change} in {range}"
+    statusOneReading: "Only one reading in {range}"
+    topUp: "Top-up +{amount}"
+    infoLine: Solid line — balance readings on a zero-based scale. Spending slopes down.
+    infoTopUp: A step up is a top-up or credit.
+    summaryKeys: Use left and right arrow keys to inspect readings.
+    note: Only successful balance readings are plotted, in the provider's currency on a zero-based scale. A rise of at least 1% between readings is marked as a top-up. The newest 48 hours stay at collection resolution; older retained history is compacted hourly for up to 30 days on this device. Balance readings store no credentials or account identifiers.
 
 settings:
   screen: Provider settings

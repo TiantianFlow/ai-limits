@@ -227,8 +227,9 @@ into an already-open grok.com tab; Cursor scheduled refresh never injects.
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
 - **Retention and controls:** Successful normalized quota, counter or spend, and
-  balance observations are retained per instance; History graphs quota metrics,
-  while counter or spend and balance observations remain stored but ungraphed.
+  balance observations are retained per instance; History graphs quota metrics
+  and the balance of balance-first providers, while counter or spend
+  observations and other balances remain stored but ungraphed.
   Successful normalized quota, counter/spend, and
   balance observations stay in the local Chrome profile per instance for up to
   30 days, subject to a 1,024-observation per-instance safety cap. Within that

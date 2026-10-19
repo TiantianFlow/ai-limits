@@ -65,8 +65,8 @@ its affiliates.
   balance observations are stored per instance for up to 30 days, subject to a
   1,024-observation per-instance safety cap. The newest 48 hours stay at
   collection resolution; older retained observations keep the latest value in
-  each UTC hour. History graphs quota metrics only. It does not graph the
-  retained counters or balances, reconstruct earlier provider history, or
+  each UTC hour. History graphs quota metrics and the balance of balance-first
+  providers. It does not graph the retained counters or other balances, reconstruct earlier provider history, or
   store raw provider responses or credentials in History.
 - Browser-session cookies and access credentials are used only for the current
   provider collection attempt and are not saved in persistent extension
