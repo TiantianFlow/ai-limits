@@ -113,6 +113,27 @@ describe("public side-panel protocol", () => {
     expect(source.instances[0]!.snapshot.metrics[0]!.label).toBe("Relay quota");
   });
 
+  test("carries only a true hidden flag for an instance", () => {
+    const view = (hidden: unknown) => ({
+      preferences: { displayMode: "used", autoRefresh: true },
+      providers,
+      instances: [
+        {
+          id: "kimi:default",
+          providerKind: "kimi",
+          hidden,
+          access: "granted",
+          createdAt: 10,
+          history: [],
+        },
+      ],
+    });
+    expect(parseAppViewState(view(true)).instances[0]!.hidden).toBe(true);
+    expect(() => parseAppViewState(view(false))).toThrow(
+      "Missing application state",
+    );
+  });
+
   test("rejects an unsafe public New API base URL", () => {
     const baseUrl = "https://relay.example/gateway?token=synthetic-secret";
     expect(() =>

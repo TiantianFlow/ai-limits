@@ -1727,4 +1727,68 @@ describe("side-panel App", () => {
     ).toBeVisible();
     expect(screen.getByRole("combobox", { name: "语言" })).toHaveValue("zh_CN");
   });
+
+  test("hides a provider at once and keeps the saved state from the worker", async () => {
+    const state = createFixtureState(NOW);
+    const commands: Record<string, unknown>[] = [];
+    let finishHide: ((value: unknown) => void) | undefined;
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        const command = message as Record<string, unknown>;
+        commands.push(command);
+        if (command.type === "SET_INSTANCE_HIDDEN") {
+          return new Promise((resolve) => {
+            finishHide = resolve;
+          }) as never;
+        }
+        return toPublicState(state) as never;
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Arrange providers" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show ChatGPT on Overview" }));
+
+    expect(
+      screen.getByRole("switch", { name: "Show ChatGPT on Overview" }),
+    ).not.toBeChecked();
+    expect(commands).toContainEqual({
+      type: "SET_INSTANCE_HIDDEN",
+      instanceId: "chatgpt:default",
+      hidden: true,
+    });
+
+    const saved = toPublicState(state);
+    saved.instances[0] = { ...saved.instances[0]!, hidden: true };
+    await act(async () => finishHide?.(saved));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.getByText("1 hidden")).toBeInTheDocument();
+  });
+
+  test("restores the saved order when reordering fails", async () => {
+    const state = createFixtureState(NOW);
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        if ((message as { type?: string }).type === "REORDER_INSTANCES") {
+          throw new Error("secret worker detail");
+        }
+        return toPublicState(state) as never;
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Arrange providers" }));
+    const handle = screen.getByRole("button", { name: "Move ChatGPT" });
+    fireEvent.keyDown(handle, { key: "ArrowDown" });
+
+    expect(await screen.findByText("Couldn’t save the provider order. Try again.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /^Move / })[0]).toHaveAccessibleName(
+        "Move ChatGPT",
+      ),
+    );
+    expect(document.body).not.toHaveTextContent("secret worker detail");
+  });
 });

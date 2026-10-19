@@ -314,6 +314,59 @@ describe("queued instance repositories", () => {
     });
   });
 
+  test("hides, shows, and reorders instances without touching their usage", async () => {
+    const personal = newApiInstance(
+      "newapi:550e8400-e29b-41d4-a716-446655440000",
+      "Personal relay",
+    );
+    const work = newApiInstance(
+      "newapi:0c5f2af7-21d4-4cd1-bcd8-09005c65e45f",
+      "Work relay",
+    );
+    const kimi: ProviderInstanceRecord = {
+      id: "kimi:default",
+      providerKind: "kimi",
+      config: { kind: "fixed" },
+      access: "granted",
+      createdAt: now,
+      history: [],
+    };
+    await repository.connectionRepository.create(personal);
+    await repository.connectionRepository.create(work);
+    await repository.connectionRepository.create(kimi);
+
+    await repository.connectionRepository.setHidden(work.id, true);
+    await expect(repository.connectionRepository.get(work.id)).resolves.toEqual({
+      ...work,
+      hidden: true,
+    });
+
+    // An ID missing from the request keeps its relative place after the listed ones.
+    await repository.connectionRepository.reorder([kimi.id, work.id]);
+    await expect(repository.connectionRepository.list()).resolves.toEqual([
+      kimi,
+      { ...work, hidden: true },
+      personal,
+    ]);
+
+    await repository.usageRepository.commit(work.id, (current) => ({
+      ...current,
+      hidden: undefined,
+      history: [],
+    }));
+    await repository.connectionRepository.replace(work.id, (current) => ({
+      ...current,
+      hidden: undefined,
+    }));
+    await expect(repository.connectionRepository.get(work.id)).resolves.toEqual({
+      ...work,
+      hidden: true,
+    });
+
+    await repository.connectionRepository.setHidden(work.id, false);
+    await expect(repository.connectionRepository.get(work.id)).resolves.toEqual(work);
+  });
+
   test("updates preferences and deletes instances independently", async () => {
     const first = newApiInstance(
       "newapi:550e8400-e29b-41d4-a716-446655440000",

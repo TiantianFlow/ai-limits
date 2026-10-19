@@ -36,6 +36,7 @@ import { localizeProviderName } from "../../i18n/presentation";
 import { Cockpit } from "./Cockpit";
 import type { ApiKeySubmission } from "./Cockpit";
 import { instanceLabels } from "./instance-label";
+import { withInstanceHidden, withInstanceOrder } from "./arrangement";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface Announcement {
@@ -137,6 +138,7 @@ export function App() {
   const stateRequestSequence = useRef(0);
   const appliedStateRequestSequence = useRef(0);
   const displayMutationSequence = useRef(0);
+  const arrangementMutationSequence = useRef(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -342,6 +344,56 @@ export function App() {
         }
       });
   };
+
+  // Order and visibility apply optimistically, like the display mode. Only the
+  // latest arrangement response may replace the view, so quick successive
+  // moves never snap back to an older order.
+  const mutateArrangement = async (
+    project: (state: AppViewState) => AppViewState,
+    command: RuntimeCommand,
+    failureMessage: string,
+  ) => {
+    const prior = viewStateRef.current;
+    if (!prior) return;
+    const mutation = ++arrangementMutationSequence.current;
+    clearAnnouncement();
+    commitViewState(project(prior));
+    try {
+      const next = parseAppViewState(await browser.runtime.sendMessage(command));
+      if (mutation === arrangementMutationSequence.current) commitViewState(next);
+    } catch {
+      try {
+        const requested = await requestViewState();
+        if (mutation === arrangementMutationSequence.current) {
+          applyRequestedViewState(requested);
+        }
+      } catch {
+        // The optimistic view stays until the next storage change reloads it.
+      }
+      announce(failureMessage, "attention");
+    }
+  };
+
+  const handleReorderInstances = (instanceIds: ProviderInstanceId[]) =>
+    mutateArrangement(
+      (state) => withInstanceOrder(state, instanceIds),
+      { type: "REORDER_INSTANCES", instanceIds },
+      l10n.t("announcements.arrangeFailed"),
+    );
+
+  const handleSetInstanceHidden = (
+    instanceId: ProviderInstanceId,
+    hidden: boolean,
+  ) =>
+    mutateArrangement(
+      (state) => withInstanceHidden(state, instanceId, hidden),
+      { type: "SET_INSTANCE_HIDDEN", instanceId, hidden },
+      l10n.t("announcements.visibilityFailed", {
+        label:
+          presentationLabel(viewStateRef.current, instanceId) ??
+          l10n.t("common.provider"),
+      }),
+    );
 
   const abandonPermissionIntent = async (permissionIntentId: string) => {
     try {
@@ -825,6 +877,10 @@ export function App() {
       onDisconnectInstance={(instanceId) => void handleDisconnectInstance(instanceId)}
       onRenameInstance={handleRenameInstance}
       onDeleteLocalData={() => void handleDeleteLocalData()}
+      onReorderInstances={(instanceIds) => void handleReorderInstances(instanceIds)}
+      onSetInstanceHidden={(instanceId, hidden) =>
+        void handleSetInstanceHidden(instanceId, hidden)
+      }
     />
   );
 }

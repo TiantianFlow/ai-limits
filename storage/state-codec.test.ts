@@ -427,4 +427,28 @@ describe("V5 instance state codec", () => {
       ],
     ]);
   });
+
+  test("keeps only a true hidden flag", () => {
+    const state = normalizeInstanceAppState(
+      {
+        version: 5,
+        preferences: { displayMode: "used", autoRefresh: true },
+        instances: ["true", true, "yes"].map((hidden, index) => ({
+          id: ["kimi:default", "claude:default", "grok:default"][index],
+          providerKind: ["kimi", "claude", "grok"][index],
+          hidden,
+          config: { kind: "fixed" },
+          access: "granted",
+          createdAt: 1,
+          history: [],
+        })),
+      },
+      now,
+    );
+    expect(state.instances.map((instance) => instance.hidden)).toEqual([
+      undefined,
+      true,
+      undefined,
+    ]);
+  });
 });

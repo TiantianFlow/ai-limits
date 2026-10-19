@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   isSupportedLocale,
@@ -51,6 +51,8 @@ export interface SettingsViewProps {
     instanceId: ProviderInstanceId,
     userLabel?: string,
   ) => Promise<boolean>;
+  onMoveInstance?: (instanceId: ProviderInstanceId, offset: number) => void;
+  onSetInstanceHidden?: (instanceId: ProviderInstanceId, hidden: boolean) => void;
   onDeleteLocalData: () => void;
   onConfirmDeleteChange: (confirm: boolean) => void;
 }
@@ -89,6 +91,8 @@ export function SettingsView({
   onDisconnectInstance,
   onReplaceApiKey,
   onRenameInstance,
+  onMoveInstance = () => undefined,
+  onSetInstanceHidden = () => undefined,
   onDeleteLocalData,
   onConfirmDeleteChange,
 }: SettingsViewProps) {
@@ -114,6 +118,33 @@ export function SettingsView({
     undefined,
   );
   const labelsByInstance = instanceLabels(instances);
+  const settingsRef = useRef<HTMLElement>(null);
+  const restoreMoveFocus = useRef<string[] | undefined>(undefined);
+
+  // Moving a row re-inserts it in the DOM, which drops focus from its button.
+  // Fall back to the opposite button when the row reaches the end of the list.
+  useLayoutEffect(() => {
+    const focusKeys = restoreMoveFocus.current;
+    if (!focusKeys) return;
+    restoreMoveFocus.current = undefined;
+    for (const focusKey of focusKeys) {
+      const target = settingsRef.current?.querySelector<HTMLButtonElement>(
+        `[data-focus-key="${focusKey}"]`,
+      );
+      if (target && !target.disabled) {
+        target.focus();
+        return;
+      }
+    }
+  }, [instances]);
+
+  const moveInstance = (instanceId: ProviderInstanceId, offset: -1 | 1) => {
+    restoreMoveFocus.current =
+      offset < 0
+        ? [`settings-move-up-${instanceId}`, `settings-move-down-${instanceId}`]
+        : [`settings-move-down-${instanceId}`, `settings-move-up-${instanceId}`];
+    onMoveInstance(instanceId, offset);
+  };
 
   useEffect(() => {
     if (!confirmDelete && restoreDeleteFocus.current) {
@@ -155,7 +186,11 @@ export function SettingsView({
   }, [confirmDisconnectId]);
 
   return (
-    <section className="screen settings-panel" aria-label={l10n.t("settings.screen")}>
+    <section
+      ref={settingsRef}
+      className="screen settings-panel"
+      aria-label={l10n.t("settings.screen")}
+    >
       <PageHeader
         title={l10n.t("settings.title")}
         subtitle={l10n.t("settings.subtitle")}
@@ -242,7 +277,7 @@ export function SettingsView({
           </div>
           {instances.length ? (
             <ul className="settings-provider-list">
-              {instances.map((instance) => {
+              {instances.map((instance, index) => {
                 const name = localizeProviderName(instance.providerKind);
                 const label = labelsByInstance.get(instance.id)!;
                 const usesApiKey = providers.find(
@@ -486,6 +521,56 @@ export function SettingsView({
                           </div>
                         </div>
                       ) : null}
+                      <div className="settings-provider-arrange">
+                        {instance.access === "granted" ? (
+                          <label className="settings-provider-arrange__visibility">
+                            <span aria-hidden="true">
+                              {l10n.t("settings.showOnOverview")}
+                            </span>
+                            <span className="settings-toggle__control">
+                              <input
+                                type="checkbox"
+                                role="switch"
+                                aria-label={l10n.t("settings.showOnOverviewNamed", {
+                                  label,
+                                })}
+                                checked={!instance.hidden}
+                                onChange={(event) =>
+                                  onSetInstanceHidden(
+                                    instance.id,
+                                    !event.currentTarget.checked,
+                                  )
+                                }
+                              />
+                              <span className="settings-toggle__track" aria-hidden="true">
+                                <span />
+                              </span>
+                            </span>
+                          </label>
+                        ) : null}
+                        <div className="settings-provider-arrange__move">
+                          <button
+                            type="button"
+                            aria-label={l10n.t("settings.moveUpNamed", { label })}
+                            title={l10n.t("settings.moveUp")}
+                            data-focus-key={`settings-move-up-${instance.id}`}
+                            disabled={index === 0}
+                            onClick={() => moveInstance(instance.id, -1)}
+                          >
+                            <span aria-hidden="true">↑</span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={l10n.t("settings.moveDownNamed", { label })}
+                            title={l10n.t("settings.moveDown")}
+                            data-focus-key={`settings-move-down-${instance.id}`}
+                            disabled={index === instances.length - 1}
+                            onClick={() => moveInstance(instance.id, 1)}
+                          >
+                            <span aria-hidden="true">↓</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </li>
                 );
@@ -494,6 +579,11 @@ export function SettingsView({
           ) : (
             <p className="settings-copy">{l10n.t("settings.noProviders")}</p>
           )}
+          {instances.length > 1 ? (
+            <p className="settings-copy">
+              {l10n.t("settings.orderExplanation")}
+            </p>
+          ) : null}
           <p className="settings-copy">
             {l10n.t("settings.disconnectExplanation")}
           </p>

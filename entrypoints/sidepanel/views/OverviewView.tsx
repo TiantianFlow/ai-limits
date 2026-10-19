@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { l10n } from "../../../i18n/index";
 import type {
@@ -8,16 +8,20 @@ import type {
   ProviderKind,
   ProviderOperation,
 } from "../../../domain/public-protocol";
+import { ArrangeList } from "../components/ArrangeList";
+import { Icon } from "../components/Icon";
 import { OpenSourceFooter } from "../components/OpenSourceFooter";
 import {
   ProviderCard,
   type ProviderCardProps,
 } from "../components/ProviderCard";
+import { ProviderMark } from "../components/ProviderMark";
 
 export interface OverviewProvider {
   instanceId: ProviderInstanceId;
   providerKind: ProviderKind;
   card: Omit<ProviderCardProps, "operation" | "action">;
+  hidden?: boolean;
   needsApiKeyReplacement?: boolean;
 }
 
@@ -33,6 +37,8 @@ export interface OverviewViewProps {
     providerKind: ApiKeyProviderKind,
     instanceId: ProviderInstanceId,
   ) => void;
+  onReorderProviders?: (instanceIds: ProviderInstanceId[]) => void;
+  onSetProviderHidden?: (instanceId: ProviderInstanceId, hidden: boolean) => void;
 }
 
 export function OverviewView({
@@ -44,14 +50,82 @@ export function OverviewView({
   onOpenProvider,
   onOpenHistory,
   onReplaceApiKey,
+  onReorderProviders = () => undefined,
+  onSetProviderHidden = () => undefined,
 }: OverviewViewProps) {
+  const [arranging, setArranging] = useState(false);
+  const arrangeButtonRef = useRef<HTMLButtonElement>(null);
+  const doneButtonRef = useRef<HTMLButtonElement>(null);
+  const focusOnModeChange = useRef(false);
+  const visibleProviders = providers.filter(({ hidden }) => !hidden);
+  const hiddenProviders = providers.filter(({ hidden }) => hidden);
+
+  useEffect(() => {
+    if (!focusOnModeChange.current) return;
+    focusOnModeChange.current = false;
+    (arranging ? doneButtonRef : arrangeButtonRef).current?.focus();
+  }, [arranging]);
+
+  const setArrangingWithFocus = (next: boolean) => {
+    focusOnModeChange.current = true;
+    setArranging(next);
+  };
+
+  if (arranging) {
+    return (
+      <section aria-labelledby="overview-arrange-title">
+        <h2 className="visually-hidden" id="overview-title">
+          {l10n.t("overview.screen")}
+        </h2>
+        <div className="arrange-heading">
+          <h3 id="overview-arrange-title">{l10n.t("overview.arrangeTitle")}</h3>
+          <button
+            ref={doneButtonRef}
+            className="button button--secondary arrange-heading__done"
+            type="button"
+            onClick={() => setArrangingWithFocus(false)}
+          >
+            {l10n.t("overview.done")}
+          </button>
+        </div>
+        <ArrangeList
+          items={providers.map(({ instanceId, providerKind, card, hidden }) => ({
+            instanceId,
+            providerKind,
+            label: card.instanceLabel,
+            hidden: Boolean(hidden),
+          }))}
+          onReorder={onReorderProviders}
+          onSetHidden={onSetProviderHidden}
+        />
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby="overview-title">
       <h2 className="visually-hidden" id="overview-title">
         {l10n.t("overview.screen")}
       </h2>
+      {visibleProviders.length === 0 ? (
+        <div className="overview-all-hidden">
+          <h3>{l10n.t("overview.allHiddenTitle")}</h3>
+          <p>{l10n.t("overview.allHiddenCopy")}</p>
+          <button
+            className="button button--secondary"
+            type="button"
+            onClick={() =>
+              hiddenProviders.forEach(({ instanceId }) =>
+                onSetProviderHidden(instanceId, false),
+              )
+            }
+          >
+            {l10n.t("overview.showAll")}
+          </button>
+        </div>
+      ) : null}
       <div className="provider-list">
-        {providers.map(({ instanceId, providerKind, card, needsApiKeyReplacement }) => {
+        {visibleProviders.map(({ instanceId, providerKind, card, needsApiKeyReplacement }) => {
           const operation = providerOperations[instanceId];
           return (
             <ProviderCard
@@ -98,15 +172,51 @@ export function OverviewView({
           );
         })}
       </div>
-      <button
-        ref={addProviderButtonRef}
-        className="add-provider-action"
-        type="button"
-        onClick={(event) => onAddProvider(event.currentTarget)}
-      >
-        <span aria-hidden="true">+</span>
-        {l10n.t("overview.addProvider")}
-      </button>
+      {hiddenProviders.length > 0 && visibleProviders.length > 0 ? (
+        <details className="overview-hidden">
+          <summary>
+            {l10n.count("overview.hiddenCount", hiddenProviders.length)}
+          </summary>
+          <ul>
+            {hiddenProviders.map(({ instanceId, providerKind, card }) => (
+              <li key={instanceId}>
+                <ProviderMark providerId={providerKind} size="sm" />
+                <span>{card.instanceLabel}</span>
+                <button
+                  type="button"
+                  aria-label={l10n.t("overview.showNamed", {
+                    label: card.instanceLabel,
+                  })}
+                  onClick={() => onSetProviderHidden(instanceId, false)}
+                >
+                  <span aria-hidden="true">{l10n.t("overview.show")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      <div className="overview-actions">
+        <button
+          ref={addProviderButtonRef}
+          className="add-provider-action"
+          type="button"
+          onClick={(event) => onAddProvider(event.currentTarget)}
+        >
+          <span aria-hidden="true">+</span>
+          {l10n.t("overview.addProvider")}
+        </button>
+        <button
+          ref={arrangeButtonRef}
+          className="arrange-action"
+          type="button"
+          aria-label={l10n.t("overview.arrangeTitle")}
+          onClick={() => setArrangingWithFocus(true)}
+        >
+          <Icon name="grip" />
+          <span aria-hidden="true">{l10n.t("overview.arrange")}</span>
+        </button>
+      </div>
       <OpenSourceFooter />
     </section>
   );

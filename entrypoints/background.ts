@@ -154,6 +154,14 @@ async function activateBackground(
       await service.renameInstance(instanceId, userLabel);
       return currentView();
     },
+    async setInstanceHidden(instanceId, hidden) {
+      await service.setInstanceHidden(instanceId, hidden);
+      return currentView();
+    },
+    async reorderInstances(instanceIds) {
+      await service.reorderInstances(instanceIds);
+      return currentView();
+    },
     async disconnectInstance(instanceId) {
       const result = await service.disconnectInstance(instanceId);
       const state = await stateAfterAlarmReconciliation();

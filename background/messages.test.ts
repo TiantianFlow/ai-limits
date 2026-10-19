@@ -22,6 +22,8 @@ describe("strict instance runtime protocol", () => {
       refreshInstance: vi.fn(async () => "one"),
       renameInstance: vi.fn(async () => "renamed"),
       disconnectInstance: vi.fn(async () => "disconnected"),
+      setInstanceHidden: vi.fn(async () => "hidden"),
+      reorderInstances: vi.fn(async () => "reordered"),
       getState: vi.fn(async () => "state"),
       setDisplayMode: vi.fn(async () => "display"),
       setAutoRefresh: vi.fn(async () => "auto"),
@@ -73,6 +75,12 @@ describe("strict instance runtime protocol", () => {
     await expect(
       handle({ type: "DISCONNECT_INSTANCE", instanceId: INSTANCE }),
     ).resolves.toBe("disconnected");
+    await expect(
+      handle({ type: "SET_INSTANCE_HIDDEN", instanceId: INSTANCE, hidden: true }),
+    ).resolves.toBe("hidden");
+    await expect(
+      handle({ type: "REORDER_INSTANCES", instanceIds: [INSTANCE, "kimi:default"] }),
+    ).resolves.toBe("reordered");
     await expect(handle({ type: "GET_STATE" })).resolves.toBe("state");
     await expect(handle({ type: "SET_DISPLAY_MODE", mode: "left" })).resolves.toBe("display");
     await expect(handle({ type: "SET_AUTO_REFRESH", enabled: false })).resolves.toBe("auto");
@@ -90,6 +98,11 @@ describe("strict instance runtime protocol", () => {
     expect(handlers.renameInstance).toHaveBeenNthCalledWith(1, INSTANCE, "Renamed");
     expect(handlers.renameInstance).toHaveBeenNthCalledWith(2, INSTANCE, undefined);
     expect(handlers.disconnectInstance).toHaveBeenCalledWith(INSTANCE);
+    expect(handlers.setInstanceHidden).toHaveBeenCalledWith(INSTANCE, true);
+    expect(handlers.reorderInstances).toHaveBeenCalledWith([
+      INSTANCE,
+      "kimi:default",
+    ]);
   });
 
   test.each([
@@ -114,6 +127,13 @@ describe("strict instance runtime protocol", () => {
     { type: "REFRESH_INSTANCE", instanceId: INSTANCE, token: "secret" },
     { type: "RENAME_INSTANCE", instanceId: INSTANCE, userLabel: "x".repeat(129) },
     { type: "RENAME_INSTANCE", instanceId: INSTANCE, userLabel: "bad\u0000label" },
+    { type: "SET_INSTANCE_HIDDEN", instanceId: INSTANCE },
+    { type: "SET_INSTANCE_HIDDEN", instanceId: INSTANCE, hidden: "yes" },
+    { type: "SET_INSTANCE_HIDDEN", instanceId: "newapi:not-a-uuid", hidden: true },
+    { type: "REORDER_INSTANCES", instanceIds: "kimi:default" },
+    { type: "REORDER_INSTANCES", instanceIds: ["kimi:default", "kimi:default"] },
+    { type: "REORDER_INSTANCES", instanceIds: ["newapi:not-a-uuid"] },
+    { type: "REORDER_INSTANCES", instanceIds: [], extra: true },
     {
       type: "CONNECT_API_KEY_PROVIDER",
       providerKind: "newapi",

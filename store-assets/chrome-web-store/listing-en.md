@@ -88,7 +88,8 @@ parent companies, or their affiliates.
 
 ### Required permissions
 
-- `storage`: saves display, language, and refresh preferences, provider access state,
+- `storage`: saves display, language, and refresh preferences, provider order and
+  Overview visibility, provider access state,
   normalized quota/counter/balance snapshots, up to 30 days of typed
   per-instance History, and sanitized refresh status in
   `chrome.storage.local`. It also holds temporary Kimi and Cursor tab-cleanup

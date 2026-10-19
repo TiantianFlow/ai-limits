@@ -17,6 +17,7 @@ export interface ProviderInstanceRecord {
   id: ProviderInstanceId;
   providerKind: ProviderKind;
   userLabel?: string;
+  hidden?: true;
   config: ProviderInstanceConfig;
   connectionRevision?: string;
   access: "required" | "granted";
