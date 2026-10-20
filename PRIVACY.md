@@ -175,8 +175,8 @@ origin for the read-only `/key/info`, `/v1/usage`,
 the selected provider. Each configured instance keeps independent
 credentials, nonsecret configuration, normalized usage, and History.
 
-DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and
-Droid use user-created API keys at fixed provider API origins. OpenAI here is
+DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter,
+Droid, and GLM use user-created API keys at fixed provider API origins. OpenAI here is
 the Platform organization and developer billing API, not the ChatGPT consumer
 session. Droid is Factory's coding product, not an organization-admin credits
 API. AI Limits sends those keys
@@ -186,13 +186,22 @@ DeepInfra's `api.deepinfra.com/payment/checklist` and `/payment/usage`
 endpoints, Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
 `/billing/summary` endpoint, OpenAI's organization cost and completion-usage
 endpoints or legacy credit-grants fallback, GroqCloud's Prometheus query
-endpoint, OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints, or
-Droid's `api.factory.ai/api/billing/limits` request. When that Droid response
+endpoint, OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints,
+Droid's `api.factory.ai/api/billing/limits` request, or GLM's
+`api.z.ai/api/monitor/usage/quota/limit` request. When that Droid response
 is not a token-rate-limits payload, AI Limits instead reads
 `api.factory.ai/api/organization/subscription/usage`. It may also read
 `api.factory.ai/api/app/auth/me` for a plan label and does not store the
 account identifier from that response. The Droid key is sent as an
-Authorization bearer token with `x-factory-client: web-app`. These
+Authorization bearer token with `x-factory-client: web-app`. The GLM key is a
+Z.ai GLM Coding Plan key and is sent only as an Authorization bearer token to
+`api.z.ai/api/monitor/usage/quota/limit`, the read-only request Z.ai's own
+usage plugin makes; it is not a documented public API. Z.ai's terms ask that
+keys not be exposed in browser or other client-side code and limit the Coding
+Plan to officially supported tools. Connecting GLM means accepting that the key
+is held in AI Limits' local credential vault and that Z.ai may treat this use
+as outside those terms, which could affect the user's Z.ai account.
+These
 read-only responses are normalized into balance, quota, counter, or spend
 metrics; raw provider responses are not persisted.
 

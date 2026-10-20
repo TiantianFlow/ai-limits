@@ -40,6 +40,7 @@ describe("provider catalog", () => {
       "groqcloud",
       "openrouter",
       "factory",
+      "zai",
     ];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
@@ -175,6 +176,11 @@ describe("provider catalog", () => {
         markPath: "/provider-marks/factory.svg",
         apiKeySetupUrl: "https://app.factory.ai/settings/api-keys",
       },
+      {
+        providerId: "zai",
+        markPath: "/provider-marks/zai.svg",
+        apiKeySetupUrl: "https://z.ai/manage-apikey/apikey-list",
+      },
     ]);
   });
 
@@ -261,6 +267,7 @@ describe("provider catalog", () => {
     expect(isApiKeyProviderKind("groqcloud")).toBe(true);
     expect(isApiKeyProviderKind("openrouter")).toBe(true);
     expect(isApiKeyProviderKind("factory")).toBe(true);
+    expect(isApiKeyProviderKind("zai")).toBe(true);
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);

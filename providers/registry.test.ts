@@ -11,6 +11,7 @@ import { deepInfraAdapter } from "./deepinfra/adapter";
 import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { factoryAdapter } from "./factory/adapter";
+import { zaiAdapter } from "./zai/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { groqCloudAdapter } from "./groqcloud/adapter";
@@ -137,6 +138,7 @@ describe("provider registry", () => {
       "groqcloud",
       "openrouter",
       "factory",
+      "zai",
     ]);
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
 
@@ -375,6 +377,15 @@ describe("provider registry", () => {
         rejected: undefined,
         permissions: { origins: ["https://api.factory.ai/*"] },
       },
+      {
+        kind: "zai",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://api.z.ai/*"] },
+      },
     ]);
 
     expect(providerRegistry.newapi.normalizeConfig({
@@ -556,6 +567,13 @@ describe("provider registry", () => {
         optionalOrigins: ["https://api.factory.ai/*"],
         optionalPermissions: [],
       },
+      zai: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://api.z.ai/*"],
+        optionalPermissions: [],
+      },
     });
   });
 
@@ -581,6 +599,7 @@ describe("provider registry", () => {
       groqcloud: groqCloudAdapter,
       openrouter: openRouterAdapter,
       factory: factoryAdapter,
+      zai: zaiAdapter,
     };
     const adapterSpies = Object.fromEntries(
       Object.entries(adapters).map(([kind, adapter]) => [
