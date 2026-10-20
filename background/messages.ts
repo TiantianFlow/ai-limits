@@ -32,7 +32,7 @@ export type {
 
 const MAX_API_KEY_LENGTH = 4_096;
 const MAX_LABEL_LENGTH = 128;
-const MAX_REORDER_INSTANCES = 256;
+const MAX_REORDER_INSTANCES = 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

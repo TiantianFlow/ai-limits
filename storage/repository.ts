@@ -173,6 +173,11 @@ export const connectionRepository = {
 
   setHidden(id: ProviderInstanceId, hidden: boolean): Promise<void> {
     return mutateState(async (state, now) => {
+      // Checked inside the write queue so a provider disconnected just before
+      // this write is reported instead of silently skipped.
+      if (!state.instances.some((instance) => instance.id === id)) {
+        throw new Error("Provider instance is unavailable.");
+      }
       await writeNormalizedState(
         {
           ...state,

@@ -365,6 +365,11 @@ describe("queued instance repositories", () => {
 
     await repository.connectionRepository.setHidden(work.id, false);
     await expect(repository.connectionRepository.get(work.id)).resolves.toEqual(work);
+
+    await repository.connectionRepository.delete(work.id);
+    await expect(
+      repository.connectionRepository.setHidden(work.id, true),
+    ).rejects.toThrow("Provider instance is unavailable.");
   });
 
   test("updates preferences and deletes instances independently", async () => {

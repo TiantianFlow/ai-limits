@@ -1766,6 +1766,36 @@ describe("side-panel App", () => {
     expect(screen.getByText("1 hidden")).toBeInTheDocument();
   });
 
+  test("keeps an unsaved hide when another setting's response predates it", async () => {
+    const state = createFixtureState(NOW);
+    vi.spyOn(browser.runtime, "sendMessage").mockImplementation(
+      async (message: unknown) => {
+        const command = message as { type?: string };
+        if (command.type === "SET_INSTANCE_HIDDEN") {
+          return new Promise(() => undefined) as never;
+        }
+        const current = toPublicState(state);
+        if (command.type === "SET_DISPLAY_MODE") {
+          current.preferences = { ...current.preferences, displayMode: "left" };
+        }
+        return current as never;
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("ChatGPT");
+    fireEvent.click(screen.getByRole("button", { name: "Arrange providers" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show ChatGPT on Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.getByText("1 hidden")).toBeInTheDocument();
+
+    // The display mode is saved first and its response still shows ChatGPT.
+    fireEvent.click(screen.getByRole("radio", { name: "Left" }));
+    await act(async () => undefined);
+    expect(screen.getByRole("radio", { name: "Left" })).toBeChecked();
+    expect(screen.getByText("1 hidden")).toBeInTheDocument();
+  });
+
   test("restores the saved order when reordering fails", async () => {
     const state = createFixtureState(NOW);
     vi.spyOn(browser.runtime, "sendMessage").mockImplementation(

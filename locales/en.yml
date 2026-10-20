@@ -409,7 +409,7 @@ settings:
   reconnectNamed: "Reconnect {label}"
   disconnectNamed: "Disconnect {label}"
   showOnOverview: Show on Overview
-  showOnOverviewNamed: "Show {label} on Overview"
+  showOnOverviewNamed: "Show on Overview: {label}"
   moveUp: Move up
   moveDown: Move down
   moveUpNamed: "Move {label} up"

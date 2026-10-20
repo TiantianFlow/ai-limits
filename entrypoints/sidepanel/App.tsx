@@ -160,7 +160,14 @@ export function App() {
   const [providerOperations, setProviderOperations] =
     useState<ProviderOperations>({});
 
-  const commitViewState = (next: AppViewState) => {
+  // Every view update can carry state read before an in-flight arrangement
+  // was saved, so unconfirmed moves and visibility changes are re-applied on
+  // top of it and a moved or hidden provider never snaps back.
+  const commitViewState = (state: AppViewState) => {
+    const next = [...pendingArrangements.current.values()].reduce(
+      (current, project) => project(current),
+      state,
+    );
     viewStateRef.current = next;
     setViewState(next);
   };
@@ -175,21 +182,13 @@ export function App() {
     };
   };
 
-  // A reload can carry state read before an in-flight arrangement was saved,
-  // so unconfirmed moves and visibility changes are re-applied on top of it.
-  const withPendingArrangements = (state: AppViewState): AppViewState =>
-    [...pendingArrangements.current.values()].reduce(
-      (current, project) => project(current),
-      state,
-    );
-
   const applyRequestedViewState = (
     requested: RequestedViewState,
     project: (state: AppViewState) => AppViewState = (state) => state,
   ): boolean => {
     if (requested.sequence <= appliedStateRequestSequence.current) return false;
     appliedStateRequestSequence.current = requested.sequence;
-    commitViewState(withPendingArrangements(project(requested.state)));
+    commitViewState(project(requested.state));
     return true;
   };
 
@@ -357,8 +356,8 @@ export function App() {
   };
 
   // Order and visibility apply optimistically, like the display mode. Only the
-  // latest arrangement response may replace the view, and unconfirmed changes
-  // stay applied over any reload, so quick successive moves never snap back.
+  // latest arrangement response may replace the view, and commitViewState keeps
+  // unconfirmed changes applied over any other update meanwhile.
   const mutateArrangement = async (
     project: (state: AppViewState) => AppViewState,
     command: RuntimeCommand,
@@ -369,12 +368,15 @@ export function App() {
     const mutation = ++arrangementMutationSequence.current;
     pendingArrangements.current.set(mutation, project);
     clearAnnouncement();
-    commitViewState(project(prior));
+    commitViewState(prior);
     try {
       const next = parseAppViewState(await browser.runtime.sendMessage(command));
       pendingArrangements.current.delete(mutation);
       if (mutation === arrangementMutationSequence.current) {
-        commitViewState(withPendingArrangements(next));
+        // This response was read after the save, so a reload requested
+        // before it arrived is older and must not replace it.
+        appliedStateRequestSequence.current = stateRequestSequence.current;
+        commitViewState(next);
       }
     } catch {
       pendingArrangements.current.delete(mutation);

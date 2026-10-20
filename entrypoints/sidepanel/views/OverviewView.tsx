@@ -69,16 +69,18 @@ export function OverviewView({
   }, [arranging]);
 
   // Showing a provider removes the button that was pressed, so focus moves
-  // to that provider's card once it is back on the Overview.
+  // to that provider's card once it is back on the Overview. Showing applies
+  // at once, so a card missing from that next update means it failed, and
+  // focus must not jump there if the provider appears much later.
   useEffect(() => {
     const instanceId = focusShownProvider.current;
     if (!instanceId) return;
-    const card = overviewRef.current?.querySelector<HTMLElement>(
-      `[data-focus-key="overview-provider-${instanceId}"]`,
-    );
-    if (!card) return;
     focusShownProvider.current = undefined;
-    card.focus();
+    overviewRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-focus-key="overview-provider-${instanceId}"]`,
+      )
+      ?.focus();
   }, [providers]);
 
   const showProvider = (instanceId: ProviderInstanceId) => {

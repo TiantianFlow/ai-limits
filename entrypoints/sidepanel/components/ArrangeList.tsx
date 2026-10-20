@@ -47,6 +47,18 @@ function sameOrder(
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
+// Providers can connect or disconnect in another window during a drag, so the
+// dragged order keeps only current ids and appends any new ones.
+function reconcileOrder(
+  order: readonly ProviderInstanceId[],
+  ids: readonly ProviderInstanceId[],
+): ProviderInstanceId[] {
+  const current = new Set(ids);
+  const kept = order.filter((id) => current.has(id));
+  const listed = new Set(kept);
+  return [...kept, ...ids.filter((id) => !listed.has(id))];
+}
+
 export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps) {
   const hintId = useId();
   const [drag, setDrag] = useState<DragState>();
@@ -56,7 +68,7 @@ export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps)
   const pendingFocus = useRef<ProviderInstanceId | undefined>(undefined);
 
   const ids = items.map(({ instanceId }) => instanceId);
-  const order = drag?.order ?? ids;
+  const order = drag ? reconcileOrder(drag.order, ids) : ids;
   const byId = new Map(items.map((item) => [item.instanceId, item]));
   const orderedItems = order.flatMap((id) => {
     const item = byId.get(id);
@@ -111,6 +123,8 @@ export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps)
 
   const dragRef = useRef(drag);
   dragRef.current = drag;
+  const idsRef = useRef(ids);
+  idsRef.current = ids;
   const commitRef = useRef(commit);
   commitRef.current = commit;
   const dragPointerId = drag?.pointerId;
@@ -122,7 +136,9 @@ export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps)
     const handleMove = (event: globalThis.PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== dragPointerId) return;
-      const others = current.original.filter((id) => id !== current.instanceId);
+      const others = reconcileOrder(current.original, idsRef.current).filter(
+        (id) => id !== current.instanceId,
+      );
       const slot = others.filter((id) => {
         const midpoint = current.midpoints.get(id);
         return midpoint !== undefined && event.clientY + window.scrollY > midpoint;
@@ -135,7 +151,11 @@ export function ArrangeList({ items, onReorder, onSetHidden }: ArrangeListProps)
       const current = dragRef.current;
       if (!current || event.pointerId !== dragPointerId) return;
       setDrag(undefined);
-      if (!cancelled) commitRef.current(current.instanceId, current.order);
+      if (cancelled || !idsRef.current.includes(current.instanceId)) return;
+      commitRef.current(
+        current.instanceId,
+        reconcileOrder(current.order, idsRef.current),
+      );
     };
     const handleUp = finish(false);
     const handleCancel = finish(true);

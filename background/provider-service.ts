@@ -813,9 +813,6 @@ export function createProviderService(
       await connectionRepository.rename(instanceId, userLabel);
     },
     async setInstanceHidden(instanceId, hidden) {
-      if (!(await connectionRepository.get(instanceId))) {
-        throw new Error("Provider instance is unavailable.");
-      }
       await connectionRepository.setHidden(instanceId, hidden);
     },
     reorderInstances: (instanceIds) => connectionRepository.reorder(instanceIds),

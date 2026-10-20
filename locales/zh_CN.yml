@@ -409,7 +409,7 @@ settings:
   reconnectNamed: "重新连接 {label}"
   disconnectNamed: "断开 {label}"
   showOnOverview: 在总览中显示
-  showOnOverviewNamed: "在总览中显示 {label}"
+  showOnOverviewNamed: "在总览中显示：{label}"
   moveUp: 上移
   moveDown: 下移
   moveUpNamed: "上移 {label}"

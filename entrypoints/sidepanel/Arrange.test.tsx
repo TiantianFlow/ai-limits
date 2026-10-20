@@ -185,6 +185,43 @@ describe("provider arrangement", () => {
     ]);
   });
 
+  it("keeps a drag in step with providers that disconnect meanwhile", () => {
+    const { onReorderInstances, rerender } = renderArranged([
+      instance("chatgpt:default"),
+      instance("claude:default"),
+      instance("kimi:default"),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Arrange providers" }));
+    const handle = screen.getByRole("button", { name: "Move Kimi" });
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 0 });
+
+    rerender(
+      <Cockpit
+        state={arrangedState([instance("chatgpt:default"), instance("kimi:default")])}
+        now={NOW}
+        onDisplayModeChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onConnectProvider={vi.fn()}
+        onReorderInstances={onReorderInstances}
+      />,
+    );
+    expect(
+      within(screen.getByRole("list"))
+        .getAllByRole("listitem")
+        .map((row) => row.textContent),
+    ).toEqual(["ChatGPT", "Kimi"]);
+
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: -10 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: -10 });
+    expect(onReorderInstances).toHaveBeenCalledWith([
+      "kimi:default",
+      "chatgpt:default",
+    ]);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Kimi moved to position 1 of 2.",
+    );
+  });
+
   it("drops a cancelled drag without saving", () => {
     const { onReorderInstances } = renderArranged([
       instance("chatgpt:default"),
@@ -208,10 +245,10 @@ describe("provider arrangement", () => {
     expect(screen.getByRole("button", { name: "Move ChatGPT up" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move Grok down" })).toBeDisabled();
     expect(
-      screen.getByRole("switch", { name: "Show Grok on Overview" }),
+      screen.getByRole("switch", { name: "Show on Overview: Grok" }),
     ).toBeChecked();
     expect(
-      screen.getByRole("switch", { name: "Show Claude on Overview" }),
+      screen.getByRole("switch", { name: "Show on Overview: Claude" }),
     ).not.toBeChecked();
 
     fireEvent.click(screen.getByRole("button", { name: "Move Claude up" }));
@@ -227,7 +264,7 @@ describe("provider arrangement", () => {
       "claude:default",
     ]);
 
-    fireEvent.click(screen.getByRole("switch", { name: "Show Claude on Overview" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show on Overview: Claude" }));
     expect(onSetInstanceHidden).toHaveBeenCalledWith("claude:default", false);
   });
 
