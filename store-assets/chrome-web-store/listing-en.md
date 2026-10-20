@@ -228,8 +228,9 @@ into an already-open grok.com tab; Cursor scheduled refresh never injects.
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
 - **Retention and controls:** Successful normalized quota, counter or spend, and
-  balance observations are retained per instance; History graphs quota metrics,
-  while counter or spend and balance observations remain stored but ungraphed.
+  balance observations are retained per instance; History graphs quota metrics
+  and the balance of balance-first providers, while counter or spend
+  observations and other balances remain stored but ungraphed.
   Successful normalized quota, counter/spend, and
   balance observations stay in the local Chrome profile per instance for up to
   30 days, subject to a 1,024-observation per-instance safety cap. Within that
@@ -381,7 +382,9 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 24. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
-   quota history while counter/spend and balance samples remain ungraphed. From a
+   quota history while counter/spend samples remain ungraphed. For a
+   balance-first provider such as OpenRouter, confirm **History** charts the
+   balance. From a
    provider detail screen, Disconnect asks for confirmation before deleting
    credentials, configuration, usage, and history. In Settings, turn automatic
    refresh off and on, disconnect one provider after confirming the same

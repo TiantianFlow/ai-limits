@@ -71,7 +71,7 @@ This local boundary is not OS-keychain encryption. Someone with access to the
 unlocked Chrome profile, extension DevTools, or local profile files may be able
 to inspect saved keys. Per-instance History contains normalized quota,
 counter/spend, and balance observations, never credentials or raw responses;
-History graphs quota metrics only. Browser-session provider endpoints are private and
+History graphs quota metrics and balance-first balances only. Browser-session provider endpoints are private and
 unsupported; ElevenLabs uses a documented endpoint, but provider responses,
 authorization behavior, and security flows can still change without notice.
 Reports about a provider's own service should be sent to that provider rather

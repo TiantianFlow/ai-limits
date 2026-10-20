@@ -4,6 +4,7 @@ node_modules/
 .output/
 dist/
 coverage/
+artifacts/
 .DS_Store
 .env
 .env.*

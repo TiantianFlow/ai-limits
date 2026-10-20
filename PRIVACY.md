@@ -234,8 +234,8 @@ stored per instance for up to 30 days, subject to a 1,024-observation
 per-instance safety cap. Within that cap, the newest 48 hours remain at
 collection resolution and older retained observations are compacted to the
 latest observation in each UTC hour. History graphs plot
-quota metrics only; counter or spend and balance observations remain stored but
-are not graphed. Currency-denominated spend counters and balances are
+quota metrics and the balance of balance-first providers; counter or spend
+observations and other balances remain stored but are not graphed. Currency-denominated spend counters and balances are
 normalized usage data, not raw payment transaction history. History never
 stores credentials or raw provider responses. Failed, deferred, skipped, or
 malformed refresh results do not add observations.

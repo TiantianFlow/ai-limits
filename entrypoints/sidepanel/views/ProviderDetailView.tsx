@@ -121,7 +121,9 @@ export function ProviderDetailView({
   const showingLastKnown =
     provider.hasSnapshot &&
     (operation !== undefined || provider.stale || Boolean(provider.attemptMessage));
-  const firstWindow = provider.usageGroups.flatMap((group) => group.quotas)[0];
+  const historyMetricId =
+    provider.usageGroups.flatMap((group) => group.quotas)[0]?.id ??
+    provider.historyMetricId;
   const interactionMessage =
     provider.attemptMessage ??
     (operation === "waiting_for_session"
@@ -265,9 +267,9 @@ export function ProviderDetailView({
           />
         ) : null}
 
-        {firstWindow || provider.usagePageUrl ? (
+        {historyMetricId || provider.usagePageUrl ? (
           <div className="detail-actions">
-            {firstWindow ? (
+            {historyMetricId ? (
               <button
                 className="detail-history-action"
                 type="button"
@@ -275,7 +277,7 @@ export function ProviderDetailView({
                   label: provider.instanceLabel,
                 })}
                 data-focus-key={`provider-history-${provider.instanceId}`}
-                onClick={() => onOpenHistory(provider.instanceId, firstWindow.id)}
+                onClick={() => onOpenHistory(provider.instanceId, historyMetricId)}
               >
                 <Icon name="trending-up" />
                 {l10n.t("providerDetail.openHistory")}

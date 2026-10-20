@@ -13,7 +13,8 @@ import {
   type ProviderInstanceView,
 } from "../../../domain/public-protocol";
 import { instanceLabels } from "../instance-label";
-import { quotaMetrics } from "../metrics";
+import { historyMetrics } from "../metrics";
+import { BalanceHistoryChart } from "../components/BalanceHistoryChart";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageHeader } from "../components/PageHeader";
 import { WindowSelect } from "../components/WindowSelect";
@@ -88,13 +89,15 @@ export function HistoryView({
     (instance) =>
       instance.access === "granted" &&
       instance.snapshot !== undefined &&
-      quotaMetrics(instance.snapshot).length > 0,
+      historyMetrics(instance.snapshot, instance.providerKind).length > 0,
   );
   const labelsByInstance = instanceLabels(instances);
   const instance = eligibleInstances.find(
     (candidate) => candidate.id === instanceId,
   );
-  const metrics = instance?.snapshot ? quotaMetrics(instance.snapshot) : [];
+  const metrics = instance?.snapshot
+    ? historyMetrics(instance.snapshot, instance.providerKind)
+    : [];
   const selectedMetric =
     metrics.find((metric) => metric.id === metricId) ?? metrics[0];
   const providerKind = instance?.providerKind;
@@ -128,12 +131,20 @@ export function HistoryView({
     ...metric,
     label: localizeMetricLabel(instance.providerKind, metric),
   }));
+  const localizedQuotas = localizedMetrics.flatMap((metric) =>
+    metric.type === "quota" ? [metric] : [],
+  );
+  const selectedBalance = localizedMetrics.find(
+    (metric) => metric.id === selectedMetric.id && metric.type === "balance",
+  );
 
   return (
     <section className="screen" aria-label={l10n.t("history.titleNamed", { label })}>
       <PageHeader
         title={l10n.t("history.titleNamed", { label })}
-        subtitle={l10n.t("history.subtitle", { provider: providerName })}
+        subtitle={l10n.t(selectedBalance ? "history.balance.subtitle" : "history.subtitle", {
+          provider: providerName,
+        })}
         backLabel={backLabel}
         onBack={onBack}
       />
@@ -149,6 +160,8 @@ export function HistoryView({
         />
 
         <div className="history-controls">
+          {/* Used and Left have no meaning for a balance. */}
+          {selectedBalance ? null : (
           <div
             className="compact-choice"
             role="radiogroup"
@@ -166,6 +179,7 @@ export function HistoryView({
               </button>
             ))}
           </div>
+          )}
           <div
             className="compact-choice"
             role="radiogroup"
@@ -187,16 +201,26 @@ export function HistoryView({
         </div>
 
         <section className="history-surface" aria-label={l10n.t("history.chart")}>
-          <HistoryChart
-            providerName={label}
-            providerKind={instance.providerKind}
-            mode={mode}
-            metrics={localizedMetrics}
-            metricId={selectedMetric.id}
-            history={instance.history}
-            now={now}
-            rangeHours={rangeHours}
-          />
+          {selectedBalance?.type === "balance" ? (
+            <BalanceHistoryChart
+              providerName={label}
+              metric={selectedBalance}
+              history={instance.history}
+              now={now}
+              rangeHours={rangeHours}
+            />
+          ) : (
+            <HistoryChart
+              providerName={label}
+              providerKind={instance.providerKind}
+              mode={mode}
+              metrics={localizedQuotas}
+              metricId={selectedMetric.id}
+              history={instance.history}
+              now={now}
+              rangeHours={rangeHours}
+            />
+          )}
         </section>
 
         {currentQuota?.id === selectedMetric.id ? (
@@ -209,7 +233,9 @@ export function HistoryView({
           </section>
         ) : null}
 
-        <p className="illustrative-note">{l10n.t("history.note")}</p>
+        <p className="illustrative-note">
+          {l10n.t(selectedBalance ? "history.balance.note" : "history.note")}
+        </p>
       </div>
     </section>
   );

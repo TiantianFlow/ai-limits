@@ -697,6 +697,104 @@ describe("Cockpit", () => {
     expect(screen.queryByRole("option", { name: "Credits" })).not.toBeInTheDocument();
   });
 
+  it("charts a balance-primary provider's balance in History", () => {
+    const hour = 60 * 60 * 1_000;
+    const balanceAt = (hoursAgo: number, value: number) => ({
+      observedAt: NOW - hoursAgo * hour,
+      metrics: [{ type: "balance" as const, metricId: "balance", value, unit: "USD" }],
+    });
+    const state = createEmptyFixtureState();
+    state.instances[0] = {
+      id: "deepseek:default",
+      providerKind: "deepseek",
+      access: "granted",
+      createdAt: NOW,
+      history: [balanceAt(72, 10), balanceAt(49, 8), balanceAt(47, 28), balanceAt(1, 26)],
+      snapshot: {
+        providerKind: "deepseek",
+        source: "api-key",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "balance",
+            id: "balance",
+            label: "Balance",
+            scope: "general",
+            value: 26,
+            unit: "USD",
+          },
+        ],
+      },
+    };
+
+    renderCockpit(state);
+    fireEvent.click(screen.getByRole("button", { name: "Open DeepSeek details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open DeepSeek history" }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "DeepSeek history" })).toBeVisible();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Show used or left" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "History range" })).toBeVisible();
+    expect(screen.getByText("+$16.00 in 30 days")).toBeVisible();
+
+    const chart = screen.getByRole("group", { name: "DeepSeek Balance balance history" });
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    const tooltip = screen.getByRole("tooltip");
+    expect(within(tooltip).getByText("$28.00")).toBeVisible();
+    expect(within(tooltip).getByText("Top-up +$20.00")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("radio", { name: "48 hours" }));
+    expect(screen.getByText("−$2.00 in 48 hours")).toBeVisible();
+  });
+
+  it("labels History by the selected meter for a provider with quotas and a balance", () => {
+    const state = createEmptyFixtureState();
+    state.instances[0] = {
+      id: "openrouter:default",
+      providerKind: "openrouter",
+      access: "granted",
+      createdAt: NOW,
+      history: [],
+      snapshot: {
+        providerKind: "openrouter",
+        source: "api-key",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "quota",
+            id: "key-budget",
+            label: "Key budget",
+            scope: "general",
+            usedRatio: 0.25,
+          },
+          {
+            type: "balance",
+            id: "credits",
+            label: "Credits",
+            scope: "general",
+            value: 12,
+            unit: "USD",
+          },
+        ],
+      },
+    };
+
+    renderCockpit(state);
+    fireEvent.click(screen.getByRole("button", { name: "Open OpenRouter details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open OpenRouter history" }));
+    expect(screen.getByText(/Local quota observations/)).toBeVisible();
+    expect(screen.getByRole("radiogroup", { name: "Show used or left" })).toBeVisible();
+
+    chooseWindow("Credits");
+    expect(screen.getByText(/Local balance observations/)).toBeVisible();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Show used or left" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     {
       name: "Provider Detail",

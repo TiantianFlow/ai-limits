@@ -77,7 +77,7 @@ Metric meaning must be explicit:
 Stable metric IDs identify History series within one provider instance. Keep
 them independent from localized or provider-controlled labels. Successful
 quota, counter/spend, and balance observations may be retained; History graphs
-select quota metrics only.
+select quota metrics and the balance of balance-first providers only.
 
 Do not persist browser-session credentials, request-local account identifiers,
 or raw provider responses. A reviewed API-key package keeps one key per instance
@@ -92,7 +92,7 @@ Provider work must add or update behavior tests at every owned boundary:
 - package tests for cardinality, config acceptance/rejection, exact permission
   derivation, credential mode, driver behavior, and collection delegation;
 - exhaustive registry/catalog tests;
-- History retention and quota-graph selection tests for each new metric shape;
+- History retention and graph selection tests for each new metric shape;
 - permission ownership, connect/replace/reject/disconnect, restart, and
   instance-isolation tests appropriate to the connection mode;
 - released-state migration tests when a durable schema changes; and
@@ -104,6 +104,11 @@ They are release security gates and must fail on any access expansion until the
 new surface is deliberately reviewed.
 
 ## Verification
+
+Unit and component tests run in Vitest with jsdom (`pnpm test`). Checks that
+need a real layout engine, such as chart geometry and hover, live in the
+real-browser suite (`pnpm test:browser`); see
+[test/browser/README.md](test/browser/README.md).
 
 Before opening a pull request, run:
 
