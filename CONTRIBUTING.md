@@ -105,6 +105,11 @@ new surface is deliberately reviewed.
 
 ## Verification
 
+Unit and component tests run in Vitest with jsdom (`pnpm test`). Checks that
+need a real layout engine, such as chart geometry and hover, live in the
+real-browser suite (`pnpm test:browser`); see
+[test/browser/README.md](test/browser/README.md).
+
 Before opening a pull request, run:
 
 ```bash

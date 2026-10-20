@@ -1,35 +1,11 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { generateChromeMessages, parseMessagesText, type ParsedMessage } from "@wxt-dev/i18n/build";
 
-import enSource from "../locales/en.yml?raw";
+import "./setup";
 
-const parsed = parseMessagesText(enSource, "YAML");
-const messages = generateChromeMessages(parsed);
-
-function templateOf(message: ParsedMessage): string {
-  if (message.type === "plural") return message.plurals.other ?? message.plurals.n ?? "";
-  return message.message;
-}
-
-const templates = new Map(parsed.map((message) => [message.key.join("."), templateOf(message)]));
-Object.assign(globalThis, {
-  browser: {
-    i18n: {
-      getMessage(key: string, substitutions?: string | string[]): string {
-        void substitutions;
-        const dotted = key.replaceAll("_", ".");
-        return templates.get(dotted) ?? messages[key]?.message ?? "";
-      },
-    },
-    runtime: { getURL: (value: string) => value },
-    storage: { local: { get: async () => ({}), set: async () => undefined, remove: async () => undefined } },
-  },
-});
-
-import { BalanceHistoryChart } from "../entrypoints/sidepanel/components/BalanceHistoryChart";
-import "../entrypoints/sidepanel/styles.css";
-import type { BalanceMetric, UsageHistoryObservation } from "../domain/model";
+import { BalanceHistoryChart } from "../../../entrypoints/sidepanel/components/BalanceHistoryChart";
+import "../../../entrypoints/sidepanel/styles.css";
+import type { BalanceMetric, UsageHistoryObservation } from "../../../domain/model";
 
 /**
  * Synthetic prepaid balance over 30 days of hourly readings: steady daytime
