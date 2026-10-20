@@ -6,6 +6,7 @@ import { deepInfraAdapter } from "./deepinfra/adapter";
 import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { factoryAdapter } from "./factory/adapter";
+import { zaiAdapter } from "./zai/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokPackage } from "./grok/package";
 import { groqCloudAdapter } from "./groqcloud/adapter";
@@ -227,6 +228,17 @@ export const providerRegistry = {
     requiredPermissions: fixedPermissions(
       providerDefinitions.factory.optionalOrigins,
       providerDefinitions.factory.optionalPermissions,
+    ),
+  }),
+  zai: createApiKeyPackage({
+    kind: "zai",
+    adapter: zaiAdapter,
+    cardinality: providerDefinitions.zai.cardinality,
+    configKind: providerDefinitions.zai.configKind,
+    normalizeConfig: normalizeFixedConfig,
+    requiredPermissions: fixedPermissions(
+      providerDefinitions.zai.optionalOrigins,
+      providerDefinitions.zai.optionalPermissions,
     ),
   }),
 } satisfies { [Kind in ProviderKind]: ProviderPackage };

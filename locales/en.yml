@@ -623,6 +623,7 @@ metrics:
     rateLimits: Chat rate limits
     credits: Credits
     droidCore: Droid Core
+    mcpTools: MCP tools
   grokPoolUnavailable: Usage-pool details are unavailable
   detail:
     includedUsage: Included usage
@@ -762,6 +763,10 @@ metrics:
     coreMonthly: Core monthly
     premium: Premium
     extraUsage: Extra usage
+  zai:
+    fiveHour: 5-hour
+    weekly: Weekly
+    mcp: MCP tools
   grok:
     weeklyPool: Weekly usage pool
     monthlyPool: Monthly usage pool
@@ -949,6 +954,17 @@ providers:
     plans:
       pro: Pro
       plus: Plus
+      max: Max
+  zai:
+    name: GLM
+    connect: Connect GLM
+    connectionDisclosure: Uses your GLM Coding Plan API key from Z.ai, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    capabilities:
+      rateLimits: Rate limits
+      mcpTools: MCP tools
+    plans:
+      lite: Lite
+      pro: Pro
       max: Max
 
 accessibility:

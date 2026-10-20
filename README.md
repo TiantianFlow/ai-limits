@@ -13,7 +13,7 @@ Chrome Web Store releases can lag while review or publishing is pending; the
 Store badge shows the currently published version. GitHub Releases preserve
 the corresponding source and validated upload archive.
 
-AI Limits supports twenty-one providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and Droid.
+AI Limits supports twenty-two providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, Droid, and GLM.
 It is a Chrome side-panel extension that shows their current
 subscription usage and local quota-history graphs in one compact view. It
 normalizes provider-specific reporting into one **Used** or **Left** display
@@ -46,7 +46,8 @@ its affiliates.
   page, or briefly open one inactive spending tab if none is open, to request
   Grok Bot, extra-credit, and per-model included-usage JSON.
 - ElevenLabs, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud,
-  OpenRouter, and Droid use user-created API keys against their fixed provider APIs. OpenAI
+  OpenRouter, Droid, and GLM use user-created API keys against their fixed provider APIs. GLM
+  reads the Z.ai GLM Coding Plan with that plan's own API key. OpenAI
   is the Platform organization and developer billing surface (organization
   costs, completion usage, or legacy credit grants), not the ChatGPT consumer
   session. New

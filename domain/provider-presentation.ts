@@ -158,6 +158,13 @@ export const providerCatalog = {
       apiKeySetupUrl: "https://app.factory.ai/settings/api-keys",
     },
   },
+  zai: {
+    displayName: "GLM",
+    presentation: {
+      markPath: "/provider-marks/zai.svg",
+      apiKeySetupUrl: "https://z.ai/manage-apikey/apikey-list",
+    },
+  },
 } as const;
 
 export type ProviderBalanceCategory =
@@ -187,6 +194,7 @@ export const providerBalanceCategories = {
   groqcloud: "none",
   openrouter: "balance-primary",
   factory: "pool-primary",
+  zai: "none",
 } as const satisfies Record<ProviderKind, ProviderBalanceCategory>;
 
 export const providerNames = Object.fromEntries(
@@ -211,6 +219,11 @@ const knownPlanLabels: Partial<
   factory: {
     pro: "Pro",
     plus: "Plus",
+    max: "Max",
+  },
+  zai: {
+    lite: "Lite",
+    pro: "Pro",
     max: "Max",
   },
 };

@@ -2,7 +2,7 @@
 
 English | [简体中文](SUPPORTED_PROVIDERS.zh-CN.md)
 
-AI Limits supports twenty-one provider connections. Each provider is opt-in, and the
+AI Limits supports twenty-two provider connections. Each provider is opt-in, and the
 extension keeps normalized usage and History in the local Chrome profile.
 
 The provenance tier describes schema evidence, not current availability:
@@ -19,7 +19,7 @@ Balance presentation is explicit by provider:
   A zero auxiliary/extra-credit balance is hidden because the plan or pool is
   the primary signal.
 - **No balance metric** — Kimi, New API, LiteLLM, ClawRouter, LLM Proxy,
-  Fireworks, and GroqCloud. Their current contracts report quotas or counters.
+  Fireworks, GroqCloud, and GLM. Their current contracts report quotas or counters.
 
 | Provider | Connection | What AI Limits reads | Provenance | Important nuance |
 | --- | --- | --- | --- | --- |
@@ -44,6 +44,7 @@ Balance presentation is explicit by provider:
 | GroqCloud | User-created API key | Five-minute Prometheus request, token, and cache-hit rates | **INFERRED** | Standard Groq keys return 404 on the Prometheus surface and are reported as requiring broader credential scope. |
 | OpenRouter | User-created API key | Credit balance and optional API-key budget | **INFERRED** | Reads `/credits` and `/key`; key-budget enrichment appears only when the service reports a usable limit. |
 | Droid | User-created Factory API key | Standard 5-hour, weekly, and monthly rate limits, Droid Core windows when that pool is in use, and extra-usage balance when the account may spend it or holds some | **INFERRED** | Reads Factory's Droid client at `api.factory.ai`. Token-rate-limit accounts use `/api/billing/limits`. Other accounts fall back to `/api/organization/subscription/usage`. A plan label may come from `/api/app/auth/me` and is omitted when that request fails; the account identifier from that response is not stored. The key is sent only as a bearer token with `x-factory-client: web-app`. Extra-usage USD is inferred from the cents field and Factory's published prepaid extra-usage pricing. This is not the organization admin credits-limit API. |
+| GLM | User-created Z.ai GLM Coding Plan API key | 5-hour and weekly Coding Plan allowances with used/limit counts and reset times when reported, plus the monthly MCP tool allowance | **INFERRED** | Reads `https://api.z.ai/api/monitor/usage/quota/limit`, the same read-only request Z.ai's official GLM Coding Plan usage plugin makes. It is not a documented public API; the shape comes from that plugin and community implementations. The key is sent only as a bearer token. Global `api.z.ai` accounts only; China-mainland BigModel and Team plans are not supported yet. A 5-hour reset more than five hours away is omitted rather than corrected, because some accounts report it with a timezone offset. Z.ai's terms ask that keys not be exposed in client-side code; AI Limits keeps the key in its local credential vault and never sends it elsewhere. |
 
 ## New API connection modes
 

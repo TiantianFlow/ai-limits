@@ -244,6 +244,16 @@ are used only to identify the corresponding provider beside its visible name.
 - Ownership: AI Limits contributors.
 - Conditions: available under this repository's MIT license.
 
+## `zai.svg`
+
+- Source: original AI Limits mark for the GLM Coding Plan provider: a plain
+  "Z" letterform authored for this project, not a copy of Z.ai's logo.
+- Retrieved: not applicable.
+- Modified: not applicable.
+- SHA-256: `d79003632e1b5886104793530ef91c1961411e20846a012f574a5f0a7a7bbe50`.
+- Ownership: AI Limits contributors.
+- Conditions: available under this repository's MIT license.
+
 ## `newapi.svg`, `litellm.svg`, `clawrouter.svg`, `sub2api.svg`, and `llmproxy.svg`
 
 - Source: original AI Limits monograms, authored for this repository because

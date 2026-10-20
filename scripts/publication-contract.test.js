@@ -41,13 +41,13 @@ const elevenLabsPublicationStatements = [
   {
     key: "readme",
     statement:
-      "AI Limits supports twenty-one providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, and Droid.",
+      "AI Limits supports twenty-two providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, Droid, and GLM.",
     error: "README is missing the rendered twenty-provider statement.",
   },
   {
     key: "readmeZh",
     statement:
-      "AI Limits 支持二十一个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud、OpenRouter 和 Droid。",
+      "AI Limits 支持二十二个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud、OpenRouter、Droid 和 GLM。",
     error:
       "Simplified Chinese README is missing the rendered twenty-provider statement.",
   },
@@ -173,7 +173,7 @@ const elevenLabsPublicationStatements = [
   {
     key: "listing",
     statement:
-      "confirm First Run opens with twenty-one opt-in provider rows and no prefilled usage.",
+      "confirm First Run opens with twenty-two opt-in provider rows and no prefilled usage.",
     error:
       "Store listing reviewer flow must expect twenty First Run provider rows.",
   },
