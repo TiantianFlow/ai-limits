@@ -56,7 +56,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "faqZh",
-    facts: ["Kimi 定时刷新绝不会打开标签页", "最多打开一个非活动的临时 Kimi 标签页", "30 秒", "只关闭它自己创建的标签页"],
+    facts: ["Kimi 定时刷新绝不会打开标签页", "最多打开一个非活动的临时 Kimi 标签页", "最多等待 30 秒", "只关闭它自己创建的标签页"],
     error: "Simplified Chinese FAQ is missing the bounded Kimi tab policy.",
   },
   {
@@ -71,7 +71,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["chrome.storage.local", "restricts to trusted extension contexts"],
+    facts: ["stored separately in chrome.storage.local", "restricts to trusted extension contexts"],
     error: "Privacy policy is missing the trusted-context API-key storage disclosure.",
   },
   {
@@ -86,7 +86,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "faqZh",
-    facts: ["只会", "https://api.elevenlabs.io", "xi-api-key", "只读"],
+    facts: ["只会作为 xi-api-key 请求头发送到 https://api.elevenlabs.io", "只读"],
     error: "Simplified Chinese FAQ is missing the ElevenLabs key destination disclosure.",
   },
   {
@@ -191,7 +191,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["Chrome Web Store User Data Policy", "Limited Use requirements"],
+    facts: ["complies with the Chrome Web Store User Data Policy", "Limited Use requirements"],
     error: "Privacy policy is missing the Limited Use compliance statement.",
   },
   {
