@@ -31,6 +31,8 @@ const ALLOWED_JSX_TEXT = new Set([
   "+",
   "×",
   "▾",
+  "↑",
+  "↓",
   "·",
   "—",
   "User → Read",

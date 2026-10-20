@@ -128,4 +128,23 @@ describe("public app view state", () => {
     });
     expect(view.instances[0]).not.toHaveProperty("origin");
   });
+
+  test("projects a hidden instance", () => {
+    const view = projectAppViewState({
+      version: 5,
+      preferences: { displayMode: "used", autoRefresh: true },
+      instances: [
+        {
+          id: "kimi:default",
+          providerKind: "kimi",
+          hidden: true,
+          config: { kind: "fixed" },
+          access: "granted",
+          createdAt: 1,
+          history: [],
+        },
+      ],
+    });
+    expect(view.instances[0]).toMatchObject({ id: "kimi:default", hidden: true });
+  });
 });

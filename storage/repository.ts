@@ -121,6 +121,7 @@ export const connectionRepository = {
       const immutable = {
         id: current.id,
         providerKind: current.providerKind,
+        hidden: current.hidden,
         createdAt: current.createdAt,
       };
       const requested = updater(current);
@@ -133,6 +134,7 @@ export const connectionRepository = {
               ...requested,
               id: immutable.id,
               providerKind: immutable.providerKind,
+              hidden: immutable.hidden,
               createdAt: immutable.createdAt,
             },
           ],
@@ -166,6 +168,44 @@ export const connectionRepository = {
         },
         now,
       );
+    });
+  },
+
+  setHidden(id: ProviderInstanceId, hidden: boolean): Promise<void> {
+    return mutateState(async (state, now) => {
+      // Checked inside the write queue so a provider disconnected just before
+      // this write is reported instead of silently skipped.
+      if (!state.instances.some((instance) => instance.id === id)) {
+        throw new Error("Provider instance is unavailable.");
+      }
+      await writeNormalizedState(
+        {
+          ...state,
+          instances: state.instances.map((instance) =>
+            instance.id === id
+              ? { ...instance, hidden: hidden ? true : undefined }
+              : instance,
+          ),
+        },
+        now,
+      );
+    });
+  },
+
+  reorder(ids: readonly ProviderInstanceId[]): Promise<void> {
+    return mutateState(async (state, now) => {
+      const rank = new Map(ids.map((id, index) => [id, index]));
+      // Instances missing from the request (for example, connected while the
+      // request was in flight) keep their relative order after the listed ones.
+      const instances = state.instances
+        .map((instance, index) => ({ instance, index }))
+        .sort(
+          (left, right) =>
+            (rank.get(left.instance.id) ?? ids.length + left.index) -
+            (rank.get(right.instance.id) ?? ids.length + right.index),
+        )
+        .map(({ instance }) => instance);
+      await writeNormalizedState({ ...state, instances }, now);
     });
   },
 
@@ -212,6 +252,7 @@ export const usageRepository = {
         id: current.id,
         providerKind: current.providerKind,
         userLabel: current.userLabel,
+        hidden: current.hidden,
         config:
           current.config.kind === "fixed"
             ? ({ kind: "fixed" } as const)
@@ -230,6 +271,7 @@ export const usageRepository = {
         ...(immutable.userLabel === undefined
           ? { userLabel: undefined }
           : { userLabel: immutable.userLabel }),
+        hidden: immutable.hidden,
         config: immutable.config,
         access: immutable.access,
         createdAt: immutable.createdAt,

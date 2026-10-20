@@ -106,6 +106,25 @@ overview:
   replaceKey: 更换密钥
   replaceKeyNamed: "更换 {label} 的 API 密钥"
   refreshNamed: "刷新 {label}"
+  arrange: 排列
+  arrangeTitle: 排列服务
+  arrangeHint: 拖动手柄，或聚焦手柄后按 ↑ 或 ↓。隐藏的服务仍保持连接并继续刷新。
+  done: 完成
+  moveNamed: "移动 {label}"
+  showOnOverviewNamed: "在总览中显示 {label}"
+  hiddenCount:
+    zero: "已隐藏 {count} 个"
+    one: "已隐藏 {count} 个"
+    two: "已隐藏 {count} 个"
+    few: "已隐藏 {count} 个"
+    many: "已隐藏 {count} 个"
+    other: "已隐藏 {count} 个"
+  show: 显示
+  showNamed: "显示 {label}"
+  allHiddenTitle: 所有服务都已隐藏
+  allHiddenCopy: 它们仍保持连接并继续刷新。可以在这里或设置中重新显示。
+  showAll: 全部显示
+  movedTo: "{label} 已移到第 {position} 位，共 {total} 位。"
 
 providerDetail:
   screenUnavailable: 服务不可用
@@ -401,6 +420,13 @@ settings:
   replaceKeyNamed: "更换 {label} 的 API 密钥"
   reconnectNamed: "重新连接 {label}"
   disconnectNamed: "断开 {label}"
+  showOnOverview: 在总览中显示
+  showOnOverviewNamed: "在总览中显示：{label}"
+  moveUp: 上移
+  moveDown: 下移
+  moveUpNamed: "上移 {label}"
+  moveDownNamed: "下移 {label}"
+  orderExplanation: 服务在总览中按此顺序显示。隐藏的服务仍保持连接并继续刷新。
   deleteTitle: 删除全部本地数据
   deleteExplanation: 将从此浏览器移除所有连接、保留的历史和全部设置。没有云端副本，因此无法撤销。
   confirmGroup: 确认删除本地数据
@@ -524,6 +550,8 @@ announcements:
   disconnectFailed: "无法断开 {label}。"
   renamed: "已将连接重命名为 {label}。"
   renameFailed: "无法重命名 {label}。"
+  arrangeFailed: 无法保存服务顺序。请重试。
+  visibilityFailed: "无法更新 {label}。请重试。"
   localDataDeleted: 已删除本地用量数据并断开所有服务。
   localDataPartial: 已删除本地用量数据。部分服务的访问权限未能移除。
   localDataFailed: 无法删除本地数据。

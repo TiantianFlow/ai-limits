@@ -78,6 +78,8 @@ function fakeService(overrides: Partial<ProviderService> = {}): ProviderService 
       results: [],
     })),
     renameInstance: vi.fn(async () => undefined),
+    setInstanceHidden: vi.fn(async () => undefined),
+    reorderInstances: vi.fn(async () => undefined),
     disconnectInstance: vi.fn(async () => ({
       ok: true as const,
       localDataDeleted: true as const,

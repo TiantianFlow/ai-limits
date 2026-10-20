@@ -32,6 +32,7 @@ export type {
 
 const MAX_API_KEY_LENGTH = 4_096;
 const MAX_LABEL_LENGTH = 128;
+const MAX_REORDER_INSTANCES = 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -179,6 +180,24 @@ export function isRuntimeCommand(value: unknown): value is RuntimeCommand {
     );
   }
 
+  if (value.type === "SET_INSTANCE_HIDDEN") {
+    return (
+      hasExactKeys(value, ["type", "instanceId", "hidden"]) &&
+      isProviderInstanceId(value.instanceId) &&
+      typeof value.hidden === "boolean"
+    );
+  }
+
+  if (value.type === "REORDER_INSTANCES") {
+    return (
+      hasExactKeys(value, ["type", "instanceIds"]) &&
+      Array.isArray(value.instanceIds) &&
+      value.instanceIds.length <= MAX_REORDER_INSTANCES &&
+      value.instanceIds.every(isProviderInstanceId) &&
+      new Set(value.instanceIds).size === value.instanceIds.length
+    );
+  }
+
   if (value.type === "SET_DISPLAY_MODE") {
     return (
       hasExactKeys(value, ["type", "mode"]) &&
@@ -212,6 +231,8 @@ export interface RuntimeCommandHandlers {
   refreshInstance(instanceId: ProviderInstanceId): unknown;
   renameInstance(instanceId: ProviderInstanceId, userLabel?: string): unknown;
   disconnectInstance(instanceId: ProviderInstanceId): unknown;
+  setInstanceHidden(instanceId: ProviderInstanceId, hidden: boolean): unknown;
+  reorderInstances(instanceIds: ProviderInstanceId[]): unknown;
   getState(): unknown;
   setDisplayMode(mode: DisplayMode): unknown;
   setAutoRefresh(enabled: boolean): unknown;
@@ -266,6 +287,10 @@ export function createRuntimeCommandHandler(handlers: RuntimeCommandHandlers) {
         return handlers.renameInstance(value.instanceId, value.userLabel);
       case "DISCONNECT_INSTANCE":
         return handlers.disconnectInstance(value.instanceId);
+      case "SET_INSTANCE_HIDDEN":
+        return handlers.setInstanceHidden(value.instanceId, value.hidden);
+      case "REORDER_INSTANCES":
+        return handlers.reorderInstances(value.instanceIds);
       case "GET_STATE":
         return handlers.getState();
       case "SET_DISPLAY_MODE":

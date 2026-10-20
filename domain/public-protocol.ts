@@ -187,6 +187,7 @@ export interface ProviderInstanceView {
   id: ProviderInstanceId;
   providerKind: ProviderKind;
   userLabel?: string;
+  hidden?: true;
   baseUrl?: string;
   origin?: string;
   access: "required" | "granted";
@@ -269,6 +270,12 @@ export type RuntimeCommand =
       userLabel?: string;
     }
   | { type: "DISCONNECT_INSTANCE"; instanceId: ProviderInstanceId }
+  | {
+      type: "SET_INSTANCE_HIDDEN";
+      instanceId: ProviderInstanceId;
+      hidden: boolean;
+    }
+  | { type: "REORDER_INSTANCES"; instanceIds: ProviderInstanceId[] }
   | { type: "GET_STATE" }
   | { type: "SET_DISPLAY_MODE"; mode: DisplayMode }
   | { type: "SET_AUTO_REFRESH"; enabled: boolean }
@@ -883,7 +890,7 @@ function parseProviderInstanceView(value: unknown): ProviderInstanceView {
     !hasExactKeys(
       value,
       ["id", "providerKind", "access", "createdAt", "history"],
-      ["userLabel", "baseUrl", "origin", "snapshot", "lastAttempt"],
+      ["userLabel", "hidden", "baseUrl", "origin", "snapshot", "lastAttempt"],
     ) ||
     !isProviderInstanceId(value.id) ||
     !isProviderKind(value.providerKind) ||
@@ -893,6 +900,7 @@ function parseProviderInstanceView(value: unknown): ProviderInstanceView {
     !value.history.every(isHistoryObservation) ||
     (Object.hasOwn(value, "userLabel") &&
       (!isSafeText(value.userLabel, 128) || value.userLabel.trim() !== value.userLabel)) ||
+    (Object.hasOwn(value, "hidden") && value.hidden !== true) ||
     (Object.hasOwn(value, "baseUrl") && !isSafePublicBaseUrl(value.baseUrl)) ||
     (Object.hasOwn(value, "origin") && !isNormalizedOrigin(value.origin)) ||
     (Object.hasOwn(value, "snapshot") && !isUsageSnapshot(value.snapshot)) ||
@@ -906,6 +914,7 @@ function parseProviderInstanceView(value: unknown): ProviderInstanceView {
     id: value.id,
     providerKind: value.providerKind,
     ...(value.userLabel === undefined ? {} : { userLabel: value.userLabel as string }),
+    ...(value.hidden === true ? { hidden: true as const } : {}),
     ...(value.baseUrl === undefined ? {} : { baseUrl: value.baseUrl as string }),
     ...(value.origin === undefined ? {} : { origin: value.origin as string }),
     access: value.access,
