@@ -25,6 +25,8 @@ export interface BalanceHistorySeries {
   gaps: { start: number; end: number }[];
   /** Newest value minus the first value in range. Absent below two readings. */
   change?: number;
+  /** First reading in the current currency, when an older currency is in range. */
+  currencyChangedAt?: number;
   topUps: number;
 }
 
@@ -37,7 +39,8 @@ function isTopUp(previous: number, next: number): boolean {
 
 /**
  * Balance readings for one meter between rangeStart and rangeEnd. Only the
- * newest reading's unit is kept, so a currency switch never mixes scales.
+ * newest stretch in one currency is kept, so a currency switch never mixes
+ * scales or joins readings across the other currency.
  */
 export function balanceHistorySeries(
   history: readonly UsageHistoryObservation[],
@@ -52,23 +55,30 @@ export function balanceHistorySeries(
         (candidate): candidate is BalanceSample =>
           candidate.type === "balance" && candidate.metricId === metricId,
       );
-      return sample && Number.isFinite(sample.value)
+      return sample && Number.isFinite(sample.value) && observation.observedAt <= rangeEnd
         ? [{ observedAt: observation.observedAt, sample }]
         : [];
-    })
-    .filter(({ observedAt }) => observedAt >= rangeStart && observedAt <= rangeEnd);
-  const unit = readings.at(-1)?.sample.unit;
+    });
+  const newest = readings.at(-1);
+  const unit = newest && newest.observedAt >= rangeStart ? newest.sample.unit : undefined;
+  let firstIndex = readings.length;
+  while (firstIndex > 0 && readings[firstIndex - 1]!.sample.unit === unit) firstIndex -= 1;
+  const stretch = readings.slice(firstIndex);
+  const switchedAt = firstIndex > 0 ? stretch[0]?.observedAt : undefined;
+  // The last reading before the range is not drawn, but a top-up that lands
+  // on the first drawn reading is measured against it.
+  let previousValue = stretch.filter(({ observedAt }) => observedAt < rangeStart).at(-1)?.sample.value;
   const points: BalanceHistoryPoint[] = [];
   const runs: BalanceHistoryPoint[][] = [];
   const gaps: { start: number; end: number }[] = [];
   let topUps = 0;
 
-  for (const { observedAt, sample } of readings) {
-    if (sample.unit !== unit) continue;
+  for (const { observedAt, sample } of stretch) {
+    if (observedAt < rangeStart) continue;
     const previous = points.at(-1);
     const point: BalanceHistoryPoint = { observedAt, value: sample.value };
-    if (previous && isTopUp(previous.value, sample.value)) {
-      point.topUp = sample.value - previous.value;
+    if (previousValue !== undefined && isTopUp(previousValue, sample.value)) {
+      point.topUp = sample.value - previousValue;
       topUps += 1;
     }
     if (!previous || observedAt - previous.observedAt > BALANCE_GAP_MS) {
@@ -77,6 +87,7 @@ export function balanceHistorySeries(
     }
     runs.at(-1)!.push(point);
     points.push(point);
+    previousValue = sample.value;
   }
 
   const first = points[0];
@@ -87,6 +98,7 @@ export function balanceHistorySeries(
     runs,
     gaps,
     ...(first && last && points.length > 1 ? { change: last.value - first.value } : {}),
+    ...(switchedAt !== undefined && switchedAt > rangeStart ? { currencyChangedAt: switchedAt } : {}),
     topUps,
   };
 }

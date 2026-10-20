@@ -750,6 +750,51 @@ describe("Cockpit", () => {
     expect(screen.getByText("−$2.00 in 48 hours")).toBeVisible();
   });
 
+  it("labels History by the selected meter for a provider with quotas and a balance", () => {
+    const state = createEmptyFixtureState();
+    state.instances[0] = {
+      id: "openrouter:default",
+      providerKind: "openrouter",
+      access: "granted",
+      createdAt: NOW,
+      history: [],
+      snapshot: {
+        providerKind: "openrouter",
+        source: "api-key",
+        fetchedAt: NOW,
+        metrics: [
+          {
+            type: "quota",
+            id: "key-budget",
+            label: "Key budget",
+            scope: "general",
+            usedRatio: 0.25,
+          },
+          {
+            type: "balance",
+            id: "credits",
+            label: "Credits",
+            scope: "general",
+            value: 12,
+            unit: "USD",
+          },
+        ],
+      },
+    };
+
+    renderCockpit(state);
+    fireEvent.click(screen.getByRole("button", { name: "Open OpenRouter details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open OpenRouter history" }));
+    expect(screen.getByText(/Local quota observations/)).toBeVisible();
+    expect(screen.getByRole("radiogroup", { name: "Show used or left" })).toBeVisible();
+
+    chooseWindow("Credits");
+    expect(screen.getByText(/Local balance observations/)).toBeVisible();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Show used or left" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     {
       name: "Provider Detail",

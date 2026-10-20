@@ -199,8 +199,9 @@ export function BalanceHistoryChart({
   }
 
   const active = hover ?? pinned ?? (keyIndex !== null ? stops[keyIndex] ?? null : null);
-  const note = series.points.length === 0
-    ? l10n.t("history.noteNone", { range: rangeText(hours) })
+  // With fewer than two readings the status line already says so.
+  const note = series.points.length < 2
+    ? null
     : series.points.length < 5
       ? l10n.count("history.noteReadings", series.points.length, { range: rangeText(hours) })
       : null;
@@ -208,6 +209,9 @@ export function BalanceHistoryChart({
     l10n.t("history.balance.infoLine"),
     series.topUps > 0 ? l10n.t("history.balance.infoTopUp") : "",
     series.gaps.length > 0 ? l10n.t("history.infoGaps") : "",
+    series.currencyChangedAt !== undefined
+      ? l10n.t("history.balance.infoCurrency", { when: formatDateTime(series.currencyChangedAt) })
+      : "",
     l10n.count("history.infoStored", series.points.length),
   ].filter((item) => item.length > 0);
   const tooltipLeft = active?.x !== undefined
@@ -251,8 +255,8 @@ export function BalanceHistoryChart({
           onKeyDown={(event) => {
             if (event.key === "ArrowRight") { event.preventDefault(); move(1); }
             else if (event.key === "ArrowLeft") { event.preventDefault(); move(-1); }
-            else if (event.key === "Home") { event.preventDefault(); setKeyIndex(stops.length > 0 ? 0 : null); }
-            else if (event.key === "End") { event.preventDefault(); setKeyIndex(stops.length > 0 ? stops.length - 1 : null); }
+            else if (event.key === "Home") { event.preventDefault(); setHover(null); setPinned(null); setKeyIndex(stops.length > 0 ? 0 : null); }
+            else if (event.key === "End") { event.preventDefault(); setHover(null); setPinned(null); setKeyIndex(stops.length > 0 ? stops.length - 1 : null); }
             else if (event.key === "Escape") { setHover(null); setPinned(null); setKeyIndex(null); }
           }}
           onPointerMove={(event) => {

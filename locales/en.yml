@@ -369,8 +369,9 @@ history:
     topUp: "Top-up +{amount}"
     infoLine: Solid line — balance readings on a zero-based scale. Spending slopes down.
     infoTopUp: A step up is a top-up or credit.
+    infoCurrency: "The currency changed at {when}; earlier readings are not shown."
     summaryKeys: Use left and right arrow keys to inspect readings.
-    note: Only successful balance readings are plotted, in the provider's currency on a zero-based scale. A rise of at least 1% between readings is marked as a top-up. The newest 48 hours stay at collection resolution; older retained history is compacted hourly for up to 30 days on this device. Balance readings store no credentials or account identifiers.
+    note: Only successful balance readings are plotted, in the provider's currency on a zero-based scale. A rise between readings of at least 1% and at least 0.50 in the provider's currency is marked as a top-up. After a currency change, only readings in the new currency are shown. The newest 48 hours stay at collection resolution; older retained history is compacted hourly for up to 30 days on this device. Balance readings store no credentials or account identifiers.
 
 settings:
   screen: Provider settings

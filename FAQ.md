@@ -225,6 +225,9 @@ longer than 90 minutes, or a changed reset boundary. This avoids presenting a
 provider reset or a failed refresh as consumption. A window that disappears
 from the provider's current response is not selectable until it returns.
 
+A balance chart breaks its line after 3 hours without a reading. A rise in the
+balance draws as a step up, because a top-up lands between two readings.
+
 ## Does switching between Used and Left change stored History?
 
 No. AI Limits stores one canonical used ratio. **Used** displays that ratio;

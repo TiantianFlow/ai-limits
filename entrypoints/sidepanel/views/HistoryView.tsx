@@ -137,13 +137,12 @@ export function HistoryView({
   const selectedBalance = localizedMetrics.find(
     (metric) => metric.id === selectedMetric.id && metric.type === "balance",
   );
-  const onlyBalances = localizedQuotas.length === 0;
 
   return (
     <section className="screen" aria-label={l10n.t("history.titleNamed", { label })}>
       <PageHeader
         title={l10n.t("history.titleNamed", { label })}
-        subtitle={l10n.t(onlyBalances ? "history.balance.subtitle" : "history.subtitle", {
+        subtitle={l10n.t(selectedBalance ? "history.balance.subtitle" : "history.subtitle", {
           provider: providerName,
         })}
         backLabel={backLabel}

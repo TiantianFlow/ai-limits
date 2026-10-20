@@ -92,7 +92,7 @@ Provider work must add or update behavior tests at every owned boundary:
 - package tests for cardinality, config acceptance/rejection, exact permission
   derivation, credential mode, driver behavior, and collection delegation;
 - exhaustive registry/catalog tests;
-- History retention and quota-graph selection tests for each new metric shape;
+- History retention and graph selection tests for each new metric shape;
 - permission ownership, connect/replace/reject/disconnect, restart, and
   instance-isolation tests appropriate to the connection mode;
 - released-state migration tests when a durable schema changes; and

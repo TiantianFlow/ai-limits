@@ -18,7 +18,7 @@ by `AI_LIMITS_CHROME_PATH`.
 pnpm test:browser                         # every spec
 pnpm test:browser --only balance-history  # one spec
 pnpm test:browser --screenshots           # also write artifacts/browser/<spec>.png
-pnpm test:browser --screenshots out/dir   # same, to another folder
+pnpm test:browser --screenshots artifacts/review  # same, to another folder
 ```
 
 A failing spec always writes `<spec>-failure.png`, so there is a picture of

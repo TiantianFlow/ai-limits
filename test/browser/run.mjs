@@ -30,6 +30,7 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === "--only") {
       options.only = argv[++index];
+      if (!options.only || options.only.startsWith("--")) throw new Error("--only needs a spec name");
     } else if (arg === "--screenshots") {
       options.screenshots = true;
       const next = argv[index + 1];

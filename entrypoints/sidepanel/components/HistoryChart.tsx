@@ -634,8 +634,8 @@ export function HistoryChart({
             onKeyDown={(event) => {
               if (event.key === "ArrowRight") { event.preventDefault(); move(1); }
               else if (event.key === "ArrowLeft") { event.preventDefault(); move(-1); }
-              else if (event.key === "Home") { event.preventDefault(); setKeyIndex(0); }
-              else if (event.key === "End") { event.preventDefault(); setKeyIndex(stops.length - 1); }
+              else if (event.key === "Home") { event.preventDefault(); setHover(null); setPinned(null); setKeyIndex(0); }
+              else if (event.key === "End") { event.preventDefault(); setHover(null); setPinned(null); setKeyIndex(stops.length - 1); }
               else if (event.key === "Escape") { setHover(null); setPinned(null); setKeyIndex(null); }
             }}
             onPointerMove={(event) => {
