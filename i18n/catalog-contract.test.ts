@@ -1,9 +1,12 @@
+// @vitest-environment node
+
 import {
   generateChromeMessages,
   parseMessagesText,
   SUPPORTED_LOCALES,
   type ParsedMessage,
 } from "@wxt-dev/i18n/build";
+import { parseAst, transformWithEsbuild } from "vite";
 import { describe, expect, it } from "vitest";
 
 import { SUPPORTED_LOCALES as APP_LOCALES } from "./locales";
@@ -70,43 +73,104 @@ function localeFromPath(path: string): string {
   return path.replace(/^.*\//, "").replace(/\.(yml|yaml)$/u, "");
 }
 
-function uncatalogedJsxLiterals(source: string): string[] {
-  const literals: string[] = [];
-  const jsxText = source.matchAll(/>([^<>{}\n]+)</g);
-  for (const match of jsxText) {
-    const text = match[1]?.trim() ?? "";
-    if (
-      !text ||
-      ALLOWED_JSX_TEXT.has(text) ||
-      !/[A-Za-z]/.test(text) ||
-      text === "Promise" ||
-      /^[a-z0-9-]+$/.test(text)
-    ) {
-      continue;
-    }
-    if (text.startsWith("{") || ALLOWED_LITERAL_RE.test(text)) {
-      continue;
-    }
-    literals.push(text);
-  }
-  const attributes = source.matchAll(
-    /\b(?:aria-label|title|placeholder|alt)=["']([^"'{]+)["']/g,
+const COPY_ATTRIBUTES = new Set(["aria-label", "title", "placeholder", "alt"]);
+
+interface AstNode {
+  type: string;
+  [field: string]: unknown;
+}
+
+function isCopy(text: string): boolean {
+  return (
+    /[A-Za-z]/.test(text) &&
+    !ALLOWED_JSX_TEXT.has(text) &&
+    !ALLOWED_LITERAL_RE.test(text) &&
+    !/^[a-z0-9-]+$/.test(text)
   );
-  for (const match of attributes) {
-    const text = match[1]?.trim() ?? "";
-    if (
-      !text ||
-      ALLOWED_JSX_TEXT.has(text) ||
-      ALLOWED_LITERAL_RE.test(text) ||
-      text.startsWith("connect-") ||
-      text.startsWith("overview-") ||
-      text.startsWith("provider-") ||
-      text.startsWith("settings-")
-    ) {
-      continue;
+}
+
+function stringValue(node: unknown): string | undefined {
+  const value = node as AstNode | undefined;
+  return value?.type === "Literal" && typeof value.value === "string"
+    ? value.value.trim()
+    : undefined;
+}
+
+function propertyName(node: AstNode): string | undefined {
+  const key = node.key as AstNode;
+  return key.type === "Identifier" ? String(key.name) : stringValue(key);
+}
+
+/**
+ * JSX text and copy attributes (aria-label, title, placeholder, alt) that are
+ * string literals. esbuild compiles the JSX to jsx() calls, so the walk sees
+ * exactly the strings React would render, not text that merely sits between
+ * `>` and `<` in the source.
+ */
+async function uncatalogedJsxLiterals(source: string, path: string): Promise<string[]> {
+  const { code } = await transformWithEsbuild(source, path, { jsx: "automatic" });
+  const program = parseAst(code) as unknown as AstNode;
+  const jsxFactories = new Set<string>();
+  const createElementFactories = new Set<string>();
+  const literals: string[] = [];
+
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
     }
-    literals.push(text);
-  }
+    if (!node || typeof node !== "object" || typeof (node as AstNode).type !== "string") return;
+    const current = node as AstNode;
+    if (current.type === "ImportDeclaration") {
+      const from = stringValue(current.source);
+      for (const specifier of current.specifiers as AstNode[]) {
+        const imported = (specifier.imported as AstNode | undefined)?.name;
+        if (from === "react/jsx-runtime") jsxFactories.add(String((specifier.local as AstNode).name));
+        // esbuild falls back to createElement when a key follows a spread.
+        if (from === "react" && imported === "createElement") {
+          createElementFactories.add(String((specifier.local as AstNode).name));
+        }
+      }
+    }
+    const callee = current.callee as AstNode | undefined;
+    const args = (current.arguments as AstNode[] | undefined) ?? [];
+    const props = args[1];
+    if (
+      current.type === "CallExpression" &&
+      callee?.type === "Identifier" &&
+      createElementFactories.has(String(callee.name))
+    ) {
+      for (const child of args.slice(2)) {
+        const text = stringValue(child);
+        if (text && isCopy(text)) literals.push(text);
+      }
+    }
+    if (
+      current.type === "CallExpression" &&
+      callee?.type === "Identifier" &&
+      (jsxFactories.has(String(callee.name)) || createElementFactories.has(String(callee.name))) &&
+      props?.type === "ObjectExpression"
+    ) {
+      for (const property of props.properties as AstNode[]) {
+        if (property.type !== "Property") continue;
+        const name = propertyName(property);
+        const values = name === "children"
+          ? [property.value, ...((property.value as AstNode).type === "ArrayExpression"
+            ? ((property.value as AstNode).elements as unknown[])
+            : [])]
+          : COPY_ATTRIBUTES.has(name ?? "") ? [property.value] : [];
+        for (const value of values) {
+          const text = stringValue(value);
+          if (text && isCopy(text)) literals.push(text);
+        }
+      }
+    }
+    for (const [field, child] of Object.entries(current)) {
+      if (field !== "type") visit(child);
+    }
+  };
+
+  visit(program);
   return literals;
 }
 
@@ -200,11 +264,31 @@ describe("i18n catalog contract", () => {
     }
   });
 
-  it("does not leave hardcoded user-visible copy in production TSX", () => {
+  it("finds rendered literals and ignores code between angle brackets", async () => {
+    const source = `
+      export const View = ({ at, a, b, t }) => (
+        <section title="Close dialog" aria-label={t("label")} data-x="Not copy">
+          Hello world
+          <b>{at > a && at < b}</b>
+          {"Inline copy"}
+          <span className="provider-row">+</span>
+          <p {...{}} key="k" title="Spread title">Spread text</p>
+        </section>
+      );`;
+    expect((await uncatalogedJsxLiterals(source, "View.tsx")).sort()).toEqual([
+      "Close dialog",
+      "Hello world",
+      "Inline copy",
+      "Spread text",
+      "Spread title",
+    ]);
+  });
+
+  it("does not leave hardcoded user-visible copy in production TSX", async () => {
     const leftover: string[] = [];
     for (const [path, source] of Object.entries(tsxSources)) {
       if (path.includes(".test.")) continue;
-      for (const literal of uncatalogedJsxLiterals(source)) {
+      for (const literal of await uncatalogedJsxLiterals(source, path)) {
         leftover.push(`${path}: ${literal}`);
       }
     }

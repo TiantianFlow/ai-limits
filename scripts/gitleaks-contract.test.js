@@ -41,6 +41,17 @@ const historicalCanonicalIdCommits = [
   "b8856acf6b266ef09e5b97ddf887fb0e6ee189c3",
 ];
 
+// The scans need the gitleaks binary. CI installs it, so it must be there;
+// a local run without it skips the scans instead of failing.
+const gitleaksInstalled = (() => {
+  try {
+    execFileSync("gitleaks", ["version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 function scan(relativePath, contents) {
   const directory = mkdtempSync(path.join(os.tmpdir(), "ai-limits-gitleaks-"));
   temporaryDirectories.push(directory);
@@ -99,6 +110,12 @@ describe("gitleaks repository contract", () => {
     expect(config).not.toMatch(/credential-vault|instance-repository/u);
   });
 
+  it.runIf(process.env.CI && !gitleaksInstalled)("has gitleaks installed in CI", () => {
+    throw new Error("gitleaks is not on PATH; CI must install it before running tests.");
+  });
+});
+
+describe.skipIf(!gitleaksInstalled)("gitleaks scans", () => {
   it.each(knownStorageTestPaths)(
     "allows canonical New API instance IDs in current storage contract %s",
     (relativePath) => {
