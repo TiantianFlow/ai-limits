@@ -51,7 +51,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "faq",
-    facts: ["Kimi scheduled refresh never opens a tab", "at most one inactive temporary Kimi tab", "30 seconds", "closes only the tab it created"],
+    facts: ["Kimi scheduled refresh never opens a tab", "at most one inactive temporary Kimi tab", "up to 30 seconds", "closes only the tab it created"],
     error: "English FAQ is missing the bounded Kimi tab policy.",
   },
   {
@@ -76,7 +76,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "faqZh",
-    facts: ["chrome.storage.local", "受信任的扩展上下文"],
+    facts: ["chrome.storage.local", "限制为仅受信任的扩展上下文"],
     error: "Simplified Chinese FAQ is missing the trusted-context key-storage disclosure.",
   },
   {
@@ -96,7 +96,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "faqZh",
-    facts: ["操作系统钥匙串", "未锁定 Chrome 配置文件"],
+    facts: ["不受操作系统钥匙串加密保护", "未锁定 Chrome 配置文件"],
     error: "Simplified Chinese FAQ is missing the local API-key inspection limitation.",
   },
   {
@@ -111,7 +111,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["rejected API key stops", "scheduled requests", "stale normalized usage"],
+    facts: ["rejected API key stops", "scheduled requests", "stale normalized usage", "remain until replacement or deletion"],
     error: "Privacy policy is missing the rejected API-key behavior.",
   },
   {
