@@ -82,8 +82,8 @@ describe("publication content", () => {
     expect(
       validate(
         replaceDisclosureParagraph(key, facts, () =>
-          "The read-only subscription request is the only place the saved key goes: " +
-          "AI Limits sends it as the XI-API-KEY header to https://api.elevenlabs.io.",
+          "For the read-only subscription request, AI Limits sends the saved key " +
+          "as the XI-API-KEY header, and only to https://api.elevenlabs.io.",
         ),
       ),
     ).toEqual([]);
@@ -104,11 +104,25 @@ describe("publication content", () => {
   it.each([
     ["an HTML comment", (paragraph) => `<!--\n${paragraph}\n-->`],
     ["a raw HTML block", (paragraph) => `<div>\n\n${paragraph}\n\n</div>`],
+    ["a details element", (paragraph) => `<details>\n\n${paragraph}\n\n</details>`],
+    ["an inline span", (paragraph) => `<span>${paragraph}</span>`],
+    ["an unclosed span", (paragraph) => `<span>${paragraph}`],
+    ["a self-closed custom element", (paragraph) => `<x-secret hidden/>${paragraph}`],
     ["a fenced code block", (paragraph) => `\`\`\`text\n${paragraph}\n\`\`\``],
     ["indented code", (paragraph) => paragraph.replace(/^/gm, "    ")],
   ])("does not count a disclosure hidden in %s", (_context, hide) => {
     const { key, facts, error } = elevenLabsDestination;
     expect(validate(replaceDisclosureParagraph(key, facts, hide))).toContain(error);
+  });
+
+  it.each([
+    ["after a closed span", (paragraph) => `<span>Note</span> ${paragraph}`],
+    ["after a line break tag", (paragraph) => `<br/>${paragraph}`],
+    ["after an image", (paragraph) => `<img src="x.png"/> ${paragraph}`],
+    ["with a fact in backticks", (paragraph) => paragraph.replace("xi-api-key", "`xi-api-key`")],
+  ])("counts a disclosure %s", (_context, edit) => {
+    const { key, facts } = elevenLabsDestination;
+    expect(validate(replaceDisclosureParagraph(key, facts, edit))).toEqual([]);
   });
 
   describe("provider counts", () => {
@@ -153,13 +167,21 @@ describe("publication content", () => {
       expect(validate({ [key]: stripped })).toContain(error);
       for (const hidden of [
         `<!-- [Issues](${issuesUrl}) -->`,
+        `<!-- [Issues](${issuesUrl})`,
+        `Note <!-- [Issues](${issuesUrl})`,
+        `Note <!--\n[Issues](${issuesUrl})\n-->`,
         `\`[Issues](${issuesUrl})\``,
+        `\`\`\`markdown\n[Issues](${issuesUrl})\n\`\`\``,
         `<div>\n[Issues](${issuesUrl})\n</div>`,
+        `<div data-support="[Issues](${issuesUrl})"></div>`,
+        `<script>\nconst support = "[Issues](${issuesUrl})";\n</script>`,
         `\\[Issues](${issuesUrl})`,
       ]) {
         expect(validate({ [key]: `${stripped}\n\n${hidden}\n` })).toContain(error);
       }
       expect(validate({ [key]: `${stripped}\n\nReport it in [our tracker](${issuesUrl}).\n` }))
+        .not.toContain(error);
+      expect(validate({ [key]: `${stripped}\n\n\`literal <!--\` then [our tracker](${issuesUrl}).\n` }))
         .not.toContain(error);
     });
 

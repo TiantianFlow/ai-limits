@@ -111,6 +111,7 @@ async function uncatalogedJsxLiterals(source: string, path: string): Promise<str
   const { code } = await transformWithEsbuild(source, path, { jsx: "automatic" });
   const program = parseAst(code) as unknown as AstNode;
   const jsxFactories = new Set<string>();
+  const createElementFactories = new Set<string>();
   const literals: string[] = [];
 
   const visit = (node: unknown): void => {
@@ -120,17 +121,34 @@ async function uncatalogedJsxLiterals(source: string, path: string): Promise<str
     }
     if (!node || typeof node !== "object" || typeof (node as AstNode).type !== "string") return;
     const current = node as AstNode;
-    if (current.type === "ImportDeclaration" && stringValue(current.source) === "react/jsx-runtime") {
+    if (current.type === "ImportDeclaration") {
+      const from = stringValue(current.source);
       for (const specifier of current.specifiers as AstNode[]) {
-        jsxFactories.add(String((specifier.local as AstNode).name));
+        const imported = (specifier.imported as AstNode | undefined)?.name;
+        if (from === "react/jsx-runtime") jsxFactories.add(String((specifier.local as AstNode).name));
+        // esbuild falls back to createElement when a key follows a spread.
+        if (from === "react" && imported === "createElement") {
+          createElementFactories.add(String((specifier.local as AstNode).name));
+        }
       }
     }
     const callee = current.callee as AstNode | undefined;
-    const props = (current.arguments as AstNode[] | undefined)?.[1];
+    const args = (current.arguments as AstNode[] | undefined) ?? [];
+    const props = args[1];
     if (
       current.type === "CallExpression" &&
       callee?.type === "Identifier" &&
-      jsxFactories.has(String(callee.name)) &&
+      createElementFactories.has(String(callee.name))
+    ) {
+      for (const child of args.slice(2)) {
+        const text = stringValue(child);
+        if (text && isCopy(text)) literals.push(text);
+      }
+    }
+    if (
+      current.type === "CallExpression" &&
+      callee?.type === "Identifier" &&
+      (jsxFactories.has(String(callee.name)) || createElementFactories.has(String(callee.name))) &&
       props?.type === "ObjectExpression"
     ) {
       for (const property of props.properties as AstNode[]) {
@@ -254,12 +272,15 @@ describe("i18n catalog contract", () => {
           <b>{at > a && at < b}</b>
           {"Inline copy"}
           <span className="provider-row">+</span>
+          <p {...{}} key="k" title="Spread title">Spread text</p>
         </section>
       );`;
-    expect(await uncatalogedJsxLiterals(source, "View.tsx")).toEqual([
+    expect((await uncatalogedJsxLiterals(source, "View.tsx")).sort()).toEqual([
       "Close dialog",
       "Hello world",
       "Inline copy",
+      "Spread text",
+      "Spread title",
     ]);
   });
 

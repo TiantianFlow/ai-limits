@@ -71,7 +71,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["chrome.storage.local", "trusted extension contexts"],
+    facts: ["chrome.storage.local", "restricts to trusted extension contexts"],
     error: "Privacy policy is missing the trusted-context API-key storage disclosure.",
   },
   {
@@ -81,12 +81,12 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["https://api.elevenlabs.io", "xi-api-key", "read-only"],
+    facts: ["only to https://api.elevenlabs.io", "xi-api-key", "read-only"],
     error: "Privacy policy is missing the ElevenLabs key destination disclosure.",
   },
   {
     key: "faqZh",
-    facts: ["https://api.elevenlabs.io", "xi-api-key", "只读"],
+    facts: ["只会", "https://api.elevenlabs.io", "xi-api-key", "只读"],
     error: "Simplified Chinese FAQ is missing the ElevenLabs key destination disclosure.",
   },
   {
@@ -101,7 +101,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["never", "usage state", "History", "screenshots", "reports", "logs", "analytics", "developer backend"],
+    facts: ["never included in", "usage state", "History", "screenshots", "reports", "logs", "analytics", "developer backend"],
     error: "Privacy policy is missing the API-key exclusion boundaries.",
   },
   {
@@ -111,7 +111,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["rejected API key", "scheduled requests", "stale normalized usage"],
+    facts: ["rejected API key stops", "scheduled requests", "stale normalized usage"],
     error: "Privacy policy is missing the rejected API-key behavior.",
   },
   {
@@ -196,7 +196,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["stored per instance", "30 days", "1,024-observation per-instance safety cap"],
+    facts: ["stored per instance", "up to 30 days", "1,024-observation per-instance safety cap"],
     error: "Privacy policy is missing the typed per-instance history disclosure.",
   },
   {
@@ -211,7 +211,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["never stores credentials", "raw provider responses"],
+    facts: ["never stores credentials or raw provider responses"],
     error: "Privacy policy is missing the credential and raw-response exclusion.",
   },
   {
@@ -226,12 +226,12 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "privacy",
-    facts: ["Disconnect deletes", "before permission cleanup", "shared origin remains granted", "final-owner removal is best-effort", "retry"],
+    facts: [/Disconnect deletes[^.]*credential[^.]*History/i, "before permission cleanup", "shared origin remains granted", "final-owner removal is best-effort", "retry"],
     error: "Privacy policy is missing the instance disconnect and final-owner behavior.",
   },
   {
     key: "security",
-    facts: ["private vulnerability reporting is available", "Security tab"],
+    facts: ["If GitHub private vulnerability reporting is available", "Security tab"],
     error: "Security policy must make private vulnerability reporting conditional on Security-tab availability.",
   },
   {
@@ -241,7 +241,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "security",
-    facts: ["never include saved API keys", "does not render them"],
+    facts: ["never include saved API keys", "does not render them", "copy them into reports, logs, or History"],
     error: "Security policy is missing the practical side-panel credential boundary.",
   },
   {
@@ -261,7 +261,7 @@ export const REQUIRED_DISCLOSURES = [
   },
   {
     key: "listing",
-    facts: ["After the repository is public", "signed-out browser"],
+    facts: ["After the repository is public", "before Chrome Web Store submission", "homepage", "privacy policy", "support URLs", "signed-out browser"],
     error: "Store listing must defer public-route verification until after repository visibility is public.",
   },
 ];
@@ -281,7 +281,7 @@ export const PROVIDER_COUNT_CLAIMS = [
   },
   {
     key: "readmeZh",
-    pattern: /AI Limits 支持([一二三四五六七八九十]+|\d+)\s*个服务：/,
+    pattern: /AI Limits 支持\s*([一二三四五六七八九十]+|\d+)\s*个服务：/,
     count: chineseCount,
     listsProviders: true,
     label: "Simplified Chinese README provider list",
@@ -309,18 +309,22 @@ export const PROVIDER_COUNT_CLAIMS = [
 const englishOnes = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
 const englishTens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 
+/** The number a count word stands for, or NaN when it is not one. */
 function englishCount(text) {
   if (/^\d+$/.test(text)) return Number(text);
-  const [tens, ones] = text.toLowerCase().split("-");
-  if (ones === undefined) {
-    const small = englishOnes.indexOf(tens);
-    return small >= 0 ? small : englishTens.indexOf(tens) * 10;
-  }
-  return englishTens.indexOf(tens) * 10 + englishOnes.indexOf(ones);
+  const [tens, ones, extra] = text.toLowerCase().split("-");
+  const small = englishOnes.indexOf(tens);
+  if (ones === undefined && small >= 0) return small;
+  const tensValue = englishTens.indexOf(tens);
+  const onesValue = ones === undefined ? 0 : englishOnes.indexOf(ones);
+  return tensValue >= 2 && onesValue >= 0 && onesValue <= 9 && extra === undefined
+    ? tensValue * 10 + onesValue
+    : NaN;
 }
 
 function chineseCount(text) {
   if (/^\d+$/.test(text)) return Number(text);
+  if (!/^(?:[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])$/.test(text)) return NaN;
   const digits = "零一二三四五六七八九";
   const [tens, ones] = text.includes("十") ? text.split("十") : ["", text];
   return (text.includes("十") ? (tens ? digits.indexOf(tens) : 1) * 10 : 0) +
@@ -555,7 +559,10 @@ function extractQualifyingMarkdownBlocks(document) {
     for (const token of blockToken.children ?? []) {
       if (token.type === "html_inline") {
         updateRawHtmlElementStack(token.content, rawHtmlElementStack);
-      } else if (token.type === "text" && rawHtmlElementStack.length === 0) {
+      } else if (
+        (token.type === "text" || token.type === "code_inline") &&
+        rawHtmlElementStack.length === 0
+      ) {
         visible.push(token.content);
       } else if (
         (token.type === "softbreak" || token.type === "hardbreak") &&
@@ -657,7 +664,9 @@ export function validatePublicationDocuments(documents, { providerNames } = {}) 
     }
     if (!providerNames) continue;
     const claimed = count(block.match(pattern)[1]);
-    if (claimed !== providerNames.length) {
+    if (!Number.isInteger(claimed) || claimed < 0) {
+      errors.push(`${label} has an unreadable provider count.`);
+    } else if (claimed !== providerNames.length) {
       errors.push(
         `${label} says ${claimed} providers; the catalog has ${providerNames.length}.`,
       );
