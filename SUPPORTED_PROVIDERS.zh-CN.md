@@ -2,7 +2,7 @@
 
 [English](SUPPORTED_PROVIDERS.md) | 简体中文
 
-AI Limits 目前支持二十一种服务连接。每个服务都需要用户主动启用；标准化用量和
+AI Limits 目前支持二十二种服务连接。每个服务都需要用户主动启用；标准化用量和
 History 只保存在当前 Chrome 配置文件中。
 
 来源等级描述的是响应结构证据，而不是当前可用性：**OBSERVED** 表示字段有开发期间
@@ -16,7 +16,7 @@ History 只保存在当前 Chrome 配置文件中。
 - **套餐/用量池为主** — ChatGPT、Claude、Cursor、Grok、Perplexity、
   ElevenLabs 和 Droid。为零的辅助或额外额度会隐藏，因为套餐或用量池才是主要信号。
 - **当前无余额指标** — Kimi、New API、LiteLLM、ClawRouter、LLM Proxy、
-  Fireworks 和 GroqCloud；当前契约报告配额或计数。
+  Fireworks、GroqCloud 和 GLM；当前契约报告配额或计数。
 
 | 服务 | 连接方式 | 读取内容 | 来源等级 | 重要差异 |
 | --- | --- | --- | --- | --- |
@@ -41,6 +41,7 @@ History 只保存在当前 Chrome 配置文件中。
 | GroqCloud | 用户创建的 API 密钥 | 五分钟 Prometheus 请求、令牌和缓存命中速率 | **INFERRED** | 标准 Groq 密钥在 Prometheus 接口上返回 404，并会显示为需要更高凭据范围。 |
 | OpenRouter | 用户创建的 API 密钥 | 额度余额和可选 API 密钥预算 | **INFERRED** | 读取 `/credits` 和 `/key`；只有服务报告可用上限时才显示密钥预算。 |
 | Droid | 用户创建的 Factory API 密钥 | Standard 的 5 小时、每周和每月速率限制；Droid Core 用量池在使用中时的窗口；账户可以花费或持有额外用量时的余额 | **INFERRED** | 读取 `api.factory.ai` 上 Factory Droid 客户端。令牌速率限制账户使用 `/api/billing/limits`，其他账户回退到 `/api/organization/subscription/usage`。套餐标签可能来自 `/api/app/auth/me`，该请求失败时省略；响应中的账户标识不会保存。密钥仅作为 bearer token 发送，并附带 `x-factory-client: web-app`。额外用量的美元单位根据分字段和 Factory 已公布的预付额外用量定价推断。这不是组织管理用的额度上限接口。 |
+| GLM | 用户创建的 Z.ai GLM Coding Plan API 密钥 | Coding Plan 的 5 小时和每周额度（报告时含已用/上限计数和重置时间），以及每月 MCP 工具额度 | **INFERRED** | 读取 `https://api.z.ai/api/monitor/usage/quota/limit`，与 Z.ai 官方 GLM Coding Plan 用量插件发出的只读请求相同。这不是公开文档化的 API；响应结构来自该插件和社区实现。密钥仅作为 bearer token 发送。目前只支持 Global `api.z.ai` 账户，暂不支持中国大陆 BigModel 和 Team 套餐。距今超过五小时的 5 小时重置时间会被省略而不是修正，因为部分账户会带时区偏移报告。Z.ai 条款要求不要在客户端代码中暴露密钥，并将 Coding Plan 限定于官方支持的工具，因此连接后用户的 Z.ai 账户可能存在风险；AI Limits 将密钥保存在本地凭据库中，且不会发送到其他地方。 |
 
 ## New API 连接模式
 

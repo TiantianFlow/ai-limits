@@ -130,6 +130,11 @@ const KNOWN_METRIC_KEYS: Partial<
     "premium-monthly": "metrics.factory.premium",
     "extra-usage": "metrics.factory.extraUsage",
   },
+  zai: {
+    "five-hour": "metrics.zai.fiveHour",
+    weekly: "metrics.zai.weekly",
+    mcp: "metrics.zai.mcp",
+  },
 };
 
 const KNOWN_GROUP_KEYS: Record<string, string> = {
@@ -138,6 +143,7 @@ const KNOWN_GROUP_KEYS: Record<string, string> = {
   "rate-limits": "metrics.groups.rateLimits",
   credits: "metrics.groups.credits",
   "droid-core": "metrics.groups.droidCore",
+  "mcp-tools": "metrics.groups.mcpTools",
 };
 
 const KNOWN_SEGMENT_KEYS: Partial<
@@ -172,6 +178,11 @@ const PLAN_KEYS: Partial<Record<ProviderKind, Record<string, string>>> = {
     pro: "providers.factory.plans.pro",
     plus: "providers.factory.plans.plus",
     max: "providers.factory.plans.max",
+  },
+  zai: {
+    lite: "providers.zai.plans.lite",
+    pro: "providers.zai.plans.pro",
+    max: "providers.zai.plans.max",
   },
 };
 
@@ -212,6 +223,7 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   groqcloud: ["requestsPerMinute", "tokensPerMinute"],
   openrouter: ["balance", "keyBudget"],
   factory: ["rateLimits", "extraUsage"],
+  zai: ["rateLimits", "mcpTools"],
 };
 
 const DURATION_METRIC = /^(\d+(?:\.\d+)?)-(day|hour)$/;

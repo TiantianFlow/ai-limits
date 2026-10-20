@@ -663,6 +663,7 @@ metrics:
     rateLimits: 对话速率限制
     credits: 额度
     droidCore: Droid Core
+    mcpTools: MCP 工具
   grokPoolUnavailable: 用量池详情不可用
   detail:
     includedUsage: 包含的用量
@@ -802,6 +803,10 @@ metrics:
     coreMonthly: Core 每月
     premium: Premium
     extraUsage: 额外用量
+  zai:
+    fiveHour: 5 小时
+    weekly: 每周
+    mcp: MCP 工具
   grok:
     weeklyPool: 每周用量池
     monthlyPool: 每月用量池
@@ -989,6 +994,17 @@ providers:
     plans:
       pro: Pro
       plus: Plus
+      max: Max
+  zai:
+    name: GLM
+    connect: 连接 GLM
+    connectionDisclosure: 使用你在 Z.ai 创建的 GLM Coding Plan API 密钥，将其保存在 AI Limits 本地，只发送到 api.z.ai，并大约每 15 分钟刷新一次。Z.ai 条款要求不要在客户端代码中暴露密钥，并将该套餐限定于受支持的工具，因此连接后你的 Z.ai 账户可能存在风险。
+    capabilities:
+      rateLimits: 速率限制
+      mcpTools: MCP 工具
+    plans:
+      lite: Lite
+      pro: Pro
       max: Max
 
 accessibility:

@@ -179,4 +179,11 @@ export const providerDefinitions = {
     optionalOrigins: ["https://api.factory.ai/*"],
     optionalPermissions: [],
   },
+  zai: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://api.z.ai/*"],
+    optionalPermissions: [],
+  },
 } as const satisfies { [Kind in ProviderKind]: ProviderDefinition };
