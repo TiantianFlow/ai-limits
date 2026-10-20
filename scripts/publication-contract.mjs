@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 import MarkdownIt from "markdown-it";
 
 import { EXPECTED_DESCRIPTION } from "./artifact-contract.mjs";
@@ -15,321 +18,314 @@ const repositoryOwnerPatterns = [
   /https:\/\/github\.com\/([^/\s)]+)\/ai-limits\b/gi,
   /https:\/\/img\.shields\.io\/github\/(?:license|v\/release)\/([^/\s)]+)\/ai-limits\b/gi,
 ];
-const releaseChannelStatement =
-  "Chrome Web Store releases can lag while review or publishing is pending; the Store badge shows the currently published version.";
-const releaseChannelStatementZh =
-  "Chrome 应用商店版本可能因审核或发布流程而滞后；应用商店徽章显示当前已发布的版本。";
-const limitedUseStatement =
-  "AI Limits complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.";
-const historyRetentionStatement =
-  "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days, subject to a 1,024-observation per-instance safety cap.";
-const securityCondition =
-  "If GitHub private vulnerability reporting is available in the repository's **Security** tab, use it for sensitive reports.";
-const securityFallback =
-  "If that feature is unavailable, open a minimal issue requesting a private contact route without disclosing the vulnerability or sensitive details.";
-const credentialBoundaryStatement =
-  "Background command responses and application state never include saved API keys, and AI Limits does not render them or copy them into reports, logs, or History.";
-const publicRouteGate =
-  "After the repository is public and before Chrome Web Store submission, verify the homepage, privacy policy, and support URLs are reachable in a signed-out browser.";
-const paceAvailabilityStatement =
-  "For quota windows with a reliable reset time plus either a start time or window duration, a pace signal compares quota consumed with elapsed time.";
 const providerBrandPattern =
   /\b(?:ChatGPT|Claude|Kimi|Cursor|Grok|Mistral|Perplexity|ElevenLabs|New API|LiteLLM|ClawRouter|sub2api|LLM Proxy|DeepSeek|Moonshot|DeepInfra|Fireworks|OpenAI|GroqCloud|OpenRouter|Droid|GLM|Z\.ai)\b/i;
-const requiredVisibleFaqStatements = [
-  {
-    key: "faq",
-    statement:
-      "Kimi automatic refresh is best-effort and may not always work; a manual Connect or Refresh may briefly open an inactive Kimi tab in the background to recover the session.",
-    error:
-      "English FAQ is missing the rendered Kimi automatic-refresh limitation.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "Kimi 自动刷新属于尽力而为，并不保证每次都能成功；手动 Connect 或 Refresh 可能会在后台短暂打开一个非活动 Kimi 标签页以恢复会话。",
-    error:
-      "Simplified Chinese FAQ is missing the rendered Kimi automatic-refresh limitation.",
-  },
-];
-const requiredVisibleElevenLabsStatements = [
+
+/**
+ * Disclosures the Chrome Web Store review and the privacy policy rely on. Each
+ * one passes when a single visible paragraph or list item carries every fact,
+ * case-insensitively, so the wording around the facts can change freely. A
+ * fact is a phrase or a RegExp; pick the words a reviewer would look for, not
+ * the glue between them.
+ */
+export const REQUIRED_DISCLOSURES = [
   {
     key: "readme",
-    statement:
-      "AI Limits supports twenty-two providers: ChatGPT, Claude, Kimi, Cursor, Grok, Mistral, Perplexity, ElevenLabs, New API, LiteLLM, ClawRouter, sub2api, LLM Proxy, DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter, Droid, and GLM.",
-    error: "README is missing the rendered twenty-provider statement.",
+    facts: ["Chrome Web Store releases can lag", "Store badge shows the currently published version"],
+    error: "README is missing the Chrome Web Store release-lag guidance.",
   },
   {
     key: "readmeZh",
-    statement:
-      "AI Limits 支持二十二个服务：ChatGPT、Claude、Kimi、Cursor、Grok、Mistral、Perplexity、ElevenLabs、New API、LiteLLM、ClawRouter、sub2api、LLM Proxy、DeepSeek、Moonshot、DeepInfra、Fireworks、OpenAI、GroqCloud、OpenRouter、Droid 和 GLM。",
-    error:
-      "Simplified Chinese README is missing the rendered twenty-provider statement.",
+    facts: ["Chrome 应用商店版本可能", "滞后", "应用商店徽章显示当前已发布的版本"],
+    error: "Simplified Chinese README is missing the Chrome Web Store release-lag guidance.",
   },
   {
     key: "faq",
-    statement:
-      "ElevenLabs uses a user-created API key; after a successful check, AI Limits stores it locally and scheduled refresh does not open an ElevenLabs tab.",
-    error:
-      "English FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+    facts: ["Kimi automatic refresh", "best-effort", "inactive Kimi tab"],
+    error: "English FAQ is missing the rendered Kimi automatic-refresh limitation.",
   },
   {
     key: "faqZh",
-    statement:
-      "ElevenLabs 使用由用户创建的 API 密钥；验证成功后，AI Limits 会将其保存在本地，定时刷新不会打开 ElevenLabs 标签页。",
-    error:
-      "Simplified Chinese FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+    facts: ["Kimi 自动刷新", "尽力而为", "非活动 Kimi 标签页"],
+    error: "Simplified Chinese FAQ is missing the rendered Kimi automatic-refresh limitation.",
   },
-  {
-    key: "privacy",
-    statement:
-      "API keys are stored separately in chrome.storage.local, which AI Limits restricts to trusted extension contexts through Chrome's storage access level.",
-    error:
-      "Privacy policy is missing the trusted-context ElevenLabs key-storage disclosure.",
-  },
-  {
-    key: "privacy",
-    statement:
-      "AI Limits sends the saved key only to https://api.elevenlabs.io as the xi-api-key header for the read-only subscription request.",
-    error:
-      "Privacy policy is missing the exact ElevenLabs key destination disclosure.",
-  },
-  {
-    key: "privacy",
-    statement:
-      "The saved key is not OS-keychain encrypted and may be inspectable by someone with access to the unlocked Chrome profile, extension DevTools, or profile files.",
-    error:
-      "Privacy policy is missing the local API-key inspection limitation.",
-  },
-  {
-    key: "privacy",
-    statement:
-      "The saved key is never included in usage state, History, screenshots, reports, logs, analytics, or a developer backend.",
-    error:
-      "Privacy policy is missing the ElevenLabs key exclusion boundaries.",
-  },
-  {
-    key: "privacy",
-    statement:
-      "A rejected API key stops that provider's scheduled requests while stale normalized usage and history remain until replacement or deletion.",
-    error:
-      "Privacy policy is missing the rejected ElevenLabs key behavior.",
-  },
-  {
-    key: "privacy",
-    statement:
-      "Disconnect, Delete all local data, uninstall, or clearing extension storage deletes the saved API key.",
-    error:
-      "Privacy policy is missing the complete ElevenLabs key-deletion lifecycle.",
-  },
-  {
-    key: "privacy",
-    statement:
-      "If Chrome cannot revoke a final-owner host permission, local instance deletion remains authoritative and durable cleanup evidence is retained for retry.",
-    error:
-      "Privacy policy is missing the permission-cleanup failure boundary.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "保存的密钥只会作为 xi-api-key 请求头发送到 https://api.elevenlabs.io，用于只读订阅请求。",
-    error:
-      "Simplified Chinese FAQ is missing the exact ElevenLabs key destination disclosure.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "AI Limits 会将密钥单独保存在 chrome.storage.local，并通过 Chrome 存储访问级别限制为仅受信任的扩展上下文可读。",
-    error:
-      "Simplified Chinese FAQ is missing the trusted-context key-storage disclosure.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "该密钥不受操作系统钥匙串加密保护；能够访问未锁定 Chrome 配置文件、扩展 DevTools 或本地配置文件的人仍可能检查到它。",
-    error:
-      "Simplified Chinese FAQ is missing the local API-key inspection limitation.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "该密钥绝不会写入用量状态、History、截图、报告、日志、分析系统或开发者后端。",
-    error:
-      "Simplified Chinese FAQ is missing the ElevenLabs key exclusion boundaries.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "如果保存的 ElevenLabs 密钥被拒绝，AI Limits 会停止定时 ElevenLabs 请求，并保留过期的标准化用量和 History，直到替换或删除密钥。",
-    error:
-      "Simplified Chinese FAQ is missing the rejected ElevenLabs key behavior.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "断开 ElevenLabs、选择 Delete all local data、卸载扩展或清除扩展存储，都会删除保存的密钥。",
-    error:
-      "Simplified Chinese FAQ is missing the complete ElevenLabs key-deletion lifecycle.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "如果 Chrome 无法撤销最后一个所有者的主机权限，本地实例删除仍然有效，并会保留持久清理证据供之后重试。",
-    error:
-      "Simplified Chinese FAQ is missing the permission-cleanup failure boundary.",
-  },
-  {
-    key: "listing",
-    statement:
-      "Authentication information: Yes. This includes provider API keys that the user creates and AI Limits saves locally after successful validation.",
-    error:
-      "Store listing is missing the saved provider-key authentication disclosure.",
-  },
-  {
-    key: "listing",
-    statement:
-      "confirm First Run opens with twenty-two opt-in provider rows and no prefilled usage.",
-    error:
-      "Store listing reviewer flow must expect twenty First Run provider rows.",
-  },
-  {
-    key: "listing",
-    statement: "AI Limits supports 22 AI services.",
-    error: "Store listing detailed description must state the 22-service count.",
-  },
-  {
-    key: "listingZh",
-    statement: "AI Limits 支持 22 个 AI 服务。",
-    error:
-      "Simplified Chinese store listing detailed description must state the 22-service count.",
-  },
-];
-const requiredVisibleV030Statements = [
   {
     key: "faq",
-    statement:
-      "Both. A successful Connect, provider Refresh, header refresh button, or scheduled automatic refresh adds one normalized typed History observation containing the quota, counter or spend, and balance metrics returned by that provider. History graphs quota metrics and the balance of balance-first providers; counter or spend observations and other balances remain stored but are not graphed.",
-    error:
-      "English FAQ introduction is missing typed History and History graph scope behavior.",
+    facts: ["Kimi scheduled refresh never opens a tab", "at most one inactive temporary Kimi tab", "30 seconds", "closes only the tab it created"],
+    error: "English FAQ is missing the bounded Kimi tab policy.",
   },
   {
     key: "faqZh",
-    statement:
-      "两者都会。成功的 Connect、单个服务 Refresh、顶部刷新按钮或定时自动刷新，都会新增一条标准化类型化 History 观测，其中包含该服务本次返回的配额、计数或支出以及余额指标。History 绘制配额指标以及以余额为主的服务商的余额；计数或支出观测和其他余额仍会保存，但不会绘图。",
-    error:
-      "Simplified Chinese FAQ introduction is missing typed History and History graph scope behavior.",
+    facts: ["Kimi 定时刷新绝不会打开标签页", "最多打开一个非活动的临时 Kimi 标签页", "30 秒", "只关闭它自己创建的标签页"],
+    error: "Simplified Chinese FAQ is missing the bounded Kimi tab policy.",
+  },
+  {
+    key: "faq",
+    facts: ["ElevenLabs", "user-created API key", "stores it locally", "does not open an ElevenLabs tab"],
+    error: "English FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+  },
+  {
+    key: "faqZh",
+    facts: ["ElevenLabs", "用户创建的 API 密钥", "保存在本地", "不会打开 ElevenLabs 标签页"],
+    error: "Simplified Chinese FAQ is missing the rendered ElevenLabs connection and refresh statement.",
+  },
+  {
+    key: "privacy",
+    facts: ["chrome.storage.local", "trusted extension contexts"],
+    error: "Privacy policy is missing the trusted-context API-key storage disclosure.",
+  },
+  {
+    key: "faqZh",
+    facts: ["chrome.storage.local", "受信任的扩展上下文"],
+    error: "Simplified Chinese FAQ is missing the trusted-context key-storage disclosure.",
+  },
+  {
+    key: "privacy",
+    facts: ["https://api.elevenlabs.io", "xi-api-key", "read-only"],
+    error: "Privacy policy is missing the ElevenLabs key destination disclosure.",
+  },
+  {
+    key: "faqZh",
+    facts: ["https://api.elevenlabs.io", "xi-api-key", "只读"],
+    error: "Simplified Chinese FAQ is missing the ElevenLabs key destination disclosure.",
+  },
+  {
+    key: "privacy",
+    facts: ["not OS-keychain encrypted", "unlocked Chrome profile"],
+    error: "Privacy policy is missing the local API-key inspection limitation.",
+  },
+  {
+    key: "faqZh",
+    facts: ["操作系统钥匙串", "未锁定 Chrome 配置文件"],
+    error: "Simplified Chinese FAQ is missing the local API-key inspection limitation.",
+  },
+  {
+    key: "privacy",
+    facts: ["never", "usage state", "History", "screenshots", "reports", "logs", "analytics", "developer backend"],
+    error: "Privacy policy is missing the API-key exclusion boundaries.",
+  },
+  {
+    key: "faqZh",
+    facts: ["绝不会", "用量状态", "History", "截图", "报告", "日志", "分析", "开发者后端"],
+    error: "Simplified Chinese FAQ is missing the ElevenLabs key exclusion boundaries.",
+  },
+  {
+    key: "privacy",
+    facts: ["rejected API key", "scheduled requests", "stale normalized usage"],
+    error: "Privacy policy is missing the rejected API-key behavior.",
+  },
+  {
+    key: "faqZh",
+    facts: ["被拒绝", "停止定时 ElevenLabs 请求", "过期的标准化用量"],
+    error: "Simplified Chinese FAQ is missing the rejected ElevenLabs key behavior.",
+  },
+  {
+    key: "privacy",
+    facts: ["Disconnect", "Delete all local data", "uninstall", "clearing extension storage", "deletes the saved API key"],
+    error: "Privacy policy is missing the complete API-key deletion lifecycle.",
+  },
+  {
+    key: "faqZh",
+    facts: ["断开 ElevenLabs", "Delete all local data", "卸载", "清除扩展存储", "删除保存的密钥"],
+    error: "Simplified Chinese FAQ is missing the complete ElevenLabs key-deletion lifecycle.",
+  },
+  {
+    key: "privacy",
+    facts: ["cannot revoke", "final-owner host permission", "local instance deletion remains authoritative", "retry"],
+    error: "Privacy policy is missing the permission-cleanup failure boundary.",
+  },
+  {
+    key: "faqZh",
+    facts: ["无法撤销", "最后一个所有者的主机权限", "本地实例删除仍然有效", "重试"],
+    error: "Simplified Chinese FAQ is missing the permission-cleanup failure boundary.",
+  },
+  {
+    key: "faq",
+    facts: ["Connect", "scheduled automatic refresh", "typed History observation", "graphs quota metrics", "balance-first providers", "not graphed"],
+    error: "English FAQ introduction is missing typed History and History graph scope behavior.",
+  },
+  {
+    key: "faqZh",
+    facts: ["Connect", "定时自动刷新", "标准化类型化 History 观测", "绘制配额指标", "以余额为主的服务商的余额", "不会绘图"],
+    error: "Simplified Chinese FAQ introduction is missing typed History and History graph scope behavior.",
   },
   {
     key: "readme",
-    statement:
-      "AI Limits supports multiple New API instances. Each instance keeps its own normalized base URL, label, relay key, current usage, refresh state, and History.",
+    facts: ["multiple New API instances", "its own", "relay key", "History"],
     error: "README is missing the rendered multi-instance New API disclosure.",
   },
   {
     key: "readmeZh",
-    statement:
-      "AI Limits 支持多个 New API 实例。每个实例分别保存自己的标准化基础网址、标签、Relay Key、当前用量、刷新状态和 History。",
-    error:
-      "Simplified Chinese README is missing the rendered multi-instance New API disclosure.",
+    facts: ["多个 New API 实例", "Relay Key", "History"],
+    error: "Simplified Chinese README is missing the rendered multi-instance New API disclosure.",
   },
   {
     key: "faq",
-    statement:
-      "Two New API instances on the same origin share only Chrome's browser-global origin permission; they never share a relay key, label, usage state, or History.",
+    facts: ["same origin", "browser-global origin permission", "never share a relay key"],
     error: "English FAQ is missing the same-origin New API isolation disclosure.",
   },
   {
     key: "faqZh",
-    statement:
-      "位于同一来源的两个 New API 实例只会共享 Chrome 的浏览器全局来源权限；它们绝不会共享 Relay Key、标签、用量状态或 History。",
-    error:
-      "Simplified Chinese FAQ is missing the same-origin New API isolation disclosure.",
-  },
-  {
-    key: "faq",
-    statement:
-      "Kimi scheduled refresh never opens a tab. An interactive Connect or Refresh may open at most one inactive temporary Kimi tab, waits up to 30 seconds for recovery, and closes only the tab it created.",
-    error: "English FAQ is missing the exact bounded Kimi tab policy.",
-  },
-  {
-    key: "faqZh",
-    statement:
-      "Kimi 定时刷新绝不会打开标签页。交互式 Connect 或 Refresh 最多打开一个非活动的临时 Kimi 标签页，最多等待 30 秒完成恢复，并且只关闭它自己创建的标签页。",
-    error: "Simplified Chinese FAQ is missing the exact bounded Kimi tab policy.",
+    facts: ["同一来源", "浏览器全局来源权限", "绝不会共享 Relay Key"],
+    error: "Simplified Chinese FAQ is missing the same-origin New API isolation disclosure.",
   },
   {
     key: "supported",
-    statement:
-      "New API supports multiple independent instances. Each configured instance has its own normalized base URL, label, relay key, usage, History, refresh state, replacement, rejection, and deletion lifecycle.",
+    facts: ["multiple independent instances", "relay key", "deletion lifecycle"],
     error: "Supported providers is missing the New API instance lifecycle.",
   },
   {
     key: "supported",
-    statement:
-      "Same-origin instances share only Chrome's browser-global origin grant; credentials, labels, usage state, and History remain independent.",
+    facts: ["browser-global origin grant", "remain independent"],
     error: "Supported providers is missing the shared-origin boundary.",
   },
   {
     key: "supportedZh",
-    statement:
-      "New API 支持多个相互独立的实例。每个已配置实例分别拥有自己的标准化基础网址、标签、Relay Key、用量、History、刷新状态、替换、拒绝和删除生命周期。",
-    error:
-      "Simplified Chinese supported providers is missing the New API instance lifecycle.",
+    facts: ["多个相互独立的实例", "Relay Key", "删除生命周期"],
+    error: "Simplified Chinese supported providers is missing the New API instance lifecycle.",
   },
   {
     key: "supportedZh",
-    statement:
-      "同一来源的实例只共享 Chrome 的浏览器全局来源授权；凭据、标签、用量状态和 History 始终相互独立。",
-    error:
-      "Simplified Chinese supported providers is missing the shared-origin boundary.",
+    facts: ["浏览器全局来源授权", "相互独立"],
+    error: "Simplified Chinese supported providers is missing the shared-origin boundary.",
   },
   {
     key: "privacy",
-    statement:
-      "Successful normalized quota, counter or spend, and balance observations are stored per instance for up to 30 days, subject to a 1,024-observation per-instance safety cap.",
+    facts: ["Chrome Web Store User Data Policy", "Limited Use requirements"],
+    error: "Privacy policy is missing the Limited Use compliance statement.",
+  },
+  {
+    key: "privacy",
+    facts: ["stored per instance", "30 days", "1,024-observation per-instance safety cap"],
     error: "Privacy policy is missing the typed per-instance history disclosure.",
   },
   {
     key: "privacy",
-    statement:
-      "Within that cap, the newest 48 hours remain at collection resolution and older retained observations are compacted to the latest observation in each UTC hour.",
-    error: "Privacy policy is missing the exact history compaction policy.",
+    facts: ["newest 48 hours", "collection resolution", "latest observation in each UTC hour"],
+    error: "Privacy policy is missing the history compaction policy.",
   },
   {
     key: "privacy",
-    statement:
-      "History graphs plot quota metrics and the balance of balance-first providers; counter or spend observations and other balances remain stored but are not graphed.",
+    facts: ["quota metrics", "balance-first providers", "not graphed"],
     error: "Privacy policy is missing the History graph scope disclosure.",
   },
   {
     key: "privacy",
-    statement: "History never stores credentials or raw provider responses.",
+    facts: ["never stores credentials", "raw provider responses"],
     error: "Privacy policy is missing the credential and raw-response exclusion.",
   },
   {
     key: "privacy",
-    statement:
-      "Currency-denominated spend counters and balances are normalized usage data, not raw payment transaction history.",
+    facts: ["spend counters and balances", "not raw payment transaction history"],
     error: "Privacy policy is missing the normalized financial-data distinction.",
   },
   {
     key: "privacy",
-    statement:
-      "Externally removing a permission marks every affected instance permission-required while retaining its nonsecret configuration, normalized usage, refresh status, and History.",
+    facts: ["Externally removing a permission", "permission-required", "retaining"],
     error: "Privacy policy is missing the external-permission retention behavior.",
   },
   {
     key: "privacy",
-    statement:
-      "Disconnect deletes that instance's credential, configuration, usage, refresh status, and History before permission cleanup; a shared origin remains granted while another active instance owns it, and final-owner removal is best-effort with durable retry evidence.",
+    facts: ["Disconnect deletes", "before permission cleanup", "shared origin remains granted", "final-owner removal is best-effort", "retry"],
     error: "Privacy policy is missing the instance disconnect and final-owner behavior.",
   },
   {
+    key: "security",
+    facts: ["private vulnerability reporting is available", "Security tab"],
+    error: "Security policy must make private vulnerability reporting conditional on Security-tab availability.",
+  },
+  {
+    key: "security",
+    facts: ["If that feature is unavailable", "private contact route", "without disclosing"],
+    error: "Security policy is missing the non-disclosing private-contact fallback.",
+  },
+  {
+    key: "security",
+    facts: ["never include saved API keys", "does not render them"],
+    error: "Security policy is missing the practical side-panel credential boundary.",
+  },
+  {
     key: "listing",
-    statement:
-      "Successful normalized quota, counter or spend, and balance observations are retained per instance; History graphs quota metrics and the balance of balance-first providers, while counter or spend observations and other balances remain stored but ungraphed.",
+    facts: ["Authentication information: Yes", "provider API keys", "saves locally"],
+    error: "Store listing is missing the saved provider-key authentication disclosure.",
+  },
+  {
+    key: "listing",
+    facts: ["retained per instance", "graphs quota metrics", "balance-first providers", "ungraphed"],
     error: "Store listing is missing typed history and History graph scope behavior.",
   },
+  {
+    key: "listing",
+    facts: ["reliable reset time", "start time or window duration", "pace signal"],
+    error: "Store listing is missing the reset-time-or-duration pace qualification.",
+  },
+  {
+    key: "listing",
+    facts: ["After the repository is public", "signed-out browser"],
+    error: "Store listing must defer public-route verification until after repository visibility is public.",
+  },
 ];
+
+/**
+ * Places that state how many providers AI Limits supports. `count` reads the
+ * number from the match. With a provider catalog, the number must match it and
+ * a `listsProviders` block must also name every provider.
+ */
+export const PROVIDER_COUNT_CLAIMS = [
+  {
+    key: "readme",
+    pattern: /AI Limits supports ([a-z-]+|\d+) providers:/i,
+    count: englishCount,
+    listsProviders: true,
+    label: "README provider list",
+  },
+  {
+    key: "readmeZh",
+    pattern: /AI Limits 支持([一二三四五六七八九十]+|\d+)\s*个服务：/,
+    count: chineseCount,
+    listsProviders: true,
+    label: "Simplified Chinese README provider list",
+  },
+  {
+    key: "listing",
+    pattern: /First Run opens with ([a-z-]+|\d+) opt-in provider rows and no prefilled usage/i,
+    count: englishCount,
+    label: "Store listing reviewer First Run step",
+  },
+  {
+    key: "listing",
+    pattern: /AI Limits supports (\d+) AI services/i,
+    count: englishCount,
+    label: "Store listing detailed description",
+  },
+  {
+    key: "listingZh",
+    pattern: /AI Limits 支持\s*(\d+)\s*个 AI 服务/,
+    count: chineseCount,
+    label: "Simplified Chinese store listing detailed description",
+  },
+];
+
+const englishOnes = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const englishTens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+function englishCount(text) {
+  if (/^\d+$/.test(text)) return Number(text);
+  const [tens, ones] = text.toLowerCase().split("-");
+  if (ones === undefined) {
+    const small = englishOnes.indexOf(tens);
+    return small >= 0 ? small : englishTens.indexOf(tens) * 10;
+  }
+  return englishTens.indexOf(tens) * 10 + englishOnes.indexOf(ones);
+}
+
+function chineseCount(text) {
+  if (/^\d+$/.test(text)) return Number(text);
+  const digits = "零一二三四五六七八九";
+  const [tens, ones] = text.includes("十") ? text.split("十") : ["", text];
+  return (text.includes("十") ? (tens ? digits.indexOf(tens) : 1) * 10 : 0) +
+    (ones ? digits.indexOf(ones) : 0);
+}
 
 const requiredListingDefaults = [
   "Category: Productivity",
@@ -539,11 +535,12 @@ function updateRawHtmlElementStack(source, elementStack) {
   }
 }
 
-function extractQualifyingMarkdownProse(document) {
+function extractQualifyingMarkdownBlocks(document) {
   // Publication disclosures must be ordinary Markdown prose. markdown-it gives
   // us source-authored HTML boundaries; tracking those elements keeps all of
-  // their contents ineligible without trying to emulate browser CSS.
-  const visible = [];
+  // their contents ineligible without trying to emulate browser CSS. Each
+  // paragraph, list item paragraph, heading or table cell is one block.
+  const blocks = [];
   const rawHtmlElementStack = [];
 
   for (const blockToken of markdown.parse(document ?? "", {})) {
@@ -554,6 +551,7 @@ function extractQualifyingMarkdownProse(document) {
 
     if (blockToken.type !== "inline") continue;
 
+    const visible = [];
     for (const token of blockToken.children ?? []) {
       if (token.type === "html_inline") {
         updateRawHtmlElementStack(token.content, rawHtmlElementStack);
@@ -567,10 +565,15 @@ function extractQualifyingMarkdownProse(document) {
       }
     }
 
-    if (rawHtmlElementStack.length === 0) visible.push(" ");
+    const block = normalizeWhitespace(visible.join("")).trim();
+    if (block) blocks.push(block);
   }
 
-  return normalizeWhitespace(visible.join(" "));
+  return blocks;
+}
+
+function extractQualifyingMarkdownProse(document) {
+  return extractQualifyingMarkdownBlocks(document).join(" ");
 }
 
 function extractMarkdownSection(document, startHeading, endHeading) {
@@ -583,7 +586,25 @@ function extractMarkdownSection(document, startHeading, endHeading) {
   return end === -1 ? afterStart : afterStart.slice(0, end);
 }
 
-export function validatePublicationDocuments(documents) {
+function hasFact(block, fact) {
+  return fact instanceof RegExp
+    ? fact.test(block)
+    : block.toLowerCase().includes(fact.toLowerCase());
+}
+
+/** The first visible block that states every fact, or undefined. */
+export function findDisclosureBlock(document, facts) {
+  return extractQualifyingMarkdownBlocks(document).find((block) =>
+    facts.every((fact) => hasFact(block, fact)),
+  );
+}
+
+/**
+ * Checks the publication documents. Pass `providerNames` (the display names
+ * from the provider catalog) to also check provider counts and lists against
+ * the catalog; without it only the claims' presence is checked.
+ */
+export function validatePublicationDocuments(documents, { providerNames } = {}) {
   const errors = [];
   if (Object.values(documents).some((source) => {
     const content = String(source ?? "");
@@ -624,38 +645,36 @@ export function validatePublicationDocuments(documents) {
     }
   }
 
-  for (const { key, statement, error } of requiredVisibleFaqStatements) {
-    if (!extractQualifyingMarkdownProse(documents[key] ?? "").includes(statement)) {
-      errors.push(error);
+  for (const { key, facts, error } of REQUIRED_DISCLOSURES) {
+    if (!findDisclosureBlock(documents[key], facts)) errors.push(error);
+  }
+
+  for (const { key, pattern, count, listsProviders, label } of PROVIDER_COUNT_CLAIMS) {
+    const block = findDisclosureBlock(documents[key], [pattern]);
+    if (!block) {
+      errors.push(`${label} is missing its provider count.`);
+      continue;
+    }
+    if (!providerNames) continue;
+    const claimed = count(block.match(pattern)[1]);
+    if (claimed !== providerNames.length) {
+      errors.push(
+        `${label} says ${claimed} providers; the catalog has ${providerNames.length}.`,
+      );
+    }
+    const missing = listsProviders
+      ? providerNames.filter((name) => !block.includes(name))
+      : [];
+    if (missing.length > 0) {
+      errors.push(`${label} does not name: ${missing.join(", ")}.`);
     }
   }
 
-  for (const { key, statement, error } of requiredVisibleElevenLabsStatements) {
-    if (!extractQualifyingMarkdownProse(documents[key] ?? "").includes(statement)) {
-      errors.push(error);
-    }
-  }
-
-  for (const { key, statement, error } of requiredVisibleV030Statements) {
-    if (!extractQualifyingMarkdownProse(documents[key] ?? "").includes(statement)) {
-      errors.push(error);
-    }
-  }
-
-  for (const {
-    key,
-    label,
-    statement,
-  } of [
-    { key: "readme", label: "README", statement: releaseChannelStatement },
-    {
-      key: "readmeZh",
-      label: "Simplified Chinese README",
-      statement: releaseChannelStatementZh,
-    },
+  for (const { key, label } of [
+    { key: "readme", label: "README" },
+    { key: "readmeZh", label: "Simplified Chinese README" },
   ]) {
-    const source = documents[key] ?? "";
-    const destinations = extractInlineMarkdownLinkDestinations(source);
+    const destinations = extractInlineMarkdownLinkDestinations(documents[key] ?? "");
     if (!destinations.includes(storeUrl)) {
       errors.push(
         `${label} is missing the canonical Chrome Web Store Markdown link.`,
@@ -664,15 +683,9 @@ export function validatePublicationDocuments(documents) {
     if (!destinations.includes(releaseUrl)) {
       errors.push(`${label} is missing the canonical GitHub release Markdown link.`);
     }
-    if (!extractQualifyingMarkdownProse(source).includes(statement)) {
-      errors.push(`${label} is missing the Chrome Web Store release-lag guidance.`);
-    }
   }
 
-  const privacy = normalizeWhitespace(documents.privacy);
-  const visiblePrivacy = extractQualifyingMarkdownProse(documents.privacy);
   const security = normalizeWhitespace(documents.security);
-  const visibleSecurity = extractQualifyingMarkdownProse(documents.security);
   const listingSource = documents.listing ?? "";
   const listing = normalizeWhitespace(listingSource);
   const visibleListing = extractQualifyingMarkdownProse(listingSource);
@@ -692,32 +705,9 @@ export function validatePublicationDocuments(documents) {
   const visibleDetailedListingZh = extractQualifyingMarkdownProse(
     detailedListingZh,
   );
-
-  if (!privacy.includes(limitedUseStatement)) {
-    errors.push("Privacy policy is missing the Limited Use compliance statement.");
-  }
-
-  if (!visiblePrivacy.includes(historyRetentionStatement)) {
-    errors.push(
-      "Privacy policy is missing the typed per-instance history disclosure.",
-    );
-  }
-
-  if (!security.includes(securityCondition)) {
-    errors.push(
-      "Security policy must make private vulnerability reporting conditional on Security-tab availability.",
-    );
-  }
-
-  if (!security.includes(securityFallback)) {
-    errors.push("Security policy is missing the non-disclosing private-contact fallback.");
-  }
-
-  if (!visibleSecurity.includes(credentialBoundaryStatement)) {
-    errors.push(
-      "Security policy is missing the practical side-panel credential boundary.",
-    );
-  }
+  const namesProvider = (text) =>
+    providerBrandPattern.test(text) ||
+    (providerNames ?? []).some((name) => text.includes(name));
 
   if (security.toLowerCase().includes("never returned to the side panel")) {
     errors.push(
@@ -737,21 +727,9 @@ export function validatePublicationDocuments(documents) {
     }
   }
 
-  if (!visibleListing.includes(paceAvailabilityStatement)) {
-    errors.push(
-      "Store listing is missing the reset-time-or-duration pace qualification.",
-    );
-  }
-
   if (!visibleListing.includes(EXPECTED_DESCRIPTION)) {
     errors.push(
       "Store listing short description must exactly match the manifest description.",
-    );
-  }
-
-  if (!listing.includes(publicRouteGate)) {
-    errors.push(
-      "Store listing must defer public-route verification until after repository visibility is public.",
     );
   }
 
@@ -761,7 +739,7 @@ export function validatePublicationDocuments(documents) {
     );
   }
 
-  if (providerBrandPattern.test(visibleDetailedListing)) {
+  if (namesProvider(visibleDetailedListing)) {
     errors.push(
       "English Store detailed description must not enumerate provider brands.",
     );
@@ -773,7 +751,7 @@ export function validatePublicationDocuments(documents) {
     );
   }
 
-  if (providerBrandPattern.test(visibleDetailedListingZh)) {
+  if (namesProvider(visibleDetailedListingZh)) {
     errors.push(
       "Simplified Chinese Store detailed description must not enumerate provider brands.",
     );
@@ -784,4 +762,29 @@ export function validatePublicationDocuments(documents) {
   }
 
   return errors;
+}
+
+/** Paths of the publication documents, relative to the repository root. */
+export const PUBLICATION_DOCUMENT_PATHS = {
+  readme: "README.md",
+  readmeZh: "README.zh-CN.md",
+  faq: "FAQ.md",
+  faqZh: "FAQ.zh-CN.md",
+  supported: "SUPPORTED_PROVIDERS.md",
+  supportedZh: "SUPPORTED_PROVIDERS.zh-CN.md",
+  privacy: "PRIVACY.md",
+  security: "SECURITY.md",
+  listing: "store-assets/chrome-web-store/listing-en.md",
+  listingZh: "store-assets/chrome-web-store/listing-zh_CN.md",
+  license: "LICENSE",
+};
+
+export async function readPublicationDocuments(root = process.cwd()) {
+  const entries = await Promise.all(
+    Object.entries(PUBLICATION_DOCUMENT_PATHS).map(async ([key, file]) => [
+      key,
+      await readFile(resolve(root, file), "utf8"),
+    ]),
+  );
+  return Object.fromEntries(entries);
 }
