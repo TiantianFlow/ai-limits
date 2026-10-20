@@ -69,6 +69,7 @@ import { NewApiConnectView } from "./views/NewApiConnectView";
 import { usageGroupViews } from "./usage-groups";
 import { balanceMetrics, counterMetrics, quotaMetrics } from "./metrics";
 import { instanceLabels } from "./instance-label";
+import { mergeSubsetOrder, moveInstanceId } from "./arrangement";
 
 export interface ApiKeySubmission {
   providerKind: ApiKeyProviderKind;
@@ -102,6 +103,8 @@ export interface CockpitProps {
     userLabel?: string,
   ) => Promise<boolean>;
   onDeleteLocalData?: () => void;
+  onReorderInstances?: (instanceIds: ProviderInstanceId[]) => void;
+  onSetInstanceHidden?: (instanceId: ProviderInstanceId, hidden: boolean) => void;
 }
 
 const STALE_AFTER_MS = 35 * 60 * 1_000;
@@ -442,6 +445,8 @@ export function Cockpit({
   onDisconnectInstance = () => undefined,
   onRenameInstance = async () => true,
   onDeleteLocalData = () => undefined,
+  onReorderInstances = () => undefined,
+  onSetInstanceHidden = () => undefined,
 }: CockpitProps) {
   const mode = state.preferences.displayMode;
   const [navigation, setNavigation] = useState<CockpitNavigationState>({
@@ -606,6 +611,7 @@ export function Cockpit({
       instanceId: instance.id,
       providerKind: instance.providerKind,
       card,
+      hidden: instance.hidden === true,
       needsApiKeyReplacement:
         providerAvailability(state, instance.providerKind).credentialKind === "api-key" &&
         (failureCategory === "credential_invalid" ||
@@ -613,6 +619,7 @@ export function Cockpit({
     };
   });
   const isFirstRun = view.name === "overview" && connectedInstances.length === 0;
+  const allInstanceIds = state.instances.map(({ id }) => id);
   const previousScreen = navigation.backStack.at(-1);
   const labelForInstance = (instanceId: ProviderInstanceId): string => {
     const instance = state.instances.find((candidate) => candidate.id === instanceId);
@@ -844,6 +851,10 @@ export function Cockpit({
           onReplaceApiKey={(providerKind, instanceId) =>
             openApiKeyConnect(providerKind, "replace", instanceId)
           }
+          onMoveInstance={(instanceId, offset) =>
+            onReorderInstances(moveInstanceId(allInstanceIds, instanceId, offset))
+          }
+          onSetInstanceHidden={onSetInstanceHidden}
           onDeleteLocalData={onDeleteLocalData}
           onConfirmDeleteChange={setConfirmDelete}
         />
@@ -924,6 +935,10 @@ export function Cockpit({
           onReplaceApiKey={(providerKind, instanceId) =>
             openApiKeyConnect(providerKind, "replace", instanceId)
           }
+          onReorderProviders={(instanceIds) =>
+            onReorderInstances(mergeSubsetOrder(allInstanceIds, instanceIds))
+          }
+          onSetProviderHidden={onSetInstanceHidden}
         />
       )}
       {view.name !== "overview" || isFirstRun ? (

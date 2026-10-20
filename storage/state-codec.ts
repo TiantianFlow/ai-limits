@@ -589,6 +589,7 @@ function normalizeInstance(
     id: value.id,
     providerKind: value.providerKind,
     ...(userLabel === undefined ? {} : { userLabel }),
+    ...(value.hidden === true ? { hidden: true as const } : {}),
     config,
     ...(isConnectionRevision(value.connectionRevision)
       ? { connectionRevision: value.connectionRevision }

@@ -36,6 +36,7 @@ import { localizeProviderName } from "../../i18n/presentation";
 import { Cockpit } from "./Cockpit";
 import type { ApiKeySubmission } from "./Cockpit";
 import { instanceLabels } from "./instance-label";
+import { withInstanceHidden, withInstanceOrder } from "./arrangement";
 import type { ApiKeyConnectAttemptResult } from "./views/ApiKeyConnectView";
 
 interface Announcement {
@@ -137,6 +138,10 @@ export function App() {
   const stateRequestSequence = useRef(0);
   const appliedStateRequestSequence = useRef(0);
   const displayMutationSequence = useRef(0);
+  const arrangementMutationSequence = useRef(0);
+  const pendingArrangements = useRef(
+    new Map<number, (state: AppViewState) => AppViewState>(),
+  );
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -155,7 +160,14 @@ export function App() {
   const [providerOperations, setProviderOperations] =
     useState<ProviderOperations>({});
 
-  const commitViewState = (next: AppViewState) => {
+  // Every view update can carry state read before an in-flight arrangement
+  // was saved, so unconfirmed moves and visibility changes are re-applied on
+  // top of it and a moved or hidden provider never snaps back.
+  const commitViewState = (state: AppViewState) => {
+    const next = [...pendingArrangements.current.values()].reduce(
+      (current, project) => project(current),
+      state,
+    );
     viewStateRef.current = next;
     setViewState(next);
   };
@@ -342,6 +354,61 @@ export function App() {
         }
       });
   };
+
+  // Order and visibility apply optimistically, like the display mode. Only the
+  // latest arrangement response may replace the view, and commitViewState keeps
+  // unconfirmed changes applied over any other update meanwhile.
+  const mutateArrangement = async (
+    project: (state: AppViewState) => AppViewState,
+    command: RuntimeCommand,
+    failureMessage: string,
+  ) => {
+    const prior = viewStateRef.current;
+    if (!prior) return;
+    const mutation = ++arrangementMutationSequence.current;
+    pendingArrangements.current.set(mutation, project);
+    clearAnnouncement();
+    commitViewState(prior);
+    try {
+      const next = parseAppViewState(await browser.runtime.sendMessage(command));
+      pendingArrangements.current.delete(mutation);
+      if (mutation === arrangementMutationSequence.current) {
+        // This response was read after the save, so a reload requested
+        // before it arrived is older and must not replace it.
+        appliedStateRequestSequence.current = stateRequestSequence.current;
+        commitViewState(next);
+      }
+    } catch {
+      pendingArrangements.current.delete(mutation);
+      try {
+        applyRequestedViewState(await requestViewState());
+      } catch {
+        // The optimistic view stays until the next storage change reloads it.
+      }
+      announce(failureMessage, "attention");
+    }
+  };
+
+  const handleReorderInstances = (instanceIds: ProviderInstanceId[]) =>
+    mutateArrangement(
+      (state) => withInstanceOrder(state, instanceIds),
+      { type: "REORDER_INSTANCES", instanceIds },
+      l10n.t("announcements.arrangeFailed"),
+    );
+
+  const handleSetInstanceHidden = (
+    instanceId: ProviderInstanceId,
+    hidden: boolean,
+  ) =>
+    mutateArrangement(
+      (state) => withInstanceHidden(state, instanceId, hidden),
+      { type: "SET_INSTANCE_HIDDEN", instanceId, hidden },
+      l10n.t("announcements.visibilityFailed", {
+        label:
+          presentationLabel(viewStateRef.current, instanceId) ??
+          l10n.t("common.provider"),
+      }),
+    );
 
   const abandonPermissionIntent = async (permissionIntentId: string) => {
     try {
@@ -825,6 +892,10 @@ export function App() {
       onDisconnectInstance={(instanceId) => void handleDisconnectInstance(instanceId)}
       onRenameInstance={handleRenameInstance}
       onDeleteLocalData={() => void handleDeleteLocalData()}
+      onReorderInstances={(instanceIds) => void handleReorderInstances(instanceIds)}
+      onSetInstanceHidden={(instanceId, hidden) =>
+        void handleSetInstanceHidden(instanceId, hidden)
+      }
     />
   );
 }

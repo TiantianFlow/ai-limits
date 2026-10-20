@@ -119,6 +119,8 @@ export interface ProviderService {
   ): Promise<RefreshReport>;
   refreshAll(trigger: "manual_all" | "scheduled"): Promise<RefreshReport>;
   renameInstance(instanceId: ProviderInstanceId, userLabel?: string): Promise<void>;
+  setInstanceHidden(instanceId: ProviderInstanceId, hidden: boolean): Promise<void>;
+  reorderInstances(instanceIds: readonly ProviderInstanceId[]): Promise<void>;
   disconnectInstance(instanceId: ProviderInstanceId): Promise<DisconnectInstanceResult>;
   reconcilePermissions(change?: Browser.permissions.Permissions): Promise<void>;
   deleteAllLocalData(): Promise<{
@@ -810,6 +812,10 @@ export function createProviderService(
       }
       await connectionRepository.rename(instanceId, userLabel);
     },
+    async setInstanceHidden(instanceId, hidden) {
+      await connectionRepository.setHidden(instanceId, hidden);
+    },
+    reorderInstances: (instanceIds) => connectionRepository.reorder(instanceIds),
     async disconnectInstance(instanceId) {
       return withPermissionOwnershipLock("permissions", async () =>
         withInstanceConnectionLock(instanceId, async () => {
