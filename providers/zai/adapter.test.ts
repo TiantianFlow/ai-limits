@@ -96,7 +96,11 @@ describe("GLM Coding Plan adapter", () => {
   test("reads the 5-hour, weekly, and MCP allowances with reset times and the plan", async () => {
     const controller = new AbortController();
     const fetch = fetchReturning(
-      response(envelope([weeklyCredits, monthlyMcp, fiveHourCredits])),
+      response(
+        envelope([weeklyCredits, monthlyMcp, fiveHourCredits], {
+          planName: "Synthetic Account Team Plan",
+        }),
+      ),
     );
 
     const result = await zaiAdapter.collect(

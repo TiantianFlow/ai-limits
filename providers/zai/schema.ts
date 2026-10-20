@@ -25,7 +25,6 @@ export const zaiQuotaEnvelopeSchema = z.object({
   data: z
     .object({
       level: z.string().nullable().optional(),
-      planName: z.string().nullable().optional(),
       limits: z.array(z.unknown()),
     })
     .nullable()

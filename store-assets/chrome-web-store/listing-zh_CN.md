@@ -42,7 +42,7 @@ AI Limits 把你的 AI 订阅用量集中显示在同一个 Chrome 侧边栏中�
 
 每个用量周期都可以打开自己的本地历史界面，方便你直接在自己的设备上查看用量随时间的变化趋势。
 
-AI Limits 支持 21 个 AI 服务。你可以逐个连接实际使用的服务；每项连接都需要主动启用。基于浏览器会话的服务使用你已登录的 Chrome 账号；基于 API 的服务使用你自行提供的密钥。
+AI Limits 支持 22 个 AI 服务。你可以逐个连接实际使用的服务；每项连接都需要主动启用。基于浏览器会话的服务使用你已登录的 Chrome 账号；基于 API 的服务使用你自行提供的密钥。
 
 完整的受支持服务、连接方式和已知限制：
 https://github.com/TiantianFlow/ai-limits/blob/main/SUPPORTED_PROVIDERS.zh-CN.md

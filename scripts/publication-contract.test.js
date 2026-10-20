@@ -177,6 +177,17 @@ const elevenLabsPublicationStatements = [
     error:
       "Store listing reviewer flow must expect twenty First Run provider rows.",
   },
+  {
+    key: "listing",
+    statement: "AI Limits supports 22 AI services.",
+    error: "Store listing detailed description must state the 22-service count.",
+  },
+  {
+    key: "listingZh",
+    statement: "AI Limits 支持 22 个 AI 服务。",
+    error:
+      "Simplified Chinese store listing detailed description must state the 22-service count.",
+  },
 ];
 const v030PublicationStatements = [
   {
@@ -415,6 +426,9 @@ const valid = {
     "## Permission justifications",
   ].join("\n"),
   listingZh: [
+    ...elevenLabsPublicationStatements
+      .filter(({ key }) => key === "listingZh")
+      .map(({ statement }) => statement),
     "## 详细说明",
     supportedProvidersUrlZh,
     "## 权限说明",

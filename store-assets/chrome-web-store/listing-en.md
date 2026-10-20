@@ -64,7 +64,7 @@ compares quota consumed with elapsed time.
 Every quota window can open its own local History screen, so you can see how
 your usage has trended over time, right on your device.
 
-AI Limits supports 21 AI services. Connect only the services you use: every
+AI Limits supports 22 AI services. Connect only the services you use: every
 connection is opt-in. Browser-session services use the account already signed
 in to Chrome, while API services use a key you provide.
 
@@ -263,7 +263,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Twenty-one-provider test flow
+## Twenty-two-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and

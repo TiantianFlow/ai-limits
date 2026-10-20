@@ -958,7 +958,7 @@ providers:
   zai:
     name: GLM
     connect: 连接 GLM
-    connectionDisclosure: 使用你在 Z.ai 创建的 GLM Coding Plan API 密钥，将其保存在 AI Limits 本地，并大约每 15 分钟刷新一次。
+    connectionDisclosure: 使用你在 Z.ai 创建的 GLM Coding Plan API 密钥，将其保存在 AI Limits 本地，只发送到 api.z.ai，并大约每 15 分钟刷新一次。Z.ai 条款要求不要在客户端代码中暴露密钥，并将该套餐限定于受支持的工具，因此连接后你的 Z.ai 账户可能存在风险。
     capabilities:
       rateLimits: 速率限制
       mcpTools: MCP 工具

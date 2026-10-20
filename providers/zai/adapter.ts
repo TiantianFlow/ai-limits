@@ -203,12 +203,9 @@ function mcpMetric(limit: ZaiQuotaLimit, now: number): QuotaMetric {
   );
 }
 
-function planLabel(
-  level: string | null | undefined,
-  planName: string | null | undefined,
-): string | undefined {
-  const label = planName?.trim() || level?.trim();
-  return label || undefined;
+// Only the plan level is kept; free-text plan names are not stored.
+function planLabel(level: string | null | undefined): string | undefined {
+  return level?.trim() || undefined;
 }
 
 function snapshotFromBody(
@@ -253,7 +250,7 @@ function snapshotFromBody(
     return { health: { kind: "provider_changed" } };
   }
 
-  const label = planLabel(data.level, data.planName);
+  const label = planLabel(data.level);
   return {
     snapshot: {
       providerKind: "zai",

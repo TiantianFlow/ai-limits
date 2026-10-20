@@ -191,6 +191,17 @@ const requiredVisibleElevenLabsStatements = [
     error:
       "Store listing reviewer flow must expect twenty First Run provider rows.",
   },
+  {
+    key: "listing",
+    statement: "AI Limits supports 22 AI services.",
+    error: "Store listing detailed description must state the 22-service count.",
+  },
+  {
+    key: "listingZh",
+    statement: "AI Limits 支持 22 个 AI 服务。",
+    error:
+      "Simplified Chinese store listing detailed description must state the 22-service count.",
+  },
 ];
 const requiredVisibleV030Statements = [
   {

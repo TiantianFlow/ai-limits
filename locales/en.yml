@@ -958,7 +958,7 @@ providers:
   zai:
     name: GLM
     connect: Connect GLM
-    connectionDisclosure: Uses your GLM Coding Plan API key from Z.ai, stores it locally in AI Limits, and refreshes about every 15 minutes.
+    connectionDisclosure: Uses your GLM Coding Plan API key from Z.ai, stores it locally in AI Limits, sends it only to api.z.ai, and refreshes about every 15 minutes. Z.ai's terms ask that keys stay out of client-side code and limit the plan to supported tools, so connecting may put your Z.ai account at risk.
     capabilities:
       rateLimits: Rate limits
       mcpTools: MCP tools
