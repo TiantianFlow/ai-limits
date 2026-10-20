@@ -191,6 +191,7 @@ export function projectAppViewState(state: InstanceAppState): AppViewState {
       ...(instance.userLabel === undefined
         ? {}
         : { userLabel: instance.userLabel }),
+      ...(instance.hidden ? { hidden: true as const } : {}),
       ...(instance.config.kind === "dynamic-origin"
         ? {
             baseUrl: instance.config.baseUrl,

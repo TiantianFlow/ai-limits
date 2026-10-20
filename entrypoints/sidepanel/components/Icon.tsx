@@ -6,6 +6,7 @@ export type IconName =
   | "chevron-right"
   | "code"
   | "feedback"
+  | "grip"
   | "info"
   | "key"
   | "minus"
@@ -89,6 +90,14 @@ export function Icon({ name, className = "" }: IconProps) {
           <path {...common} d="M8 4.5H4.5V15.5H15.5V12" />
           <path {...common} d="M10.5 4.5H15.5V9.5" />
           <path {...common} d="m9.2 10.8 6-6" />
+        </>
+      ) : name === "grip" ? (
+        <>
+          {[6.5, 13.5].flatMap((cx) =>
+            [5, 10, 15].map((cy) => (
+              <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.3" fill="currentColor" />
+            )),
+          )}
         </>
       ) : name === "code" ? (
         <path {...common} d="m7.5 5-5 5 5 5m5-10 5 5-5 5" />

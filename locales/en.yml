@@ -106,6 +106,25 @@ overview:
   replaceKey: Replace key
   replaceKeyNamed: "Replace {label} API key"
   refreshNamed: "Refresh {label}"
+  arrange: Arrange
+  arrangeTitle: Arrange providers
+  arrangeHint: Drag a handle, or focus it and press ↑ or ↓. Hidden providers stay connected and keep refreshing.
+  done: Done
+  moveNamed: "Move {label}"
+  showOnOverviewNamed: "Show {label} on Overview"
+  hiddenCount:
+    zero: "{count} hidden"
+    one: "{count} hidden"
+    two: "{count} hidden"
+    few: "{count} hidden"
+    many: "{count} hidden"
+    other: "{count} hidden"
+  show: Show
+  showNamed: "Show {label}"
+  allHiddenTitle: Every provider is hidden
+  allHiddenCopy: They are still connected and keep refreshing. Show them again here or in Settings.
+  showAll: Show all
+  movedTo: "{label} moved to position {position} of {total}."
 
 providerDetail:
   screenUnavailable: Provider unavailable
@@ -389,6 +408,13 @@ settings:
   replaceKeyNamed: "Replace {label} API key"
   reconnectNamed: "Reconnect {label}"
   disconnectNamed: "Disconnect {label}"
+  showOnOverview: Show on Overview
+  showOnOverviewNamed: "Show on Overview: {label}"
+  moveUp: Move up
+  moveDown: Move down
+  moveUpNamed: "Move {label} up"
+  moveDownNamed: "Move {label} down"
+  orderExplanation: Providers appear on the Overview in this order. Hidden providers stay connected and keep refreshing.
   deleteTitle: Delete all local data
   deleteExplanation: Removes every connection, all retained history, and all settings from this browser. There is no cloud copy, so this cannot be undone.
   confirmGroup: Confirm local data deletion
@@ -512,6 +538,8 @@ announcements:
   disconnectFailed: "Couldn’t disconnect {label}."
   renamed: "Renamed connection to {label}."
   renameFailed: "Couldn’t rename {label}."
+  arrangeFailed: Couldn’t save the provider order. Try again.
+  visibilityFailed: "Couldn’t update {label}. Try again."
   localDataDeleted: Local usage data deleted and providers disconnected.
   localDataPartial: Local usage data deleted. Some provider access could not be removed.
   localDataFailed: Couldn’t delete local data.

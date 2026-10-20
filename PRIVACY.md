@@ -201,7 +201,7 @@ metrics; raw provider responses are not persisted.
 AI Limits stores one application-state record in `chrome.storage.local`. It
 contains display, language, and automatic-refresh preferences, per-instance nonsecret
 configuration such as a normalized configurable-provider base URL and label, provider
-permission state, the normalized usage fields listed above, History, and
+order and Overview visibility, provider permission state, the normalized usage fields listed above, History, and
 sanitized refresh-attempt metadata. It does not contain provider cookies,
 browser-session credentials, or API keys.
 
