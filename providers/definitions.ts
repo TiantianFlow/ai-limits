@@ -186,4 +186,11 @@ export const providerDefinitions = {
     optionalOrigins: ["https://api.z.ai/*"],
     optionalPermissions: [],
   },
+  warp: {
+    cardinality: "single",
+    credentialKind: "api-key",
+    configKind: "fixed",
+    optionalOrigins: ["https://app.warp.dev/*"],
+    optionalPermissions: [],
+  },
 } as const satisfies { [Kind in ProviderKind]: ProviderDefinition };

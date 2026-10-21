@@ -41,7 +41,7 @@ Regeneration and validation instructions are in
 
 AI Limits gives a user one Chrome side panel for viewing current subscription
 usage as **Used** or **Left**, reset timing, pace, and local quota-history
-graphs across twenty-two supported services. Browser-session services use an account
+graphs across twenty-three supported services. Browser-session services use an account
 already signed in within the user's browser profile; API-key services use a key
 the user connects through guided setup.
 
@@ -72,7 +72,7 @@ Arrange the Overview your way: drag providers into the order you want, or hide
 one without disconnecting it. Hidden providers stay connected and keep
 refreshing.
 
-AI Limits supports 22 AI services. Connect only the services you use: every
+AI Limits supports 23 AI services. Connect only the services you use: every
 connection is opt-in. Browser-session services use the account already signed
 in to Chrome, while API services use a key you provide.
 
@@ -144,7 +144,7 @@ These origins are requested one provider at a time after the user clicks
 - `https://api.deepseek.com/*`, `https://api.moonshot.ai/*`,
   `https://api.deepinfra.com/*`, `https://api.fireworks.ai/*`,
   `https://api.openai.com/*`, `https://api.groq.com/*`,
-  `https://openrouter.ai/*`, `https://api.factory.ai/*`, and `https://api.z.ai/*`: send the selected provider's saved key only to its
+  `https://openrouter.ai/*`, `https://api.factory.ai/*`, `https://api.z.ai/*`, and `https://app.warp.dev/*`: send the selected provider's saved key only to its
   fixed read-only balance, usage, metrics, or billing endpoints.
 - `https://*/*`: optional dynamic host capability for New API, LiteLLM,
   ClawRouter, sub2api, and LLM Proxy instances. The extension never requests
@@ -270,11 +270,11 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
   the homepage, privacy policy, and support URLs are reachable in a signed-out
   browser.
 
-## Twenty-two-provider test flow
+## Twenty-three-provider test flow
 
 1. Install the submitted build, or extract the ZIP and load its root as an
    unpacked extension. Pin AI Limits if desired, select its toolbar action, and
-   confirm First Run opens with twenty-two opt-in provider rows and no prefilled usage.
+   confirm First Run opens with twenty-three opt-in provider rows and no prefilled usage.
 2. **ChatGPT:** sign in at `chatgpt.com`, click **Connect** on ChatGPT, approve
    only the ChatGPT origin, and confirm a plan plus available quota windows or
    credits appears. Use the card's **Refresh** action once.
@@ -384,7 +384,11 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
     `https://api.z.ai/*`, and confirm the 5-hour and weekly Coding Plan
     allowances, plus the MCP tool allowance when reported. No Z.ai tab should
     open.
-24. Use the header refresh and confirm connected providers retain their previous
+24. **Warp:** connect a temporary Warp API key, approve only
+    `https://app.warp.dev/*`, and confirm included credits with the reset time,
+    plus the add-on credit balance when the account holds add-on credits. No
+    Warp tab should open.
+25. Use the header refresh and confirm connected providers retain their previous
    visible data while refreshing. Open a quota window's **History** action and
    confirm the dedicated screen appears, then confirm a successful refresh adds
    quota history while counter/spend samples remain ungraphed. For a

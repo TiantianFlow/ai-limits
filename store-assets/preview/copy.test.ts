@@ -199,20 +199,20 @@ describe("store artwork copy", () => {
     expect(previewContent.en.social).toEqual({
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "22 supported AI services · Multiple New API instances",
+      description: "23 supported AI services · Multiple New API instances",
     });
     expect(previewContent.en.socialNotes).toEqual([
       "Used or Left · Reset timing · Pace · Local history",
       "Local history. No remote backend.",
     ]);
     expect(previewContent.zh_CN.social.description).toBe(
-      "支持 22 个 AI 服务 · 多个 New API 实例",
+      "支持 23 个 AI 服务 · 多个 New API 实例",
     );
   });
 
   it("states the supported-service count instead of naming brands in the overview artwork", () => {
-    expect(previewContent.en.providerLine).toBe("22 supported AI services");
-    expect(previewContent.zh_CN.providerLine).toBe("支持 22 个 AI 服务");
+    expect(previewContent.en.providerLine).toBe("23 supported AI services");
+    expect(previewContent.zh_CN.providerLine).toBe("支持 23 个 AI 服务");
   });
 
   it("makes multi-instance New API support visible in both overview languages", () => {

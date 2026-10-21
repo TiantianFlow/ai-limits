@@ -254,6 +254,16 @@ are used only to identify the corresponding provider beside its visible name.
 - Ownership: AI Limits contributors.
 - Conditions: available under this repository's MIT license.
 
+## `warp.svg`
+
+- Source: original AI Limits mark for the Warp provider: a plain "W"
+  letterform authored for this project, not a copy of Warp's logo.
+- Retrieved: not applicable.
+- Modified: not applicable.
+- SHA-256: `dd1d9b864e94b7f49bd4ef6df5b29c1560012001703de4773eee4b4b3e728494`.
+- Ownership: AI Limits contributors.
+- Conditions: available under this repository's MIT license.
+
 ## `newapi.svg`, `litellm.svg`, `clawrouter.svg`, `sub2api.svg`, and `llmproxy.svg`
 
 - Source: original AI Limits monograms, authored for this repository because

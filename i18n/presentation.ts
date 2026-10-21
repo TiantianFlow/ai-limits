@@ -135,6 +135,10 @@ const KNOWN_METRIC_KEYS: Partial<
     weekly: "metrics.zai.weekly",
     mcp: "metrics.zai.mcp",
   },
+  warp: {
+    included: "metrics.warp.included",
+    "add-on": "metrics.warp.addOn",
+  },
 };
 
 const KNOWN_GROUP_KEYS: Record<string, string> = {
@@ -224,6 +228,7 @@ const CAPABILITY_IDS: Record<ProviderKind, readonly string[]> = {
   openrouter: ["balance", "keyBudget"],
   factory: ["rateLimits", "extraUsage"],
   zai: ["rateLimits", "mcpTools"],
+  warp: ["includedCredits", "addOnCredits"],
 };
 
 const DURATION_METRIC = /^(\d+(?:\.\d+)?)-(day|hour)$/;

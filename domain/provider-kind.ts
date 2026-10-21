@@ -21,6 +21,7 @@ export const providerKinds = [
   "openrouter",
   "factory",
   "zai",
+  "warp",
 ] as const;
 
 export type ProviderKind = (typeof providerKinds)[number];
@@ -48,6 +49,7 @@ export const apiKeyProviderKinds = [
   "openrouter",
   "factory",
   "zai",
+  "warp",
 ] as const;
 export type ApiKeyProviderKind = (typeof apiKeyProviderKinds)[number];
 
