@@ -807,6 +807,9 @@ metrics:
     fiveHour: 5 小时
     weekly: 每周
     mcp: MCP 工具
+  warp:
+    included: 包含的额度
+    addOn: 附加额度
   grok:
     weeklyPool: 每周用量池
     monthlyPool: 每月用量池
@@ -1006,6 +1009,13 @@ providers:
       lite: Lite
       pro: Pro
       max: Max
+  warp:
+    name: Warp
+    connect: 连接 Warp
+    connectionDisclosure: 使用你创建的 Warp API 密钥，将其保存在 AI Limits 本地，只发送到 app.warp.dev，并大约每 15 分钟刷新一次。Warp 密钥无法限定为只读，并且可以启动由你付费的代理运行，因此请创建一个设有过期时间的专用密钥。
+    capabilities:
+      includedCredits: 包含的额度
+      addOnCredits: 附加额度
 
 accessibility:
   refreshProvider: "刷新 {provider}"

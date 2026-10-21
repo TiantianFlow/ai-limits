@@ -807,6 +807,9 @@ metrics:
     fiveHour: 5-hour
     weekly: Weekly
     mcp: MCP tools
+  warp:
+    included: Included credits
+    addOn: Add-on credits
   grok:
     weeklyPool: Weekly usage pool
     monthlyPool: Monthly usage pool
@@ -1006,6 +1009,13 @@ providers:
       lite: Lite
       pro: Pro
       max: Max
+  warp:
+    name: Warp
+    connect: Connect Warp
+    connectionDisclosure: Uses a Warp API key you create, stores it locally in AI Limits, sends it only to app.warp.dev, and refreshes about every 15 minutes. Warp keys cannot be limited to read-only access and can start agent runs billed to you, so create a dedicated key with an expiry.
+    capabilities:
+      includedCredits: Included credits
+      addOnCredits: Add-on credits
 
 accessibility:
   refreshProvider: "Refresh {provider}"

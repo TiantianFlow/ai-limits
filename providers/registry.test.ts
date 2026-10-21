@@ -12,6 +12,7 @@ import { deepSeekAdapter } from "./deepseek/adapter";
 import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { factoryAdapter } from "./factory/adapter";
 import { zaiAdapter } from "./zai/adapter";
+import { warpAdapter } from "./warp/adapter";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokAdapter } from "./grok/adapter";
 import { groqCloudAdapter } from "./groqcloud/adapter";
@@ -139,6 +140,7 @@ describe("provider registry", () => {
       "openrouter",
       "factory",
       "zai",
+      "warp",
     ]);
     expect(Object.keys(providerRegistry)).toEqual(providerKinds);
 
@@ -386,6 +388,15 @@ describe("provider registry", () => {
         rejected: undefined,
         permissions: { origins: ["https://api.z.ai/*"] },
       },
+      {
+        kind: "warp",
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        accepted: fixed,
+        rejected: undefined,
+        permissions: { origins: ["https://app.warp.dev/*"] },
+      },
     ]);
 
     expect(providerRegistry.newapi.normalizeConfig({
@@ -574,6 +585,13 @@ describe("provider registry", () => {
         optionalOrigins: ["https://api.z.ai/*"],
         optionalPermissions: [],
       },
+      warp: {
+        cardinality: "single",
+        credentialKind: "api-key",
+        configKind: "fixed",
+        optionalOrigins: ["https://app.warp.dev/*"],
+        optionalPermissions: [],
+      },
     });
   });
 
@@ -600,6 +618,7 @@ describe("provider registry", () => {
       openrouter: openRouterAdapter,
       factory: factoryAdapter,
       zai: zaiAdapter,
+      warp: warpAdapter,
     };
     const adapterSpies = Object.fromEntries(
       Object.entries(adapters).map(([kind, adapter]) => [

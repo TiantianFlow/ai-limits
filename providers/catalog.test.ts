@@ -41,6 +41,7 @@ describe("provider catalog", () => {
       "openrouter",
       "factory",
       "zai",
+      "warp",
     ];
     const allKinds: ProviderKind[] = [...browserSessionKinds, ...apiKeyKinds];
 
@@ -181,6 +182,11 @@ describe("provider catalog", () => {
         markPath: "/provider-marks/zai.svg",
         apiKeySetupUrl: "https://z.ai/manage-apikey/apikey-list",
       },
+      {
+        providerId: "warp",
+        markPath: "/provider-marks/warp.svg",
+        apiKeySetupUrl: "https://oz.warp.dev/settings",
+      },
     ]);
   });
 
@@ -268,6 +274,7 @@ describe("provider catalog", () => {
     expect(isApiKeyProviderKind("openrouter")).toBe(true);
     expect(isApiKeyProviderKind("factory")).toBe(true);
     expect(isApiKeyProviderKind("zai")).toBe(true);
+    expect(isApiKeyProviderKind("warp")).toBe(true);
     expect(isApiKeyProviderKind("chatgpt")).toBe(false);
     expect(isApiKeyProviderKind("unknown")).toBe(false);
     expect(isApiKeyProviderKind(undefined)).toBe(false);

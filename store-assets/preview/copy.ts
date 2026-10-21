@@ -277,10 +277,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "22 supported AI services · Multiple New API instances",
+      description: "23 supported AI services · Multiple New API instances",
     },
     chromeSidePanelLabel: "Chrome side panel",
-    providerLine: "22 supported AI services",
+    providerLine: "23 supported AI services",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
       "Provider access is opt-in",
@@ -327,10 +327,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
-      description: "支持 22 个 AI 服务 · 多个 New API 实例",
+      description: "支持 23 个 AI 服务 · 多个 New API 实例",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
-    providerLine: "支持 22 个 AI 服务",
+    providerLine: "支持 23 个 AI 服务",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
       "服务访问需主动授权",

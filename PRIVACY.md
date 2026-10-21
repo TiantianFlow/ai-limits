@@ -176,7 +176,7 @@ the selected provider. Each configured instance keeps independent
 credentials, nonsecret configuration, normalized usage, and History.
 
 DeepSeek, Moonshot, DeepInfra, Fireworks, OpenAI, GroqCloud, OpenRouter,
-Droid, and GLM use user-created API keys at fixed provider API origins. OpenAI here is
+Droid, GLM, and Warp use user-created API keys at fixed provider API origins. OpenAI here is
 the Platform organization and developer billing API, not the ChatGPT consumer
 session. Droid is Factory's coding product, not an organization-admin credits
 API. AI Limits sends those keys
@@ -187,8 +187,9 @@ endpoints, Fireworks' `api.fireworks.ai/v1/accounts` and selected-account
 `/billing/summary` endpoint, OpenAI's organization cost and completion-usage
 endpoints or legacy credit-grants fallback, GroqCloud's Prometheus query
 endpoint, OpenRouter's `/api/v1/credits` and `/api/v1/key` endpoints,
-Droid's `api.factory.ai/api/billing/limits` request, or GLM's
-`api.z.ai/api/monitor/usage/quota/limit` request. When that Droid response
+Droid's `api.factory.ai/api/billing/limits` request, GLM's
+`api.z.ai/api/monitor/usage/quota/limit` request, or Warp's
+`app.warp.dev/graphql/v2?op=GetRequestLimitInfo` request. When that Droid response
 is not a token-rate-limits payload, AI Limits instead reads
 `api.factory.ai/api/organization/subscription/usage`. It may also read
 `api.factory.ai/api/app/auth/me` for a plan label and does not store the
@@ -200,7 +201,13 @@ usage plugin makes; it is not a documented public API. Z.ai's terms ask that
 keys not be exposed in browser or other client-side code and limit the Coding
 Plan to officially supported tools. Connecting GLM means accepting that the key
 is held in AI Limits' local credential vault and that Z.ai may treat this use
-as outside those terms, which could affect the user's Z.ai account.
+as outside those terms, which could affect the user's Z.ai account. The Warp
+key is sent only as an Authorization bearer token in that one read-only
+GraphQL query, which Warp's own open-source client sends; it is not a documented
+public API. The query asks only whether the plan is unlimited, for credit
+counts, refresh timing, add-on credit amounts, types, and expirations, and for
+any error message. Warp API keys cannot be limited to read-only
+access, so AI Limits suggests creating a dedicated key with an expiry.
 These
 read-only responses are normalized into balance, quota, counter, or spend
 metrics; raw provider responses are not persisted.

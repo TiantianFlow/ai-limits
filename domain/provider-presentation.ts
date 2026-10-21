@@ -165,6 +165,13 @@ export const providerCatalog = {
       apiKeySetupUrl: "https://z.ai/manage-apikey/apikey-list",
     },
   },
+  warp: {
+    displayName: "Warp",
+    presentation: {
+      markPath: "/provider-marks/warp.svg",
+      apiKeySetupUrl: "https://oz.warp.dev/settings",
+    },
+  },
 } as const;
 
 export type ProviderBalanceCategory =
@@ -195,6 +202,7 @@ export const providerBalanceCategories = {
   openrouter: "balance-primary",
   factory: "pool-primary",
   zai: "none",
+  warp: "pool-primary",
 } as const satisfies Record<ProviderKind, ProviderBalanceCategory>;
 
 export const providerNames = Object.fromEntries(

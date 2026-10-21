@@ -19,7 +19,7 @@ const repositoryOwnerPatterns = [
   /https:\/\/img\.shields\.io\/github\/(?:license|v\/release)\/([^/\s)]+)\/ai-limits\b/gi,
 ];
 const providerBrandPattern =
-  /\b(?:ChatGPT|Claude|Kimi|Cursor|Grok|Mistral|Perplexity|ElevenLabs|New API|LiteLLM|ClawRouter|sub2api|LLM Proxy|DeepSeek|Moonshot|DeepInfra|Fireworks|OpenAI|GroqCloud|OpenRouter|Droid|GLM|Z\.ai)\b/i;
+  /\b(?:ChatGPT|Claude|Kimi|Cursor|Grok|Mistral|Perplexity|ElevenLabs|New API|LiteLLM|ClawRouter|sub2api|LLM Proxy|DeepSeek|Moonshot|DeepInfra|Fireworks|OpenAI|GroqCloud|OpenRouter|Droid|GLM|Z\.ai|Warp)\b/i;
 
 /**
  * Disclosures the Chrome Web Store review and the privacy policy rely on. Each
