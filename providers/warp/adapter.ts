@@ -40,6 +40,7 @@ const QUERY = `query GetRequestLimitInfo($requestContext: RequestContext!) {
           requestLimitRefreshDuration
         }
         bonusGrants {
+          grantType
           requestCreditsGranted
           requestCreditsRemaining
           expiration
@@ -47,6 +48,7 @@ const QUERY = `query GetRequestLimitInfo($requestContext: RequestContext!) {
         workspaces {
           bonusGrantsInfo {
             grants {
+              grantType
               requestCreditsGranted
               requestCreditsRemaining
               expiration
@@ -70,7 +72,8 @@ const REFRESH_DURATION_MS: Record<string, number> = {
 };
 
 // Warp reports some authentication failures as GraphQL errors on HTTP 200.
-const AUTH_ERROR = /unauthori[sz]ed|unauthenticated|not authenticated|invalid (?:api )?(?:key|token)|expired/i;
+const AUTH_ERROR =
+  /unauthori[sz]ed|unauthenticated|not authenticated|invalid (?:api )?(?:key|token)|(?:api key|token|session) (?:has )?expired/i;
 
 function requestBody(): string {
   // OS and client fields are optional; none are claimed for a browser caller.
@@ -220,6 +223,8 @@ function addOnBalance(
   now: number,
 ): BalanceMetric | undefined {
   const active = grants.filter((grant) => {
+    // Ambient-only grants pay only for Warp's background agent runs.
+    if (grant.grantType === "AMBIENT_ONLY") return false;
     const expiresAt = timestamp(grant.expiration);
     return expiresAt === undefined || expiresAt > now;
   });

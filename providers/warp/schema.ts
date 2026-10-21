@@ -14,6 +14,7 @@ export const warpRequestLimitInfoSchema = z.object({
 });
 
 export const warpBonusGrantSchema = z.object({
+  grantType: z.string().nullable().optional(),
   requestCreditsGranted: finiteNumber,
   requestCreditsRemaining: finiteNumber,
   expiration: z.string().nullable().optional(),

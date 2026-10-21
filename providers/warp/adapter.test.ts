@@ -360,6 +360,31 @@ describe("Warp adapter", () => {
     ]);
   });
 
+  test("leaves ambient-only grants out of the add-on balance", async () => {
+    const fetch = fetchReturning(
+      response(
+        userOutput({
+          bonusGrants: [
+            { ...grant(500, 500, null), grantType: "AMBIENT_ONLY" },
+            { ...grant(100, 40, null), grantType: "ANY" },
+          ],
+        }),
+      ),
+    );
+
+    const result = await warpAdapter.collect(context(fetch));
+
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: [
+          { id: "included" },
+          { id: "add-on", value: 40, initialLimit: 100 },
+        ],
+      },
+    });
+  });
+
   test("keeps a depleted add-on balance and skips malformed grants", async () => {
     const fetch = fetchReturning(
       response(
@@ -423,6 +448,16 @@ describe("Warp adapter", () => {
     [
       "an authentication GraphQL error",
       { errors: [{ message: "Unauthenticated: invalid API key" }] },
+      { kind: "credential_invalid" },
+    ],
+    [
+      "an error about something else expiring",
+      { errors: [{ message: "Your trial has expired" }] },
+      { kind: "provider_changed" },
+    ],
+    [
+      "an expired API key",
+      { errors: [{ message: "API key has expired" }] },
       { kind: "credential_invalid" },
     ],
     [
