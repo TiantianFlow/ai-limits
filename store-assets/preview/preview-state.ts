@@ -9,6 +9,7 @@ import {
 } from "../../providers/fixtures";
 import type { FidelityRequest, FidelityScenario } from "./copy";
 import { prepareFidelityViewState } from "./fidelity-state";
+import { withStoreHistory } from "./store-history";
 
 function parsePreviewState(candidate: unknown): AppViewState {
   return parseAppViewState(candidate);
@@ -71,7 +72,14 @@ export function createStorePreviewState(
     return fixtureViewState(initial, now);
   }
 
-  return fixtureViewState(fixture, now);
+  // "Grok SuperGrok" beside the "SuperGrok" plan badge says the plan twice
+  // and squeezes the badge onto two lines at artwork width.
+  for (const instance of fixture.instances) {
+    if (instance.providerKind === "grok" && instance.snapshot) {
+      delete instance.snapshot.accountLabel;
+    }
+  }
+  return withStoreHistory(fixtureViewState(fixture, now), now);
 }
 
 export function createFidelityPreviewState(
