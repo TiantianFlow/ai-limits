@@ -1,6 +1,6 @@
 # Chrome Web Store listing
 
-This document describes AI Limits version 0.5.3. It is the complete
+This document describes AI Limits version 0.5.4. It is the complete
 Chrome Web Store submission pack, including the paste-ready listing copy
 and the reviewer reference material. It is not a claim that any provider
 has approved the extension.
@@ -100,7 +100,7 @@ parent companies, or their affiliates.
   Overview visibility, provider access state,
   normalized quota/counter/balance snapshots, up to 30 days of typed
   per-instance History, and sanitized refresh status in
-  `chrome.storage.local`. It also holds temporary Kimi and Cursor tab-cleanup
+  `chrome.storage.local`. It also holds temporary Kimi, Cursor, and Grok tab-cleanup
   lease metadata in `chrome.storage.session`. Browser-session cookies and access
   credentials are not persisted. After validation, each user-created provider API
   key is persisted in a separate `chrome.storage.local` credential record whose
@@ -258,7 +258,7 @@ The full policy is in [PRIVACY.md](../../PRIVACY.md).
 ## Reviewer prerequisites
 
 - Chrome 116 or newer.
-- The validated `ai-limits-0.5.3-chrome.zip` upload artifact.
+- The validated `ai-limits-0.5.4-chrome.zip` upload artifact.
 - Reviewer-owned test accounts signed in to the desired browser-session
   provider sites in the same Chrome profile, plus temporary reviewer-created
   keys for each API-key provider under test. ElevenLabs should use
