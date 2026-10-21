@@ -41,7 +41,7 @@
     "playwright-core": "1.61.0",
     "pngjs": "7.0.0",
     "typescript": "7.0.2",
-    "vite": "7.3.6",
+    "vite": "7.3.7",
     "vitest": "4.1.11",
     "wxt": "0.21.3"
   },
