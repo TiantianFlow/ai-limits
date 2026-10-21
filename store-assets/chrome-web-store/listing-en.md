@@ -100,7 +100,7 @@ parent companies, or their affiliates.
   Overview visibility, provider access state,
   normalized quota/counter/balance snapshots, up to 30 days of typed
   per-instance History, and sanitized refresh status in
-  `chrome.storage.local`. It also holds temporary Kimi and Cursor tab-cleanup
+  `chrome.storage.local`. It also holds temporary Kimi, Cursor, and Grok tab-cleanup
   lease metadata in `chrome.storage.session`. Browser-session cookies and access
   credentials are not persisted. After validation, each user-created provider API
   key is persisted in a separate `chrome.storage.local` credential record whose
