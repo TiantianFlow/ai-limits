@@ -48,11 +48,8 @@ Web Store screenshots, but they are not part of the current English store
 submission. Chrome Web Store promotional tiles are not localized, so there is
 no separate Chinese promotional tile.
 
-The side panel now supports English and Simplified Chinese. The current Chinese
-GitHub images still embed the English production UI; only the surrounding
-project copy is Chinese. Regenerate them so the embedded UI uses the Simplified
-Chinese catalog. The capture preview currently still leaves the production
-Cockpit in English even when `locale=zh_CN`.
+The side panel supports English and Simplified Chinese, and the Chinese images
+embed the production UI rendered from the Simplified Chinese catalog.
 
 ### GitHub repository artwork
 
@@ -81,18 +78,20 @@ AI_LIMITS_CHROME_PATH=/absolute/path/to/chrome pnpm assets:store
 The preview uses the fixed instant `2026-08-09T14:00:00.000Z`, forces light
 mode, `en-US`, `America/Toronto`, and a device scale factor of 1, and creates a
 fresh browser context without a user profile. The `locale=zh_CN` preview option
-localizes only the surrounding project copy; it currently still leaves the
-production extension UI in English. The pacing image aligns the complete Kimi
+localizes both the surrounding project copy and the production side panel,
+which the preview pins to the catalog compiled from `locales/zh_CN.yml`. Every
+fixture provider carries two weeks of synthetic, deterministic History
+(15-minute readings for 48 hours, hourly before that) so the History image
+shows windows climbing and resetting. The pacing image aligns the complete Kimi
 and Cursor cards below the real sticky side-panel header at production scale.
 The History image follows the real ChatGPT quota action into the dedicated
-History screen and verifies that its chart and current-cycle surface fit inside
+History screen, selects the 48-hour range, and verifies that its chart and current-cycle surface fit inside
 the panel frame. The privacy image opens the real Settings view through its real
 button, then verifies that the nonpersonal **Demo relay A** and **Demo relay B**
 New API instance rows and their per-instance actions both fit inside the panel
-frame. The overview provider line remains a representative seven-provider
-fixture; the listing copy and supported-providers document carry the complete
-twenty-two-provider roster. Expanding demo fixtures is intentionally a separate
-UI-test update.
+frame. The overview shows a representative eight-instance fixture, so its
+provider line states the supported count rather than naming brands; the
+supported-providers document carries the complete twenty-two-provider roster.
 
 Never generate store artwork from a browser profile, extension storage,
 provider website, network credential, or live provider response. Representative
