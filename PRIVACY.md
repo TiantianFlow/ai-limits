@@ -204,8 +204,8 @@ is held in AI Limits' local credential vault and that Z.ai may treat this use
 as outside those terms, which could affect the user's Z.ai account. The Warp
 key is sent only as an Authorization bearer token in that one read-only
 GraphQL query, which Warp's own open-source client sends; it is not a documented
-public API. The query asks only for credit counts, refresh timing, and add-on
-credit amounts and expirations. Warp API keys cannot be limited to read-only
+public API. The query asks only for credit counts, refresh timing, add-on
+credit amounts, types, and expirations, and any error message. Warp API keys cannot be limited to read-only
 access, so AI Limits suggests creating a dedicated key with an expiry.
 These
 read-only responses are normalized into balance, quota, counter, or spend

@@ -268,7 +268,7 @@ describe("Warp adapter", () => {
     });
   });
 
-  test("omits a reset time that is missing or already past", async () => {
+  test("treats a passed refresh time as a fresh allowance without a reset time", async () => {
     const fetch = fetchReturning(
       response(
         userOutput({
@@ -282,6 +282,20 @@ describe("Warp adapter", () => {
 
     const result = await warpAdapter.collect(context(fetch));
 
+    expect(result).toMatchObject({
+      ok: true,
+      snapshot: {
+        metrics: [
+          {
+            id: "included",
+            usedRatio: 0,
+            used: 0,
+            limit: 1_500,
+            cycle: { cadence: "calendar" },
+          },
+        ],
+      },
+    });
     if (!result.ok) throw new Error("expected a snapshot");
     expect(result.snapshot.metrics[0]?.cycle).toEqual({ cadence: "calendar" });
   });
@@ -385,7 +399,7 @@ describe("Warp adapter", () => {
     });
   });
 
-  test("keeps a depleted add-on balance and skips malformed grants", async () => {
+  test("leaves out a spent add-on balance and skips malformed grants", async () => {
     const fetch = fetchReturning(
       response(
         userOutput({
@@ -396,15 +410,10 @@ describe("Warp adapter", () => {
 
     const result = await warpAdapter.collect(context(fetch));
 
-    expect(result).toMatchObject({
-      ok: true,
-      snapshot: {
-        metrics: [
-          { id: "included" },
-          { id: "add-on", value: 0, initialLimit: 500 },
-        ],
-      },
-    });
+    if (!result.ok) throw new Error("expected a snapshot");
+    expect(result.snapshot.metrics.map((metric) => metric.id)).toEqual([
+      "included",
+    ]);
   });
 
   test("reports a missing key as signed out without a request", async () => {

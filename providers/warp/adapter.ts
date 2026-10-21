@@ -185,7 +185,13 @@ function includedMetric(
     label: "Included credits",
     scope: "general",
   } as const;
-  const used = nonNegative(info.requestsUsedSinceLastRefresh);
+  // Like Warp's client, treat a passed refresh time as a fresh allowance
+  // until the server reports the new period.
+  const refreshedAt = timestamp(info.nextRefreshTime);
+  const used =
+    refreshedAt !== undefined && refreshedAt <= now
+      ? 0
+      : nonNegative(info.requestsUsedSinceLastRefresh);
   const cycle = includedCycle(info, now);
   // Unlimited plans and plans without included credits have no ratio to show.
   if (info.isUnlimited || info.requestLimit <= 0) {
@@ -228,11 +234,12 @@ function addOnBalance(
     const expiresAt = timestamp(grant.expiration);
     return expiresAt === undefined || expiresAt > now;
   });
-  if (active.length === 0) return undefined;
   const remaining = active.reduce(
     (sum, grant) => sum + nonNegative(grant.requestCreditsRemaining),
     0,
   );
+  // A spent balance is hidden on pool-primary cards, so it is not reported.
+  if (remaining <= 0) return undefined;
   const granted = active.reduce(
     (sum, grant) => sum + nonNegative(grant.requestCreditsGranted),
     0,
