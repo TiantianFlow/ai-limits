@@ -178,12 +178,12 @@ describe("store artwork copy", () => {
     expect(parsePreviewLanguage(new URLSearchParams())).toBe("en");
   });
 
-  it("keeps the Chinese media honest about the embedded English interface", () => {
-    expect(previewContent.zh_CN.representativeLabel).toContain("英文");
+  it("labels the Chinese media as sample data around a Chinese interface", () => {
+    expect(previewContent.zh_CN.representativeLabel).toBe("示例数据");
     expect(previewContent.zh_CN.overview.title).toMatch(/[\u3400-\u9fff]/u);
     expect(previewContent.zh_CN.history.title).toMatch(/[\u3400-\u9fff]/u);
-    expect(previewContent.zh_CN.history.description).toContain("每个实例");
-    expect(previewContent.zh_CN.history.description).toContain("类型化历史");
+    expect(previewContent.zh_CN.history.description).toContain("本地刷新");
+    expect(previewContent.zh_CN.history.description).toContain("这台设备");
   });
 
   it("gives local quota history a dedicated store-artwork view", () => {
@@ -191,7 +191,7 @@ describe("store artwork copy", () => {
     expect(previewContent.en.history.description).toMatch(/local/i);
     expect(previewContent.en.history.description).toMatch(/refresh/i);
     expect(previewContent.en.history.description).toContain(
-      "Quota graphs use per-instance typed history",
+      "climb and reset",
     );
   });
 
@@ -199,24 +199,20 @@ describe("store artwork copy", () => {
     expect(previewContent.en.social).toEqual({
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "7 providers · Multiple New API instances",
+      description: "22 supported AI services · Multiple New API instances",
     });
     expect(previewContent.en.socialNotes).toEqual([
       "Used or Left · Reset timing · Pace · Local history",
       "Local history. No remote backend.",
     ]);
     expect(previewContent.zh_CN.social.description).toBe(
-      "7 个服务 · 多个 New API 实例",
+      "支持 22 个 AI 服务 · 多个 New API 实例",
     );
   });
 
-  it("names all seven supported providers in the overview artwork", () => {
-    expect(previewContent.en.providerLine).toBe(
-      "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
-    );
-    expect(previewContent.zh_CN.providerLine).toBe(
-      "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
-    );
+  it("states the supported-service count instead of naming brands in the overview artwork", () => {
+    expect(previewContent.en.providerLine).toBe("22 supported AI services");
+    expect(previewContent.zh_CN.providerLine).toBe("支持 22 个 AI 服务");
   });
 
   it("makes multi-instance New API support visible in both overview languages", () => {

@@ -47,7 +47,7 @@ describe("release version", () => {
     expect(read("store-assets/chrome-web-store/listing-en.md")).toContain(
       `describes AI Limits version ${documentedReleaseVersion}.`,
     );
-    expect(read("SECURITY.md")).toContain("latest 0.4.x release");
+    expect(read("SECURITY.md")).toContain("latest 0.5.x release");
   });
 
   it("keeps personal email addresses out of public capture fixtures", () => {

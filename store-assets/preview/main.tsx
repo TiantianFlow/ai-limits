@@ -20,6 +20,8 @@ import {
   createStorePreviewState,
 } from "./preview-state";
 import "./styles.css";
+import catalogs from "virtual:ai-limits-preview-catalogs";
+import { applyLocaleOverride, preloadLocaleCatalog } from "../../i18n/index";
 
 const DEFAULT_CAPTURE_NOW = Date.parse(FIDELITY_FIXED_CLOCK);
 
@@ -349,6 +351,25 @@ if (!root) {
 
 const fidelityRequest = parseFidelityRequest(
   new URLSearchParams(window.location.search),
+);
+
+// The preview runs outside the extension, so give the locale runtime a
+// no-op storage area and pin the panel to the capture's language.
+const previewStorage = {
+  get: async () => ({}),
+  set: async () => undefined,
+  remove: async () => undefined,
+};
+(globalThis as { browser?: unknown }).browser ??= {
+  storage: { local: previewStorage },
+  runtime: { getManifest: () => ({}), getURL: (path: string) => path },
+};
+preloadLocaleCatalog("en", catalogs.en);
+preloadLocaleCatalog("zh_CN", catalogs.zh_CN);
+await applyLocaleOverride(
+  fidelityRequest
+    ? "en"
+    : parsePreviewLanguage(new URLSearchParams(window.location.search)),
 );
 
 createRoot(root).render(

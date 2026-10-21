@@ -62,7 +62,15 @@ reliable reset time plus either a start time or window duration, a pace signal
 compares quota consumed with elapsed time.
 
 Every quota window can open its own local History screen, so you can see how
-your usage has trended over time, right on your device.
+your usage has trended over time, right on your device. Usage fills in as it
+climbs through each window and drops at each reset, and the header says where
+you stand: how much you're on pace to use by the reset, or that you've hit the
+limit.
+Prepaid-balance services chart their balance instead, with top-ups marked.
+
+Arrange the Overview your way: drag providers into the order you want, or hide
+one without disconnecting it. Hidden providers stay connected and keep
+refreshing.
 
 AI Limits supports 22 AI services. Connect only the services you use: every
 connection is opt-in. Browser-session services use the account already signed
@@ -94,10 +102,9 @@ parent companies, or their affiliates.
   per-instance History, and sanitized refresh status in
   `chrome.storage.local`. It also holds temporary Kimi and Cursor tab-cleanup
   lease metadata in `chrome.storage.session`. Browser-session cookies and access
-  credentials are not persisted. After validation, the user-created ElevenLabs
-  or New API key is persisted in a separate `chrome.storage.local` credential
-  record whose Chrome storage access level is restricted to trusted extension
-  contexts. The same boundary applies to every validated provider API key. It
+  credentials are not persisted. After validation, each user-created provider API
+  key is persisted in a separate `chrome.storage.local` credential record whose
+  Chrome storage access level is restricted to trusted extension contexts. It
   is not OS-keychain encrypted and may be inspectable from an
   unlocked Chrome profile, extension DevTools, or profile files.
 - `alarms`: schedules the approximately 15-minute refresh cycle only while
@@ -227,14 +234,12 @@ into an already-open grok.com tab; Cursor scheduled refresh never injects.
 - **Sale or unrelated sharing:** No. Data is not sold and is not sent to the
   developer, advertisers, data brokers, or unrelated third parties.
 - **Analytics, advertising, telemetry, or remote backend:** None.
-- **Retention and controls:** Successful normalized quota, counter or spend, and
-  balance observations are retained per instance; History graphs quota metrics
-  and the balance of balance-first providers, while counter or spend
-  observations and other balances remain stored but ungraphed.
-  Successful normalized quota, counter/spend, and
-  balance observations stay in the local Chrome profile per instance for up to
-  30 days, subject to a 1,024-observation per-instance safety cap. Within that
-  cap, observations from the newest 48 hours stay at collection resolution;
+- **Retention and controls:** Successful normalized quota, counter/spend, and
+  balance observations are retained per instance in the local Chrome profile
+  for up to 30 days; History graphs quota metrics and the balance of balance-first
+  providers, while counter or spend observations and other balances remain
+  stored but ungraphed. Retention is subject to a 1,024-observation
+  per-instance safety cap. Within that cap, observations from the newest 48 hours stay at collection resolution;
   older retained History keeps the latest value in each UTC hour. Disconnect
   removes that instance's key/configuration/usage/History before best-effort
   permission cleanup; **Delete all local data** removes every instance even if

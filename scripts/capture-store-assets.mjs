@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright-core";
 import { PNG } from "pngjs";
 import { createServer } from "vite";
+import { generateChromeMessages, parseMessagesText } from "@wxt-dev/i18n/build";
 
 import {
   FIDELITY_FIXED_CLOCK,
@@ -193,9 +194,13 @@ async function prepareStoreAsset(page, asset) {
       .click();
     await page.locator(".history-surface").waitFor();
     await page.locator(".current-cycle-surface").waitFor();
+    await page.locator('.history-surface [role="group"][aria-label]').first().waitFor();
+    // 48 hours shows each 5-hour window climbing and resetting.
+    const range48h = message(asset.locale, "history.range48h");
     await page
-      .getByRole("img", { name: /ChatGPT .* usage history/ })
-      .waitFor();
+      .getByRole("radio", { name: range48h, exact: true })
+      .or(page.getByRole("button", { name: range48h, exact: true }))
+      .click();
     await page.locator("[data-panel-frame]").evaluate((frame) => {
       frame.scrollTop = 0;
     });
@@ -236,15 +241,18 @@ async function prepareStoreAsset(page, asset) {
   }
 
   if (asset.view === "privacy") {
-    await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("heading", { name: "Settings" }).waitFor();
-    const requiredLabels = marketingPrivacyRequiredLabels();
+    const settingsTitle = message(asset.locale, "settings.title");
+    await page.getByRole("button", { name: settingsTitle, exact: true }).click();
+    await page.getByRole("heading", { name: settingsTitle, exact: true }).waitFor();
+    const requiredLabels = marketingPrivacyRequiredLabels().map((label) => ({
+      label,
+      rowLabel: message(asset.locale, "settings.instanceSettings", { label }),
+    }));
     await page.locator("[data-panel-frame]").evaluate((frame, labels) => {
-      const instanceRows = labels.map((label) => ({
+      const instanceRows = labels.map(({ label, rowLabel }) => ({
         label,
         element: [...document.querySelectorAll("li")].find(
-          (candidate) =>
-            candidate.getAttribute("aria-label") === `${label} settings`,
+          (candidate) => candidate.getAttribute("aria-label") === rowLabel,
         ),
       }));
       if (
@@ -1210,6 +1218,69 @@ async function captureFidelityAsset(page, asset, assetPath) {
   };
 }
 
+/**
+ * The production side panel reads its copy through WXT's generated `#i18n`
+ * module and Chrome's message catalogs. The preview has neither, so it gets a
+ * stub `#i18n` and both catalogs compiled from locales/*.yml. The preview then
+ * pins the locale override, which reads only those catalogs.
+ */
+async function loadPreviewCatalogs() {
+  const catalogs = {};
+  for (const locale of ["en", "zh_CN"]) {
+    const source = await readFile(
+      path.join(repositoryRoot, "locales", `${locale}.yml`),
+      "utf8",
+    );
+    catalogs[locale] = generateChromeMessages(parseMessagesText(source, "YAML"));
+  }
+  return catalogs;
+}
+
+const previewCatalogs = await loadPreviewCatalogs();
+
+/** Production copy for `key` in the capture's locale, for locating controls. */
+function message(locale, key, substitutions = {}) {
+  const text = previewCatalogs[locale]?.[key.replaceAll(".", "_")]?.message;
+  assert(text, `Missing ${locale} message ${key}.`);
+  return text.replace(/\{([A-Za-z0-9_]+)\}/g, (match, name) =>
+    name in substitutions ? String(substitutions[name]) : match,
+  );
+}
+
+function previewLocalePlugin() {
+  const catalogs = previewCatalogs;
+  const catalogsId = "virtual:ai-limits-preview-catalogs";
+  const i18nId = "\0ai-limits-preview-i18n";
+  return {
+    name: "ai-limits-preview-locale",
+    enforce: "pre",
+    resolveId(source) {
+      if (source === "#i18n") return i18nId;
+      if (source === catalogsId) return `\0${catalogsId}`;
+      return null;
+    },
+    load(id) {
+      if (id === i18nId) {
+        return [
+          `import catalogs from "${catalogsId}";`,
+          "export const i18n = {",
+          "  t(key, substitutions) {",
+          '    const message = catalogs.en[key.replaceAll(".", "_")]?.message ?? "";',
+          "    if (!substitutions || typeof substitutions !== \"object\") return message;",
+          "    return message.replace(/\\{([A-Za-z0-9_]+)\\}/g, (match, name) =>",
+          "      name in substitutions ? String(substitutions[name]) : match);",
+          "  },",
+          "};",
+        ].join("\n");
+      }
+      if (id === `\0${catalogsId}`) {
+        return `export default ${JSON.stringify(catalogs)};`;
+      }
+      return null;
+    },
+  };
+}
+
 let browser;
 let vite;
 
@@ -1220,6 +1291,7 @@ try {
   vite = await createServer({
     configFile: false,
     root: previewRoot,
+    plugins: [previewLocalePlugin()],
     publicDir: path.join(repositoryRoot, "public"),
     logLevel: "error",
     server: {

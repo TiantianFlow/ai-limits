@@ -249,7 +249,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "One Chrome side panel",
       title: "Every AI limit, in one quiet view.",
       description:
-        "See seven providers and multiple independent New API instances as Used or Left, with reset timing and local History.",
+        "See every connected provider and multiple independent New API instances as Used or Left, with reset timing, pace, and local History.",
     },
     pacing: {
       eyebrow: "Plan your usage",
@@ -261,7 +261,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "See the trend",
       title: "History that stays on your device.",
       description:
-        "Quota graphs use per-instance typed history from successful local refreshes, with reset-aware gaps instead of misleading lines.",
+        "Watch each window climb and reset, with a plain pace headline. Built from local refreshes and kept on this device.",
     },
     privacy: {
       eyebrow: "Local by design",
@@ -277,10 +277,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome side panel",
       title: "Usage limits, in one view.",
-      description: "7 providers · Multiple New API instances",
+      description: "22 supported AI services · Multiple New API instances",
     },
     chromeSidePanelLabel: "Chrome side panel",
-    providerLine: "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
+    providerLine: "22 supported AI services",
     pacingNotes: ["Used or Left", "Time elapsed", "Pace signal"],
     privacyNotes: [
       "Provider access is opt-in",
@@ -299,7 +299,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "一个 Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
       description:
-        "统一查看七个服务和多个相互独立的 New API 实例，包括已用或剩余、重置时间和本地历史。",
+        "统一查看每个已连接服务和多个相互独立的 New API 实例，包括已用或剩余、重置时间、用量节奏和本地历史。",
     },
     pacing: {
       eyebrow: "规划你的用量",
@@ -311,7 +311,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       eyebrow: "查看变化趋势",
       title: "用量历史，仅存本地。",
       description:
-        "配额图表使用每个实例的类型化历史；跨越重置周期或数据缺失时保留间隔，避免误导趋势。",
+        "查看每个周期的用量如何上升、何时重置，并用一句话说明当前节奏。数据来自本地刷新，只保存在这台设备上。",
     },
     privacy: {
       eyebrow: "数据仅存本地",
@@ -327,10 +327,10 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
     social: {
       eyebrow: "Chrome 侧边栏",
       title: "AI 用量限制，一目了然。",
-      description: "7 个服务 · 多个 New API 实例",
+      description: "支持 22 个 AI 服务 · 多个 New API 实例",
     },
     chromeSidePanelLabel: "Chrome 侧边栏",
-    providerLine: "ChatGPT · Claude · Kimi · Cursor · Grok · ElevenLabs · New API",
+    providerLine: "支持 22 个 AI 服务",
     pacingNotes: ["已用或剩余", "已过时间", "用量节奏"],
     privacyNotes: [
       "服务访问需主动授权",
@@ -338,7 +338,7 @@ export const previewContent: Record<PreviewLanguage, PreviewContent> = {
       "无分析追踪或远程后端",
     ],
     productPreviewLabel: "AI Limits 产品预览",
-    representativeLabel: "示例数据 · 扩展界面暂为英文",
+    representativeLabel: "示例数据",
     socialNotes: [
       "已用或剩余 · 重置时间 · 用量节奏 · 本地历史",
       "历史仅存本地，无远程后端。",
