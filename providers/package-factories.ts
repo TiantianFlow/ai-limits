@@ -86,6 +86,7 @@ export function createApiKeyPackage<Kind extends ApiKeyProviderKind>({
   configKind,
   normalizeConfig,
   requiredPermissions,
+  startup,
 }: {
   kind: Kind;
   adapter: ProviderCollector<Kind>;
@@ -95,6 +96,7 @@ export function createApiKeyPackage<Kind extends ApiKeyProviderKind>({
   requiredPermissions: (
     config: ProviderInstanceConfig,
   ) => Browser.permissions.Permissions | undefined;
+  startup?: () => Promise<void>;
 }): ProviderPackage {
   return {
     kind,
@@ -103,6 +105,7 @@ export function createApiKeyPackage<Kind extends ApiKeyProviderKind>({
     configKind,
     normalizeConfig,
     requiredPermissions,
+    ...(startup ? { startup } : {}),
     collect(instance, services, credentialOverride): Promise<CollectionResult> {
       const normalizedConfig = matchesPackage(kind, instance, normalizeConfig);
       const credential = normalizeCredential(credentialOverride);

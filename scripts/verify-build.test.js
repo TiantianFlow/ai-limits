@@ -15,7 +15,12 @@ function validManifest() {
     default_locale: "en",
     version: "0.5.4",
     minimum_chrome_version: "116",
-    permissions: ["storage", "alarms", "sidePanel"],
+    permissions: [
+      "storage",
+      "alarms",
+      "sidePanel",
+      "declarativeNetRequestWithHostAccess",
+    ],
     optional_permissions: ["cookies", "scripting"],
     optional_host_permissions: [...EXPECTED_OPTIONAL_ORIGINS],
     icons: {
@@ -55,7 +60,7 @@ describe("built Chrome artifact contract", () => {
     const tabs = validManifest();
     tabs.permissions.push("tabs");
     expect(validateBuildManifest(tabs, "0.5.4")).toContain(
-      "Expected permissions to be exactly alarms, sidePanel, storage.",
+      "Expected permissions to be exactly alarms, declarativeNetRequestWithHostAccess, sidePanel, storage.",
     );
   });
 

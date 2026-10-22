@@ -18,7 +18,12 @@ export default defineConfig({
     description: "__MSG_manifest_description__",
     default_locale: "en",
     minimum_chrome_version: "116",
-    permissions: ["storage", "alarms", "sidePanel"],
+    permissions: [
+      "storage",
+      "alarms",
+      "sidePanel",
+      "declarativeNetRequestWithHostAccess",
+    ],
     optional_host_permissions: [
       ...new Set(providers.flatMap(({ optionalOrigins }) => optionalOrigins)),
     ],

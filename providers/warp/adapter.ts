@@ -13,6 +13,7 @@ import type {
   CollectionResult,
   ProviderCollector,
 } from "../types";
+import { WARP_USAGE_URL } from "./origin-rule";
 import {
   warpBonusGrantSchema,
   warpRequestLimitInfoSchema,
@@ -21,9 +22,8 @@ import {
   type WarpRequestLimitInfo,
 } from "./schema";
 
-const API_ORIGIN = "https://app.warp.dev";
 const OPERATION = "GetRequestLimitInfo";
-const GRAPHQL_URL = `${API_ORIGIN}/graphql/v2?op=${OPERATION}`;
+const GRAPHQL_URL = WARP_USAGE_URL;
 
 // The same read-only query Warp's open-source client sends, trimmed to the
 // fields AI Limits shows. Grant costs, reasons, and messages are not requested.
@@ -93,7 +93,9 @@ function requestHeaders(apiKey: string): Record<string, string> {
 }
 
 function healthForResponse(response: Response, now: number): ProviderHealth {
-  if (response.status === 401 || response.status === 403) {
+  // Warp answers a bad key with 401. Its 403 has no body and comes from the
+  // server refusing the request itself, so it says nothing about the key.
+  if (response.status === 401) {
     return { kind: "credential_invalid" };
   }
 

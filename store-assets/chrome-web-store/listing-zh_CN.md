@@ -62,6 +62,7 @@ AI Limits 是 TiantianFlow 独立开发的项目，与任何已连接的服务�
 - `storage`：在 `chrome.storage.local` 中保存显示、语言和刷新偏好、服务顺序与总览可见性、服务访问状态、标准化后的配额/计数/余额快照、最多 30 天的按类型分实例 History，以及经过清理的刷新状态。它还会在 `chrome.storage.session` 中保存临时的 Kimi、Cursor 和 Grok 标签页清理租约元数据。浏览器会话 cookie 和访问凭据不会被持久化。验证通过后，用户创建的服务商 API 密钥会保存在单独的 `chrome.storage.local` 凭据记录中，其 Chrome 存储访问级别仅限于受信任的扩展上下文。该记录不受操作系统钥匙串加密保护，因此从已解锁的 Chrome 配置文件、扩展 DevTools 或配置文件文件中仍可能被检查到。
 - `alarms`：仅在启用自动刷新且至少有一个服务已连接时，安排大约每 15 分钟一次的刷新周期。
 - `sidePanel`：在 Chrome 侧边栏中显示本扩展的唯一应用界面。
+- `declarativeNetRequestWithHostAccess`：从本扩展发往 `https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo` 的 POST 请求中移除 `Origin` 请求头，因为 Warp 服务器会拒绝带有扩展来源的请求。这条会话规则只匹配该 URL 和本扩展 Service Worker 发出的请求，并且只有在用户授予可选的 `https://app.warp.dev/*` 主机权限后才会生效。不会修改任何其他请求。
 
 ### 可选主机权限
 

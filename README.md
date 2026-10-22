@@ -122,7 +122,10 @@ limitations,
 ## Permissions
 
 AI Limits requires `storage`, `alarms`, and `sidePanel` for local state,
-scheduled refresh, and its interface. Provider origins are optional and are
+scheduled refresh, and its interface. It also requires
+`declarativeNetRequestWithHostAccess`, which shows no install warning and acts
+only on origins you grant: it removes the extension's `Origin` header from
+Warp's one usage request, because Warp's server refuses requests that carry one. Provider origins are optional and are
 requested one at a time when you click **Connect** or validate an API-key
 connection. New API, LiteLLM, ClawRouter, sub2api, and LLM Proxy declare dynamic
 optional host capability because they can use configurable origins, but Chrome

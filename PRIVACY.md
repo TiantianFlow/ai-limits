@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: October 21, 2026
+Last updated: October 22, 2026
 
 AI Limits is a locally running Chrome extension by TiantianFlow. This policy
 describes version 0.5.4.
@@ -204,7 +204,9 @@ is held in AI Limits' local credential vault and that Z.ai may treat this use
 as outside those terms, which could affect the user's Z.ai account. The Warp
 key is sent only as an Authorization bearer token in that one read-only
 GraphQL query, which Warp's own open-source client sends; it is not a documented
-public API. The query asks only whether the plan is unlimited, for credit
+public API. Warp's server refuses requests that carry an extension `Origin`
+header, so a session rule removes that header from this one request and no
+other. The query asks only whether the plan is unlimited, for credit
 counts, refresh timing, add-on credit amounts, types, and expirations, and for
 any error message. Warp API keys cannot be limited to read-only
 access, so AI Limits suggests creating a dedicated key with an expiry.

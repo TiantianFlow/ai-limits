@@ -111,6 +111,12 @@ parent companies, or their affiliates.
   automatic refresh is enabled and at least one provider is connected.
 - `sidePanel`: displays the extension's only application interface in Chrome's
   side panel.
+- `declarativeNetRequestWithHostAccess`: removes the `Origin` header from the
+  extension's own POST to `https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo`,
+  because Warp's server refuses requests that carry an extension origin. The
+  single session rule matches only that URL, only requests from this
+  extension's service worker, and acts only after the user grants the optional
+  `https://app.warp.dev/*` host permission. No other request is changed.
 
 ### Optional host permissions
 
