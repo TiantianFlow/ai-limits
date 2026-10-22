@@ -85,6 +85,61 @@ function grant(
 }
 
 describe("Warp adapter", () => {
+  test("reads a live Build trial response with no add-on credits", async () => {
+    // Shape captured from a real Build trial account on 2026-10-22.
+    const now = Date.parse("2026-10-22T01:30:00Z");
+    const fetch = fetchReturning(
+      response({
+        data: {
+          user: {
+            __typename: "UserOutput",
+            user: {
+              requestLimitInfo: {
+                isUnlimited: false,
+                requestLimit: 1111,
+                requestsUsedSinceLastRefresh: 0,
+                nextRefreshTime: "2026-11-21T01:36:25Z",
+                requestLimitRefreshDuration: "MONTHLY",
+              },
+              bonusGrants: [],
+              workspaces: [{ bonusGrantsInfo: { grants: [] } }],
+            },
+          },
+        },
+      }),
+    );
+
+    const result = await warpAdapter.collect(context(fetch, { now }));
+
+    expect(result).toEqual({
+      ok: true,
+      snapshot: {
+        providerKind: "warp",
+        source: "api-key",
+        fetchedAt: now,
+        metrics: [
+          {
+            id: "included",
+            label: "Included credits",
+            scope: "general",
+            type: "quota",
+            usedRatio: 0,
+            used: 0,
+            limit: 1111,
+            unit: "credits",
+            cycle: {
+              cadence: "calendar",
+              startedAt: Date.parse("2026-10-21T01:36:25Z"),
+              resetsAt: Date.parse("2026-11-21T01:36:25Z"),
+              durationMs: 31 * DAY_MS,
+            },
+          },
+        ],
+        usageGroups: [{ id: "usage", label: "Usage", metricIds: ["included"] }],
+      },
+    });
+  });
+
   test("reads monthly included credits and the add-on balance from personal and workspace grants", async () => {
     const controller = new AbortController();
     const fetch = fetchReturning(
@@ -429,7 +484,7 @@ describe("Warp adapter", () => {
 
   test.each([
     [401, { kind: "credential_invalid" }],
-    [403, { kind: "credential_invalid" }],
+    [403, { kind: "provider_changed" }],
     [500, { kind: "temporary_error" }],
     [404, { kind: "provider_changed" }],
   ])("maps HTTP %i", async (status, health) => {

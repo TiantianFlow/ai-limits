@@ -5,7 +5,12 @@ import { unzipSync } from "fflate";
 export const EXPECTED_DESCRIPTION =
   "Track subscription usage, resets, pace, and local history for your connected AI providers in one Chrome side panel.";
 
-export const EXPECTED_REQUIRED_PERMISSIONS = ["alarms", "sidePanel", "storage"];
+export const EXPECTED_REQUIRED_PERMISSIONS = [
+  "alarms",
+  "declarativeNetRequestWithHostAccess",
+  "sidePanel",
+  "storage",
+];
 export const EXPECTED_OPTIONAL_PERMISSIONS = ["cookies", "scripting"];
 export const EXPECTED_OPTIONAL_ORIGINS = [
   "https://api.elevenlabs.io/*",
@@ -144,7 +149,7 @@ export function validateBuildManifest(manifest, packageVersion) {
     errors.push('Expected side_panel.default_path to be "sidepanel.html".');
   }
   if (!hasExactMembers(manifest.permissions, EXPECTED_REQUIRED_PERMISSIONS)) {
-    errors.push("Expected permissions to be exactly alarms, sidePanel, storage.");
+    errors.push("Expected permissions to be exactly alarms, declarativeNetRequestWithHostAccess, sidePanel, storage.");
   }
   if (
     !hasExactMembers(

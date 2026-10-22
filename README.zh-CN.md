@@ -95,7 +95,9 @@ ElevenLabs 设置流程会在普通标签页中打开其官方 API 密钥页面�
 ## 权限
 
 AI Limits 使用 `storage`、`alarms` 和 `sidePanel`，分别用于本地状态、定时
-刷新和用户界面。服务来源权限均为可选权限，只有当你点击 **Connect** 或验证
+刷新和用户界面。它还需要 `declarativeNetRequestWithHostAccess`：该权限安装时
+不显示警告，且只作用于你授权的来源，仅用于从 Warp 的那一个用量请求中移除
+扩展的 `Origin` 请求头，因为 Warp 服务器会拒绝带有该请求头的请求。服务来源权限均为可选权限，只有当你点击 **Connect** 或验证
 API 密钥连接时才会逐个请求。New API、LiteLLM、ClawRouter、sub2api 和
 LLM Proxy 因来源可配置而声明动态可选主机能力，但 Chrome 实际只会请求设置中
 输入的那个实例来源。同一来源的多个实例只共享这一浏览器全局授权；凭据、标签、

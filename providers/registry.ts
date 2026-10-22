@@ -8,6 +8,7 @@ import { elevenLabsAdapter } from "./elevenlabs/adapter";
 import { factoryAdapter } from "./factory/adapter";
 import { zaiAdapter } from "./zai/adapter";
 import { warpAdapter } from "./warp/adapter";
+import { installWarpOriginRule } from "./warp/origin-rule";
 import { fireworksAdapter } from "./fireworks/adapter";
 import { grokPackage } from "./grok/package";
 import { groqCloudAdapter } from "./groqcloud/adapter";
@@ -252,5 +253,6 @@ export const providerRegistry = {
       providerDefinitions.warp.optionalOrigins,
       providerDefinitions.warp.optionalPermissions,
     ),
+    startup: () => installWarpOriginRule(),
   }),
 } satisfies { [Kind in ProviderKind]: ProviderPackage };
